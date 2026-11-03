@@ -8,6 +8,7 @@ them. finalModel() gives the final model of writeModel in memory, without writin
 """
 
 import sys
+import warnings
 import math
 import contextlib
 import numpy as np
@@ -279,7 +280,8 @@ def asymmetricDrift(c, par, rad, densprof, dispprof, rotcur, inc):
         if npar1 >= nn: npar1 = nn - 1
         cdisp, _, ok = polyfit_lsq(rad, disp2, npar1)
         if not ok:
-            if p.verbose: sys.stderr.write("3DFIT ERROR: cannot least-square fit the dispersion for asymmetric drift.\n")
+            warnings.warn("3DFIT: cannot fit the dispersion profile for the asymmetric drift correction (ADRIFT): "
+                          "asymdrift.txt is not written.")
             par.flagADRIFT = False
             return False
     SigmaFO = np.asarray(densprof, float) * np.cos(np.radians(inc))
@@ -287,7 +289,8 @@ def asymmetricDrift(c, par, rad, densprof, dispprof, rotcur, inc):
     if npar2 >= nn: npar2 = nn - 1
     cfun, _, ok = polyfit_lsq(rad, SigmaFO, npar2)
     if not ok:
-        if p.verbose: sys.stderr.write("3DFIT ERROR: cannot least-square fit the Sigma for asymmetric drift.\n")
+        warnings.warn("3DFIT: cannot fit the Sigma profile for the asymmetric drift correction (ADRIFT): "
+                      "asymdrift.txt is not written.")
         par.flagADRIFT = False
         return False
     P = np.polynomial.polynomial

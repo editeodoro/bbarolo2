@@ -13,7 +13,7 @@ import collections
 import numpy as np
 import scipy.fft as sfft
 
-from .bbutils import arcsconv, KpcPerArc, FluxtoJyBeam, Smooth1D
+from .bbutils import BBaroloError, arcsconv, KpcPerArc, FluxtoJyBeam, Smooth1D
 
 CUTOFFRATIO = 1.0 / 10000.0
 MAXCONV = 512 * 512
@@ -198,18 +198,15 @@ class Smooth3D:
             print("Major axis < minor axis. Inverting...", end="")
             ob[0], ob[1] = ob[1], ob[0]
         if not (nb[0] >= ob[0] and nb[1] >= ob[1]):
-            print("SMOOTH error: new beam smaller than old beam")
-            print(f"   old beam: {ob[0]} x {ob[1]}")
-            print(f"   new beam: {nb[0]} x {nb[1]}")
-            return False
+            raise BBaroloError(f"SMOOTH: the new beam ({nb[0]:g} x {nb[1]:g} arcsec) is smaller than the old beam "
+                               f"({ob[0]:g} x {ob[1]:g} arcsec).")
         if nb[0] < nb[1]:
             print("Major axis < minor axis. Inverting...", end="")
             nb[0], nb[1] = nb[1], nb[0]
         self.oldbeam, self.newbeam = tuple(ob), tuple(nb)
         cb = convpars(ob, nb)
         if cb is None:
-            print("SMOOTHING error: cannot calculate convolution parameters!")
-            return False
+            raise BBaroloError(f"SMOOTH: cannot calculate the convolution from the beam {ob} to the beam {nb}.")
         cb = [cb[0], cb[1], cb[2] - (self.crota - 90)]
         conf = fillgauss2d(cb, self.gridspace, 1.0, norm=True)
         if conf is None:

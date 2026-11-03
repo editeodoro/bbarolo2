@@ -34,7 +34,7 @@ from astropy.io import fits
 
 from .params import Param, value_to_string
 from . import keywords as _kw
-from .bbutils import mkdirp
+from .bbutils import mkdirp, BBaroloError
 
 __all__ = ['FitMod3D', 'GalMod', 'GalWind', 'Search', 'FitMod2D', 'Ellprof', 'Smooth', 'SmoothSpec', 'Maps',
            'PVSlice', 'SpacePar', 'Rend3D', 'ContSub', 'Stats', 'MakeMask', 'run', 'Result', 'Task',
@@ -129,6 +129,8 @@ def _galmod(c, par, write=True, seed=None):
     if (write or norm != "NONE") and not c.MaskAll():
         c.BlankMask()
     rings = initial_rings(c, gf, galmod=True, write=write).rings
+    from .galfit import check_vsys
+    check_vsys(c, rings, fatal=False)
     # DENS is a flux (DENSFLUX=false: a column density, used with NORM=NONE only, since the
     # normalisations to the data work with fluxes)
     dm = DiskModel(c, par=gf, densflux=gf.DENSFLUX if norm == "NONE" else True)
@@ -337,12 +339,16 @@ def BBcore(par, collect=False):
             return False
         outfolder = os.getcwd() + "/output/" + h.Name() + "/"
         p.setOutfolder(outfolder)
+    if p.verbose and os.path.isdir(outfolder) and os.listdir(outfolder):
+        print(f" NOTE: the output folder {outfolder} already exists: its files will be overwritten.")
     mkdirp(outfolder)
     with _logfile(par, outfolder):
         if par.logFile:
             p.showbar = False
         try:
             ok = c.readCube(p.imageFile)
+        except BBaroloError:
+            raise                                # (e.g. no beam: a clear message, not "not readable")
         except Exception as e:
             print(e)
             ok = False
@@ -361,7 +367,8 @@ def run_par(par, banner=True, collect=False):
     verbose = par.verbose
     if banner and verbose and not par.logFile:
         welcomeMessage()
-        print(par)
+        if verbose >= 2:
+            print(par)
     images = list(par.images)
     allout = []
     for im, img in enumerate(images):
@@ -439,10 +446,16 @@ def read_table(fname):
                 comments.append(s[1:].split())
             else:
                 rows.append(s.split())
-    if not rows:
-        return Table()
-    ncol = len(rows[0])
-    data = np.array([[float(x) for x in r[:ncol]] for r in rows if len(r) >= ncol])
+    if rows:
+        ncol = len(rows[0])
+        data = np.array([[float(x) for x in r[:ncol]] for r in rows if len(r) >= ncol])
+    else:
+        # no rows (e.g. no ring could be fitted): the columns of the header, with no values
+        head = next((c for c in reversed(comments) if c), None)
+        if not head:
+            return Table()
+        ncol = len(head)
+        data = np.zeros((0, ncol))
     # the header is the last comment line with one word per column, or the last two (names
     # and units) when they are consecutive
     cand = [i for i, c in enumerate(comments) if len(c) == ncol]
@@ -518,6 +531,7 @@ class Result:
         self.files = list(files)
         self._tmpdir = tmpdir
         self._keys = []
+        self._lazy = {}
 
     def _set(self, name, value):
         if value is None:
@@ -525,6 +539,20 @@ class Result:
         setattr(self, name, value)
         if name not in self._keys:
             self._keys.append(name)
+
+    def _set_lazy(self, name, fn, what):
+        """An attribute computed when it is first used (e.g. a cube): fn() gives it, what describes it."""
+        self._lazy[name] = (fn, what)
+        if name not in self._keys:
+            self._keys.append(name)
+
+    def __getattr__(self, name):
+        lazy = self.__dict__.get("_lazy", {})
+        if name in lazy:
+            v = lazy.pop(name)[0]()
+            setattr(self, name, v)
+            return v
+        raise AttributeError(f"'Result' object has no attribute '{name}'")
 
     def keys(self):
         return list(self._keys)
@@ -575,8 +603,104 @@ class Result:
         lines = [f"<Result of {self.task}: {len(self.files)} files in {self.outfolder}"]
         w = max([14] + [len(k) for k in self._keys])
         for k in self._keys:
-            lines.append(f"   {k:{w}s} {self._describe(getattr(self, k))}")
+            d = self._lazy[k][1] + " (computed when used)" if k in self._lazy else self._describe(getattr(self, k))
+            lines.append(f"   {k:{w}s} {d}")
         return "\n".join(lines) + ">"
+
+    # ------------------------------------------------------------------ plots
+    def _need(self, *names):
+        miss = [n for n in names if n not in self]
+        if miss:
+            raise ValueError(f"No {', '.join(miss)} in this Result of {self.task}.")
+
+    def plot_rings(self, params=None):
+        """Ring parameters against radius (with the errors, if any): VROT, VDISP and the other free
+        parameters, or the list params (e.g. ['vrot', 'inc']). Returns a matplotlib Figure."""
+        import matplotlib.pyplot as plt
+        self._need("rings")
+        t = self.rings
+        if params is None:
+            params = ["vrot", "vdisp"] + [k for k in ("inc", "pa", "z0", "vsys", "xpos", "ypos", "vrad", "dens")
+                                          if f"e_{k}1" in t.colnames or (k in t.colnames and len(t) > 1
+                                                                           and np.ptp(np.asarray(t[k])) > 0)]
+        units = dict(vrot="km/s", vdisp="km/s", vrad="km/s", vsys="km/s", inc="deg", pa="deg", z0="arcsec",
+                     xpos="pix", ypos="pix", dens="")
+        fig, axs = plt.subplots(len(params), 1, sharex=True, figsize=(6, 1.9 * len(params) + 0.6), squeeze=False)
+        r = np.asarray(t["radii"])
+        for ax, k in zip(axs[:, 0], params):
+            v = np.asarray(t[k])
+            err = None
+            if f"e_{k}1" in t.colnames:
+                err = [-np.asarray(t[f"e_{k}1"]), np.asarray(t[f"e_{k}2"])]
+            ax.errorbar(r, v, yerr=err, fmt="o-", ms=3, lw=1, capsize=2)
+            ax.set_ylabel(f"{k.upper()}" + (f" ({units.get(k)})" if units.get(k) else ""))
+        axs[-1, 0].set_xlabel("Radius (arcsec)")
+        fig.tight_layout()
+        return fig
+
+    def _map_pair(self, kind):
+        """(data, model) HDUs of a map ('0mom', ...) or PV slice ('pv_a', 'pv_b')."""
+        d = self.maps if kind.endswith("mom") else self.pvs
+        mod = sorted(k for k in d if k == "mod_" + kind or k.startswith("mod_" + kind + "_"))   # e.g. mod_0mom_azim
+        return d[kind], (d[mod[0]] if mod else None)
+
+    def plot_maps(self):
+        """The moment maps of the data (top) and of the model (bottom): total intensity, velocity and
+        dispersion. Returns a matplotlib Figure."""
+        import matplotlib.pyplot as plt
+        self._need("maps")
+        kinds = [k for k in ("0mom", "1mom", "2mom") if k in self.maps]
+        fig, axs = plt.subplots(2, len(kinds), figsize=(3.6 * len(kinds), 6.4), squeeze=False)
+        titles = {"0mom": "Total intensity", "1mom": "Velocity (km/s)", "2mom": "Dispersion (km/s)"}
+        for j, k in enumerate(kinds):
+            d, m = self._map_pair(k)
+            dd = np.asarray(d.data, float)
+            fin = np.isfinite(dd)
+            lo, hi = (np.nanpercentile(dd[fin], [1, 99]) if fin.any() else (0, 1))
+            for i, (h, lab) in enumerate(((d, "data"), (m, "model"))):
+                ax = axs[i, j]
+                if h is not None:
+                    im = ax.imshow(np.asarray(h.data, float), origin="lower", vmin=lo, vmax=hi,
+                                   cmap="RdBu_r" if k == "1mom" else "viridis")
+                    fig.colorbar(im, ax=ax, shrink=0.8)
+                ax.set_title(f"{titles[k]}, {lab}", fontsize=9)
+                ax.set_xticks([]), ax.set_yticks([])
+        fig.tight_layout()
+        return fig
+
+    def plot_pv(self):
+        """Position-velocity slices along the major (pv_a) and minor (pv_b) axes: the data in grey and
+        the model in red contours. Returns a matplotlib Figure."""
+        import matplotlib.pyplot as plt
+        self._need("pvs")
+        kinds = [k for k in ("pv_a", "pv_b") if k in self.pvs]
+        fig, axs = plt.subplots(1, len(kinds), figsize=(5.2 * len(kinds), 4), squeeze=False)
+        for ax, k in zip(axs[0], kinds):
+            d, m = self._map_pair(k)
+            h = d.header
+            ny, nx = d.data.shape
+            off = (np.arange(nx) + 1 - h.get("CRPIX1", 1)) * h.get("CDELT1", 1) + h.get("CRVAL1", 0)
+            off = off * (3600. if str(h.get("CUNIT1", "deg")).lower().startswith("deg") else 1.)
+            vel = (np.arange(ny) + 1 - h.get("CRPIX2", 1)) * h.get("CDELT2", 1) + h.get("CRVAL2", 0)
+            if str(h.get("CUNIT2", "")).lower() in ("m/s", "ms"):
+                vel = vel / 1000.
+            dd = np.asarray(d.data, float)
+            mm = np.asarray(m.data, float) if m is not None else None
+            if vel[-1] < vel[0]:                 # velocity increasing upwards
+                vel, dd = vel[::-1], dd[::-1]
+                mm = mm[::-1] if mm is not None else None
+            ext = [off[0], off[-1], vel[0], vel[-1]]
+            fin = np.isfinite(dd) & (dd != 0)
+            vmax = np.nanpercentile(dd[fin], 99.5) if fin.any() else 1.
+            ax.imshow(dd, origin="lower", extent=ext, aspect="auto", cmap="Greys", vmin=0, vmax=vmax)
+            if mm is not None and np.nanmax(mm) > 0:
+                ax.contour(mm, levels=np.nanmax(mm) * np.array([0.05, 0.15, 0.3, 0.5, 0.75]), origin="lower",
+                           extent=ext, colors="red", linewidths=0.8)
+            ax.set_xlabel("Offset (arcsec)")
+            ax.set_ylabel("Velocity (km/s)")
+            ax.set_title("Major axis" if k == "pv_a" else "Minor axis")
+        fig.tight_layout()
+        return fig
 
 
 def _base(f, prefix):
@@ -590,8 +714,44 @@ def _base(f, prefix):
     return b.lstrip("_") or b
 
 
-def _fill(res, step, mem, files, prefix):
-    """Fill a Result with the outputs of one step (files written + objects in memory)."""
+def _rotation_curve(t):
+    """The rotation curve of a ring table: radius (arcsec, and kpc), VROT and its errors (lower and upper,
+    as positive numbers: the table has e_vrot1 < 0 and e_vrot2 > 0)."""
+    from astropy.table import Table
+    rc = Table()
+    for k in ("radii", "rad_kpc", "vrot"):
+        if k in t.colnames:
+            rc[k] = t[k]
+    if "e_vrot1" in t.colnames:
+        rc["e_vrot_lo"] = -t["e_vrot1"]
+        rc["e_vrot_hi"] = t["e_vrot2"]
+    return rc
+
+
+def _add_data(res, c):
+    """res.data (the cube that was analysed, after CONTSUB if any) and res.residual (data - model,
+    NaN outside the mask), computed when first used."""
+    if c is None or getattr(c, "array", None) is None:
+        return
+    def data():
+        return fits.PrimaryHDU(data=c.array, header=c.Head().toAstropy(3, True))
+
+    def residual():
+        r = np.asarray(res.data.data, np.float32) - np.asarray(res.model.data, np.float32)
+        if "mask" in res:
+            r[~np.asarray(res.mask.data, bool)] = np.nan
+        h = res.model.header.copy()
+        h["BTYPE"] = "Residual"
+        return fits.PrimaryHDU(data=r, header=h)
+    shape = "x".join(str(n) for n in c.array.shape)
+    res._set_lazy("data", data, f"HDU {shape}")
+    if "model" in res:
+        res._set_lazy("residual", residual, f"HDU {shape}")
+
+
+def _fill(res, step, mem, files, prefix, cube=None):
+    """Fill a Result with the outputs of one step (files written + objects in memory). cube: the Cube
+    that was analysed (for Result.data and Result.residual)."""
     fitsf = [f for f in files if f.endswith((".fits", ".fits.gz"))]
     base = lambda f: os.path.basename(f)
     find = lambda pred: [f for f in fitsf if pred(base(f))]
@@ -606,6 +766,10 @@ def _fill(res, step, mem, files, prefix):
         if step == "3DFIT":
             last = txt.get("rings_final2.txt") or txt.get("rings_final1.txt")
             res._set("rings", read_table(last) if last else None)
+            if last and not len(res.rings):
+                import warnings
+                warnings.warn("3DFIT: no ring could be fitted (see the warnings of the fit): Result.rings is "
+                              "empty.")
             if "rings_final2.txt" in txt and "rings_final1.txt" in txt:
                 res._set("rings_stage1", read_table(txt["rings_final1.txt"]))
             if "rings_initial.txt" in txt:
@@ -643,6 +807,9 @@ def _fill(res, step, mem, files, prefix):
         res._set("pvs", folder_maps("pvs") or None)
         res._set("galfit", mem.get("galfit"))
         res._set("diskmodel", mem.get("diskmodel"))
+        if "rings" in res and "vrot" in res.rings.colnames and step != "GALMOD":
+            res._set("rotation_curve", _rotation_curve(res.rings))
+        _add_data(res, cube)
         pdfs = [f for f in files if f.endswith(".pdf")]
         res._set("plots", pdfs or None)
     elif step == "GALWIND":
@@ -756,7 +923,8 @@ def read_parfile(fname):
             parts = line.split(None, 1)
             kw = _kw.lookup(parts[0])
             if kw is None:
-                sys.stderr.write(f" BBAROLO WARNING: {_kw.unknown_message(parts[0])}. It is ignored.\n")
+                from .params import unknown_keyword
+                unknown_keyword(parts[0])           # (an error if it is a typo of a keyword)
                 continue
             out.pop(kw.name, None)
             out[kw.name] = _FromFile(parts[1] if len(parts) > 1 else "")
@@ -795,7 +963,8 @@ def _checked(par):
         ok = par.checkPars()
     msg = buf.getvalue().strip()
     if not ok:
-        raise ValueError("Unacceptable input parameters:\n" + msg)
+        from .bbutils import BBaroloError
+        raise BBaroloError("Unacceptable input parameters:\n" + msg)
     if msg and par.verbose:
         print(msg)
     return par
@@ -889,6 +1058,12 @@ class Task:
             if v is None:
                 self._params.pop(k, None)
             else:
+                from .params import ring_value_problem, _RING_KEYS, free_problem
+                if isinstance(v, str) and not isinstance(v, _FromFile):
+                    prob = ring_value_problem(k, v) if k in _RING_KEYS else (
+                        free_problem(v) if k == "FREE" and self.TASK == "3DFIT" else None)
+                    if prob:
+                        raise BBaroloError(f"{type(self).__name__}: {prob}")
                 self._params[k] = v
         self._check_rings()
         return self
@@ -1058,7 +1233,7 @@ class Task:
         prefix = c.pars().outPrefix
         for name, (mem, files) in outs.items():
             res.files = sorted(set(res.files) | set(files))
-            _fill(res, name, mem, files, prefix)
+            _fill(res, name, mem, files, prefix, cube=c)
         self.result = res
         return res
 
@@ -1105,14 +1280,10 @@ class GalMod(Task):
             prm["PLOTS"] = -1                       # no mask.fits
             par = _checked(build_param(prm))
             c = Cube(par=par)
-            try:
-                ok = c.readCube(self._cube, printInfo=False) if hdu is None else c.readHDU(hdu, name=prm["FITSFILE"])
-                if not ok:
-                    raise IOError(f"{prm['FITSFILE']} is not a readable FITS file!")
-                mod, self.diskmodel, _, _ = _galmod(c, par, write=False, seed=seed)
-            except SystemExit:
-                raise ValueError("The cube has no beam: set BMAJ, BMIN, BPA or BEAMFWHM (arcsec), "
-                                 "or give beam=(bmaj, bmin, bpa).") from None
+            ok = c.readCube(self._cube, printInfo=False) if hdu is None else c.readHDU(hdu, name=prm["FITSFILE"])
+            if not ok:
+                raise IOError(f"{prm['FITSFILE']} is not a readable FITS file!")
+            mod, self.diskmodel, _, _ = _galmod(c, par, write=False, seed=seed)
         return model_hdu(mod, mod.Head().Name())
 
 
@@ -1172,11 +1343,20 @@ class MakeMask(Task):
 
 _doc(FitMod3D, """Fit a 3D tilted-ring model to a datacube (3DFIT).
 
-    Result: rings (Table of the final rings, with errors if FLAGERRORS), rings_stage1 and
-    rings_initial (Tables), model (HDU of the model, NORM of the last stage), models (all
-    the models written), maps and pvs (dicts of HDUs), densprof (Table), mask (HDU),
-    galfit (the fitting engine), plots (PDF files). Geometric parameters that are not
-    given are estimated, as in BBarolo.
+    Result:
+      rings          Table of the final rings: radii (arcsec), rad_kpc, vrot, vdisp, vrad, vsys
+                     (km/s), inc, pa (deg), z0 (arcsec), z0_pc, dens, xpos, ypos (pixels); with
+                     FLAGERRORS, the errors e_<name>1 (lower, negative) and e_<name>2 (upper) of
+                     the free parameters
+      rotation_curve radii, rad_kpc, vrot and its errors e_vrot_lo, e_vrot_hi (positive)
+      rings_stage1, rings_initial   the rings of the first stage and the initial rings
+      model          HDU of the model (NORM of the last stage); models: all the models written
+      data, residual HDUs of the data analysed and of data - model (NaN outside the mask),
+                     computed when first used
+      maps, pvs      dicts of HDUs: moment maps and PV slices of the data and of the model
+      densprof, mask, galfit (the fitting engine), plots (PDF files)
+    Methods: plot_rings(), plot_maps(), plot_pv() (matplotlib Figures), plot() (the PDF plots
+    again). Geometric parameters that are not given are estimated, as in BBarolo.
 
     >>> f = FitMod3D("ngc2403.fits", radii=np.arange(15, 1200, 30), xpos=77, ypos=77,
     ...              vsys=132.8, vrot=120, vdisp=8, z0=10, inc=60, pa=123.7,
@@ -1278,7 +1458,7 @@ def run(parfile=None, exe=None, stdout=None, **params):
         p = c.pars()
         d = {}
         for name, (mem, files) in out.items():
-            d[name] = _fill(Result(name, p.outFolder, files), name, mem, files, p.outPrefix)
+            d[name] = _fill(Result(name, p.outFolder, files), name, mem, files, p.outPrefix, cube=c)
         results.append(d)
     if not ok and not results:
         raise RuntimeError("BBarolo could not run (see the messages above).")

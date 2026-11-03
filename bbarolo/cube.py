@@ -16,7 +16,7 @@ from astropy.io import fits
 from .header import Header
 from .params import Param, stringize
 from .stats import Stats, findMADFM
-from .bbutils import (arcsconv, DeltaVel, FluxtoJy, FluxtoJyBeam, isFluxUnitKnown, AlltoVel,
+from .bbutils import (BBaroloError, arcsconv, DeltaVel, FluxtoJy, FluxtoJyBeam, isFluxUnitKnown, AlltoVel,
                       ProgressBar, mkdirp, randomAdjective)
 
 
@@ -98,16 +98,24 @@ class Cube:
             if bmaj < 0 and bmin < 0 and p.beamFWHM > 0:
                 bmaj = bmin = p.beamFWHM
             if bmaj < 0 and bmin < 0:
-                sys.stderr.write("\n ERROR: No beam information available for data.\n"
-                                 "        Please set the beam with BMAJ/BMIN/BPA or BeamFWHM params (in arcsec).\n\n")
-                raise SystemExit(1)
+                raise BBaroloError("No beam information available for the data: set the beam with BMAJ, BMIN "
+                                   "and BPA, or BEAMFWHM (in arcsec), or beam=(bmaj, bmin, bpa) in Python.")
             print(f"\n WARNING: Beam not available in the header: using a {bmaj * 3600.:.5g}x{bmin * 3600.:.5g}"
                   f" arcsec (BPA={bpa:.5g}).\n"
                   "          You can set the beam with BMAJ/BMIN/BPA or BeamFWHM params (in arcsec).\n")
+            pix = h.PixScale()
+            if min(bmaj, bmin) < 0.25 * pix:
+                raise BBaroloError(f"The beam ({bmaj * 3600.:.4g}x{bmin * 3600.:.4g} arcsec) is smaller than a "
+                                   f"quarter of a pixel ({pix * 3600.:.4g} arcsec): BMAJ, BMIN and BEAMFWHM are in "
+                                   "arcsec.")
             h.setBmaj(bmaj)
             h.setBmin(bmin)
             h.setBpa(bpa)
             h.calcArea()
+        elif min(h.Bmaj(), h.Bmin()) < h.PixScale() and not getattr(self, "_beamwarned", False):
+            self._beamwarned = True
+            print(f"\n WARNING: the beam ({h.Bmaj() * 3600.:.4g}x{h.Bmin() * 3600.:.4g} arcsec) is smaller than a "
+                  f"pixel ({h.PixScale() * 3600.:.4g} arcsec).\n")
 
     def readCube(self, fname, printInfo=True):
         p = self.par
@@ -519,7 +527,7 @@ class Cube:
                 sm_c.search()
                 n = sm_c.getNumObj()
                 if n == 0:
-                    raise RuntimeError("MASKING error: No sources detected in the datacube. Cannot build mask!!! ")
+                    raise BBaroloError("MASKING error: No sources detected in the datacube. Cannot build mask!!! ")
                 objs = [sm_c.getSources().LargestDetection()] if (onlyLargest or n == 1) else sm_c.getSources().objectList
                 for o in objs:
                     mask[o.z, o.y, o.x] = True
@@ -529,7 +537,7 @@ class Cube:
                     self.search()
                 n = self.getNumObj()
                 if n == 0:
-                    raise RuntimeError("MASKING error: No sources detected in the datacube. Cannot build mask!!! ")
+                    raise BBaroloError("MASKING error: No sources detected in the datacube. Cannot build mask!!! ")
                 objs = [self.sources.LargestDetection()] if (onlyLargest or n == 1) else self.sources.objectList
                 for o in objs:
                     mask[o.z, o.y, o.x] = True
@@ -591,8 +599,7 @@ class Cube:
                 st2[0] = True
                 mask = binary_dilation(mask, structure=st2)
         finally:
-            if verb:
-                p.verbose = True
+            p.verbose = verb                     # (the level, VERBOSE 1 or 2)
 
         # Writing mask to FITS file
         mh = h.copy()

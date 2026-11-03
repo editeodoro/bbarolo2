@@ -76,6 +76,14 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   were written as given in the plotting scripts, which then failed when run from another folder
   (e.g. `plot_all.py` to redo the plots). They become absolute paths (relative to the current
   folder) when the parameters are checked.
+- **Centres given as 07h36m51s or +65d35m12s**: the first was taken as pixels (an error), the second as
+  65°, without the minutes. **(C++)**
+- **VERBOSE 2 was lost** after the mask was built (the level was restored as "true").
+- **A failed asymmetric drift fit (ADRIFT)** was silent without VERBOSE; it is a warning now.
+- **Rings rejected by 3DFIT** ("does not look good") now say why: the fitted VROT exceeds what the
+  spectral band allows at the ring's VSYS and INC.
+- **A 3DFIT with no ring fitted** gave an empty `Result.rings` without columns (`res.rings['vrot']`
+  was a KeyError); the columns are kept, with a warning.
 - **Memory of long Bayesian samplings with a free centre, Z0 or RADMAX**: a kernel transform was
   cached for every new model box size, without limit. Only the 32 most recent ones are kept now.
 - **Parameter files**: `inf` or `nan` given to an integer parameter (CDENS, NV, BOX, ...) raised
@@ -83,12 +91,42 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **Errors**: `bbarolo.BBaroloError` (a `ValueError`) for problems in the input, with a message that
+  says what is wrong. The library never exits the Python session any more (a cube without a beam
+  raised `SystemExit`), and errors no longer surface later as unrelated `AttributeError`s (SMOOTH to
+  a smaller beam, PVSLICE outside the cube, GALWIND with inconsistent sizes). The command line
+  prints the message and exits with code 1 (it exited with 0 after unacceptable parameters).
+- **Checks before running**, with messages that name the parameter: ring values that are not
+  numbers, lists of numbers, `file(...)` or WCS positions (also when a task class is built: e.g.
+  `inc="sixty"`); unknown names in FREE (they were ignored); VSYS outside the velocity range of the
+  cube (an error for 3DFIT, with a hint when it looks like m/s; a warning for GALMOD); a beam from
+  BMAJ/BMIN/BEAMFWHM smaller than a quarter of a pixel (degrees given instead of arcsec). A note
+  gives the distance assumed from the Hubble flow when DISTANCE is not given.
+- **Result** of 3DFIT (and GALMOD, BAYESIAN3DFIT): `data` and `residual` (data − model, NaN outside
+  the mask), computed when first used; `rotation_curve` (radius, VROT and its errors as positive
+  numbers); `plot_rings()`, `plot_maps()` and `plot_pv()`, which return matplotlib figures.
+- **VERBOSE levels**: 0 (false) nothing; 1 (true, the default) the main messages, a progress bar
+  and one line per ring in order of radius, with the outcome of the ring (e.g. why it was
+  rejected); 2 everything, as before (the parameters, every ring in detail).
 - **SPECRES**: the spectral resolution of the models (σ, in channels). LINEAR still sets it when
   SPECRES is not given, as in C++, but LINEAR is also the new resolution of SMOOTH (in kpc): the
   parameter check now warns when one run uses LINEAR for both.
 
 ### Changed
 
+- **THREADS** defaults to the number of cores, at most 16 (all the cores of a large shared server
+  were too many). The ring tables do not depend on THREADS; MC final models do (one seed per chunk).
+- **Default output** is much shorter (VERBOSE 1, above): about 140 lines for the NGC 2403 3DFIT
+  instead of about 400. Progress bars are drawn on a terminal only (in a log file their backspaces
+  piled up). A note says when an existing output folder is overwritten.
+- **A misspelled keyword in a parameter file** (very close to a real one, e.g. VDSIP) is an error;
+  other unknown keywords are still ignored with a warning. All the keywords of the C++ code are
+  known, so valid parameter files are not affected.
+- **A velocity axis without CUNIT3** is taken as m/s if its channels are wider than 100, otherwise as
+  km/s (C++: always km/s, or m/s when no CUNIT is given at all).
+- **Help**: `-d TASK` lists DISTANCE and the beam keywords; `bbarolo.help('dist')` prints the close
+  matches instead of raising; clearer help for FREE; the FitMod3D docstring lists the columns of the
+  results and the convention of the errors.
 - **BayesianBBarolo and BAYESIAN3DFIT use ANALYTIC models by default** (GALMODTYPE; 3DFIT, GALMOD
   and the other tasks keep MC). Their likelihood has no Monte-Carlo noise: with sigma equal to the
   noise, the noise of MC models made it rough and the sampling slow. A likelihood call is also about

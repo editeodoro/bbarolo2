@@ -27,7 +27,7 @@ import sys
 import numpy as np
 
 from .image import Image2D
-from .bbutils import arcsconv, getCenterCoordinates
+from .bbutils import BBaroloError, arcsconv, getCenterCoordinates
 
 
 def _line_range(x0, y0, dx, dy, nx, ny):
@@ -292,8 +292,8 @@ class PvSlice(Image2D):
         if self.isAngle:
             if self.radii is None:
                 if not (0 <= self.x0 < c.DimX() and 0 <= self.y0 < c.DimY()):
-                    sys.stderr.write("PvSlice ERROR: center (x0,y0) is outside the cube.\n")
-                    return False
+                    raise BBaroloError(f"PVSLICE: the centre ({self.x0:g}, {self.y0:g}) is outside the cube "
+                                       f"({c.DimX()} x {c.DimY()} pixels).")
             s, x, y = pv_path(self.x0, self.y0, self.angle, radii=self.radii, shape=a.shape[1:], step=self.step)
             if s.size > 1 and np.ndim(self.angle) == 0:
                 # BBarolo's orientation: offset increasing with x (with y if vertical)
@@ -302,8 +302,7 @@ class PvSlice(Image2D):
         else:
             s, x, y = pv_path(p1=(self.x1, self.y1), p2=(self.x2, self.y2), shape=a.shape[1:], step=self.step)
         if s.size < 2:
-            sys.stderr.write("PvSlice ERROR: Slice does not intercept cube.\n")
-            return False
+            raise BBaroloError("PVSLICE: the slice does not cross the cube.")
         self.s, self.x_locus, self.y_locus = s, x, y
         pv = pv_sample(a, x, y, width=self.width, order=self.order)
         self.array = pv.astype(np.float32)

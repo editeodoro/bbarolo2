@@ -6,7 +6,7 @@ the NelderMead class of Utilities/optimization.hh).
 import math
 import numpy as np
 
-from .bbutils import AlltoVel, arcsconv, DeltaVel, getCenterCoordinates
+from .bbutils import BBaroloError, AlltoVel, arcsconv, DeltaVel, getCenterCoordinates
 from .stats import findMedian
 
 FLT_MAX = float(np.finfo(np.float32).max)
@@ -309,7 +309,7 @@ class ParamGuess:
             try:
                 mymin = NelderMead().minimize(point, dels, func)
             except RuntimeError:
-                raise RuntimeError("PARAMGUESS ERROR: Error while estimating inclination.")
+                raise BBaroloError("PARAMGUESS ERROR: Error while estimating inclination.")
             self.Rmax, self.inclin = float(mymin[0]), float(mymin[1])
             bm = c.Head().Bmaj() * 3600.
             Axmin = self.Rmax * math.cos(math.radians(self.inclin))
@@ -472,7 +472,7 @@ def EstimateInitial(c, p):
     if verb:
         print("\n Estimating initial parameters... ", end="", flush=True)
     if largest is None:
-        raise RuntimeError(" 3DFIT ERROR: No sources detected in the datacube. Cannot fit!!! ")
+        raise BBaroloError(" 3DFIT ERROR: No sources detected in the datacube. Cannot fit!!! ")
     ip = ParamGuess(c, largest)
     if p.VSYS != "-1": ip.vsystem = _given(p.VSYS)
     else: ip.findSystemicVelocity()

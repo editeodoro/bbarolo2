@@ -484,7 +484,7 @@ class SimulatedGalaxyCube(object):
           noise (float, bool): RMS noise of the output datacube (in the units of the cube).
                                If True, a random value between 0 and 0.05.
           smooth (bool):       Whether to smooth the model to the resolution of the template cube
-          threads (int):       Number of threads (default: all the cores)
+          threads (int):       Number of threads (default: THREADS, the number of cores, at most 16)
           seed (int):          Seed for the noise (default: random)
           verbose (bool):      Whether to print BBarolo's messages
           stdout (str):        Where to print BBarolo's messages: None (screen), a file name or 'null'

@@ -17,7 +17,7 @@ import numpy as np
 
 from .params import Param, TASKS_LIST, FITSUTILS_LIST
 from ._version import __version__, __cpp_reference__
-from .bbutils import randomQuoting
+from .bbutils import randomQuoting, BBaroloError
 
 
 # --------------------------------------------------------------------------
@@ -157,18 +157,15 @@ def getopts(argv):
             return None
         if a in ("-p", "--paramfile"):
             if nxt is None:
-                sys.stderr.write("\n Option -p requires a paramter file as argument.\n\n   Usage: BBarolo -p paramfile \n\n")
-                return None
-            if par.readParamFile(nxt):
-                ok = True
-            else:
-                sys.stderr.write(f"\n BBAROLO ERROR: Could not open parameter file {nxt}.\n\n")
+                raise BBaroloError("Option -p requires a parameter file: BBarolo -p paramfile")
+            if not par.readParamFile(nxt):
+                raise BBaroloError(f"Could not open the parameter file {nxt}.")
+            ok = True
             i += 2
             continue
         if a in ("-f", "--fitsfile"):
             if nxt is None:
-                sys.stderr.write("\n Option -f requires a FITS file as argument.\n\n   Usage: BBarolo -f fitsfile \n\n")
-                return None
+                raise BBaroloError("Option -f requires a FITS file: BBarolo -f fitsfile")
             par.imageFile = nxt
             par.AUTO = True
             ok = True
@@ -204,15 +201,14 @@ def getopts(argv):
         elif "=" in a:
             rest.append(a)
         else:
-            sys.stderr.write(f"\n Option {a} is unacceptable. Try BBarolo -h for help.\n\n")
+            raise BBaroloError(f"Option {a} is unacceptable. Try BBarolo -h for help.")
         i += 1
     if not ok:
         return None
     for s in rest:
         par.readParamCL(s)
     if not par.checkPars():
-        sys.stderr.write("\n Unacceptable input parameters. Exiting...\n\n")
-        return None
+        raise BBaroloError("Unacceptable input parameters (see the messages above).")
     return par
 
 
@@ -223,9 +219,13 @@ from .tasks import BBcore, run_steps, run_par  # noqa: E402,F401
 
 
 def main(argv=None):
-    """Entry point of the BBarolo command (returns the exit code)."""
+    """Entry point of the BBarolo command (returns the exit code: 0, or 1 if something failed)."""
     try:
         return _main(argv)
+    except BBaroloError as e:
+        sys.stdout.flush()
+        sys.stderr.write(f"\n BBAROLO ERROR: {str(e).strip()}\n\n")
+        return 1
     except BrokenPipeError:
         # Output piped to a program that closed it early (e.g. "BBarolo -d | head")
         devnull = os.open(os.devnull, os.O_WRONLY)
@@ -238,7 +238,7 @@ def _main(argv=None):
     os.environ.setdefault("MPLBACKEND", "Agg")
     argv = sys.argv[1:] if argv is None else list(argv)
     par = getopts(argv)
-    if par is None:
+    if par is None:                         # (help, version, ... or no arguments: the help screen)
         return 0 if argv else 1
     ok, _ = run_par(par)
     return 0 if ok else 1

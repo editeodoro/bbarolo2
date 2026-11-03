@@ -72,8 +72,11 @@ python3 performance/compare_examples.py HEAD -j 15   # all example outputs: work
   state behaviour and units. British spelling in documentation and keywords (CENTRED, normalised).
 - numba kernels: `@nb.njit(cache=True, nogil=True)`, numpy arrays and scalars in, release the
   GIL (3DFIT fits rings in parallel threads).
-- Errors: `ValueError` with a message that names the parameter; BBarolo-style
-  `"TASK error: ..."` messages in `checkPars`.
+- Errors in the input: raise `BBaroloError` (`bbutils`, a `ValueError`) with a message that names
+  the parameter, never `sys.exit`/`SystemExit` or "print and return False" (the command line prints
+  the message and exits with 1). BBarolo-style `"TASK error: ..."` messages in `checkPars`.
+- `p.verbose` is a level: 0 quiet, 1 normal (default), 2 everything. Detailed output (every ring,
+  the parameter list) goes under `verbose >= 2`; save and restore the level, not `True`.
 
 ## Pitfalls
 

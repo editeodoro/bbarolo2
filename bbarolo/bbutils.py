@@ -13,6 +13,11 @@ import time
 import random
 import numpy as np
 
+class BBaroloError(ValueError):
+    """An error in the input of BBarolo (data, parameters) that stops a task, with a message that
+    says what is wrong. The command line prints it and exits with code 1."""
+
+
 C_KMS = 299792.458          # speed of light in km/s
 C_MS = 2.99792458e08        # speed of light in m/s
 
@@ -278,12 +283,17 @@ def angularSeparation(ra1, dec1, ra2, dec2):
 
 def getCenterCoordinates(pos, h):
     """Parse a pair of (x,y) center strings: pixels, degrees ('123.4d') or sexagesimal."""
+    import re
     world = [0., 0.]
     isPOS = [False, False]
     for i in range(2):
-        s = str(pos[i]).strip()
+        s = str(pos[i]).strip().lower()
         ctyp = h.Ctype(i).lower()
-        if "d" in s:
+        if re.search(r"\d[hms]", s) or (re.search(r"\dd", s) and re.search(r"[ms]", s)):
+            # 07h36m51s, +65d35m12s (C++ read 65d35m as 65 degrees)
+            from astropy.coordinates import Angle
+            world[i] = float(Angle(s, unit="hourangle" if "h" in s else "deg").deg)
+        elif "d" in s:
             world[i] = float(s[:s.find("d")])
         elif ":" in s:
             v = dmsToDec(s)
@@ -659,7 +669,8 @@ class ProgressBar:
     def __init__(self, Time=False, Verbose=True, Showbar=True, length=20, s="#"):
         self.ltime = Time
         self.verbose = Verbose
-        self.showbar = Showbar and Verbose
+        # (drawn on a terminal only: in a log file the backspaces would pile up)
+        self.showbar = Showbar and Verbose and sys.stdout.isatty()
         self.length = length
         self.s = s
         self.size = 1

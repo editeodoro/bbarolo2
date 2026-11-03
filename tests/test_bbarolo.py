@@ -1409,3 +1409,142 @@ def test_bayesian_default_analytic(tmp_path):
     assert BayesianBBarolo.from_parfile(str(par))._make_par().galmodtype == "ANALYTIC"
     par.write_text(par.read_text() + "GALMODTYPE MC\n")
     assert BayesianBBarolo.from_parfile(str(par))._make_par().galmodtype == "MC"
+
+
+def test_errors_and_exit_codes(tmp_path):
+    """Errors in the input raise BBaroloError (a ValueError) with a clear message, never SystemExit; the
+    command line prints it and exits with 1 (it exited with 0 after unacceptable parameters, and ran
+    the task after an unknown option)."""
+    from bbarolo import FitMod3D, Smooth, PVSlice, BBaroloError
+    nob = emptyfits([32, 32, 10], [-10. / 3600., 10. / 3600., 10.], bunit="JY/BEAM", obj="NOBEAM")
+    nob.data[:] = 1.
+    fn = str(tmp_path / "nobeam.fits")
+    nob.writeto(fn)
+    with pytest.raises(BBaroloError, match="No beam"):
+        FitMod3D(fn, radii=[10, 20], xpos=15, ypos=15, vsys=0, vrot=50, vdisp=8, inc=60, pa=30, z0=0,
+                 verbose=False).run(write=False)
+    beam = emptyfits([32, 32, 10], [-10. / 3600., 10. / 3600., 10.], beam=30. / 3600., bunit="JY/BEAM", obj="B")
+    beam.data[:] = 1.
+    fb = str(tmp_path / "beam.fits")
+    beam.writeto(fb)
+    with pytest.raises(BBaroloError, match="smaller than the old beam"):
+        Smooth(fb, bmaj=10, bmin=10, verbose=False).run(write=False)
+    with pytest.raises(BBaroloError, match="outside the cube"):
+        PVSlice(fb, xpos_pv=500, ypos_pv=500, pa_pv=30, verbose=False).run(write=False)
+    cli = [sys.executable, os.path.join(ROOT, "run_bbarolo.py")]
+    run = lambda *a: subprocess.run(cli + list(a), capture_output=True, text=True, cwd=str(tmp_path))
+    r = run("-p", "nofile.par")
+    assert r.returncode == 1 and "Could not open the parameter file" in r.stderr
+    r = run("-c", f"fitsfile={fb}", "3dfit=true", "norm=GLOBAL", "radii=10", "xpos=15", "ypos=15", "vsys=0",
+            "vrot=50", "vdisp=8", "inc=60", "pa=30", "z0=0")
+    assert r.returncode == 1 and "Unacceptable input parameters" in r.stderr
+    r = run("-f", fb, "--bogus")
+    assert r.returncode == 1 and "--bogus is unacceptable" in r.stderr and not (tmp_path / "output").exists()
+    r = run("-c", f"fitsfile={fn}", "3dfit=true", "radii=10", "xpos=15", "ypos=15", "vsys=0", "vrot=50", "vdisp=8",
+            "inc=60", "pa=30", "z0=0")
+    assert r.returncode == 1 and "No beam" in r.stderr and "Traceback" not in r.stderr
+    assert run("-v").returncode == 0
+
+
+def test_empty_ring_table(tmp_path):
+    """A ring table without rows (no ring fitted) keeps its columns (Result.rings['vrot'] was a KeyError)."""
+    from bbarolo.tasks import read_table
+    from bbarolo.galfit import writeHeader
+    with open(tmp_path / "r.txt", "w") as f:
+        writeHeader(f, [True] * 2 + [False] * 8, False, False)
+    t = read_table(str(tmp_path / "r.txt"))
+    assert len(t) == 0 and {"radii", "vrot", "vdisp", "inc", "pa"} <= set(t.colnames)
+
+
+def test_input_checks(tmp_path, capsys):
+    """Checks before running: misspelled keywords, ring values, FREE names, VSYS in the band, beams in
+    degrees, missing CUNIT3, sexagesimal centres."""
+    from astropy.io import fits
+    from bbarolo import FitMod3D, BBaroloError
+    from bbarolo.header import Header
+    from bbarolo.bbutils import getCenterCoordinates
+    # a typo of a keyword is an error, another unknown keyword a warning
+    with pytest.raises(BBaroloError, match="VDISP"):
+        Param().readParamString("VDSIP 10\n")
+    Param().readParamString("NOTAKEYWORD 1\n")
+    assert "It is ignored" in capsys.readouterr().err
+    # ring values and FREE, when the task is built
+    hdu = emptyfits([32, 32, 20], [-10. / 3600., 10. / 3600., 10.], beam=30. / 3600., bunit="JY/BEAM", obj="CHK")
+    hdu.data[:] = 1.
+    fn = str(tmp_path / "c.fits")
+    hdu.writeto(fn)
+    kw = dict(radii=[10, 20], xpos=15, ypos=15, vsys=0, vrot=50, vdisp=8, inc=60, pa=30, z0=0, mask="NONE",
+              verbose=False)
+    with pytest.raises(BBaroloError, match="INC='sixty' is not valid"):
+        FitMod3D(fn, **dict(kw, inc="sixty"))
+    with pytest.raises(BBaroloError, match="unknown free parameter.*FOO"):
+        FitMod3D(fn, free="VROT FOO", **kw)
+    p = Param()
+    p.readParamString(f"FITSFILE {fn}\n3DFIT true\nRADII 10 20\nXPOS 15\nYPOS 15\nVSYS 0\nVROT 50\nVDISP 8\n"
+                      "INC sixty\nPA 30\nZ0 0\nFREE VROT\n")
+    assert not p.checkPars(quiet=True)
+    # VSYS outside the band (given in m/s)
+    with pytest.raises(BBaroloError, match="is it in m/s"):
+        FitMod3D(fn, **dict(kw, vsys=50000)).run(write=False)
+    # a beam given in degrees instead of arcsec
+    del hdu.header["BMAJ"], hdu.header["BMIN"], hdu.header["BPA"]
+    hdu.writeto(str(tmp_path / "nob.fits"))
+    with pytest.raises(BBaroloError, match="smaller than a quarter of a pixel"):
+        FitMod3D(str(tmp_path / "nob.fits"), bmaj=0.0083, bmin=0.0083, **kw).run(write=False)
+    # missing CUNIT3: m/s if the channels are wider than 100
+    for cdelt, unit in ((5000., "m/s"), (5., "km/s")):
+        h = fits.Header()
+        for k, v in dict(NAXIS=3, NAXIS1=8, NAXIS2=8, NAXIS3=10, CTYPE1="RA---SIN", CTYPE2="DEC--SIN", CTYPE3="VRAD",
+                         CRPIX1=4, CRPIX2=4, CRPIX3=5, CRVAL1=150., CRVAL2=30., CRVAL3=0., CDELT1=-1e-3, CDELT2=1e-3,
+                         CDELT3=cdelt, CUNIT1="deg", CUNIT2="deg").items():
+            h[k] = v
+        hh = Header()
+        hh.warning = False
+        hh.fromAstropy(h)
+        assert hh.Cunit(2) == unit
+    # sexagesimal centres (07h36m51s was taken as pixels, +65d35m as 65 deg)
+    if os.path.isfile(N2403):
+        h2 = Header(N2403, warning=False)
+        a = getCenterCoordinates(["07h36m51s", "+65d35m"], h2)
+        b = getCenterCoordinates([f"{(7 + 36 / 60 + 51 / 3600) * 15}d", f"{65 + 35 / 60}d"], h2)
+        assert np.allclose(a, b)
+
+
+@needs_data
+def test_verbosity_levels(tmp_path, capsys):
+    """VERBOSE 0: nothing; 1 (default): one line per ring, in order of radius; 2: every ring in detail, as
+    in C++."""
+    from bbarolo import FitMod3D
+    kw = dict(radii=[150, 250, 350], xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8, inc=60, pa=123.7, z0=10,
+              free="VROT VDISP", twostage=False, threads=3, plots=False, distance=3.2)
+    out = {}
+    for v in (0, 1, 2):
+        FitMod3D(N2403, verbose=v, **kw).run(outfolder=str(tmp_path / f"v{v}"))
+        out[v] = capsys.readouterr().out
+    assert "Best parameters" not in out[0] and "outcome" not in out[0] and len(out[0].splitlines()) < 5
+    lines = [ln.split() for ln in out[1].splitlines() if ln.strip().endswith(" ok")]
+    assert [int(x[0]) for x in lines] == [1, 2, 3] and "Best parameters" not in out[1]
+    assert out[2].count("Best parameters for ring") == 3 and "outcome" not in out[2]
+
+
+@needs_data
+def test_result_data_residual_curve_plots(tmp_path):
+    """Result of 3DFIT: data and residual (computed when used), the rotation curve with positive errors,
+    and the plotting methods (matplotlib Figures)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    from bbarolo import FitMod3D, GalMod
+    kw = dict(radii=[150, 250, 350], xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8, inc=60, pa=123.7, z0=10,
+              twostage=False, threads=3, plots=False, verbose=0, distance=3.2)
+    res = FitMod3D(N2403, free="VROT VDISP", flagerrors=True, **kw).run(write=False)
+    assert "data" in res and "data" in res._lazy                 # not computed yet
+    assert res.data.data.shape == res.model.data.shape == res.residual.data.shape
+    m = np.asarray(res.mask.data, bool)
+    assert np.all(np.isnan(res.residual.data[~m]))
+    assert np.allclose(res.residual.data[m], (res.data.data - res.model.data)[m])
+    rc = res.rotation_curve
+    assert rc.colnames == ["radii", "rad_kpc", "vrot", "e_vrot_lo", "e_vrot_hi"] and np.all(rc["e_vrot_lo"] >= 0)
+    for f in (res.plot_rings(), res.plot_maps(), res.plot_pv()):
+        assert isinstance(f, matplotlib.figure.Figure)
+    g = GalMod(N2403, norm="AZIM", **kw).run(write=False)
+    assert g.residual.data.shape == g.model.data.shape and "rotation_curve" not in g

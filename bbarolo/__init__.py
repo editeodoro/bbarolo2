@@ -43,11 +43,12 @@ from .rings import Rings
 from .galmod import DiskModel
 from .pvslice import pv_path, pv_sample, pv_extract
 from .utils import SimulatedGalaxyCube, emptyfits
+from .bbutils import BBaroloError
 
 __all__ = ['FitMod3D', 'GalMod', 'GalWind', 'Search', 'FitMod2D', 'Ellprof', 'Smooth', 'SmoothSpec', 'Maps',
            'PVSlice', 'SpacePar', 'Rend3D', 'ContSub', 'Stats', 'MakeMask', 'BayesianBBarolo', 'run',
            'Result', 'read_parfile', 'Param', 'Cube', 'Rings', 'DiskModel', 'pv_path', 'pv_sample',
-           'pv_extract', 'SimulatedGalaxyCube', 'emptyfits', '__version__']
+           'pv_extract', 'SimulatedGalaxyCube', 'emptyfits', 'BBaroloError', '__version__']
 
 version = __version__
 BBBversion = __BBBversion__

@@ -25,7 +25,7 @@ from .rings import Rings
 from .smooth import Smooth3D
 from .moments import MomentMap
 from .pvslice import PositionVelocity
-from .bbutils import arcsconv, getCenterCoordinates, getDataColumn, AlltoVel, DeltaVel, \
+from .bbutils import BBaroloError, arcsconv, getCenterCoordinates, getDataColumn, AlltoVel, DeltaVel, \
     ProgressBar, randomAdjective
 from .plotscripts import run_scripts, F
 
@@ -114,8 +114,7 @@ class GalWind:
         Vwind, Vdisp = column(par.VWIND, par.VWIND), column(par.VDISP, par.VDISP)
         Dens, Vrot = column(par.DENS, par.DENS), column(par.VROT, par.VROT)
         if not (len(Vwind) == len(Vdisp) == len(Dens) == len(Vrot) == ntot):
-            print(" GALWIND ERROR: VWIND, VDISP and DENS must have size=NTOT!")
-            return False
+            raise BBaroloError(f"GALWIND: VWIND, VDISP, DENS and VROT must have NTOT={ntot} values (one per layer).")
 
         setup = GalmodSetup(c, gmpar=self._gmpar())
         gtype = getattr(c.pars(), "galmodtype", "MC")
@@ -181,13 +180,13 @@ class GalWind:
                        np.radians(column(par.OPENANG)), np.full(nr, x0), np.full(nr, y0),
                        np.full(nr, Vsys * 1000.)])
         if np.any(U[2] < 0):
-            raise ValueError("GALMOD error: Negative velocity dispersion not allowed.")
+            raise BBaroloError("GALMOD error: Negative velocity dispersion not allowed.")
         if np.any(U[3] < 0):
-            raise ValueError("GALMOD error: Negative column-density not allowed.")
+            raise BBaroloError("GALMOD error: Negative column-density not allowed.")
         urad = radii / 60.
         sep = 0.75 * min(setup.pixsize)
         if np.any(urad[:-1] + sep >= urad[1:]):
-            raise ValueError("GALMOD error: Radii not in increasing order or separation too small.")
+            raise BBaroloError("GALMOD error: Radii not in increasing order or separation too small.")
         f32 = np.float32
         rads, vals = [], []
         r = f32(urad[0] + sep / 2.) if urad[0] != 0 else f32(sep / 2.)

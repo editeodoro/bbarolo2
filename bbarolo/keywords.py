@@ -211,11 +211,12 @@ KEYWORDS = [
     # ---------------------------------------------------------------- general
     K("FITSFILE", "str", ["imageFile"], ALL, "FITS file to be analysed"),
     K("FITSLIST", "str", ["imageList"], ALL, "Text file with a list of FITS files to be analysed"),
-    K("VERBOSE", "flag", ["verbose"], ALL, "Printing output messages?"),
+    K("VERBOSE", "flagorint", ["verbose"], ALL, "Output messages: 0 (false) none, 1 (true, the default) the main "
+      "ones and one line per ring, 2 all (the parameters, the details of every ring, as in C++)"),
     K("OUTFOLDER", "str", ["outFolder"], ALL, "Directory where outputs are written (default ./output/<OBJECT>/)"),
     K("OUTPREFIX", "str", ["outPrefix"], ALL, "Prefix for output files (default: OBJECT keyword of the header)"),
     K("LOGFILE", "flag", ["logFile"], ALL, "Redirect output messages to a file?"),
-    K("THREADS", "int", ["threads"], ALL, "Number of threads (default: all the cores)"),
+    K("THREADS", "int", ["threads"], ALL, "Number of threads (default: the number of cores, at most 16)"),
     K("DEBUG", "flag", ["debug"], ALL, "Debugging mode?"),
     K("SHOWBAR", "flag", ["showbar"], ALL, "Showing progress bars?"),
     K("PLOTS", "flagorint", ["plots"], ALL, "Producing output plots?"),
@@ -348,9 +349,10 @@ KEYWORDS = [
       "Weighting function (0=uniform, 1=|cos|, 2=cos^2, -1=|sin|, -2=sin^2)"),
     K("TOL", "float", ["gf.TOL"], ("3DFIT",), "Minimization tolerance"),
     K("FREE", "str", ["gf.FREE"], ("3DFIT", "BAYESIAN3DFIT", "2DFIT"),
-      "Parameters to be minimized (required by BAYESIAN3DFIT, where a name alone has one value per ring, "
-      "NAME_SINGLE one value for all the rings, NAME_FUNC a function of radius, plus SIGMA, FRACERR and RADMAX; "
-      "case-insensitive)"),
+      "Free parameters, case-insensitive. 3DFIT and 2DFIT: any of VROT, VDISP, DENS, Z0, INC, PA, XPOS, YPOS, "
+      "VSYS, VRAD, or ALL. BAYESIAN3DFIT (required): a name alone has one value per ring, NAME_SINGLE one "
+      "value for all the rings, NAME_FUNC a function of radius (VROT, VDISP, DENS), plus SIGMA, FRACERR and "
+      "RADMAX"),
     K("SIDE", "ustr", ["gf.SIDE"], ("3DFIT", "SPACEPAR", "2DFIT", "ELLPROF"),
       "Side of the galaxy to be used (A=approaching, R=receding, B=both)"),
     K("BWEIGHT", "float", ["gf.BWEIGHT"], ("3DFIT", "SPACEPAR"), "Weight for blank pixels"),
@@ -592,5 +594,6 @@ def help(name=None, stream=None):
             st.write(describe(kw, kw.value(d)) + "\n\n")
         return
     if kw is None:
-        raise UnknownParameterError(unknown_message(name))
+        st.write("\n" + unknown_message(name)[0].upper() + unknown_message(name)[1:] + ".\n\n")
+        return
     st.write("\n" + describe(kw, kw.value(d)) + "\n\n")

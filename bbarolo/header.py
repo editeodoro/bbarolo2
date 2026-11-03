@@ -186,9 +186,13 @@ class Header:
         if n > 0 and "RA" in self.ctype[0] and self.crval[0] < 0:
             self.crval[0] += 360.
 
+        def velunit(i):
+            # a velocity axis without CUNIT: m/s if the channels are wider than 100 (no cube has
+            # channels of 100 km/s; C++ assumed km/s, or m/s when no CUNIT was given at all)
+            return "m/s" if abs(self.cdelt[i]) > 100 else "km/s"
         cunit = [g(f"CUNIT{i + 1}") for i in range(n)]
         if all(c is None for c in cunit):
-            dflt = ["deg", "deg", "hz" if (n > 2 and "freq" in self.ctype[2].lower()) else "m/s"]
+            dflt = ["deg", "deg", "hz" if (n > 2 and "freq" in self.ctype[2].lower()) else (velunit(2) if n > 2 else "")]
             cunit = [dflt[i] if i < 3 else "" for i in range(n)]
             self.Warning(f"HEADER WARNING: CUNITs keywords not found. Assuming [deg,deg,{cunit[2] if n > 2 else ''}]")
         else:
@@ -201,8 +205,9 @@ class Header:
                     if "stokes" in ct:
                         cunit[i] = "stokes"     # (C++ took an empty CUNIT3 of a Stokes axis as km/s)
                         continue
-                    cunit[i] = ("hz" if "freq" in ct else "km/s") if i >= 2 else "deg"
-                    self.Warning(f"HEADER WARNING: CUNIT{i + 1} keywords not found. Assuming {cunit[i]}.")
+                    cunit[i] = ("hz" if "freq" in ct else velunit(i)) if i >= 2 else "deg"
+                    self.Warning(f"HEADER WARNING: CUNIT{i + 1} keywords not found. Assuming {cunit[i]}"
+                                 + (f" (from CDELT{i + 1}={self.cdelt[i]:g})." if i >= 2 and "freq" not in ct else "."))
         self.cunit = cunit
 
         self.dunit3 = str(g("DUNIT3", "NONE"))

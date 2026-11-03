@@ -27,7 +27,7 @@ import numpy as np
 import numba as nb
 from concurrent.futures import ThreadPoolExecutor
 
-from .bbutils import DeltaVel, AlltoVel, C_MS, arcsconv
+from .bbutils import BBaroloError, DeltaVel, AlltoVel, C_MS, arcsconv
 from ._rng import rng_init, rng_uniform, rng_normal
 from .smooth import Smooth3D, FFTConvolver
 
@@ -527,7 +527,7 @@ class GalmodSetup:
             elif "arcs" in cu: arcmconv = 1 / 60.
             elif "arcm" in cu: arcmconv = 1.
             else:
-                raise ValueError(f"GALMOD error (unknown CUNIT for RA-DEC): cannot convert to ARCMIN.\n{cu}")
+                raise BBaroloError(f"GALMOD error (unknown CUNIT for RA-DEC): cannot convert to ARCMIN.\n{cu}")
             cdelt[i] = h.Cdelt(i) * arcmconv
         self.arcmconv = arcmconv
         self.cdelt = cdelt
@@ -550,7 +550,7 @@ class GalmodSetup:
             elif cunit3 in ("nm", "nanom"): mconv = 1.0E-09
             elif cunit3 in ("a", "ang", "angstrom"): mconv = 1.0E-10
             else:
-                raise ValueError(f"GALMOD ERROR: unknown CUNIT3={cunit3}. Cannot convert to meters.")
+                raise BBaroloError(f"GALMOD ERROR: unknown CUNIT3={cunit3}. Cannot convert to meters.")
             self.crval3 *= mconv
             self.cdelt3 *= mconv
             restw = p.getRestwave()
@@ -562,7 +562,7 @@ class GalmodSetup:
             self.axtyp = 3
             hz = {"hz": 1, "khz": 1E03, "mhz": 1E06, "ghz": 1E09}.get(cunit3)
             if hz is None:
-                raise ValueError(f"GALMOD ERROR: unknown CUNIT3={cunit3}. Cannot convert to Hz.")
+                raise BBaroloError(f"GALMOD ERROR: unknown CUNIT3={cunit3}. Cannot convert to Hz.")
             self.crval3 *= hz
             self.cdelt3 *= hz
             self.freq0 = h.Freq0() / (1 + reds)
@@ -577,14 +577,14 @@ class GalmodSetup:
             # the units of AlltoVel and DeltaVel (C++ took any other unit, e.g. kms, as cm/s)
             msconv = {"m/s": 1., "ms": 1., "km/s": 1.0E03, "kms": 1.0E03}.get(cunit3)
             if msconv is None:
-                raise ValueError(f"GALMOD ERROR: unknown CUNIT3={cunit3}. Cannot convert to m/s.")
+                raise BBaroloError(f"GALMOD ERROR: unknown CUNIT3={cunit3}. Cannot convert to m/s.")
             self.freq0 = h.Freq0() / (1 + reds)
             if self.freq0 == 0:
                 self.freq0 = 0.1420405751786E10
             self.crval3 *= msconv
             self.cdelt3 *= msconv
         else:
-            raise ValueError("GALMOD ERROR: unknown Spectral axis type. Check CTYPE3 and CUNIT3 keywords.")
+            raise BBaroloError("GALMOD ERROR: unknown Spectral axis type. Check CTYPE3 and CUNIT3 keywords.")
         nch = p.specres if getattr(p, "specres", -1) != -1 else p.linear     # (LINEAR: as in C++)
         if nch == -1:
             nch = 1. / (2 * math.sqrt(2 * math.log(2)))
@@ -658,8 +658,8 @@ class GalmodSetup:
         for i in range(1, nr):
             if rad[i - 1] + radsep >= rad[i]:
                 if rad[i - 1] > rad[i]:
-                    raise ValueError("GALMOD ERROR: Radii not in increasing order.")
-                raise ValueError("GALMOD ERROR: Radius separation too small.")
+                    raise BBaroloError("GALMOD ERROR: Radii not in increasing order.")
+                raise BBaroloError("GALMOD ERROR: Radius separation too small.")
         if np.any(np.asarray(rings.vdisp) < 0):
             raise ValueError("GALMOD ERROR: Negative velocity dispersion not allowed.")
         if np.any(np.asarray(rings.dens) < 0):

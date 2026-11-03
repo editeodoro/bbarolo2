@@ -70,6 +70,53 @@ def checkHome(s):
     return s
 
 
+_FREE_NAMES = ("vrot", "disp", "dens", "z0", "inc", "pa", "phi", "xpos", "ypos", "vsys", "vrad", "all")
+_NUM = r"[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?"
+
+
+def unknown_keyword(name):
+    """An unknown keyword of a parameter file (or KEY=value): an error if it is very close to a known
+    one (a typo, e.g. VDSIP), otherwise a warning (it is ignored, as in C++)."""
+    import difflib
+    close = difflib.get_close_matches(str(name).lower(), list(_kw.LOOKUP), n=1, cutoff=0.8)
+    if close:
+        from .bbutils import BBaroloError
+        raise BBaroloError(f"{_kw.unknown_message(name)}")
+    sys.stderr.write(f" BBAROLO WARNING: {_kw.unknown_message(name)}. It is ignored.\n")
+
+
+def ring_value_problem(key, value):
+    """None if value is acceptable for the ring parameter key (RADII, VROT, XPOS, ...), otherwise a
+    message: a number, one number per ring, file(name,col) or, for RADII, Rmin~Rmax:step; for XPOS and
+    YPOS also a WCS value (123.4d, 07:36:51, 07h36m51s)."""
+    import re
+    v = str(value).strip()
+    if v in ("", "-1") or "file(" in v.lower():
+        return None
+    toks = v.replace(",", " ").split()
+    if key == "RADII" and len(toks) == 1 and re.fullmatch(_NUM + "~" + _NUM + ":" + _NUM, toks[0]):
+        return None
+    ok = re.compile(_NUM + "$")
+    wcs = re.compile(r"[+-]?[\d.:]+(d|deg|h)?([\d.]+m)?([\d.]+s)?$|[+-]?\d+[hd]\d*m?[\d.]*s?$")
+    for t in toks:
+        if ok.match(t) or (key in ("XPOS", "YPOS") and wcs.match(t.lower())):
+            continue
+        return (f"{key}={v!r} is not valid: give a number, one number per ring, file(name,column)"
+                + (" or Rmin~Rmax:step" if key == "RADII" else "")
+                + (", or a WCS position (e.g. 123.4d, 07:36:51, 07h36m51s)" if key in ("XPOS", "YPOS") else ""))
+    return None
+
+
+def free_problem(free):
+    """None if every name of FREE (3DFIT) is known, otherwise a message."""
+    import re
+    bad = [t for t in re.split(r"[\s,]+", str(free).strip()) if t and not any(k in t.lower() for k in _FREE_NAMES)]
+    if bad:
+        return (f"unknown free parameter(s) {', '.join(bad)} in FREE (accepted: VROT, VDISP, DENS, Z0, INC, PA, "
+                "XPOS, YPOS, VSYS, VRAD or ALL)")
+    return None
+
+
 # --------------------------------------------------------------------------
 # Parameter structures
 # --------------------------------------------------------------------------
@@ -224,7 +271,7 @@ class Param:
         self.outFolder = ""
         self.outPrefix = ""
         self.logFile = False
-        self.verbose = True
+        self.verbose = 1             # 0 quiet, 1 normal, 2 everything (VERBOSE)
         self.showbar = True
         self.plots = 1
         self.beamFWHM = -1.0
@@ -287,7 +334,7 @@ class Param:
 
         self.debug = False
         self.AUTO = False
-        self.threads = os.cpu_count() or 1
+        self.threads = min(os.cpu_count() or 1, 16)   # (all the cores is too many on a shared server)
 
         # New options of the python port
         self.galmodtype = "MC"   # MC = classic Monte Carlo GALMOD, ANALYTIC = noiseless profiles
@@ -392,7 +439,7 @@ class Param:
         rest = parts[1] if len(parts) > 1 else ""
         kw = _kw.lookup(parts[0])
         if kw is None:
-            sys.stderr.write(f" BBAROLO WARNING: {_kw.unknown_message(parts[0])}. It is ignored.\n")
+            unknown_keyword(parts[0])
             return
         kw.apply(self, rest)
 
@@ -534,6 +581,8 @@ class Param:
             if gf.flagGALFIT:
                 if gf.FREE == "":
                     out("3DFIT error: FREE" + msg); good = False
+                elif free_problem(gf.FREE):
+                    out("3DFIT error: " + free_problem(gf.FREE)); good = False
                 if gf.FTYPE < 1 or gf.FTYPE > 4:
                     out("3DFIT warning: Not valid argument for FTYPE parameter. Assuming 2 (|mod-obs|).")
                     gf.FTYPE = 2
@@ -599,6 +648,15 @@ class Param:
             if gf.flagADRIFT and gf.ADRIFTPOL2 < 0:
                 sys.stderr.write("3DFIT ERROR: ADRIFTPOL2 needs to be >0. Defaulting it to 3.")
                 gf.ADRIFTPOL2 = 3
+
+        if gf.flagGALFIT or gf.flagBAYESIAN or self.flagSpace or gm.flagGALMOD or self.flagRing or self.flagEllProf:
+            st = gm if gm.flagGALMOD else gf
+            for key in _RING_KEYS:
+                attr = "PHI" if key == "PA" else key
+                if hasattr(st, attr):
+                    prob = ring_value_problem(key, getattr(st, attr))
+                    if prob:
+                        out("INPUT error: " + prob); good = False
 
         if self.flagEllProf:
             msg = " is not an optional parameter. Please specify it in the input file."
@@ -1151,13 +1209,20 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
     R("[THREADS]", "Number of threads", p.threads)
     R("[PLOTS]", "Producing output plots?", stringize(p.plots))
     R("[SHOWBAR]", "Showing progress bars?", stringize(p.showbar))
-    R("[VERBOSE]", "Printing output messages?", stringize(p.verbose))
+    R("[VERBOSE]", "Output messages (0 none, 1 main, 2 all)?", int(p.verbose))
     if p.outFolder != "" or defaults: R("[OUTFOLDER]", "Directory where outputs are written", p.outFolder)
     if p.outPrefix != "" or defaults: R("[OUTPREFIX]", "Prefix for output files", p.outPrefix)
     R("[LOGFILE]", "Redirect output messages to a file?", stringize(p.logFile))
     R("[flagRobustStats]", "Using robust statistics?", stringize(p.flagRobustStats))
     R("[FLUXCONVERT]", "Whether to convert flux to Jy?", stringize(p.fluxConvert))
     if p.checkCube or (defaults and isAll): R("[checkCube]", "Check cube for bad channels/rows/columns?", p.checkCube)
+    if defaults or p.beamFWHM != -1:
+        fwhm = p.beamFWHM * 3600. if getattr(p, "_beamConverted", False) and p.beamFWHM != -1 / 3600. else p.beamFWHM
+        R("[BEAMFWHM]", "Beam FWHM (arcsec) if not in the header", fwhm)
+        if defaults and whichtask not in ("SMOOTH", "ALL"):
+            R("[BMAJ]", "Beam major axis (arcsec) if not in the header", p.bmaj)
+            R("[BMIN]", "Beam minor axis (arcsec) if not in the header", p.bmin)
+            R("[BPA]", "Beam position angle (deg) if not in the header", p.bpa)
     if p.debug: R("[DEBUG]", "Debugging mode?", stringize(p.debug))
     Str.write("-----------------\n")
 
@@ -1280,7 +1345,8 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
         R("[MASK]", "   Type of mask", p.MaskType)
         if isGalfit or isGalmod or isSpacepar: R("[NORM]", "   Type of normalization", gf.NORM)
         if isGalfit: R("[SIDE]", "   Side of the galaxy to be used", gf.SIDE)
-        if gf.DISTANCE != -1: R("[DISTANCE]", "   Distance of the galaxy (Mpc)?", gf.DISTANCE)
+        if gf.DISTANCE != -1 or defaults:
+            R("[DISTANCE]", "   Distance of the galaxy (Mpc; -1: from VSYS)?", gf.DISTANCE)
         typ = {1: "gaussian", 2: "sech2", 3: "exponential", 4: "Lorentzian", 5: "box"}.get(gf.LTYPE, "")
         R("[LTYPE]", "   Layer type along z direction", typ)
         gmt = p.galmodtype

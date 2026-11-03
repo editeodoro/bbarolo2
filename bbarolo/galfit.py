@@ -24,7 +24,7 @@ from concurrent.futures import ThreadPoolExecutor
 from .rings import Rings, readRings
 from .galmod import DiskModel
 from .stats import findMedian, findMADFM, madfmToSigma
-from .bbutils import (arcsconv, AlltoVel, VeltoDist, KpcPerArc, DeltaVel, bezier_interp, polyfit_lsq,
+from .bbutils import (BBaroloError, arcsconv, AlltoVel, VeltoDist, KpcPerArc, DeltaVel, bezier_interp, polyfit_lsq,
                       ProgressBar, mkdirp)
 
 VROT, VDISP, DENS, Z0, INC, PA, XPOS, YPOS, VSYS, VRAD, MAXPAR = range(11)
@@ -258,6 +258,24 @@ def ringfile_values(par):
     if par.VRAD == "-1": par.VRAD = f"file({rf},13)"
 
 
+def check_vsys(c, rings, fatal=True):
+    """VSYS of the rings must be in the velocity range of the cube: a BBaroloError if fatal (3DFIT),
+    otherwise a warning (GALMOD). A VSYS given in m/s instead of km/s is the usual cause."""
+    h = c.Head()
+    if c.DimZ() < 2:
+        return
+    v = [AlltoVel(c.getZphys(0), h), AlltoVel(c.getZphys(c.DimZ() - 1), h)]
+    lo, hi = min(v), max(v)
+    out = [x for x in np.atleast_1d(rings.vsys) if not lo <= x <= hi]
+    if not out:
+        return
+    msg = (f"VSYS={out[0]:g} km/s is outside the velocity range of the cube ({lo:.1f} to {hi:.1f} km/s)"
+           + (": is it in m/s?" if lo <= out[0] / 1000. <= hi else "."))
+    if fatal:
+        raise BBaroloError(msg)
+    print(f" WARNING: {msg}")
+
+
 def initial_rings(c, par, galmod=False, write=True):
     """The initial rings of 3DFIT, or the rings of GALMOD (galmod=True), from the
     parameters par (a GalfitPar; changed in place: the values that are not given are set).
@@ -303,7 +321,7 @@ def initial_rings(c, par, galmod=False, write=True):
 
     inR, fromfile = readRings(par, c.Head(), return_fromfile=True)
     if inR.nr == 0:
-        raise ValueError("\n 3DFIT ERROR: The number of radii must be > 0! ")
+        raise BBaroloError("\n 3DFIT ERROR: The number of radii must be > 0! ")
     if write:
         writeInitialRings(inR, p.outFolder + ("rings_model.txt" if galmod else "rings_initial.txt"))
     return types.SimpleNamespace(rings=inR, fromfile=fromfile, estimated=estimated, toEstimate=toEstimate, ip=ip)
@@ -413,13 +431,18 @@ class Galfit:
         self.verb = c.pars().verbose
         for ir in range(self.inr.nr):
             if ir and self.inr.radii[ir] <= self.inr.radii[ir - 1]:
-                raise ValueError("3DFIT ERROR: Radii not in increasing order.")
+                raise BBaroloError("3DFIT ERROR: Radii not in increasing order.")
             if self.inr.radii[ir] < 0:
-                raise ValueError("3DFIT ERROR: Negative radius!!!")
+                raise BBaroloError("3DFIT ERROR: Negative radius!!!")
         c.checkBeam()
         h = c.Head()
         self.arcconv = arcsconv(h.Cunit(0))
+        check_vsys(c, self.inr, fatal=True)
         self.distance = VeltoDist(abs(self.inr.vsys[0])) if par.DISTANCE == -1 else par.DISTANCE
+        if par.DISTANCE == -1 and self.verb and not getattr(c, "_distnote", False):
+            c._distnote = True
+            print(f" NOTE: DISTANCE is not given: {self.distance:.3g} Mpc from VSYS and the Hubble flow "
+                  "(H0 = 70 km/s/Mpc), for the radii in kpc and Z0 in pc.")
         self.chan_noise = np.ones(c.DimZ(), np.float64)
         if not c.StatsDef():
             c.setCubeStats()
@@ -480,6 +503,7 @@ class Galfit:
         self.data_T = np.ascontiguousarray(c.array.transpose(1, 2, 0))
         self._rngs = {}
         self._tls = threading.local()
+        self._ringstat = {}             # outcome of the fit of each ring (for the summary)
 
     def __getstate__(self):
         st = self.__dict__.copy()
@@ -504,7 +528,7 @@ class Galfit:
         if "vrad" in f: m[VRAD] = True
         if "all" in f: m = [True] * MAXPAR
         if not any(m):
-            raise ValueError(" 3DFIT ERROR: NO free parameters!")
+            raise BBaroloError(" 3DFIT ERROR: NO free parameters!")
         self.mpar = m
         self.nfree = sum(m)
 
@@ -766,13 +790,17 @@ class Galfit:
                 getattr(o, key)[ir] = pmin[k]
                 k += 1
 
-    def _check_vrot(self, ir):
+    def _max_vrot(self, ir):
+        """The largest VROT whose projection still falls in the spectral band (for VSYS and INC of
+        the ring ir)."""
         c, h, o = self.cin, self.cin.Head(), self.outr
         maxv = abs(AlltoVel(c.getZphys(c.DimZ() - 1), h) - o.vsys[ir])
         minv = abs(AlltoVel(c.getZphys(0), h) - o.vsys[ir])
         sini = math.sin(o.inc[ir] * math.pi / 180.)
-        maxvrot = max(maxv / sini, minv / sini) if sini != 0 else np.inf
-        return o.vrot[ir] <= maxvrot
+        return max(maxv / sini, minv / sini) if sini != 0 else np.inf
+
+    def _check_vrot(self, ir):
+        return self.outr.vrot[ir] <= self._max_vrot(ir)
 
     def _fit_ring(self, ir, errors, fitok, nthreads, toKpc, modsoFar=None):
         # the generator of this ring is used only during its fit (see _rng)
@@ -781,10 +809,15 @@ class Galfit:
             self._fit_one_ring(ir, errors, fitok, nthreads, toKpc, modsoFar)
         finally:
             self._tls.rng = None
+            bar = getattr(self, "_bar", None)
+            if bar is not None:
+                with self._lock:
+                    self._ndone += 1
+                    bar.update(self._ndone)
 
     def _fit_one_ring(self, ir, errors, fitok, nthreads, toKpc, modsoFar=None):
         inr = self.inr
-        if self.verb and nthreads == 1:
+        if self.verb >= 2 and nthreads == 1:
             print(f"\n Working on ring #{ir + 1} at radius {inr.radii[ir]:.2f} arcsec "
                   f"({inr.radii[ir] * toKpc:.2f} Kpc)... [{time.strftime('%H:%M:%S')}]")
         dring = self._make_dring(ir)
@@ -795,26 +828,34 @@ class Galfit:
                                            dring.xpos[-1] - blo[0], dring.ypos[-1] - blo[1],
                                            dring.phi[-1], dring.inc[-1], dring.radii[0] / ps, dring.radii[-1] / ps)
             if nIn < 20 and (nIn == 0 or nIn < 0.7 * nTot):
-                if self.verb:
+                if self.verb >= 2:
                     WarningMessage(sys.stdout, f" Not enough pixels to fit in ring #{ir + 1}. I will skip it.")
+                self._ringstat[ir] = ("skipped: few pixels in the mask", None)
                 fitok[ir] = False
                 return
         ok, minimum, pmin = self.minimize(dring, modsoFar)
         fitok[ir] = ok
         if not ok:
-            if self.verb:
+            self._ringstat[ir] = ("not converged", minimum)
+            if self.verb >= 2:
                 WarningMessage(sys.stdout, f" Can not achieve convergence in ring #{ir + 1}. I'll keep going, but \n"
                                            " parameters for this ring are wrong! Please, try to change initial \n"
                                            " conditions and/or the function to minimize.")
             return
         self._store(ir, pmin)
         if not self._check_vrot(ir):
-            if self.verb:
-                WarningMessage(sys.stdout, f" Ring #{ir + 1} does not look good. I will ignore it and treat it as a   \n"
-                                           "non-converged fit.")
+            self._ringstat[ir] = (f"rejected: VROT > {self._max_vrot(ir):.0f} km/s (the band)", minimum)
+            if self.verb >= 2:
+                o = self.outr
+                WarningMessage(sys.stdout, f" Ring #{ir + 1}: the fitted VROT ({o.vrot[ir]:.1f} km/s) is larger "
+                                           f"than the band allows\n (at most {self._max_vrot(ir):.1f} km/s for "
+                                           f"VSYS={o.vsys[ir]:.1f} km/s and INC={o.inc[ir]:.1f} deg).\n The ring "
+                                           "is treated as a non-converged fit (try other initial values,\n e.g. "
+                                           "a lower VROT, or a wider band).")
             fitok[ir] = False
             return
-        if self.verb:
+        self._ringstat[ir] = ("ok", minimum)
+        if self.verb >= 2:
             with self._lock:
                 printRing(sys.stdout, self.outr, ir, minimum, toKpc, self.mpar, nthreads)
         if self.par.flagERRORS:
@@ -846,6 +887,11 @@ class Galfit:
         fitok = [False] * nr
         nthreads = p.threads
         toKpc = KpcPerArc(self.distance)
+        self._ringstat, self._ndone, self._bar = {}, 0, None
+        start = self.par.STARTRAD if self.par.STARTRAD < nr else 0
+        if self.verb == 1:                       # (VERBOSE 2: every ring, as in C++)
+            self._bar = ProgressBar(True, True, p.showbar)
+            self._bar.init(f" Stage {n}: fitting {nr - start} rings with {max(1, nthreads)} threads ", nr - start)
         try:
             if self.reverse:
                 self.fit_reverse(errors, fitok, toKpc)
@@ -862,6 +908,11 @@ class Galfit:
         finally:
             self.data_noise, self.data_T = dn_orig, dT_orig
             self.scaled_data = c.array
+            if self._bar is not None:
+                self._bar.fillSpace(" Done.\n")
+                self._bar = None
+        if self.verb == 1:
+            self._print_rings(range(start, nr), toKpc)
         self.fitok = fitok
         self.errors = errors
         with open(fileo, "w") as fout:
@@ -879,7 +930,27 @@ class Galfit:
                     self.outr.dens[ir] = 0
         if self.verb:
             print("=" * 69 + "\n")
-            p.verbose = True
+            p.verbose = self.verb
+
+    def _print_rings(self, rings, toKpc):
+        """The rings of a stage, in order of radius: the free parameters, fmin and the outcome."""
+        names = [("VROT", VROT, "vrot"), ("VDISP", VDISP, "vdisp"), ("DENS", DENS, "dens"), ("Z0", Z0, "z0"),
+                 ("INC", INC, "inc"), ("PA", PA, "phi"), ("XPOS", XPOS, "xpos"), ("YPOS", YPOS, "ypos"),
+                 ("VSYS", VSYS, "vsys"), ("VRAD", VRAD, "vrad")]
+        cols = [x for x in names if self.mpar[x[1]]]
+        o = self.outr
+        head = f"   {'#':>3s} {'RAD(arcs)':>9s} {'RAD(kpc)':>8s}" + "".join(f" {x[0]:>8s}" for x in cols)
+        print(head + f" {'fmin':>10s}  outcome")
+        for ir in rings:
+            st, fmin = self._ringstat.get(ir, ("not fitted", None))
+            line = f"   {ir + 1:3d} {o.radii[ir]:9.2f} {o.radii[ir] * toKpc:8.3f}"
+            fitted = st == "ok" or st.startswith("rejected") or st == "not converged"
+            for _, _, attr in cols:
+                v = getattr(o, attr)[ir]
+                line += f" {v:8.2f}" if fitted else f" {'-':>8s}"
+            line += f" {fmin:10.4g}" if fmin is not None else f" {'-':>10s}"
+            print(line + "  " + st)
+        sys.stdout.flush()
 
     def fit_reverse(self, errors, fitok, toKpc):
         inr = self.inr
