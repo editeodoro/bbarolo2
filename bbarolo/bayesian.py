@@ -63,8 +63,8 @@ Differences from the original module (other than running without the C++ library
     inherit the fitter, so nothing big is pickled and it also works on macOS (where the
     default 'spawn' start method broke the original global-function approach). Under MPI,
     schwimmbad's MPIPool is used as before;
-  * ``GALMODTYPE='ANALYTIC'`` (``set_options(galmodtype='ANALYTIC')``) gives a likelihood
-    free of Monte-Carlo noise;
+  * the models are ANALYTIC by default (GALMODTYPE=MC for the Monte-Carlo models): the
+    likelihood has no Monte-Carlo noise, and is about twice faster;
   * the likelihood uses the measured noise per voxel when 'sigma' is not fitted (instead
     of sigma=1 in the units of the data), is multiplied by 1/(correlation volume of the
     noise) (each independent noise measurement counts once; noisecorr='beam' uses the beam
@@ -604,6 +604,17 @@ class BayesianBBarolo(FitMod3D):
             out[key] = val
         self.like_kwargs, self._like_kwargs = out, call
         return out
+
+    def _all_params(self, outfolder=None, fitsfile=None):
+        # The defaults of the Bayesian fit that differ from 3DFIT (keywords.TASK_DEFAULTS): ANALYTIC
+        # models, whose likelihood has no Monte-Carlo noise (with sigma = the noise, the noise of MC
+        # models makes it rough and the sampling slow) and which are about twice faster. A GALMODTYPE
+        # that is given (MC) is kept.
+        from .keywords import TASK_DEFAULTS
+        prm = super(BayesianBBarolo, self)._all_params(outfolder=outfolder, fitsfile=fitsfile)
+        for k, v in TASK_DEFAULTS[self.TASK].items():
+            prm.setdefault(k, v)
+        return prm
 
     def _outfolder(self):
         of = self._params.get("OUTFOLDER")

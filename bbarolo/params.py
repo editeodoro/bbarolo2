@@ -1283,7 +1283,11 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
         if gf.DISTANCE != -1: R("[DISTANCE]", "   Distance of the galaxy (Mpc)?", gf.DISTANCE)
         typ = {1: "gaussian", 2: "sech2", 3: "exponential", 4: "Lorentzian", 5: "box"}.get(gf.LTYPE, "")
         R("[LTYPE]", "   Layer type along z direction", typ)
-        R("[GALMODTYPE]", "   Type of model (MC or ANALYTIC)", p.galmodtype)
+        gmt = p.galmodtype
+        if (defaults and whichtask == "BAYESIAN3DFIT") or \
+                (not defaults and gf.flagBAYESIAN and "GALMODTYPE" not in getattr(p, "_given", {})):
+            gmt = "ANALYTIC"                    # the default of BAYESIAN3DFIT (keywords.TASK_DEFAULTS)
+        R("[GALMODTYPE]", "   Type of model (MC or ANALYTIC)", gmt)
         R("[RINGMODE]", "   Ring convention (CENTRED, NODES, SHIFTED)", p.ringmode)
         R("[EMPTY]", "   Whether to leave empty inner part", stringize(gf.EMPTY))
         if isGalfit:

@@ -236,7 +236,8 @@ KEYWORDS = [
       "S/N cut for the SMOOTH mask"),
     K("STATS", "flag", ["flagStats"], ("STATS",), "Calculate and print statistics?", flag=True),
     K("GALMODTYPE", "ustr", ["galmodtype"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "GALWIND"),
-      "Type of model: MC (Monte Carlo) or ANALYTIC (noiseless, pure-Python only)"),
+      "Type of model: MC (Monte Carlo) or ANALYTIC (noiseless, pure-Python only). Default MC, but "
+      "ANALYTIC for BAYESIAN3DFIT"),
     K("RINGMODE", "ustr", ["ringmode"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD"),
       "Rings of the models: CENTRED (each ring is an annulus centred on its radius, reaching "
       "halfway to the next rings, as fitted by 3DFIT), NODES (values at the radii, disk from the "
@@ -524,6 +525,10 @@ def _task_of(name):
     return _CLASS_TASK.get(n.lower())
 
 
+# Defaults that differ for a task (applied by its class, e.g. BayesianBBarolo._all_params)
+TASK_DEFAULTS = {"BAYESIAN3DFIT": {"GALMODTYPE": "ANALYTIC"}}
+
+
 def describe(kw, default=None):
     """One keyword as text: name, aliases, default, tasks and description."""
     s = f"{kw.name}"
@@ -577,10 +582,11 @@ def help(name=None, stream=None):
     if task is not None:
         st.write(f"\nParameters of {task}" + (" (task flag set automatically by its class)" if task != "MAPS" else "")
                  + ":\n\n")
+        tdef = TASK_DEFAULTS.get(task, {})
         for k in keywords_for(task):
             if k.name == task:
                 continue
-            st.write(f"  {k.name:18s}{k.help} [{_fmtval(k.value(d))}]\n")
+            st.write(f"  {k.name:18s}{k.help} [{_fmtval(tdef.get(k.name, k.value(d)))}]\n")
         st.write("\nGeneral parameters: " + ", ".join(k.name for k in KEYWORDS if k.tasks[0] == "ALL") + "\n\n")
         if kw is not None and kw.name != task:
             st.write(describe(kw, kw.value(d)) + "\n\n")

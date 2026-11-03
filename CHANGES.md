@@ -89,6 +89,11 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **BayesianBBarolo and BAYESIAN3DFIT use ANALYTIC models by default** (GALMODTYPE; 3DFIT, GALMOD
+  and the other tasks keep MC). Their likelihood has no Monte-Carlo noise: with sigma equal to the
+  noise, the noise of MC models made it rough and the sampling slow. A likelihood call is also about
+  twice faster (NGC 2403, 6 rings: 18 ms against 33 ms). `GALMODTYPE MC` gives the previous models;
+  `examples/compare_bayesian.py`, which compares with the C++-based module, sets it.
 - The input file is recorded with its absolute path (in the HISTORY of the mask, the plotting
   scripts and the printed parameters), and `Result.files` and `Result.outfolder` are absolute.
 - Output headers no longer carry the CD matrix of the input: the WCS is written as CDELT, plus PC

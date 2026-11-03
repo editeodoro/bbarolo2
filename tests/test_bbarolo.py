@@ -1390,3 +1390,22 @@ def test_fft_kernel_cache_is_bounded():
     for n in range(10, 10 + 3 * FFTConvolver.MAXCACHE):
         cv(rng.random((n, n)))
     assert len(cv._cache) == FFTConvolver.MAXCACHE and np.array_equal(cv(a), ref)
+
+
+@needs_data
+def test_bayesian_default_analytic(tmp_path):
+    """BayesianBBarolo and BAYESIAN3DFIT use ANALYTIC models by default; a GALMODTYPE that is given is
+    kept. 3DFIT keeps MC."""
+    from bbarolo import FitMod3D
+    from bbarolo.bayesian import BayesianBBarolo
+    kw = dict(radii=[100, 200], xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10, inc=60, pa=123.7, z0=10,
+              outfolder=str(tmp_path) + "/")
+    assert BayesianBBarolo(N2403, **kw)._make_par().galmodtype == "ANALYTIC"
+    assert BayesianBBarolo(N2403, galmodtype="MC", **kw)._make_par().galmodtype == "MC"
+    assert FitMod3D(N2403, **kw).par.galmodtype == "MC"
+    par = tmp_path / "b.par"
+    par.write_text(f"FITSFILE {N2403}\nBAYESIAN3DFIT true\nFREE VROT\nRADII 100 200\nXPOS 77\nYPOS 77\nVSYS 132.8\n"
+                   "VROT 100\nVDISP 10\nINC 60\nPA 123.7\nZ0 10\n")
+    assert BayesianBBarolo.from_parfile(str(par))._make_par().galmodtype == "ANALYTIC"
+    par.write_text(par.read_text() + "GALMODTYPE MC\n")
+    assert BayesianBBarolo.from_parfile(str(par))._make_par().galmodtype == "MC"

@@ -53,7 +53,8 @@ def make():
     else:                                     # pure-Python bbarolo
         from bbarolo import BayesianBBarolo
         f = BayesianBBarolo(cfg["cube"], radii=np.array(cfg["radii"]), pa=123.7, mask="SEARCH",
-                            outfolder=cfg["outfolder"], plots=0, ringmode="SHIFTED", **ring)   # C++ rings
+                            outfolder=cfg["outfolder"], plots=0, ringmode="SHIFTED",   # C++ rings
+                            galmodtype="MC", **ring)                  # C++ models (default: ANALYTIC)
     return f
 
 
