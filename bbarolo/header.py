@@ -13,6 +13,8 @@ import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
 
+from .bbutils import degconv
+
 
 
 def _lower(s):
@@ -183,8 +185,6 @@ class Header:
             dflt = ["RA---NCP", "DEC--NCP", "VRAD"]
             ctype = [dflt[i] if i < 3 else "" for i in range(n)]
         self.ctype = [str(c) if c is not None else "" for c in ctype]
-        if n > 0 and "RA" in self.ctype[0] and self.crval[0] < 0:
-            self.crval[0] += 360.
 
         def velunit(i):
             # a velocity axis without CUNIT: m/s if the channels are wider than 100 (no cube has
@@ -209,6 +209,21 @@ class Header:
                     self.Warning(f"HEADER WARNING: CUNIT{i + 1} keywords not found. Assuming {cunit[i]}"
                                  + (f" (from CDELT{i + 1}={self.cdelt[i]:g})." if i >= 2 and "freq" not in ct else "."))
         self.cunit = cunit
+        # Spatial axes in arcsec or arcmin are converted to degrees, the unit of BMAJ and BMIN in FITS
+        # files: the code compares the beam with CDELT and converts both with the CUNIT of the axes (C++
+        # mixed the two: beam area, beam in pixels, ring widths and warnings were wrong for such cubes).
+        # The outputs are then written in degrees.
+        self._spatial_scaled = False
+        for i in range(min(n, 2)):
+            cu = self.cunit[i].lower()
+            if "arcs" in cu or "arcm" in cu:
+                f = degconv(cu)
+                self.cdelt[i] *= f
+                self.crval[i] *= f
+                self.cunit[i] = "deg"
+                self._spatial_scaled = True
+        if n > 0 and "RA" in self.ctype[0] and self.crval[0] < 0:
+            self.crval[0] += 360.
 
         self.dunit3 = str(g("DUNIT3", "NONE"))
         if "BUNIT" in hdr:
@@ -416,6 +431,9 @@ class Header:
             # Use the full header but with sanitized units
             wh = self._wcs_header()
             hdr = hdr.copy()
+            if getattr(self, "_spatial_scaled", False):
+                for k in [k for k in hdr if k[:2] in ("CD", "PC") and "_" in k and k[2:3].isdigit()]:
+                    del hdr[k]              # (in the units of the input; the rotation is in pc)
             for k in wh:
                 hdr[k] = wh[k]
         with warnings.catch_warnings():

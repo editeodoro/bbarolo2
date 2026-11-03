@@ -7,6 +7,12 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **Spatial axes in arcsec or arcmin (C++).** BMAJ and BMIN are in degrees in FITS files, but the
+  code compared them with CDELT in the units of the axes. For such cubes the beam area, the beam in
+  pixels, the ring width estimated from the beam (0.008 arcsec: a blind 3DFIT stopped with "Radius
+  separation too small"), the region and the noise correlation of the Bayesian likelihood, and the
+  header warnings were wrong. The spatial axes are now converted to degrees when the cube is read,
+  so the results are those of the same cube in degrees, and the outputs are written in degrees.
 - **3DFIT and GALMOD changed the parameters seen by later tasks.** The ring parameters that
   are estimated or defaulted (XPOS, VSYS, DVDZ, ZCYL, the RINGFILE columns, ...) were written
   into the parameters of the cube, so the next tasks of the same run used them. For example, a

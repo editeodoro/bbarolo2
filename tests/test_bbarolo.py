@@ -1586,3 +1586,36 @@ def test_initial_estimates(tmp_path, guesstype):
     p.checkPars(quiet=True)
     ip = EstimateInitial(Cube(fn, par=p), p.gf)
     assert ip.inclin == 65 and ip.vsystem == 1
+
+
+def test_spatial_axes_in_arcsec(tmp_path):
+    """Spatial axes in arcsec or arcmin (BMAJ in degrees, as in FITS) are converted to degrees on
+    reading: the same results as in degrees (C++ mixed the units: the beam area, the estimated ring
+    width (0.008 arcsec: 3DFIT stopped), the region of the Bayesian likelihood)."""
+    from astropy.io import fits
+    import bbarolo
+    from bbarolo.bayesian import BayesianBBarolo
+    fn = _mock_cube(tmp_path, "deg")
+    h, d = fits.getheader(fn), fits.getdata(fn)
+    for name, f, u in (("arcs", 3600., "arcsec"), ("arcm", 60., "arcmin")):
+        h2 = h.copy()
+        for k in ("CDELT1", "CDELT2", "CRVAL1", "CRVAL2"):
+            h2[k] = h[k] * f
+        h2["CUNIT1"] = h2["CUNIT2"] = u
+        fits.PrimaryHDU(d, header=h2).writeto(str(tmp_path / f"{name}.fits"))
+    out = {}
+    for name in ("deg", "arcs", "arcm"):
+        fn = str(tmp_path / f"{name}.fits")
+        hd = Cube(fn, par=Param()).Head()
+        r = bbarolo.FitMod3D(fn, free="vrot inc", mask="SEARCH", galmodtype="ANALYTIC", outfolder=str(tmp_path / name),
+                             verbose=0, plots=0, twostage=False, threads=1).run()
+        mh = fits.getheader(str(tmp_path / name / "MOCK_mod_azim.fits"))
+        f = BayesianBBarolo(fn, radii=[20, 60, 100, 140], xpos=31.5, ypos=31.5, vsys=0, vrot=120, vdisp=15, z0=0, inc=60,
+                            pa=45, mask="SEARCH", outfolder=str(tmp_path / ("b" + name)))
+        f._setup(['vrot', 'vdisp_single'])
+        out[name] = (hd.Cdelt(0), hd.Crval(0), hd.BeamArea(), mh["CUNIT1"], mh["CDELT1"], f.beam_area, f.nvox,
+                     f._log_likelihood(np.array([140., 150, 150, 150, 10.])), np.asarray(r.rings["radii"]),
+                     np.asarray(r.rings["vrot"]), np.asarray(r.rings["inc"]))
+    for name in ("arcs", "arcm"):
+        for a, b in zip(out[name], out["deg"]):
+            assert np.allclose(a, b, rtol=1e-9, atol=0) if not isinstance(a, str) else a == b == "deg"
