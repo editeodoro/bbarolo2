@@ -164,16 +164,16 @@ def test_bayesian_deconvolved_profile(tmp_path):
     with pytest.raises(ValueError):
         BayesianBBarolo(fn, **kw, pa=45., outfolder=str(tmp_path) + "/").ring_errors('vrot')
     g.write_bestmodel(plots=False, verbose=False)
-    ring_dens = np.loadtxt(str(tmp_path / "rings_final1.txt"), usecols=8)
+    ring_dens = np.loadtxt(str(tmp_path / "MOCK_rings_final1.txt"), usecols=8)
     assert np.allclose(ring_dens, g.outri.r['dens'], rtol=0.06)
-    head = open(str(tmp_path / "rings_final1.txt")).readline().split()
+    head = open(str(tmp_path / "MOCK_rings_final1.txt")).readline().split()
     assert head[13:] == ["E_VROT1", "E_VROT2", "E_DENS1", "E_DENS2"]
-    e_dens = np.loadtxt(str(tmp_path / "rings_final1.txt"), usecols=(15, 16))
+    e_dens = np.loadtxt(str(tmp_path / "MOCK_rings_final1.txt"), usecols=(15, 16))
     assert np.allclose(e_dens, np.c_[-dp['err_lo'], dp['err_hi']], rtol=1e-2, atol=1e-3)
-    t = np.loadtxt(str(tmp_path / "densprof_deconvolved.txt"))
+    t = np.loadtxt(str(tmp_path / "MOCK_densprof_deconvolved.txt"))
     assert np.allclose(t[:, 0], radii) and np.allclose(t[:, 1], g.outri.r['dens'], rtol=1e-5)
     assert np.allclose(t[:, 2], dp['err_lo'], rtol=1e-5) and np.allclose(t[:, 3], dp['err_hi'], rtol=1e-5)
-    assert np.allclose(t[:, 4] / dens, obs, rtol=1e-3) and os.path.isfile(str(tmp_path / "densprof.txt"))
+    assert np.allclose(t[:, 4] / dens, obs, rtol=1e-3) and os.path.isfile(str(tmp_path / "MOCK_densprof.txt"))
     # too few pixels to compute the profile: an error
     g._region[:] = False
     with pytest.raises(ValueError):
@@ -335,11 +335,11 @@ def test_python_equals_cli(tmp_path):
     subprocess.run([sys.executable, os.path.join(ROOT, "run_bbarolo.py"), "-p", str(par),
                     f"OUTFOLDER={tmp_path}/cli/"], check=True, stdout=subprocess.DEVNULL)
     res = Ellprof.from_parfile(str(par), outfolder=str(tmp_path / "py")).run()
-    a = open(tmp_path / "cli" / "ngc2403_densprof.txt").read()
-    b = open(tmp_path / "py" / "ngc2403_densprof.txt").read()
+    a = open(tmp_path / "cli" / "ngc2403_ellprof.txt").read()
+    b = open(tmp_path / "py" / "ngc2403_ellprof.txt").read()
     assert a == b and len(res.profile) == 10
     from astropy.io import fits
-    assert np.array_equal(fits.getdata(tmp_path / "cli" / "ngc2403_densmap.fits"), res.map.data, equal_nan=True)
+    assert np.array_equal(fits.getdata(tmp_path / "cli" / "ngc2403_ellprof_map.fits"), res.map.data, equal_nan=True)
 
 
 def test_simulated_galaxy_cube(tmp_path, monkeypatch):
@@ -525,11 +525,11 @@ def test_bayesian_quick(tmp_path):
     assert not f._galfit.par.TWOSTAGE                   # the plots then read rings_final1.txt
     # the posterior errors are written as the 3DFIT error columns (and FREE is restored)
     # (with the errors of the deconvolved density profile)
-    head = open(os.path.join(str(tmp_path), "rings_final1.txt")).readline().split()
+    head = open(os.path.join(str(tmp_path), "ngc2403_rings_final1.txt")).readline().split()
     assert head[13:] == ["E_VROT1", "E_VROT2", "E_DISP1", "E_DISP2", "E_DENS1", "E_DENS2"]
     assert not f._galfit.par.flagERRORS
     f.write_bestmodel(plots=False, verbose=False)
-    assert os.path.isfile(os.path.join(str(tmp_path), "ngc2403mod_none.fits"))
+    assert os.path.isfile(os.path.join(str(tmp_path), "ngc2403_mod_none.fits"))
     f.save_results(str(tmp_path / "res.npy"))
     g = BayesianBBarolo(N2403, outfolder=str(tmp_path) + "/")
     g.load_results(str(tmp_path / "res.npy"))
@@ -930,10 +930,10 @@ def test_bayesian_task(tmp_path, capsys):
     assert "Fitting 2 parameters: ['vrot', 'vdisp']" in out and "Best-fit parameters" in out
     assert "Deconvolved density profile" in out
     cli = tmp_path / "cli"
-    for name in ("rings_final1.txt", "densprof.txt", "densprof_deconvolved.txt", "MOCKmod_none.fits",
+    for name in ("MOCK_rings_final1.txt", "MOCK_densprof.txt", "MOCK_densprof_deconvolved.txt", "MOCK_mod_none.fits",
                  "MOCK_dynesty_results.npy", "MOCK_corner.pdf", "MOCK_profiles.pdf", "MOCK_parameters.pdf"):
         assert (cli / name).is_file(), name
-    head = open(cli / "rings_final1.txt").readline().split()
+    head = open(cli / "MOCK_rings_final1.txt").readline().split()
     assert head[13:] == ["E_VROT1", "E_VROT2", "E_DISP1", "E_DISP2", "E_DENS1", "E_DENS2"]
     g = BayesianBBarolo(fn, outfolder=str(tmp_path / "re"))
     g.load_results(str(cli / "MOCK_dynesty_results.npy"))

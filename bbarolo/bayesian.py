@@ -49,7 +49,7 @@ Density profile when DENS is not fitted: the densities whose beam-convolved mode
 the total intensity map (non-negative least squares with a smoothness term, densprof_smooth;
 see _deconvolved_profile), with errors (deconvolved_profile_errors). The original module used
 the average of the observed map in each ring (Ellprof), which is smoothed by the beam twice
-(by the data and by the model); that profile is now only an output (densprof.txt).
+(by the data and by the model); that profile is now only an output (<prefix>_densprof.txt).
 
 Differences from the original module (other than running without the C++ library):
   * the interface of the bbarolo tasks: BayesianBBarolo(cube, **params), update(**params)
@@ -79,7 +79,7 @@ Differences from the original module (other than running without the C++ library
     ``plot_profiles`` failed unless all nine parameters were free and did not handle
     parametric ('_func') parameters; ``write_bestmodel`` failed with the density fitted;
     ``save_results``/``load_results`` now also work with nautilus;
-  * the posterior errors are written in rings_final1.txt (as the 3DFIT error columns) and
+  * the posterior errors are written in <prefix>_rings_final1.txt (as the 3DFIT error columns) and
     shown in the _parameters.pdf plot of write_bestmodel.
 """
 
@@ -631,7 +631,7 @@ class BayesianBBarolo(FitMod3D):
         prm["3DFIT"] = True
         prm["VERBOSE"] = False
         prm["THREADS"] = 1
-        prm["TWOSTAGE"] = False                  # one set of rings (rings_final1.txt), also for the plots
+        prm["TWOSTAGE"] = False                  # one set of rings (<prefix>_rings_final1.txt), also for the plots
         return _checked(build_param(prm))
 
     def _load_cube(self):
@@ -1527,7 +1527,7 @@ class BayesianBBarolo(FitMod3D):
             except Exception:
                 pass
 
-        # Best-fit rings (rings_final1.txt, with the errors from the posterior), with the
+        # Best-fit rings (<prefix>_rings_final1.txt, with the errors from the posterior), with the
         # density profile at the best-fit geometry if DENS is not fitted
         self.outri = self._inri.copy()
         self.outri = self._update_rings(self.outri, self.params)
@@ -1623,7 +1623,7 @@ class BayesianBBarolo(FitMod3D):
         observed map in each ring (Ellprof), which the beam smooths twice (in the data and in
         the model): for marginally resolved disks, the inner rings were too faint and the outer
         ones too bright, which biased INC and VDISP. That profile is now only an output
-        (densprof.txt, see _observed_profile). """
+        (<prefix>_densprof.txt, see _observed_profile). """
         dens = self._deconvolved_profile(rings)
         if dens is None:
             raise ValueError("BAYESIAN3DFIT ERROR: too few pixels with data in the likelihood region to compute "
@@ -1632,8 +1632,8 @@ class BayesianBBarolo(FitMod3D):
 
     def _observed_profile(self, rings):
         """ The Ellprof engine with the radial profile of the total intensity map of the voxels
-        of the likelihood along the rings: the observed profile of the outputs (densprof.txt,
-        the plots and the DENS_OBS column of densprof_deconvolved.txt). Not used in the fit. """
+        of the likelihood along the rings: the observed profile of the outputs (<prefix>_densprof.txt,
+        the plots and the DENS_OBS column of <prefix>_densprof_deconvolved.txt). Not used in the fit. """
         if self._ellprof is None:
             from .ellprof import Ellprof
             self._ellprof = Ellprof(self._cube_obj, rings.object)
@@ -1728,10 +1728,10 @@ class BayesianBBarolo(FitMod3D):
                     the correlation area 1/likefactor2d pixels).
 
         Called at the end of run() and load_results(). Sets and returns self.dens_profile, a
-        dict with radii, dens (the profile of the best fit, as in outri and rings_final1.txt),
+        dict with radii, dens (the profile of the best fit, as in outri and <prefix>_rings_final1.txt),
         err_lo, err_hi (total 1-sigma errors), err_geom_lo, err_geom_hi, err_noise_lo,
-        err_noise_hi, nsamples and nmc; None if DENS is fitted. The errors are also written in rings_final1.txt (E_DENS) and
-        densprof_deconvolved.txt (write_bestmodel). """
+        err_noise_hi, nsamples and nmc; None if DENS is fitted. The errors are also written in <prefix>_rings_final1.txt (E_DENS) and
+        <prefix>_densprof_deconvolved.txt (write_bestmodel). """
         from scipy.ndimage import gaussian_filter
         self.dens_profile = None
         if not (getattr(self, 'useNorm', False) and not self.useBBres and self.outri is not None):
@@ -1796,10 +1796,10 @@ class BayesianBBarolo(FitMod3D):
         norm: 'AZIM' (model as used in the likelihood) or 'LOCAL' (pixel-by-pixel normalized),
         used only when the density is not fitted.
 
-        The DENS column of rings_final1.txt is the density profile of the model (deconvolved,
-        at the best-fit geometry, if DENS is not fitted), and densprof.txt the observed profile
+        The DENS column of <prefix>_rings_final1.txt is the density profile of the model (deconvolved,
+        at the best-fit geometry, if DENS is not fitted), and <prefix>_densprof.txt the observed profile
         (the average of the total intensity map in each ring). If DENS is not fitted,
-        densprof_deconvolved.txt lists both profiles at full precision, with the errors.
+        <prefix>_densprof_deconvolved.txt lists both profiles at full precision, with the errors.
         """
         if not self.modCalculated:
             print("Sampler has not been run yet. Please run run() before running this function.")
@@ -1812,7 +1812,7 @@ class BayesianBBarolo(FitMod3D):
         else:
             if self.useNorm:
                 self._set_density(self.outri)
-            ell = self._observed_profile(self.outri)        # densprof.txt (outputs only)
+            ell = self._observed_profile(self.outri)        # <prefix>_densprof.txt (outputs only)
             model = self._calculate_model(self.outri, fullcube=True)[0]
             if model.ndim == 4:             # (non-convolved, convolved) models
                 model = model[-1]
@@ -1828,13 +1828,14 @@ class BayesianBBarolo(FitMod3D):
         vprint(verbose, "Done!")
 
     def _write_deconvolved_profile(self):
-        """ densprof_deconvolved.txt in the output folder: radius, the density profile of the
+        """ <prefix>_densprof_deconvolved.txt in the output folder: radius, the density profile of the
         model (deconvolved, at the best-fit geometry) with its 1-sigma errors (see
         deconvolved_profile_errors), the observed profile (face-on average of the total
         intensity map in each ring, the profile of the original module), and the errors from
         the geometry and from the noise, in the units of DENS. Needs the Ellprof profile along
         self.outri (see write_bestmodel). """
-        fn = os.path.join(self._cube_obj.pars().outFolder, "densprof_deconvolved.txt")
+        p_ = self._cube_obj.pars()
+        fn = os.path.join(p_.outFolder, p_.outPrefix + "_densprof_deconvolved.txt")
         r = self.outri.r
         nr = self.outri.nr
         dp = getattr(self, 'dens_profile', None)
@@ -1876,7 +1877,7 @@ class BayesianBBarolo(FitMod3D):
 
     @contextlib.contextmanager
     def _errors_in_outputs(self):
-        """ Writes rings_final1.txt with the errors from the posterior. Inside the context,
+        """ Writes <prefix>_rings_final1.txt with the errors from the posterior. Inside the context,
         the free parameters of the sampling (instead of FREE) and the error columns are used
         by the outputs of the 3DFIT engine, so that the plots (_parameters.pdf) show the
         errors. """
@@ -1939,7 +1940,7 @@ class BayesianBBarolo(FitMod3D):
         param: vrot, vdisp (or disp), dens, z0, inc, phi (or pa), xpos, ypos, vsys, vrad,
         vvert, dvdz, zcyl, case-insensitive. Without param: a dictionary with the errors of
         vrot, vdisp, dens, z0, inc, phi, xpos, ypos, vsys and vrad. These are the errors of
-        rings_final1.txt and of plot_profiles. Needs run() or load_results(). """
+        <prefix>_rings_final1.txt and of plot_profiles. Needs run() or load_results(). """
         if not self.modCalculated or self.outri is None:
             raise ValueError("ring_errors: run the sampling (run) or load the results (load_results) first.")
         if param is None:
@@ -2135,8 +2136,8 @@ def run_task(c, par):
     defaults of BayesianBBarolo); the sampler runs with THREADS processes.
 
     Then it writes in OUTFOLDER the outputs of BayesianBBarolo.write_bestmodel (best model,
-    maps, PV diagrams, rings_final1.txt with the errors, densprof.txt and, when DENS is not
-    fitted, densprof_deconvolved.txt; with PLOTS the plots of 3DFIT) and the samples
+    maps, PV diagrams, <prefix>_rings_final1.txt with the errors, <prefix>_densprof.txt and, when DENS is not
+    fitted, <prefix>_densprof_deconvolved.txt; with PLOTS the plots of 3DFIT) and the samples
     (<prefix>_<sampler>_results.npy, see load_results); with PLOTS also the corner plot
     (<prefix>_corner.pdf) and the radial profiles (<prefix>_profiles.pdf); with VERBOSE it
     prints the statistics of the posterior (print_stats). Returns the BayesianBBarolo. """

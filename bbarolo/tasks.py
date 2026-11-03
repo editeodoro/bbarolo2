@@ -87,7 +87,7 @@ def _step_smoothspec(c, par):
 def _step_search(c, par):
     p = c.pars()
     c.search()
-    with open(p.outFolder + "detections.txt", "w") as f:
+    with open(p.outFolder + p.outPrefix + "_detections.txt", "w") as f:
         c.printDetections(f)
     c.writeDetections()
     if p.se.cubelets:
@@ -195,25 +195,25 @@ def _step_maps(c, par):
     m.input(c)
     if ma.totalmap:
         m.ZeroMoment(masking, ma.maptype)
-        m.fitswrite_2d(s + "map_0th.fits")
+        m.fitswrite_2d(s + "_map_0th.fits")
         if ma.SNmap:
             m.SNMap(masking)
     if ma.velocitymap:
         m.FirstMoment(masking, ma.maptype)
-        m.fitswrite_2d(s + "map_1st.fits")
+        m.fitswrite_2d(s + "_map_1st.fits")
     if ma.dispersionmap:
         m.SecondMoment(masking, ma.maptype)
-        m.fitswrite_2d(s + "map_2nd.fits")
+        m.fitswrite_2d(s + "_map_2nd.fits")
     if ma.massdensmap:
         m.HIMassDensityMap(masking)
-        m.fitswrite_2d(s + "map_massdens.fits")
+        m.fitswrite_2d(s + "_map_massdens.fits")
     if ma.rmsmap:
         m.RMSMap(masking)
-        m.fitswrite_2d(s + "map_RMS.fits")
+        m.fitswrite_2d(s + "_map_RMS.fits")
     if ma.globprof:
         spec = Image2D().extractGlobalSpectrum(c)
         zphys = np.array([c.getZphys(i) for i in range(c.DimZ())])
-        with open(of + "spectrum.txt", "w") as f:
+        with open(s + "_spectrum.txt", "w") as f:
             for z, v in zip(zphys, spec):
                 f.write(f"{z:g} {v:g}\n")
     return {}
@@ -224,7 +224,7 @@ def _step_pvslice(c, par):
     p = c.pars()
     pv = PvSlice(c)
     pv.slice()
-    pv.fitswrite_2d(p.outFolder + p.outPrefix + f"pv_{par.PA_PV:.0f}.fits", True)
+    pv.fitswrite_2d(p.outFolder + p.outPrefix + f"_pv_{par.PA_PV:.0f}.fits", True)
     return {}
 
 
@@ -246,11 +246,11 @@ def _step_ellprof(c, par):
     of, pre = p.outFolder, p.outPrefix
     ell = _Ellprof(c)
     ell.RadialProfile()
-    with open(of + pre + "_densprof.txt", "w") as f:
+    with open(of + pre + "_ellprof.txt", "w") as f:
         ell.printProfile(f, ell.getNseg() - 1)
     if p.verbose:
         ell.printProfile(sys.stdout, ell.getNseg() - 1)
-    ell.writeMap(of + pre + "_densmap.fits")
+    ell.writeMap(of + pre + "_ellprof_map.fits")
     return {"ellprof": ell}
 
 
@@ -755,14 +755,19 @@ def _fill(res, step, mem, files, prefix, cube=None):
     fitsf = [f for f in files if f.endswith((".fits", ".fits.gz"))]
     base = lambda f: os.path.basename(f)
     find = lambda pred: [f for f in fitsf if pred(base(f))]
-    if "mask.fits" in [base(f) for f in files] and step != "SEARCH":
-        res._set("mask", load_fits([f for f in files if base(f) == "mask.fits"][0]))
+
+    def name(f):
+        """The name of an output without the prefix: <prefix>_rings_final1.txt -> rings_final1.txt."""
+        b = base(f)
+        return b[len(prefix) + 1:] if prefix and b.startswith(prefix + "_") else b
+    if "mask.fits" in [name(f) for f in files] and step != "SEARCH":
+        res._set("mask", load_fits([f for f in files if name(f) == "mask.fits"][0]))
 
     def folder_maps(sub):
         return {_base(f, prefix): load_fits(f) for f in fitsf if os.path.basename(os.path.dirname(f)) == sub}
 
     if step in ("3DFIT", "GALMOD", "BAYESIAN3DFIT"):
-        txt = {base(f): f for f in files if f.endswith(".txt")}
+        txt = {name(f): f for f in files if f.endswith(".txt")}
         if step == "3DFIT":
             last = txt.get("rings_final2.txt") or txt.get("rings_final1.txt")
             res._set("rings", read_table(last) if last else None)
@@ -786,7 +791,7 @@ def _fill(res, step, mem, files, prefix, cube=None):
                 res._set("rings", read_table(txt["rings_model.txt"]))
         top = res.outfolder.rstrip("/")
         models = {_base(f, prefix).replace("mod_", "", 1): load_fits(f) for f in fitsf
-                  if base(f).startswith(prefix + "mod_") and os.path.dirname(f).rstrip("/") == top}
+                  if base(f).startswith(prefix + "_mod_") and os.path.dirname(f).rstrip("/") == top}
         if models:
             fit = mem.get("galfit")
             if step == "3DFIT":
@@ -827,11 +832,11 @@ def _fill(res, step, mem, files, prefix, cube=None):
         res._set("table", mem.get("table"))
         for f in fitsf:
             b = base(f)
-            if b.startswith("detections.fits"):
+            if name(f).startswith("detections.fits"):
                 res._set("cube", load_fits(f))
-            elif b.startswith("detections_num"):
+            elif name(f).startswith("detections_num"):
                 res._set("labels", load_fits(f))
-            elif b.startswith("DetectMap"):
+            elif name(f).startswith("detectmap"):
                 res._set("detmap", load_fits(f))
         top = res.outfolder.rstrip("/")
         res._set("maps", {_base(f, prefix): load_fits(f) for f in fitsf if base(f).startswith(prefix + "_mom")
@@ -850,9 +855,9 @@ def _fill(res, step, mem, files, prefix, cube=None):
     elif step == "ELLPROF":
         for f in files:
             b = base(f)
-            if b.endswith("_densprof.txt"):
+            if b.endswith("_ellprof.txt"):
                 res._set("profile", read_table(f))
-            elif b.endswith("_densmap.fits"):
+            elif b.endswith("_ellprof_map.fits"):
                 res._set("map", load_fits(f))
         res._set("ellprof", mem.get("ellprof"))
     elif step == "MAPS":
@@ -867,23 +872,23 @@ def _fill(res, step, mem, files, prefix, cube=None):
         res._set("maps", maps or None)
         for k, v in maps.items():
             res._set(k, v)
-        sp = [f for f in files if base(f) == "spectrum.txt"]
+        sp = [f for f in files if name(f) == "spectrum.txt"]
         if sp:
             from astropy.table import Table
             a = np.loadtxt(sp[0], ndmin=2)
             res._set("spectrum", Table(a, names=("spectral", "flux")))
     elif step in ("SMOOTH", "SMOOTHSPEC", "CONTSUB", "REDUCE"):
-        cubes = [f for f in fitsf if base(f) != "mask.fits"]
+        cubes = [f for f in fitsf if name(f) != "mask.fits"]
         if cubes:
             # CONTSUB before another task: the subtracted cube is 'contsub'
             name = "contsub" if step == "CONTSUB" and res.task != "CONTSUB" else "cube"
             res._set(name, load_fits(cubes[-1]))
     elif step == "PVSLICE":
-        pv = find(lambda b: b.startswith(prefix + "pv_"))
+        pv = find(lambda b: b.startswith(prefix + "_pv_"))
         if pv:
             res._set("pv", load_fits(pv[-1]))
     elif step == "SPACEPAR":
-        sp = find(lambda b: b.startswith("spacepar_"))
+        sp = find(lambda b: b.endswith("_spacepar.fits"))
         if sp:
             res._set("space", load_fits(sp[-1]))
         res._set("spacepar", mem.get("spacepar"))

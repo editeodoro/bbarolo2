@@ -34,7 +34,7 @@ def writeKinematicMaps(c, mod, suffix=""):
         allmaps[i].fitswrite_2d(outfold + "maps/" + prefix + s + ".fits")
     mod.pars().verbose = False
     modmaps = getAllMoments(mod, False, None, "MOMENT")
-    for i, s in enumerate(("mod_0mom", "mod_1mom", "mod_2mom")):
+    for i, s in enumerate(("_mod_0mom", "_mod_1mom", "_mod_2mom")):
         modmaps[i].fitswrite_2d(outfold + "maps/" + prefix + s + suffix + ".fits")
     p.verbose = v
 
@@ -53,16 +53,16 @@ def writePVs(c, mod, rings, mask, suffix=""):
     meanPAp90 = meanPA + 90 if meanPA + 90 < 360 else meanPA - 90
     PositionVelocity(c, meanX, meanY, meanPA).fitswrite_2d(outfold + prefix + "_pv_a.fits")
     PositionVelocity(c, meanX, meanY, meanPAp90).fitswrite_2d(outfold + prefix + "_pv_b.fits")
-    PositionVelocity(mod, meanX, meanY, meanPA).fitswrite_2d(outfold + prefix + "mod_pv_a" + suffix + ".fits")
-    PositionVelocity(mod, meanX, meanY, meanPAp90).fitswrite_2d(outfold + prefix + "mod_pv_b" + suffix + ".fits")
+    PositionVelocity(mod, meanX, meanY, meanPA).fitswrite_2d(outfold + prefix + "_mod_pv_a" + suffix + ".fits")
+    PositionVelocity(mod, meanX, meanY, meanPAp90).fitswrite_2d(outfold + prefix + "_mod_pv_b" + suffix + ".fits")
     m = Cube.fromArray(mask.astype(np.int16), c.Head(), p)
     m.Head().setMinMax(0., 0)
     pa = PositionVelocity(m, meanX, meanY, meanPA, order=0)        # nearest pixel for the mask
     pa.array = pa.array.astype(np.int16)
-    pa.fitswrite_2d(outfold + prefix + "mask_pv_a.fits")
+    pa.fitswrite_2d(outfold + prefix + "_mask_pv_a.fits")
     pb = PositionVelocity(m, meanX, meanY, meanPAp90, order=0)
     pb.array = pb.array.astype(np.int16)
-    pb.fitswrite_2d(outfold + prefix + "mask_pv_b.fits")
+    pb.fitswrite_2d(outfold + prefix + "_mask_pv_b.fits")
 
 
 # --------------------------------------------------------------------------
@@ -156,8 +156,8 @@ def writeModel(c, model, rings, normtype, mask, par=None, makeplots=False, fit=N
     mask: the mask (bool array); par: the GALMOD/3DFIT parameters (NOISERMS, ADRIFT, ...;
     default c.pars().gf); fit: the Galfit object of a 3DFIT, for the plots (makeplots).
 
-    Written: densprof.txt, <prefix>mod_<norm>.fits, the moment maps and PV slices of the
-    model, the data and the mask, the noisy model (NOISERMS), asymdrift.txt (ADRIFT) and
+    Written: <prefix>_densprof.txt, <prefix>_mod_<norm>.fits, the moment maps and PV slices of the
+    model, the data and the mask, the noisy model (NOISERMS), <prefix>_asymdrift.txt (ADRIFT) and
     the plots. Returns the (last) model Cube."""
     p = c.pars()
     par = p.gf if par is None else par
@@ -172,7 +172,7 @@ def writeModel(c, model, rings, normtype, mask, par=None, makeplots=False, fit=N
             print(" Preparing a bunch of cool outputs...")
             print(f"    Deriving {randomAdjective(1)} radial profile...", end="", flush=True)
         ell, scaling_factor = radialProfile(c, rings, normtype)
-        with open(outfold + "densprof.txt", "w") as f:
+        with open(outfold + prefix + "_densprof.txt", "w") as f:
             ell.printProfile(f, ell.getNseg() - 1)
         if verb:
             print(" Done.")
@@ -183,7 +183,7 @@ def writeModel(c, model, rings, normtype, mask, par=None, makeplots=False, fit=N
             if verb:
                 print(" Done.")
                 print(f"    Writing {randomAdjective(1)} azimuthally-normalized model...", end="", flush=True)
-            mod.fitswrite_3d(outfold + prefix + "mod_azim.fits")
+            mod.fitswrite_3d(outfold + prefix + "_mod_azim.fits")
             writePVs(c, mod, rings, mask, "_azim")
             if verb:
                 print(" Done.")
@@ -197,7 +197,7 @@ def writeModel(c, model, rings, normtype, mask, par=None, makeplots=False, fit=N
                 print(" Done.")
             if verb:
                 print(f"    Writing {randomAdjective(1)} locally-normalized model...", end="", flush=True)
-            mod.fitswrite_3d(outfold + prefix + "mod_local.fits")
+            mod.fitswrite_3d(outfold + prefix + "_mod_local.fits")
             writePVs(c, mod, rings, mask, "_local")
             if verb:
                 print(" Done.")
@@ -210,7 +210,7 @@ def writeModel(c, model, rings, normtype, mask, par=None, makeplots=False, fit=N
             if verb:
                 print(" Done.")
                 print("    Writing model...", end="", flush=True)
-            mod.fitswrite_3d(outfold + prefix + "mod_none.fits")
+            mod.fitswrite_3d(outfold + prefix + "_mod_none.fits")
             writePVs(c, mod, rings, mask, "_none")
             if verb:
                 print(" Done.")
@@ -222,7 +222,7 @@ def writeModel(c, model, rings, normtype, mask, par=None, makeplots=False, fit=N
             if verb:
                 print(f"    Writing {randomAdjective(1)} noisy model...", end="", flush=True)
             mod.array = model.addnoise(mod.array, par.NOISERMS)
-            mod.fitswrite_3d(outfold + prefix + "mod_noise.fits")
+            mod.fitswrite_3d(outfold + prefix + "_mod_noise.fits")
             if verb:
                 print(" Done.")
         if par.flagADRIFT:
@@ -252,11 +252,11 @@ def writeOutputs(c, mod, ell, rings, mask, makeplots=True, fit=None):
     p = c.pars()
     suffix = "_none"
     outfold, prefix = p.outFolder, p.outPrefix
-    with open(outfold + "densprof.txt", "w") as f:
+    with open(outfold + prefix + "_densprof.txt", "w") as f:
         ell.printProfile(f, ell.getNseg() - 1)
     mod.Head().setMinMax(0., 0.)
     mod.Head().setName(prefix + "mod")
-    mod.fitswrite_3d(outfold + prefix + "mod" + suffix + ".fits")
+    mod.fitswrite_3d(outfold + prefix + "_mod" + suffix + ".fits")
     writePVs(c, mod, rings, mask, suffix)
     writeKinematicMaps(c, mod, suffix)
     if makeplots and fit is not None:
@@ -281,7 +281,7 @@ def asymmetricDrift(c, par, rad, densprof, dispprof, rotcur, inc):
         cdisp, _, ok = polyfit_lsq(rad, disp2, npar1)
         if not ok:
             warnings.warn("3DFIT: cannot fit the dispersion profile for the asymmetric drift correction (ADRIFT): "
-                          "asymdrift.txt is not written.")
+                          "<prefix>_asymdrift.txt is not written.")
             par.flagADRIFT = False
             return False
     SigmaFO = np.asarray(densprof, float) * np.cos(np.radians(inc))
@@ -290,12 +290,12 @@ def asymmetricDrift(c, par, rad, densprof, dispprof, rotcur, inc):
     cfun, _, ok = polyfit_lsq(rad, SigmaFO, npar2)
     if not ok:
         warnings.warn("3DFIT: cannot fit the Sigma profile for the asymmetric drift correction (ADRIFT): "
-                      "asymdrift.txt is not written.")
+                      "<prefix>_asymdrift.txt is not written.")
         par.flagADRIFT = False
         return False
     P = np.polynomial.polynomial
     m = 20
-    with open(p.outFolder + "asymdrift.txt", "w") as f:
+    with open(p.outFolder + p.outPrefix + "_asymdrift.txt", "w") as f:
         f.write("#" + f"{'RAD(arcs)':>{m - 1}}" + "".join(f"{s:>{m}}" for s in
                 ("VCIRC(km/s)", "ASYMDRIFT_SQ(km/s)2", "DISP2(km/s)2", "DISP2_REG(km/s)2", "DENSPROF", "DENSPROF_REG")) + "\n")
         for i in range(nn):

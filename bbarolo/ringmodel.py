@@ -200,7 +200,7 @@ class Ringmodel:
         else:
             mp.array = c.array[0].copy()
             mp.setHead(1)
-        mp.fitswrite_2d(c.pars().outFolder + c.pars().outPrefix + "map_1st.fits")
+        mp.fitswrite_2d(c.pars().outFolder + c.pars().outPrefix + "_map_1st.fits")
         self.setfield(mp.array, mp.DimX(), mp.DimY())
 
     def setoption(self, maskpar, hside, wfunc, freeangle):

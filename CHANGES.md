@@ -114,6 +114,26 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **Output file names**: every output is now `<prefix>_<what>` (the prefix is OUTPREFIX, by default
+  the OBJECT of the header). Before, some names had no prefix and others had it without the
+  underscore. The contents do not change. With the prefix `ngc2403`:
+
+  | Before | Now |
+  |---|---|
+  | `rings_initial.txt`, `rings_model.txt`, `rings_final1.txt`, `rings_final2.txt` | `ngc2403_rings_initial.txt`, ... |
+  | `densprof.txt`, `asymdrift.txt`, `mask.fits` | `ngc2403_densprof.txt`, `ngc2403_asymdrift.txt`, `ngc2403_mask.fits` |
+  | `ngc2403mod_azim.fits` (and `_local`, `_none`, `_noise`) | `ngc2403_mod_azim.fits`, ... |
+  | `maps/ngc2403mod_0mom_azim.fits`, ... | `maps/ngc2403_mod_0mom_azim.fits`, ... |
+  | `pvs/ngc2403mod_pv_a_azim.fits`, `pvs/ngc2403mask_pv_a.fits`, ... | `pvs/ngc2403_mod_pv_a_azim.fits`, `pvs/ngc2403_mask_pv_a.fits`, ... |
+  | MAPS, 2DFIT: `ngc2403map_0th.fits`, `ngc2403map_1st.fits`, ..., `spectrum.txt` | `ngc2403_map_0th.fits`, ..., `ngc2403_spectrum.txt` |
+  | SEARCH: `detections.txt`, `detections.fits.gz`, `detections_num.fits.gz`, `DetectMap.fits.gz` | `ngc2403_detections.txt`, ..., `ngc2403_detectmap.fits.gz` |
+  | PVSLICE: `ngc2403pv_123.fits` | `ngc2403_pv_123.fits` |
+  | ELLPROF: `ngc2403_densprof.txt`, `ngc2403_densmap.fits` | `ngc2403_ellprof.txt`, `ngc2403_ellprof_map.fits` (the 3DFIT profile is now `ngc2403_densprof.txt`) |
+  | SPACEPAR: `spacepar_ngc2403.fits`, `.pdf` | `ngc2403_spacepar.fits`, `.pdf` |
+  | `initialguesses_ngc2403.pdf`, `densprof_deconvolved.txt` (BAYESIAN3DFIT) | `ngc2403_initialguesses.pdf`, `ngc2403_densprof_deconvolved.txt` |
+
+  The plotting scripts and `Result` follow the new names; the keys of a Result (`maps['mod_0mom_azim']`,
+  `pvs['pv_a']`, ...) do not change. Scripts that read the files by name need the new names.
 - **THREADS** defaults to the number of cores, at most 16 (all the cores of a large shared server
   were too many). The ring tables do not depend on THREADS; MC final models do (one seed per chunk).
 - **Default output** is much shorter (VERBOSE 1, above): about 140 lines for the NGC 2403 3DFIT

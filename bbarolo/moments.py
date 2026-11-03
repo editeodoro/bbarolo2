@@ -307,8 +307,8 @@ class MomentMap(Image2D):
         s_im.Head().setBunit("NONE")
         if outfolder == "":
             outfolder = c.pars().outFolder + c.pars().outPrefix
-        n_im.fitswrite_2d(outfolder + "map_0th_RMS.fits")
-        s_im.fitswrite_2d(outfolder + "map_0th_SN.fits")
+        n_im.fitswrite_2d(outfolder + "_map_0th_RMS.fits")
+        s_im.fitswrite_2d(outfolder + "_map_0th_SN.fits")
 
 
 def getAllMoments(c, usemask=True, mask=None, mtype="MOMENT"):

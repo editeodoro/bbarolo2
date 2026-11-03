@@ -494,11 +494,11 @@ def EstimateInitial(c, p):
     if p.VROT != "-1": ip.vrot = _given(p.VROT)
     else: ip.findRotationVelocity()
     if c.pars().plots >= 3:
-        ip.plotGuess("initialguesses_" + c.pars().outPrefix + "_0.pdf")
+        ip.plotGuess(c.pars().outPrefix + "_initialguesses_0.pdf")
     if ip.nrings > 3:
         ip.tuneWithTiltedRing()
     if c.pars().plots >= 2:
-        ip.plotGuess("initialguesses_" + c.pars().outPrefix + ".pdf")
+        ip.plotGuess(c.pars().outPrefix + "_initialguesses.pdf")
     if verb:
         print("Done.")
     c.pars().verbose = verb

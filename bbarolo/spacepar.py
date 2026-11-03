@@ -146,7 +146,7 @@ class Spacepar(Galfit):
         p = self.cin.pars()
         verb = p.verbose
         outfold, obj = p.outFolder, p.outPrefix
-        fname = outfold + "spacepar_" + obj + ".fits"
+        fname = outfold + obj + "_spacepar.fits"
         ps = self.parspace.astype(np.float64)
         mins = ps.reshape(ps.shape[0], -1).min(axis=1)[:, None, None]
         with np.errstate(invalid="ignore", divide="ignore"):
@@ -154,7 +154,7 @@ class Spacepar(Galfit):
         cube = self._Cube.fromArray(rel.astype(np.float32), self._pshead, p)
         cube.fitswrite_3d(fname)
         mkdirp(outfold + "plotscripts/")
-        fout = outfold + "spacepar_" + obj + ".pdf"
+        fout = outfold + obj + "_spacepar.pdf"
         script = outfold + "plotscripts/spacepar.py"
         with open(script, "w") as f:
             f.write(f"""# A script to produce output plots for SPACEPAR task.

@@ -323,7 +323,7 @@ def initial_rings(c, par, galmod=False, write=True):
     if inR.nr == 0:
         raise BBaroloError("\n 3DFIT ERROR: The number of radii must be > 0! ")
     if write:
-        writeInitialRings(inR, p.outFolder + ("rings_model.txt" if galmod else "rings_initial.txt"))
+        writeInitialRings(inR, p.outFolder + p.outPrefix + ("_rings_model.txt" if galmod else "_rings_initial.txt"))
     return types.SimpleNamespace(rings=inR, fromfile=fromfile, estimated=estimated, toEstimate=toEstimate, ip=ip)
 
 
@@ -867,7 +867,7 @@ class Galfit:
         n = self.n_galfit
         c = self.cin
         p = c.pars()
-        fileo = p.outFolder + f"rings_final{n}.txt"
+        fileo = p.outFolder + p.outPrefix + f"_rings_final{n}.txt"
         if self.verb:
             p.verbose = False
             print("\n" + "=" * 31 + " 3DFIT " + "=" * 31)
@@ -1181,7 +1181,7 @@ class Galfit:
     # Outputs
     # ------------------------------------------------------------------
     def writeRingFile(self, filename, r, errors=None):
-        fileo = self.cin.pars().outFolder + filename
+        fileo = self.cin.pars().outFolder + self.cin.pars().outPrefix + "_" + filename
         toKpc = KpcPerArc(self.distance)
         with open(fileo, "w") as fout:
             writeHeader(fout, self.mpar, self.par.flagERRORS, self.par.flagBADOUT)

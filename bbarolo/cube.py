@@ -375,17 +375,17 @@ class Cube:
         isObj = self.detectionMask()
         det = Cube.fromArray(np.where(isObj, self.array, 0).astype(self.array.dtype), h, p)
         det.Head().setMinMax(0, 0)
-        det.fitswrite_3d(p.outFolder + "detections.fits.gz")
+        det.fitswrite_3d(p.outFolder + p.outPrefix + "_detections.fits.gz")
         num = np.zeros(self.array.shape, np.int32)
         for i, o in enumerate(self.sources.objectList):
             num[o.z, o.y, o.x] = i + 1
         dn = Cube.fromArray(num, h, p)
         dn.Head().setMinMax(0, 0)
-        dn.fitswrite_3d(p.outFolder + "detections_num.fits.gz")
+        dn.fitswrite_3d(p.outFolder + p.outPrefix + "_detections_num.fits.gz")
         dm = Image2D.fromArray(isObj.sum(axis=0).astype(np.int32), h)
         dm.Head().setMinMax(0, 0)
         dm.Head().setBtype("detected_chan")
-        dm.fitswrite_2d(p.outFolder + "DetectMap.fits.gz")
+        dm.fitswrite_2d(p.outFolder + p.outPrefix + "_detectmap.fits.gz")
         maps = getAllMoments(self, True, isObj, "MOMENT")
         maps[0].fitswrite_2d(p.outFolder + p.outPrefix + "_mom0th.fits")
         maps[1].fitswrite_2d(p.outFolder + p.outPrefix + "_mom1st.fits")
@@ -636,7 +636,7 @@ class Cube:
         if p.plots >= 0:
             mc = Cube(par=p, head=mh)
             mc.array = mask.astype(np.int16)
-            mc.fitswrite_3d(p.outFolder + "mask.fits", True)
+            mc.fitswrite_3d(p.outFolder + p.outPrefix + "_mask.fits", True)
         if verb:
             print(" Done.")
         self.mask = mask
