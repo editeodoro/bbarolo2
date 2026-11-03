@@ -188,7 +188,8 @@ def fit(job):
                        ncall=int(getattr(f.sampler, 'n_like', 0)))
             if job.get("fit3d"):
                 rec["fit3d"] = fit3d(fn, R, xc, g, z0, dvdz, gtype, wd)
-                rec["truth_rings"] = dict(vrot=[float(x) for x in t["vrot"]], vdisp=[float(g["sigma"])] * len(R),
+                rec["truth_rings"] = dict(radii=[float(x) for x in R], vrot=[float(x) for x in t["vrot"]],
+                                          vdisp=[float(g["sigma"])] * len(R),
                                           inc=[float(x) for x in t["inc"]], phi=[float(x) for x in t["pa"]])
     except Exception as e:                       # a failed fit is a result too
         rec.update(status="failed", error=f"{type(e).__name__}: {e}"[:400])
@@ -203,8 +204,8 @@ def fit3d(fn, R, xc, g, z0, dvdz, gtype, wd):
     r = FitMod3D(fn, radii=list(R), xpos=xc, ypos=xc, vsys=0., vrot=120., vdisp=15., inc=g["inc"], pa=g["pa"], z0=z0,
                  dvdz=dvdz, ltype=1, free="vrot vdisp inc pa", mask="SEARCH", galmodtype=gtype, twostage=False,
                  outfolder=os.path.join(wd, "fit3d"), verbose=0, plots=0, threads=1).run()
-    return {k: [float(x) for x in r.rings[c]] for k, c in (("vrot", "vrot"), ("vdisp", "vdisp"), ("inc", "inc"),
-                                                            ("phi", "pa"))}
+    return {k: [float(x) for x in r.rings[c]] for k, c in (("radii", "radii"), ("vrot", "vrot"), ("vdisp", "vdisp"),
+                                                            ("inc", "inc"), ("phi", "pa"))}
 
 
 def jobs(ngal, snrs, configs, spatial, hanning, nlive, neff, seed=2026, kind="flat", galmodtype="ANALYTIC",
@@ -278,12 +279,25 @@ def summary(path):
             if f3:
                 errs.setdefault("3DFIT (" + c + ")", {})
                 for p in pars:
-                    e = [v - tv for r in f3 for v, tv in zip(r["fit3d"][p], r["truth_rings"][p])]
+                    e = []
+                    for r in f3:
+                        per_ring = any(n.startswith(p) and n[len(p):].isdigit() for n in r["names"])
+                        v, tv = np.asarray(r["fit3d"][p], float), np.asarray(r["truth_rings"][p], float)
+                        if "radii" in r["fit3d"]:           # (3DFIT leaves out the rings without enough signal)
+                            tv = tv[np.searchsorted(np.round(r["truth_rings"]["radii"], 3),
+                                                    np.round(r["fit3d"]["radii"], 3))]
+                        elif len(v) != len(tv):
+                            continue
+                        d = v - tv
+                        if p == "phi":
+                            d = (d + 180.) % 360. - 180.
+                        # (a parameter with one value in the posterior: the median of the rings of 3DFIT)
+                        e.extend(d.tolist() if per_ring else [float(np.median(d))])
                     errs["3DFIT (" + c + ")"][p] = e
         print("  (cover: fraction of the true values within the 68% interval; pulls: median and half 68% range of"
               " (median - true) / half-width; factor: voxels per independent measurement)")
         print(f"  errors of the medians (median - true, median +- half 68% range; VROT and VDISP in km/s, INC and PA"
-              " in deg):")
+              " in deg; 3DFIT: the median of its rings for a parameter with one value in the posterior):")
         for c, e in errs.items():
             cells = []
             for p in pars:

@@ -124,7 +124,20 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   `radmax_width` (default a quarter of the beam FWHM). The default, `radmax=ring`, does not
   change. The model engine has the edge too (`Rings.edge`, `Rings.edgewidth`), also in the
   density profile. `performance/radmax.py` compares the ways of fitting the edge on simulated
-  disks.
+  disks with a sharp edge inside the last ring (12 disks at 3 and 5 beams, S/N 20; errors in
+  units of the ring width w):
+
+  | RADMAX | edge: error, coverage (3 beams) | (5 beams) | VROT of the last ring: coverage |
+  |---|---|---|---|
+  | ring (default) | −0.02 ± 0.30 w, 0.75 | −0.04 ± 0.27 w, 0.83 | 0.83, 0.92 |
+  | edge | −0.02 ± 0.27 w, 0.75 | −0.13 ± 0.28 w, 0.75 | 1.00, 1.00 |
+  | taper | −0.08 ± 0.30 w, 0.75 | −0.16 ± 0.31 w, 0.67 | 1.00, 1.00 |
+  | evidence of N−1, N, N+1 rings | −0.21 ± 0.69 w | +0.86 ± 0.72 w | 0.83, 1.00 |
+
+  RADMAX locates the edge as well with `ring` as with `edge`, but with `ring` the model extends
+  half a ring beyond RADMAX and the last ring's VROT refers to a radius that changes from sample
+  to sample. `taper` brings nothing for sharp edges, and the evidence is coarse (it chose an
+  empty extra ring in 5 of 12 disks at 5 beams). Times are the same.
 - **`run_geometry` with a model error**: `sigma` and `fracerr` (free, or given in `like_kwargs`)
   in the likelihood of the total intensity map, as in that of the cube; without them the values
   do not change. The map of a real galaxy has structure that an axisymmetric disk does not
@@ -142,7 +155,19 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   `run_geometry` (the default, 0–360°, gives two modes).
 - **`performance/bayes_coverage.py`**: warped, thick and lagging disks (`--kind`), Monte-Carlo
   fits (`--galmodtype MC`), 3DFIT on the same cubes (`--fit3d`), and the errors of the medians
-  in the summary.
+  in the summary. Validation of the defaults (12 disks per case; S/N 5–40; 3, 5 and 8 beams; flat,
+  warped, thick and lagging disks; ANALYTIC and MC fits; 144 fits, one failed: at S/N 5 SEARCH found no source):
+  * the medians are more accurate than 3DFIT on the same cubes: at 3 beams and S/N 20, scatter of
+    VROT 6.5 against 10.1 km/s, INC 1.2° against 2.3°, PA 0.7° against 1.9°; 3DFIT's INC is
+    biased by −1.8° and −3.0° at 5 and 8 beams (the posterior: −0.3° and −0.4°);
+  * the credible intervals of VROT are 2–3 times too wide (coverage of the 68% intervals
+    0.92–1.00, pulls ± 0.3–0.5), those of INC and PA up to twice at 3 beams: the factor
+    1/(correlation volume of the noise) is exact only for a signal smoother than the beam;
+  * VDISP is biased low by 0.3–1.6 km/s at S/N 20–40 (coverage 0.25–0.75), with the data in the
+    dilated mask or in all the voxels, and with the true density profile; at S/N 5 INC is
+    biased by −7.5° (3DFIT: +5°);
+  * MC fits, thick and lagging disks, and warps (INC and PA in each ring) behave as flat disks
+    with ANALYTIC fits.
 - **GUESSTYPE: new initial estimates** of the parameters that are not given (3DFIT, 2DFIT,
   SPACEPAR, BAYESIAN3DFIT). For now the default is LEGACY, the C++ algorithm.
   - **FIT**: starts from the ELLIPSE estimates and refines them. (1) A beam-convolved disk is fitted
