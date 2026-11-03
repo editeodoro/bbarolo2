@@ -34,6 +34,7 @@ class Header:
         self.datamin = self.datamax = 0.
         self.redshift = 0.
         self.crota = 0.
+        self.pc = None              # rotation of the spatial axes, ((PC1_1, PC1_2), (PC2_1, PC2_2)); None: none
         self.drval3 = 0.
         self.dunit3 = ""
         self.radesys = ""
@@ -163,6 +164,7 @@ class Header:
                 cdelt[i] = v
             self.Warning("HEADER WARNING: Found CDn_n keywords instead!")
         self.cdelt = [float(c if c is not None else (g(f"CD{i + 1}_{i + 1}") or 1.)) for i, c in enumerate(cdelt)]
+        self.pc = self._read_pc(hdr) if n >= 2 else None
         crpix = [g(f"CRPIX{i + 1}") for i in range(n)]
         if all(c is None for c in crpix):
             self.Warning("HEADER ERROR: CRPIXs keywords not found.")
@@ -195,7 +197,11 @@ class Header:
                 if "km s-1" in cunit[i]: cunit[i] = "km/s"
                 if "m s-1" in cunit[i]: cunit[i] = "m/s"
                 if cunit[i] == "":
-                    cunit[i] = "km/s" if i == 2 else ("stokes" if i == 3 else "deg")
+                    ct = self.ctype[i].lower()
+                    if "stokes" in ct:
+                        cunit[i] = "stokes"     # (C++ took an empty CUNIT3 of a Stokes axis as km/s)
+                        continue
+                    cunit[i] = ("hz" if "freq" in ct else "km/s") if i >= 2 else "deg"
                     self.Warning(f"HEADER WARNING: CUNIT{i + 1} keywords not found. Assuming {cunit[i]}.")
         self.cunit = cunit
 
@@ -226,11 +232,13 @@ class Header:
 
         if n == 0:
             return True
-        cu2 = self.cunit[n - 1].lower()
-        ct2 = self.ctype[n - 1].lower()
+        # the spectral axis: the last one, or the third one of 4D cubes, or the fourth one if the
+        # third is a Stokes axis (RA, DEC, STOKES, FREQ: swapped with the third one by Cube)
+        sp = n - 1
         if n > 3:
-            cu2 = self.cunit[2].lower()
-            ct2 = self.ctype[2].lower()
+            sp = 3 if "stokes" in self.ctype[2].lower() else 2
+        cu2 = self.cunit[sp].lower()
+        ct2 = self.ctype[sp].lower()
         self.specsys = ""
         if "SPECSYS" in hdr:
             self.specsys = str(g("SPECSYS"))
@@ -264,9 +272,10 @@ class Header:
                 if self.dunit3.lower() == "km/s": d = self.drval3 * 1000
                 elif self.dunit3.lower() == "m/s": d = self.drval3
                 c3 = 0.
-                if cu2 == "hz": c3 = self.crval[2]
-                elif cu2 == "mhz": c3 = self.crval[2] * 1E06
-                elif cu2 == "ghz": c3 = self.crval[2] * 1E09
+                if cu2 == "hz": c3 = self.crval[sp]
+                elif cu2 == "khz": c3 = self.crval[sp] * 1E03
+                elif cu2 == "mhz": c3 = self.crval[sp] * 1E06
+                elif cu2 == "ghz": c3 = self.crval[sp] * 1E09
                 f0 = c3 * math.sqrt((299792458. + d) / (299792458. - d))
         self.freq0 = f0
 
@@ -327,14 +336,40 @@ class Header:
         self.updateWCS(hdr)
         cs = cu2
         if cs == "km/s": self.specConv = 1 / 1000.
+        if cs == "khz": self.specConv = 1 / 1E03
         if cs == "mhz": self.specConv = 1 / 1E06
         if cs == "ghz": self.specConv = 1 / 1E09
         if cs in ("micron", "mum", "um"): self.specConv = 1E06
+        if cs in ("nm", "nanom"): self.specConv = 1E09
         if cs in ("a", "ang", "angstrom"): self.specConv = 1E10
         self.calcArea()
         return True
 
     # ------------------------------------------------------------------ WCS
+    def _read_pc(self, hdr):
+        """The rotation of the spatial axes, as PCi_j with the CDELTs: from the PCi_j cards, or from
+        the CDi_j cards divided by CDELT. None if there is no rotation. Written in place of the CD and
+        PC cards of the input, which become wrong when CDELT changes (e.g. REDUCE)."""
+        pc = [[1., 0.], [0., 1.]]
+        cd = {(i, j): hdr.get(f"CD{i}_{j}") for i in (1, 2) for j in (1, 2)}
+        pcc = {(i, j): hdr.get(f"PC{i}_{j}") for i in (1, 2) for j in (1, 2)}
+        if any(v is not None for v in pcc.values()):
+            for (i, j), v in pcc.items():
+                if v is not None:
+                    pc[i - 1][j - 1] = float(v)
+        elif any(v is not None for v in cd.values()):
+            for (i, j), v in cd.items():
+                pc[i - 1][j - 1] = float(v or 0.) / self.cdelt[i - 1] if self.cdelt[i - 1] else 0.
+        if pc == [[1., 0.], [0., 1.]]:
+            return None
+        return (tuple(pc[0]), tuple(pc[1]))
+
+    def _pc_cards(self, h):
+        if self.pc is not None:
+            for i in range(2):
+                for j in range(2):
+                    h[f"PC{i + 1}_{j + 1}"] = self.pc[i][j]
+
     def _wcs_header(self):
         """Build a minimal FITS header describing the WCS of this Header."""
         h = fits.Header()
@@ -357,6 +392,10 @@ class Header:
             elif cu.lower() == "stokes":
                 cu = ""
             h[f"CUNIT{i + 1}"] = cu
+        if n >= 2:
+            self._pc_cards(h)
+            if self.pc is None and self.crota != 0:
+                h["CROTA2"] = self.crota
         for k in ("RESTFRQ", "RESTFREQ", "RESTWAV", "SPECSYS", "EQUINOX", "RADESYS",
                   "LONPOLE", "LATPOLE", "PV2_1", "PV2_2", "VELREF", "DATE-OBS", "MJD-OBS"):
             if hasattr(self, "_hdr") and k in self._hdr:
@@ -445,6 +484,8 @@ class Header:
     def getZphys(self, z, convert=True):
         """Channel (0-based) -> spectral value in the units of the spectral axis."""
         z = np.asarray(z, dtype=float)
+        if len(self.crpix) < 3:                    # a 2D image: no spectral axis
+            return z if z.ndim else float(z)
         lin = (z + 1 - self.crpix[2]) * self.cdelt[2] + self.crval[2]
         if self.wcs is None or self.wcs.wcs.spec < 0:
             return lin if lin.ndim else float(lin)
@@ -469,6 +510,8 @@ class Header:
     def getZgrid(self, specvalue, convert=True):
         """Spectral value (units of spectral axis) -> 0-based channel."""
         s = np.asarray(specvalue, dtype=float)
+        if len(self.crpix) < 3:                    # a 2D image: no spectral axis
+            return s if s.ndim else float(s)
         lin = (s - self.crval[2]) / self.cdelt[2] + self.crpix[2] - 1
         if self.wcs is None or self.wcs.wcs.spec < 0:
             return lin if lin.ndim else float(lin)
@@ -549,6 +592,8 @@ class Header:
             h[f"CDELT{k}"] = self.cdelt[i]
             h[f"CTYPE{k}"] = self.ctype[i]
             h[f"CUNIT{k}"] = self.cunit[i]
+        if min(numDim, self.numAxes) >= 2:
+            self._pc_cards(h)
         h["BUNIT"] = self.bunit
         if self.btype != "NONE": h["BTYPE"] = self.btype
         if self.bmaj != 0: h["BMAJ"] = self.bmaj
@@ -574,6 +619,8 @@ class Header:
                 kw = card[:f].strip()
                 if kw in skip or kw.startswith("NAXIS") or kw in h:
                     continue
+                if kw[:2] in ("CD", "PC") and "_" in kw and kw[2:3].isdigit():
+                    continue            # (the rotation is written above, from pc and CDELT)
                 try:
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore")

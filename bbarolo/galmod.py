@@ -37,6 +37,10 @@ from .smooth import Smooth3D, FFTConvolver
 # --------------------------------------------------------------------------
 @nb.njit(inline="always", cache=True)
 def _lround(x):
+    if not abs(x) < 1e18:
+        # NaN or infinite (e.g. a NaN ring parameter): int() of them is undefined (0 on ARM, which
+        # put the flux in pixel or channel 0); a value far outside any grid is skipped by the callers
+        return -(1 << 62)
     if x >= 0:
         return int(x + 0.5)
     return -int(-x + 0.5)
@@ -194,8 +198,10 @@ def _line_profile(prof, v, sig, vedges, cd2i, ptab, kc, K, nz):
 
 
 @nb.njit(cache=True)
-def _zquantiles(zq, n, ltype):
-    """Heights (in units of z0) at the quantiles (k+0.5)/n of the vertical layer profile."""
+def _zquantiles(zq, n, ltype, frac=1.0):
+    """Heights (in units of z0) at the quantiles (k+0.5)/n of the vertical layer profile. For the
+    Lorentzian layer (ltype 4), of the part of the layer within the fraction frac of its flux
+    (see _lorentz_frac)."""
     SQ2 = math.sqrt(2.0)
     for k in range(n):
         u = (k + 0.5) / n
@@ -215,11 +221,29 @@ def _zquantiles(zq, n, ltype):
                 # exponential layer: quantiles of the two-sided (Laplace) distribution
                 zq[k] = -math.log(1.0 - x) if x >= 0 else math.log(1.0 + x)
             elif ltype == 4:
-                zq[k] = math.tan(0.5 * math.pi * x)
+                zq[k] = math.tan(0.5 * math.pi * x * frac)
             else:
                 zq[k] = x
     if n == 1:
         zq[0] = 0.0
+
+
+@nb.njit(inline="always", cache=True)
+def _lorentz_frac(ltype, z0, R0, radsep, sinc, xpos, ypos, cdelt0, cdelt1, blo0, blo1, bhi0, bhi1):
+    """Fraction of the flux of a Lorentzian layer (ltype 4) at heights that can fall in the box: a
+    cloud of the ring centred at (xpos, ypos) (pixels) higher than (R0 + radsep + distance to the
+    farthest corner of the box) / |sin i| is outside it. Without this, the far tail would be sampled
+    by the outermost quantiles only, closer to the plane than it is, while MC models lose that flux
+    outside the field. 1 for the other layers."""
+    if ltype != 4 or z0 <= 0:
+        return 1.0
+    s = abs(sinc)
+    if s < 1e-6:
+        return 1.0
+    dx = max(abs(blo0 - 0.5 - xpos), abs(bhi0 - 0.5 - xpos)) * abs(cdelt0)
+    dy = max(abs(blo1 - 0.5 - ypos), abs(bhi1 - 0.5 - ypos)) * abs(cdelt1)
+    zmax = (R0 + radsep + math.sqrt(dx * dx + dy * dy)) / s
+    return 2.0 / math.pi * math.atan(zmax / z0)
 
 
 @nb.njit(nogil=True, cache=True)
@@ -238,6 +262,7 @@ def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, 
     pixsize = math.sqrt(pixarea)
     zq = np.empty(max(nzq, 1))
     nzcur = -1
+    fcur = 1.0
     prof = np.empty(nz + 1)
     gx = np.empty(max(nzq, 1), np.int64)
     gy = np.empty(max(nzq, 1), np.int64)
@@ -268,10 +293,13 @@ def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, 
             # by <~0.5 sigma in velocity, or the line profiles of the samples form a comb
             nz_vel = int(12.0 * abs(dvdz) * z0 * abs(sinc) / sig) + 1 if dvdz != 0 else 1
             nzz = min(max(nz_pix, nz_vel), nzq)
-        if nzz != nzcur:
-            _zquantiles(zq, nzz, ltype)
-            nzcur = nzz
-        fluxsc = dens * ring_area_pix * pixarea / (naz * nrad * nzz)
+        lfrac = 1.0
+        if nzz > 1:
+            lfrac = _lorentz_frac(ltype, z0, R0, radsep, sinc, xpos, ypos, cdelt0, cdelt1, blo0, blo1, bhi0, bhi1)
+        if nzz != nzcur or lfrac != fcur:
+            _zquantiles(zq, nzz, ltype, lfrac)
+            nzcur, fcur = nzz, lfrac
+        fluxsc = dens * ring_area_pix * pixarea * lfrac / (naz * nrad * nzz)
         # does the velocity depend on height for some vertical sample?
         zdep = False
         if dvdz != 0 and nzz > 1:
@@ -367,6 +395,7 @@ def _ring_maps_analytic(out, sr, widx, wval, radsep, pixarea, cdelt0, cdelt1, cr
     pixsize = math.sqrt(pixarea)
     zq = np.empty(max(nzq, 1))
     nzcur = -1
+    fcur = 1.0
     for ir in range(sr.shape[1]):
         if widx[ir, 0] < 0 and widx[ir, 1] < 0:
             continue
@@ -384,10 +413,13 @@ def _ring_maps_analytic(out, sr, widx, wval, radsep, pixarea, cdelt0, cdelt1, cr
         nzz = 1
         if z0 > 0 and nzq > 1:
             nzz = min(max(4, int(6.0 * z0 * abs(sinc) / pixsize) + 1), nzq)
-        if nzz != nzcur:
-            _zquantiles(zq, nzz, ltype)
-            nzcur = nzz
-        fluxsc = ring_area_pix * pixarea / (naz * nrad * nzz)
+        lfrac = 1.0
+        if nzz > 1:
+            lfrac = _lorentz_frac(ltype, z0, R0, radsep, sinc, xpos, ypos, cdelt0, cdelt1, blo0, blo1, bhi0, bhi1)
+        if nzz != nzcur or lfrac != fcur:
+            _zquantiles(zq, nzz, ltype, lfrac)
+            nzcur, fcur = nzz, lfrac
+        fluxsc = ring_area_pix * pixarea * lfrac / (naz * nrad * nzz)
         r_inner = R0 - 0.5 * radsep
         daz = 2 * math.pi / naz
         cd, sd = math.cos(daz), math.sin(daz)
@@ -553,7 +585,7 @@ class GalmodSetup:
             self.cdelt3 *= msconv
         else:
             raise ValueError("GALMOD ERROR: unknown Spectral axis type. Check CTYPE3 and CUNIT3 keywords.")
-        nch = p.linear
+        nch = p.specres if getattr(p, "specres", -1) != -1 else p.linear     # (LINEAR: as in C++)
         if nch == -1:
             nch = 1. / (2 * math.sqrt(2 * math.log(2)))
         self.chwidth = abs(DeltaVel(h)) * 1000
@@ -729,13 +761,13 @@ class GalmodSetup:
             if nthreads <= 1 or nsub < 2 * nthreads:
                 _galmod_analytic(out, sr, 0, nsub, *args[1:])
             else:
-                bufs = [np.zeros_like(out) for _ in range(nthreads)]
                 chunks = np.array_split(np.arange(nsub), nthreads)
-                with ThreadPoolExecutor(nthreads) as ex:
-                    list(ex.map(lambda k: _galmod_analytic(bufs[k], sr, int(chunks[k][0]), int(chunks[k][-1]) + 1,
-                                                           *args[1:]) if len(chunks[k]) else None, range(nthreads)))
-                for b in bufs:
-                    out += b
+
+                def work_a(k, buf):
+                    c = chunks[k]
+                    if len(c):
+                        _galmod_analytic(buf, sr, int(c[0]), int(c[-1]) + 1, *args[1:])
+                _sum_chunks(out, nthreads, work_a)
             return out
         args = (self.radsep, nv, self.cdens, self.cmode, self.pixarea, self.cdelt[0], self.cdelt[1],
                 self.crota2, blo[0], blo[1], bhi[0], bhi[1], self.ltype, self.sig_instr, self.axtyp,
@@ -744,18 +776,40 @@ class GalmodSetup:
             _galmod_mc(out, sr, 0, nsub, seed, *args)
         else:
             # Split the sub-rings among threads (each chunk with its own seed)
-            bufs = [np.zeros_like(out) for _ in range(nthreads)]
             chunks = np.array_split(np.arange(nsub), nthreads)
 
-            def work(k):
+            def work(k, buf):
                 c = chunks[k]
                 if len(c):
-                    _galmod_mc(bufs[k], sr, int(c[0]), int(c[-1]) + 1, (seed + 7919 * k) & 0xFFFFFFFF, *args)
-            with ThreadPoolExecutor(nthreads) as ex:
-                list(ex.map(work, range(nthreads)))
-            for b in bufs:
-                out += b
+                    _galmod_mc(buf, sr, int(c[0]), int(c[-1]) + 1, (seed + 7919 * k) & 0xFFFFFFFF, *args)
+            _sum_chunks(out, nthreads, work)
         return out
+
+
+# at most this many bytes of chunk buffers at a time (and at most _MAXBUF buffers)
+_BUFMEM = 2 * 1024 ** 3
+_MAXBUF = 16
+
+
+def _sum_chunks(out, nchunks, work):
+    """out += the sum of the chunks 0..nchunks-1, where work(k, buf) deposits chunk k into the zeroed
+    buffer buf (an array like out). The chunks run in parallel in groups, each with its own buffer,
+    and are added to out in the order of k: the same result as one buffer per chunk, but at most
+    min(_MAXBUF, _BUFMEM / out.nbytes) buffers exist at a time (one per thread was hundreds of GB for
+    large cubes with many threads)."""
+    nb_ = int(max(1, min(nchunks, _MAXBUF, _BUFMEM // max(out.nbytes, 1))))
+    bufs = [np.empty_like(out) for _ in range(nb_)]
+    with ThreadPoolExecutor(nb_) as ex:
+        for k0 in range(0, nchunks, nb_):
+            ks = list(range(k0, min(k0 + nb_, nchunks)))
+
+            def run(i):
+                bufs[i][...] = 0.
+                work(ks[i], bufs[i])
+            list(ex.map(run, range(len(ks))))
+            for i in range(len(ks)):
+                out += bufs[i]
+    return out
 
 
 # --------------------------------------------------------------------------

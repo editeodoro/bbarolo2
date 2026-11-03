@@ -94,7 +94,7 @@ def _wave_rest(h, zcent_default):
     return (z_cent + 1 - h.Crpix(2)) * h.Cdelt(2) + h.Crval(2)
 
 
-_WAVE_UNITS = ("mum", "um", "micron", "a", "ang", "angstrom")
+_WAVE_UNITS = ("mum", "um", "micron", "nm", "nanom", "a", "ang", "angstrom")
 # frequency units of the spectral axis -> Hz (rest frequencies are always in Hz)
 _FREQ_UNITS = {"hz": 1., "khz": 1E03, "mhz": 1E06, "ghz": 1E09}
 

@@ -168,9 +168,10 @@ class Detection:
         self.velWidth = abs(self.velMax - self.velMin)
 
     def calcIntegFlux(self, array, head, pbcorr=0, fluxconvert=True):
-        f = array[self.z, self.y, self.x].astype(np.float64)
+        f0 = array[self.z, self.y, self.x].astype(np.float64)
+        f = f0
         if pbcorr:
-            f = np.array([Pbcor(x, y, z, ff, head, pbcorr) for x, y, z, ff in zip(self.x, self.y, self.z, f)])
+            f = np.array([Pbcor(x, y, z, ff, head, pbcorr) for x, y, z, ff in zip(self.x, self.y, self.z, f0)])
         zmin, zmax = self.getZmin(), self.getZmax()
         zsize = zmax - zmin + 3
         zpts = np.arange(zsize) + zmin - 1
@@ -180,8 +181,10 @@ class Detection:
         dv[-1] = world[-1] - world[-2]
         dv[1:-1] = (world[2:] - world[:-2]) / 2.
         self.intFlux = float(np.sum(f * np.abs(dv[self.z - zmin + 1])))
+        # the line widths come from the spectrum of the observed fluxes, not PB-corrected (as in C++;
+        # the corrected fluxes can be NaN beyond the cutoff)
         intSpec = np.zeros(array.shape[0])
-        np.add.at(intSpec, self.z, f)
+        np.add.at(intSpec, self.z, f0)
         self.calcVelWidths(intSpec, head)
         if fluxconvert:
             self.intFlux = float(FluxtoJy(self.intFlux, head))

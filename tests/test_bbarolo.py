@@ -1029,9 +1029,9 @@ def test_analytic_dvdz_and_zero_width():
     dm = DiskModel(c, smooth=False)
     r = Rings().setRings(radii=np.arange(15, 600, 30), xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8, z0=30,
                          inc=80, phi=123.7, dens=1, dvdz=2., zcyl=5.)
-    a = dm.array(r, galmodtype="ANALYTIC").sum((0, 1))
+    a = dm.array(r, galmodtype="ANALYTIC").sum((1, 2))
     dm.setup.cdens = 400.
-    ref = dm.array(r, galmodtype="MC", seed=3, threads=8).sum((0, 1))
+    ref = dm.array(r, galmodtype="MC", seed=3, threads=8).sum((1, 2))
     assert np.abs(a - ref).max() / ref.max() < 0.04             # 0.146 before
     c.pars().linear = 0.
     dm = DiskModel(c, smooth=False)
@@ -1070,7 +1070,7 @@ def test_frequency_axes_lines_and_units(tmp_path):
         assert np.allclose(dm.setup.relvel / 1000., [0., 300.], atol=0.5)
         r = Rings().setRings(radii=np.arange(15, 200, 30), xpos=31.5, ypos=31.5, vsys=0., vrot=100, vdisp=10, z0=0,
                              inc=60, phi=45, dens=1)
-        specs.append(dm.array(r, galmodtype="ANALYTIC").sum((0, 1)))
+        specs.append(dm.array(r, galmodtype="ANALYTIC").sum((1, 2)))
     assert specs[0].sum() > 0 and np.allclose(specs[0], specs[1], rtol=1e-6)
 
 
@@ -1119,3 +1119,241 @@ def test_free_all_two_stages_with_errors(tmp_path):
                    verbose=False).run(outfolder=str(tmp_path))
     cols = res.rings.colnames
     assert {"e_vrot1", "e_vdisp1", "e_dens1", "e_vrad1"} <= set(cols) and len(res.rings) == 3
+
+
+@needs_data
+def test_normalcube_restores_data(tmp_path):
+    """NORMALCUBE scales the data during a fitting stage only."""
+    from bbarolo.galfit import Galfit
+    p = Param()
+    p.readParamString(f"FITSFILE {N2403}\n3DFIT true\nRADII 150 250\nXPOS 77\nYPOS 77\nVSYS 132.8\nVROT 120\n"
+                      f"VDISP 8\nINC 60\nPA 123.7\nZ0 10\nFREE VROT\nNORMALCUBE true\nTHREADS 2\nVERBOSE false\n"
+                      f"OUTFOLDER {tmp_path}/\n")
+    assert p.checkPars(quiet=True)
+    c = Cube(N2403, par=p)
+    fit = Galfit(c)
+    fit.galfit()
+    assert np.array_equal(fit.data_T, c.array.transpose(1, 2, 0))
+    assert getattr(fit._tls, "rng", None) is None        # the generator of a ring lives only during its fit
+
+
+@needs_data
+def test_estimates_with_values_from_files(tmp_path):
+    """Initial estimates with some ring parameters given as file(...) columns (it raised ValueError)."""
+    from bbarolo.galfit import initial_rings
+    rf = tmp_path / "rings.txt"
+    rf.write_text("# rad vsys vrot pa\n100 133.5 110 124.\n200 133.5 120 124.\n")
+    p = Param()
+    p.readParamString(f"FITSFILE {N2403}\nVSYS file({rf},2)\nVROT file({rf},3)\nPA file({rf},4)\nTHREADS 2\n"
+                      f"VERBOSE false\nOUTFOLDER {tmp_path}/\n")
+    assert p.checkPars(quiet=True)
+    c = Cube(N2403, par=p)
+    r = initial_rings(c, c.pars().gf, write=False).rings
+    assert np.allclose([r.vsys[0], r.vrot[0], r.phi[0]], [133.5, 110., 124.])
+
+
+@needs_data
+def test_2dfit_keeps_given_radii(tmp_path):
+    """2DFIT with RADII given and the geometry estimated keeps all the radii (they were cut to the
+    estimated number of rings)."""
+    from bbarolo import FitMod2D
+    rm = FitMod2D(N2403, radii=np.arange(15, 1200, 30), vsys=132.8, vrot=120, free="VROT", mask="SEARCH",
+                  threads=2, verbose=False)
+    radii = np.asarray(rm.run(write=False).rings["radii"])
+    assert len(radii) >= 38 and np.allclose(radii, np.arange(15, 1200, 30)[:len(radii)])
+
+
+def test_detection_widths_with_pbcorr(synthetic_cube, monkeypatch):
+    """W20/W50 come from the spectrum of the observed fluxes, also with PBCORR (as in C++): the
+    corrected fluxes can be NaN beyond the cutoff."""
+    import bbarolo.search as bs
+    c = synthetic_cube
+    z = np.arange(10, 30)
+    a = np.zeros_like(c.array)
+    a[z, 32, 32] = np.exp(-0.5 * ((z - 20) / 3.) ** 2)
+    det = bs.Detection(z, np.full(z.size, 32), np.full(z.size, 32))
+    det.calcIntegFlux(a, c.Head(), pbcorr=0, fluxconvert=False)
+    w20, w50 = det.getW20(), det.getW50()
+    monkeypatch.setattr(bs, "Pbcor", lambda x, y, z, f, h, opt: np.nan)
+    det.calcIntegFlux(a, c.Head(), pbcorr=3, fluxconvert=False)
+    assert np.isfinite(w20) and (det.getW20(), det.getW50()) == (w20, w50)
+
+
+def test_2d_header_spectral_coordinates(tmp_path):
+    """A 2D image has no spectral axis: getZphys/getZgrid return the channel (it raised IndexError)."""
+    from bbarolo.header import Header
+    hdu = emptyfits([32, 32], [-10. / 3600., 10. / 3600.], beam=30. / 3600., bunit="JY/BEAM", obj="IMG")
+    hdu.writeto(str(tmp_path / "img.fits"))
+    h = Header(str(tmp_path / "img.fits"), warning=False)
+    assert h.getZphys(0) == 0. and h.getZgrid(0.) == 0.
+
+
+def test_rotated_wcs_kept(tmp_path):
+    """A rotated CD matrix is kept as PC + CDELT: when the WCS is rebuilt, and in the header of a
+    spatially REDUCEd cube (which had the old CD cards next to the new CDELT)."""
+    from astropy.io import fits
+    from astropy.wcs import WCS
+    hdu = emptyfits([40, 40, 8], [-10. / 3600., 10. / 3600., 10.], beam=30. / 3600., bunit="JY/BEAM", obj="ROT")
+    h = hdu.header
+    th = np.radians(30.)
+    for k in ("CDELT1", "CDELT2"):
+        del h[k]
+    h["CD1_1"], h["CD1_2"] = -10. / 3600. * np.cos(th), -10. / 3600. * np.sin(th)
+    h["CD2_1"], h["CD2_2"] = -10. / 3600. * np.sin(th), 10. / 3600. * np.cos(th)
+    hdu.data[:] = np.random.default_rng(1).random(hdu.data.shape)
+    fn = str(tmp_path / "rot.fits")
+    hdu.writeto(fn)
+    w0 = WCS(fits.getheader(fn)).celestial
+    c = Cube(fn, par=Param(verbose=False))
+    pix = np.array([[3., 7., 0.], [25., 31., 0.]])
+    before = c.Head().pixToWCS(pix)[:, :2]
+    assert np.allclose(before, w0.wcs_pix2world(pix[:, :2], 0), atol=1e-9)
+    c.Head().updateWCS()
+    assert np.allclose(c.Head().pixToWCS(pix)[:, :2], before, atol=1e-9)
+    c.Reduce(2, "spatial").fitswrite_3d(str(tmp_path / "red.fits"), True)
+    Cube.fromArray(np.zeros_like(c.array), c.Head().copy(), c.pars()).Reduce(2, "spatial")   # all NaN: no crash
+    hr = fits.getheader(str(tmp_path / "red.fits"))
+    assert not any(k.startswith("CD") and "_" in k for k in hr)
+    # reduced pixel (0, 0) (0-based) is the centre of original pixels 0-1: 0.5
+    assert np.allclose(WCS(hr).celestial.wcs_pix2world([[0., 0.]], 0), w0.wcs_pix2world([[0.5, 0.5]], 0), atol=1e-9)
+
+
+def test_stokes_third_axis(tmp_path):
+    """A cube with axes RA, DEC, STOKES, FREQ (no CUNIT3): the first Stokes plane, and a frequency axis
+    (C++ took the empty CUNIT3 as km/s)."""
+    from astropy.io import fits
+    from bbarolo.bbutils import DeltaVel
+    data = np.zeros((20, 2, 16, 16), np.float32)          # (FREQ, STOKES, y, x)
+    data[:, 0] = 1.
+    data[:, 1] = 5.
+    h = fits.Header()
+    for k, v in dict(NAXIS=4, NAXIS1=16, NAXIS2=16, NAXIS3=2, NAXIS4=20, CTYPE1="RA---SIN", CTYPE2="DEC--SIN",
+                     CTYPE3="STOKES", CTYPE4="FREQ", CRPIX1=8, CRPIX2=8, CRPIX3=1, CRPIX4=10, CRVAL1=150., CRVAL2=30.,
+                     CRVAL3=1., CRVAL4=1.42e9, CDELT1=-10 / 3600., CDELT2=10 / 3600., CDELT3=1., CDELT4=-2e4,
+                     CUNIT1="deg", CUNIT2="deg", CUNIT4="Hz", BMAJ=30 / 3600., BMIN=30 / 3600., BPA=0.,
+                     BUNIT="JY/BEAM", RESTFREQ=1.420405751786e9).items():
+        h[k] = v
+    fits.writeto(str(tmp_path / "s.fits"), data, h)
+    c = Cube(str(tmp_path / "s.fits"), par=Param(verbose=False))
+    assert c.array.shape == (20, 16, 16) and np.all(c.array == 1.)
+    assert c.Head().SpectralType() == "freq" and np.isclose(abs(DeltaVel(c.Head())), 4.22, atol=0.05)
+
+
+def test_rings_defaults_and_ranges():
+    """Rings() starts with radsep 0 (as C++; -1 shrank SHIFTED disks), RADII Rmin~Rmax:step includes
+    Rmax also for steps that are not exact in binary, and a NaN position or velocity does not land in
+    pixel or channel 0."""
+    from bbarolo.galmod import _lround
+    from bbarolo.rings import readRings
+    assert Rings().radsep == 0.
+    p = Param()
+    p.readParamString("RADII 0~1:0.1\nXPOS 10\nYPOS 10\nVSYS 0\nVROT 100\nVDISP 10\nINC 60\nPA 30\nZ0 0\n")
+    h = emptyfits([32, 32, 10], [-10. / 3600., 10. / 3600., 10.], beam=30. / 3600.)
+    from bbarolo.header import Header
+    hh = Header()
+    hh.fromAstropy(h.header)
+    r = readRings(p.gf, hh)
+    assert r.nr == 11 and np.isclose(r.radii[-1], 1.)
+    assert _lround(np.nan) < -1e15 and _lround(np.inf) < -1e15 and _lround(2.5) == 3 and _lround(-2.5) == -3
+
+
+@needs_data
+def test_analytic_lorentzian_layer():
+    """ANALYTIC models with a Lorentzian layer (LTYPE 4) keep only the part of the layer that can fall
+    in the field, as MC models do (the far tail was put closer to the plane: +1.4% of flux)."""
+    from bbarolo import DiskModel
+    p = Param(verbose=False)
+    p.gf.LTYPE = p.gm.LTYPE = 4
+    dm = DiskModel(Cube(N2403, par=p), smooth=False)
+    r = Rings().setRings(radii=np.arange(15, 600, 30), xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8, z0=30,
+                         inc=80, phi=123.7, dens=1)
+    a = dm.array(r, galmodtype="ANALYTIC").sum()
+    dm.setup.cdens = 200.
+    m = dm.array(r, galmodtype="MC", seed=3, threads=8).sum()
+    assert abs(a / m - 1) < 0.008                             # 0.0138 before
+
+
+def test_specres_keyword(synthetic_cube, capsys):
+    """SPECRES sets the spectral resolution of the models; LINEAR still does when SPECRES is not given
+    (as in C++), with a warning when LINEAR is also the resolution of SMOOTH."""
+    from bbarolo import DiskModel
+    c = synthetic_cube
+    r = _rings()
+    models = {}
+    for k, v in (("default", None), ("linear", ("linear", 2.)), ("specres", ("specres", 2.))):
+        c.pars().linear, c.pars().specres = -1., -1.
+        if v:
+            setattr(c.pars(), v[0], v[1])
+        models[k] = DiskModel(c, smooth=False).array(r, galmodtype="ANALYTIC")
+    assert np.array_equal(models["linear"], models["specres"]) and not np.allclose(models["default"], models["linear"])
+    p = Param()
+    p.readParamString(f"FITSFILE {N2403}\nSMOOTH true\nLINEAR 0.5\nDISTANCE 3\nGALMOD true\nRADII 100 200\n"
+                      "XPOS 77\nYPOS 77\nVSYS 130\nVROT 100\nVDISP 8\nINC 60\nPA 120\nZ0 0\n")
+    p.checkPars()
+    assert "SPECRES" in capsys.readouterr().out
+
+
+_C, _F0, _W0, _NZ, _DV, _V0 = 299792.458, 1.420405751786e9, 6562.8, 60, 10., 1000.
+_b = _V0 / _C
+# (name, CTYPE3, CUNIT3, CRVAL3, CDELT3, extra cards, VELDEF, RESTWAVE, expected DeltaVel)
+_AXES = [(f"VRAD {u}", "VRAD", u, _V0 * s, _DV * s, {}, "radio", None, _DV) for u, s in
+         (("m/s", 1e3), ("km/s", 1.), ("kms", 1.))] + \
+        [(f"FREQ {u}", "FREQ", u, _F0 * (1 - _b) / s, -_F0 * _DV / _C / s, dict(RESTFRQ=_F0), "radio", None, _DV)
+         for u, s in (("Hz", 1.), ("kHz", 1e3), ("MHz", 1e6), ("GHz", 1e9))] + \
+        [(f"WAVE {u}", "WAVE", u, _W0 * (1 + _b) / s, _W0 * _DV / _C / s, {}, "optical", _W0 / s, _DV)
+         for u, s in (("Angstrom", 1.), ("nm", 10.), ("um", 1e4))] + \
+        [("FREQ optical", "FREQ", "Hz", _F0 / (1 + _b), -_F0 * _DV / _C, dict(RESTFRQ=_F0), "optical", None,
+          _DV * (1 + _b) ** 2),
+         ("WAVE radio", "WAVE", "Angstrom", _W0 / (1 - _b), _W0 * _DV / _C, {}, "radio", _W0, _DV * (1 - _b) ** 2),
+         ("FREQ relativistic", "FREQ", "Hz", _F0 * np.sqrt((1 - _b) / (1 + _b)), -_F0 * _DV / _C,
+          dict(RESTFRQ=_F0), "relativistic", None, None),
+         ("WAVE relativistic", "WAVE", "Angstrom", _W0 * np.sqrt((1 + _b) / (1 - _b)), _W0 * _DV / _C, {},
+          "relativistic", _W0, None)]
+
+
+@pytest.mark.parametrize("axis", _AXES, ids=[a[0] for a in _AXES])
+def test_spectral_axes(axis, tmp_path):
+    """The same galaxy on spectral axes of every type, unit and velocity definition: the velocity of the
+    reference channel, the channel width, channel <-> spectral value round trips, and a model centred on
+    VSYS (kHz and nm axes were wrong)."""
+    from astropy.io import fits
+    from bbarolo import DiskModel
+    from bbarolo.bbutils import DeltaVel, AlltoVel, Vel2Spec
+    name, ct, cu, crval, cdelt, extra, veldef, restw, dv = axis
+    h = fits.Header()
+    for k, v in dict(NAXIS=3, NAXIS1=48, NAXIS2=48, NAXIS3=_NZ, CTYPE1="RA---SIN", CTYPE2="DEC--SIN", CTYPE3=ct,
+                     CRPIX1=24.5, CRPIX2=24.5, CRPIX3=_NZ // 2, CRVAL1=150., CRVAL2=30., CRVAL3=crval,
+                     CDELT1=-10 / 3600., CDELT2=10 / 3600., CDELT3=cdelt, CUNIT1="deg", CUNIT2="deg", CUNIT3=cu,
+                     BMAJ=30 / 3600., BMIN=30 / 3600., BPA=0., BUNIT="JY/BEAM", OBJECT="AX", **extra).items():
+        h[k] = v
+    fits.writeto(str(tmp_path / "ax.fits"), np.zeros((_NZ, 48, 48), np.float32), h)
+    p = Param(verbose=False)
+    p.ma.veldef = veldef
+    if restw:
+        p.gf.RESTWAVE = p.gm.RESTWAVE = [restw]
+    c = Cube(str(tmp_path / "ax.fits"), par=p)
+    hh = c.Head()
+    v = np.array([AlltoVel(hh.getZphys(z), hh) for z in range(_NZ)])
+    assert np.isclose(v[_NZ // 2 - 1], _V0, atol=1e-3)
+    if dv is not None:
+        assert np.isclose(abs(DeltaVel(hh)), dv, rtol=2e-3)
+    assert np.allclose([hh.getZgrid(Vel2Spec(x, hh)) for x in v], np.arange(_NZ), atol=1e-6)
+    r = Rings().setRings(radii=np.arange(15, 200, 30), xpos=23.5, ypos=23.5, vsys=_V0, vrot=100, vdisp=10, z0=0,
+                         inc=60, phi=45, dens=1)
+    spec = DiskModel(c, smooth=False).array(r, galmodtype="ANALYTIC").sum((1, 2))
+    assert spec.sum() > 0 and abs((spec * v).sum() / spec.sum() - _V0) < 0.5
+
+
+def test_parser_non_finite_integers():
+    """inf or nan given to an integer parameter is unreadable (it raised OverflowError/ValueError)."""
+    p = Param()
+    p.readParamString("FITSFILE x.fits\nBOX inf 1 2\nCDENS nan\nNV inf\n")
+    assert p.BOX[0] == -1 and p.gf.CDENS == 0 and p.checkPars(quiet=True)
+
+
+def test_xpos_from_file_keeps_path_case():
+    """XPOS/YPOS are read in lower case (WCS values), but a file(...) path keeps its case (C++ lowercased
+    it: ring files in folders with capital letters were not found)."""
+    p = Param()
+    p.readParamString("XPOS file(/Data/Rings.txt,10)\nYPOS 07H36M51S\n")
+    assert p.gf.XPOS == "file(/Data/Rings.txt,10)" and p.gf.YPOS == "07h36m51s"

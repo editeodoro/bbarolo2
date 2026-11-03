@@ -590,11 +590,13 @@ class Galfit:
         r = getattr(self._tls, "rng", None)
         if r is not None:
             return r
+        # outside a ring fit (e.g. func3D called directly): one generator per thread
         tid = threading.get_ident()
-        r = self._rngs.get(tid)
-        if r is None:
-            r = np.random.default_rng(len(self._rngs) + 12345)
-            self._rngs[tid] = r
+        with self._lock:
+            r = self._rngs.get(tid)
+            if r is None:
+                r = np.random.default_rng([12345, len(self._rngs)])
+                self._rngs[tid] = r
         return r
 
     def func3D(self, dring, zpar, modsoFar=None):
@@ -773,7 +775,14 @@ class Galfit:
         return o.vrot[ir] <= maxvrot
 
     def _fit_ring(self, ir, errors, fitok, nthreads, toKpc, modsoFar=None):
+        # the generator of this ring is used only during its fit (see _rng)
         self._tls.rng = np.random.default_rng([12345, self.n_galfit, ir])
+        try:
+            self._fit_one_ring(ir, errors, fitok, nthreads, toKpc, modsoFar)
+        finally:
+            self._tls.rng = None
+
+    def _fit_one_ring(self, ir, errors, fitok, nthreads, toKpc, modsoFar=None):
         inr = self.inr
         if self.verb and nthreads == 1:
             print(f"\n Working on ring #{ir + 1} at radius {inr.radii[ir]:.2f} arcsec "
@@ -823,15 +832,15 @@ class Galfit:
             print("\n" + "=" * 31 + " 3DFIT " + "=" * 31)
         self.outr = self.inr.copy()
         scaling = 1.
+        dn_orig, dT_orig = self.data_noise, self.data_T
         if self.par.NORMALCUBE:
+            # the data, and their noise, are scaled during the fit only (restored below)
             scaling = 10. / c.stat().getMax()
             self.scaled_data = (c.array * scaling).astype(c.array.dtype)
-            self.data_noise_scaled = self.data_noise * scaling
+            self.data_T = np.ascontiguousarray(self.scaled_data.transpose(1, 2, 0))
         else:
             self.scaled_data = c.array
-        dn_orig = self.data_noise
         self.data_noise = self.data_noise * scaling
-        self.data_T = np.ascontiguousarray(self.scaled_data.transpose(1, 2, 0))
         nr = self.inr.nr
         errors = np.zeros((nr, 2, self.nfree))
         fitok = [False] * nr
@@ -851,7 +860,7 @@ class Galfit:
                         for f in futs:
                             f.result()
         finally:
-            self.data_noise = dn_orig
+            self.data_noise, self.data_T = dn_orig, dT_orig
             self.scaled_data = c.array
         self.fitok = fitok
         self.errors = errors

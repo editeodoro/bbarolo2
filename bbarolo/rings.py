@@ -14,7 +14,7 @@ class Rings:
     """A set of tilted rings. Each parameter is a float64 numpy array of length nr."""
 
     def __init__(self, nr=0):
-        self.radsep = -1.
+        self.radsep = 0.            # (as in C++; -1 shrank SHIFTED disks by 0.5)
         self.id = 0
         for k in RING_KEYS:
             setattr(self, k, np.zeros(nr))
@@ -130,10 +130,10 @@ def readRings(par, h, return_fromfile=False):
             Rmin, Rmax, step = float(s[0][:f1]), float(s[0][f1 + 1:f2]), float(s[0][f2 + 1:])
             if Rmin > Rmax or step < 0:
                 raise ValueError(' INPUT ERROR: RADII parameter format is "Rmin~Rmax:step".')
-            rr = [Rmin]
-            while rr[-1] <= Rmax - step:
-                rr.append(rr[-1] + step)
-            fr["radii"] = rr
+            # Rmin, Rmin+step, ... up to Rmax included (a tolerance for steps such as 0.1, which
+            # are not exact in binary: C++ sums floats, and 0~1:0.1 gave 10 or 11 radii)
+            n = int(np.floor((Rmax - Rmin) / step + 1e-6)) + 1 if step > 0 else 1
+            fr["radii"] = list(Rmin + np.arange(n) * step)
         else:
             fr["radii"] = [float(x) for x in s]
         radii_b = len(fr["radii"]) > 0

@@ -252,6 +252,7 @@ class Param:
         self.obmin = -1.0
         self.obpa = 0.0
         self.linear = -1.0
+        self.specres = -1.0           # spectral resolution of the models (sigma, channels); -1: LINEAR
         self.factor = 2.0
         self.scalefactor = -1.0
         self.reduce = "false"
@@ -620,6 +621,10 @@ class Param:
             if self.linear != -1 and gf.DISTANCE == -1:
                 out("SMOOTH error: with LINEAR parameter you must specify also the DISTANCE. ")
                 good = False
+            if self.linear != -1 and self.specres == -1 and (gf.flagGALFIT or gf.flagBAYESIAN or gm.flagGALMOD
+                                                              or self.flagSpace):
+                out(f"SMOOTH warning: LINEAR={self.linear} is also the spectral resolution of the models (sigma, "
+                    "in channels), as in C++. Give SPECRES to set it independently.")
             if self.bmaj != -1 and self.bmin == -1:
                 self.bmin = self.bmaj
 
@@ -1238,7 +1243,7 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
         if gf.RESTFREQ[0] != -1 or defaults: R("[RESTFREQ]", "   Transition frequency at rest?", " ".join(f"{v:.2f}" for v in gf.RESTFREQ))
         if len(gf.RELINT) > 1 or defaults: R("[RELINT]", "   Relative intensities of lines?", " ".join(f"{v:.2f}" for v in gf.RELINT))
         R("[RINGFILE]", "   A BB output file with rings", gf.ringfile)
-        R("[LINEAR]", "   Spectral resolution in sigma (channels)", p.linear)
+        R("[SPECRES]", "   Spectral resolution in sigma (channels)", p.specres if p.specres != -1 else p.linear)
         if defaults or gf.RADII == "-1":
             if defaults: R("[RADII]", "   Radii for rings", gf.RADII)
             R("[NRADII]", "   Number of radii", gf.NRADII)

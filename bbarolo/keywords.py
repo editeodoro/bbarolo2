@@ -56,6 +56,11 @@ def readfloat(s, default=0.0):
         return default
 
 
+def _int_or_zero(x):
+    """int(x), or 0 (as an unreadable integer) if x is infinite or NaN."""
+    return int(x) if x == x and abs(x) != float("inf") else 0
+
+
 def readflag(s):
     return boolify(_first(s))
 
@@ -77,7 +82,7 @@ def readvec(s, typ=float):
     for t in _tokens(s):
         try:
             out.append(typ(float(t)) if typ is int else typ(t))
-        except ValueError:
+        except (ValueError, OverflowError):        # (inf, nan: not integers, as for C++ >> int)
             break
     return out
 
@@ -100,6 +105,9 @@ def splitString(s, delimiter):
 READERS = {
     "str": readstr,
     "lstr": lambda s: readstr(s).lower(),
+    # lower case (WCS values such as 07h36m51s), except a file(...) column: its path keeps its case
+    # (C++ lowercased it too, so paths with capital letters were not found)
+    "pos": lambda s: readstr(s) if "file(" in readstr(s).lower() else readstr(s).lower(),
     "ustr": lambda s: readstr(s).upper(),
     "flag": readflag,
     "int": readint,
@@ -107,7 +115,7 @@ READERS = {
     "flagorint": readflagorint,
     "ivec": lambda s: readvec(s, int),
     "fvec": lambda s: readvec(s, float),
-    "cdens": lambda s: int(readfloat(s)),
+    "cdens": lambda s: _int_or_zero(readfloat(s)),
     "fvec3": lambda s: (readvec(s, float) + [0, 0, 0])[:3],
     "ivec6": lambda s: (readvec(s, int) + [-1] * 6)[:6],
     "fvec2": lambda s: (readvec(s, float) + [-1, -1])[:2],
@@ -304,8 +312,8 @@ KEYWORDS = [
     K("DVDZ", "str", _g(G2, "DVDZ"), ("GALMOD", "BAYESIAN3DFIT"), "Vertical gradient of rotation velocity (km/s/arcs)"),
     K("ZCYL", "str", _g(G2, "ZCYL"), ("GALMOD", "BAYESIAN3DFIT"), "Height where the gradient begins (arcs)"),
     K("VDISP", "str", _g(G3, "VDISP"), MOD + ("GALWIND",), "Velocity dispersion (km/s)"),
-    K("XPOS", "lstr", _g(G3, "XPOS"), RING + ("GALWIND",), "X center of the galaxy (pixel, or WCS with a unit)"),
-    K("YPOS", "lstr", _g(G3, "YPOS"), RING + ("GALWIND",), "Y center of the galaxy (pixel, or WCS with a unit)"),
+    K("XPOS", "pos", _g(G3, "XPOS"), RING + ("GALWIND",), "X center of the galaxy (pixel, or WCS with a unit)"),
+    K("YPOS", "pos", _g(G3, "YPOS"), RING + ("GALWIND",), "Y center of the galaxy (pixel, or WCS with a unit)"),
     K("VSYS", "str", _g(G3, "VSYS"), RING + ("GALWIND",), "Systemic velocity of the galaxy (km/s)"),
     K("INC", "str", _g(G3, "INC"), RING + ("GALWIND",), "Inclination angle (degrees)"),
     K("PA", "str", _g(G3, "PHI"), RING + ("GALWIND",),
@@ -406,7 +414,11 @@ KEYWORDS = [
     K("OBMIN", "float", ["obmin"], ("SMOOTH",), "Old minor beam (arcsec)"),
     K("OBPA", "float", ["obpa"], ("SMOOTH",), "Old beam position angle (degree)"),
     K("LINEAR", "float", ["linear"], ("SMOOTH", "3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR"),
-      "New linear resolution (kpc) for SMOOTH; spectral resolution (sigma, channels) for models"),
+      "New linear resolution (kpc) for SMOOTH; for the models, also their spectral resolution (sigma, "
+      "channels) when SPECRES is not given (as in C++)"),
+    K("SPECRES", "float", ["specres"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR"),
+      "Spectral resolution of the models (sigma, in channels; default: LINEAR if given, else "
+      "1/2.355, i.e. a FWHM of one channel)"),
     K("FACTOR", "float", ["factor"], ("SMOOTH", "MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "2DFIT", "ELLPROF") + MAPS,
       "New beam factor (times old beam), also used by the SMOOTH mask"),
     K("SCALEFACTOR", "float", ["scalefactor"], ("SMOOTH",), "Scaling factor for the smoothed cube"),

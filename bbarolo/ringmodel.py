@@ -137,8 +137,9 @@ class Ringmodel:
                       or par.YPOS == "-1" or par.VSYS == "-1" or par.VROT == "-1" or par.PHI == "-1" or par.INC == "-1")
         if toEstimate:
             ip = EstimateInitial(c, par)
-            if par.NRADII == -1: par.NRADII = ip.nrings
-            if par.RADSEP == -1: par.RADSEP = ip.radsep
+            if par.RADII == "-1":           # (C++ also set them with RADII given, truncating RADII)
+                if par.NRADII == -1: par.NRADII = ip.nrings
+                if par.RADSEP == -1: par.RADSEP = ip.radsep
             if par.XPOS == "-1": par.XPOS = repr(float(ip.xcentre))
             if par.YPOS == "-1": par.YPOS = repr(float(ip.ycentre))
             if par.VSYS == "-1": par.VSYS = repr(float(ip.vsystem))

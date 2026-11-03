@@ -40,11 +40,14 @@ likelihood. Read the relevant section of it before changing behaviour.
 ```bash
 python3 bin/BBarolo -p param.par            # or: python3 -m bbarolo -p param.par
 python3 bin/BBarolo -d 3DFIT                # parameters and defaults of a task
-python3 -m pytest -q --ignore=tests/test_BBB tests   # 31 tests, about 1 minute
+python3 -m pytest -q                        # about 1 minute (pyproject.toml ignores tests/test_BBB)
+python3 performance/compare_examples.py HEAD -j 15   # all example outputs: working tree vs a git ref
 ```
 
-- `--ignore=tests/test_BBB` is needed: `tests/test_BBB/test_BBB_pure.py` is a script that calls
-  `exit()` at import, which aborts pytest collection.
+- Every fix gets a regression test that fails on the previous code (check it in a `git worktree`
+  of the previous commit).
+- `performance/compare_examples.py` must report "identical" for changes meant to keep results;
+  otherwise it shows what changed (FITS data difference, header keywords, text lines).
 - `bash examples/run_all_tests.sh` runs every example task; run it from the folder that contains
   `examples/` (the parent of this repo).
 - Comparisons with C++ (`examples/compare_galmod.py`, `compare_bayesian.py`,

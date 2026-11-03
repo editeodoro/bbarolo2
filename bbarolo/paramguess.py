@@ -84,6 +84,19 @@ class NelderMead:
                 nfunc -= 1
 
 
+def _given(s):
+    """The (first) value of a ring parameter that is given: a number, one value per ring, or a
+    column of a file, file(name,col)."""
+    s = str(s)
+    if "file(" in s.lower():
+        from .bbutils import getDataColumn
+        col = getDataColumn(s)
+        if not col:
+            raise ValueError(f"3DFIT ERROR: cannot read the values of {s}")
+        return float(col[0])
+    return float(s.split()[0])
+
+
 def funcEllipse(mypar, c, pa, xcen, ycen, Vf):
     if mypar[0] < 0: mypar[0] = abs(mypar[0])
     if mypar[1] > 90: mypar[1] = 180 - mypar[1]
@@ -461,22 +474,24 @@ def EstimateInitial(c, p):
     if largest is None:
         raise RuntimeError(" 3DFIT ERROR: No sources detected in the datacube. Cannot fit!!! ")
     ip = ParamGuess(c, largest)
-    if p.VSYS != "-1": ip.vsystem = float(str(p.VSYS).split()[0])
+    if p.VSYS != "-1": ip.vsystem = _given(p.VSYS)
     else: ip.findSystemicVelocity()
     if p.XPOS != "-1" and p.YPOS != "-1":
         from .rings import firstValue
-        ip.xcentre, ip.ycentre = getCenterCoordinates([firstValue(p.XPOS), firstValue(p.YPOS)], c.Head())
+        def first(s):
+            return repr(_given(s)) if "file(" in str(s).lower() else firstValue(s)
+        ip.xcentre, ip.ycentre = getCenterCoordinates([first(p.XPOS), first(p.YPOS)], c.Head())
     else:
         ip.findCentre()
-    if p.PHI != "-1": ip.posang = float(str(p.PHI).split()[0])
+    if p.PHI != "-1": ip.posang = _given(p.PHI)
     else: ip.findPositionAngle(1)
     ip.findInclination(2)
-    if p.INC != "-1": ip.inclin = float(str(p.INC).split()[0])
+    if p.INC != "-1": ip.inclin = _given(p.INC)
     if p.NRADII != -1 and p.RADSEP != -1:
         ip.radsep, ip.nrings = p.RADSEP, p.NRADII
     else:
         ip.findRings()
-    if p.VROT != "-1": ip.vrot = float(str(p.VROT).split()[0])
+    if p.VROT != "-1": ip.vrot = _given(p.VROT)
     else: ip.findRotationVelocity()
     if c.pars().plots >= 3:
         ip.plotGuess("initialguesses_" + c.pars().outPrefix + "_0.pdf")

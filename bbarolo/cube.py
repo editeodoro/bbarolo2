@@ -148,7 +148,8 @@ class Cube:
         if p.getRestfreq() != -1:
             h.setFreq0(p.getRestfreq())
         dims = [h.DimAx(i) if i < h.NumAx() else 1 for i in range(3)]
-        if h.NumAx() > 3 and h.Ctype(2).lower() == "stokes":
+        stokes3 = h.NumAx() > 3 and h.Ctype(2).lower() == "stokes"
+        if stokes3:
             h.setCrpix(2, h.Crpix(3)); h.setCrval(2, h.Crval(3)); h.setCdelt(2, h.Cdelt(3))
             h.setCtype(2, h.Ctype(3)); h.setCunit(2, h.Cunit(3))
             h.setDimAx(2, h.DimAx(3))
@@ -178,9 +179,13 @@ class Cube:
             npx = dims[0] * dims[1] * dims[2]
             print(f"\nOpening file {fname}")
             print(f"Reading {dims[0]} x {dims[1]} x {dims[2]} pixels FITS file ({4 * npx / 1048576.:.1f} MB)... ", end="")
-        data = getdata()
+        data = np.asarray(getdata())
+        if data.ndim == 4:
+            # the first Stokes plane (or the first plane of the 4th axis): (FREQ, STOKES, y, x) when
+            # the third axis is the Stokes one, otherwise (STOKES, FREQ, y, x)
+            data = data[:, 0] if stokes3 else data[0]
         n = dims[0] * dims[1] * dims[2]
-        data = np.asarray(data).reshape(-1)[:n].reshape(dims[2], dims[1], dims[0])
+        data = data.reshape(-1)[:n].reshape(dims[2], dims[1], dims[0])
         data = data.astype(np.float32 if data.dtype.itemsize <= 4 else np.float64, copy=True)
         data[np.isnan(data)] = 0
         self.array = np.ascontiguousarray(data)
@@ -669,8 +674,9 @@ class Cube:
         if p.verbose:
             print("OK\n" + o + "\n" + nn)
         r = Cube.fromArray(out.astype(self.array.dtype), h, p)
-        r.Head().setDataMax(np.nanmax(out))
-        r.Head().setDataMin(np.nanmin(out))
+        if np.any(np.isfinite(out)):            # (an empty cube is all NaN: no DATAMAX/DATAMIN)
+            r.Head().setDataMax(np.nanmax(out))
+            r.Head().setDataMin(np.nanmin(out))
         return r
 
     def CheckCube(self, type=1):

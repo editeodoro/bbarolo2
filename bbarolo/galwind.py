@@ -20,7 +20,7 @@ import copy
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 
-from .galmod import GalmodSetup, _galmod_wind, _seed
+from .galmod import GalmodSetup, _galmod_wind, _seed, _sum_chunks
 from .rings import Rings
 from .smooth import Smooth3D
 from .moments import MomentMap
@@ -147,20 +147,16 @@ class GalWind:
         verb = c.pars().verbose
         bar = ProgressBar(False, verb, c.pars().showbar)
         bar.init(" Generating outflow model... ", ntot)
-        bufs = [out] + [np.zeros_like(out) for _ in range(min(nthreads, ntot) - 1)]
+        nch = max(1, min(nthreads, ntot))          # chunk t: the cylinders t+1, t+1+nch, ...
         done = [0]
 
-        def work(t):
-            for k in range(t + 1, ntot + 1, len(bufs)):
+        def work(t, buf):
+            for k in range(t + 1, ntot + 1, nch):
                 for ic, r in enumerate(cylinder(k)):
-                    setup._build(r, (0, 0), (c.DimX(), c.DimY()), bufs[t],
-                                 (base + 2 * k + ic) & 0xFFFFFFFF, 1, gtype)
+                    setup._build(r, (0, 0), (c.DimX(), c.DimY()), buf, (base + 2 * k + ic) & 0xFFFFFFFF, 1, gtype)
                 done[0] += 1
                 bar.update(done[0])
-        with ThreadPoolExecutor(len(bufs)) as ex:
-            list(ex.map(work, range(len(bufs))))
-        for b in bufs[1:]:
-            out += b
+        _sum_chunks(out, nch, work)
         bar.fillSpace(" Done.\n")
         return True
 
@@ -223,22 +219,18 @@ class GalWind:
             print(" GALWIND WARNING: no clouds in some shells. Choose higher CDENS.")
         nthreads = max(1, min(int(c.pars().threads), ns))
         chunks = np.array_split(np.arange(ns), nthreads)
-        bufs = [out] + [np.zeros_like(out) for _ in range(nthreads - 1)]
         args = (sep, nv, setup.cdens, 1, setup.pixarea, setup.cdelt[0], setup.cdelt[1], setup.crota2,
                 0, 0, c.DimX(), c.DimY(), setup.sig_instr, setup.axtyp, setup.velsys, setup.freq0,
                 setup.crval3, setup.cdelt3, setup.crpix3, setup.relvel, setup.relint, setup.cd2i)
         seed = _seed(par.ISEED)
 
-        def work(t):
+        def work(t, buf):
             ch = chunks[t]
             if len(ch):
-                _galmod_wind(bufs[t], sr, int(ch[0]), int(ch[-1]) + 1, (seed + 7919 * t) & 0xFFFFFFFF, *args)
+                _galmod_wind(buf, sr, int(ch[0]), int(ch[-1]) + 1, (seed + 7919 * t) & 0xFFFFFFFF, *args)
         if c.pars().verbose:
             print(" Modeling outflow... ", end="", flush=True)
-        with ThreadPoolExecutor(nthreads) as ex:
-            list(ex.map(work, range(nthreads)))
-        for b in bufs[1:]:
-            out += b
+        _sum_chunks(out, nthreads, work)
         if c.pars().verbose:
             print("OK.")
         return True
