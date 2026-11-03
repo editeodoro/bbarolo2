@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyBBarolo"
+dynamic = ["version"]
+description = "3D-Barolo (BBarolo) in pure Python: 3D tilted-ring fitting of emission-line datacubes"
+readme = "README.md"
+license = {text = "GPL-3.0-or-later"}
+authors = [{name = "Enrico Di Teodoro", email = "enrico.diteodoro@gmail.com"}]
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.22",
+    "scipy>=1.15",
+    "astropy>=5.0",
+    "numba>=0.57",
+    "matplotlib>=3.5",
+]
+
+[project.optional-dependencies]
+bayesian = ["dynesty", "nautilus-sampler", "corner"]
+mpi = ["mpi4py", "schwimmbad"]
+test = ["pytest"]
+
+[project.scripts]
+BBarolo = "bbarolo.cli:main"
+
+[project.urls]
+Homepage = "https://bbarolo.readthedocs.io"
+
+[tool.setuptools]
+packages = ["bbarolo", "pyBBarolo"]
+
+[tool.setuptools.dynamic]
+version = {attr = "bbarolo._version.__version__"}

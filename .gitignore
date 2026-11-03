@@ -1,0 +1,18 @@
+# Python bytecode and numba caches (numba writes its caches in __pycache__)
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+
+# Tool caches
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# Source archives of the Cowork deliveries (replaced by git)
+dist/
+
+# Outputs of BBarolo runs (default OUTFOLDER is ./output/<OBJECT>/)
+output/
+output_py/

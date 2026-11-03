@@ -1,0 +1,25 @@
+\begin{tabular}{l rl r}
+\toprule
+ & \multicolumn{2}{c}{INC offset ($^\circ$)} & $\sigma$ error \\
+test & median & [range] & (\%) \\
+\midrule
+\multicolumn{4}{l}{\emph{A. 3DFIT from the true INC and PA, DELTAINC = 15$^\circ$ (per galaxy: median over the rings)}} \\
+as the geometry experiment & $-$7.3 & [$-$8.1, $-$5.7] & +14 \\
+cube simulated with the Monte-Carlo GALMOD & $-$7.2 & [$-$8.7, $-$5.1] & +13 \\
+razor-thin disk (Z0 = 0) & $-$6.3 & [$-$8.0, $-$3.7] & +13 \\
+noise-free models in the fit (GALMODTYPE = ANALYTIC) & $-$7.1 & [$-$8.4, $-$5.2] & +17 \\
+uniform azimuthal weights (WFUNC = 0) & $-$7.3 & [$-$8.9, $-$5.6] & +9 \\
+local normalisation (NORM = LOCAL) & $-$1.3 & [$-$3.0, $-$0.3] & +7 \\
+10 pixels per beam & $-$6.7 & [$-$7.9, $-$4.3] & +13 \\
+disk radius = 12 beams & $-$8.4 & [$-$10.4, $-$7.3] & +5 \\
+rings one beam wide & $-$3.4 & [$-$8.0, $-$0.5] & +7 \\
+reverse-cumulative fit (REVERSE = true) & $-$6.5 & [$-$8.1, $-$4.7] & +8 \\
+\addlinespace
+\multicolumn{4}{l}{\emph{B. Minimum of the objective of single rings, other parameters at the true values (per ring)}} \\
+ring alone, width = beam/2 (as 3DFIT) & $-$9.0 & [$-$12.0, $-$5.0] & \\
+ring alone, width = beam & $-$8.0 & [$-$12.0, $-$4.0] & \\
+ring alone, width = 2 beams & $-$5.0 & [$-$6.0, $-$4.5] & \\
+ring alone, width = beam/2; uniform disk, flat rotation curve & $-$6.5 & [$-$12.0, +6.0] & \\
+ring + rest of the disk (true values), width = beam/2 & $-$1.0 & [$-$5.0, +4.5] & \\
+\bottomrule
+\end{tabular}

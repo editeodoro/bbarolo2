@@ -1,0 +1,22 @@
+#!/bin/sh
+# BBarolo (pure-Python) command line launcher: runs the bbarolo package of the folder above
+# this one with Python 3. The file is both a shell script and a Python script, so both work:
+#
+#   /path/to/pyBBarolo_pure/bin/BBarolo -p param.par
+#   python /path/to/pyBBarolo_pure/bin/BBarolo -p param.par
+#
+# To type just "BBarolo -p param.par", add this folder to your PATH, e.g. in ~/.zshrc:
+#   export PATH="/path/to/pyBBarolo_pure/bin:$PATH"
+# or link it from a folder already in the PATH (links are followed):
+#   ln -s /path/to/pyBBarolo_pure/bin/BBarolo /usr/local/bin/BBarolo
+# As a shell script, it runs itself with $BBAROLO_PYTHON if set, otherwise with python3.
+"exec" "${BBAROLO_PYTHON:-python3}" "$0" "$@"
+
+# From here on: Python
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+from bbarolo.cli import main  # noqa: E402
+
+sys.exit(main())
