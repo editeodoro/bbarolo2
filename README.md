@@ -22,5 +22,4 @@ f = FitMod3D("ngc2403.fits", radii=np.arange(15, 1200, 30), xpos=77, ypos=77, vs
 res = f.run()                     # res.rings: the fitted rings; res.model: the model cube
 ```
 
-The pip package is still called `pyBBarolo`, so installing replaces an installed C++-based
-pyBBarolo. Requires Python 3.9 or later. License: GPL-3.0-or-later.
+Requires Python 3.9 or later. License: GPL-3.0-or-later.
