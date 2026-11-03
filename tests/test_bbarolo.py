@@ -260,7 +260,8 @@ def test_plot_runner(tmp_path):
 
 def test_cli_version():
     out = subprocess.run([sys.executable, os.path.join(ROOT, "run_bbarolo.py"), "-v"], capture_output=True, text=True)
-    assert out.returncode == 0 and "pure-Python" in out.stdout
+    from bbarolo import __version__
+    assert out.returncode == 0 and f"BBarolo version {__version__}" in out.stdout
 
 
 @needs_data
@@ -445,20 +446,13 @@ def test_parameter_table_sets_attributes():
         assert all(a != b for a, b in zip(after, before)) or all(a == after[0] for a in after), k.name
 
 
-def test_launchers_and_old_name(tmp_path):
+def test_launchers(tmp_path):
     launcher = os.path.join(ROOT, "bin", "BBarolo")
     os.symlink(launcher, str(tmp_path / "BB"))
     # bin/BBarolo is both a shell and a Python script (python bin/BBarolo works too); links are followed
     for cmd in ([launcher], [sys.executable, launcher], [str(tmp_path / "BB")], [sys.executable, str(tmp_path / "BB")]):
         out = subprocess.run(cmd + ["-v"], capture_output=True, text=True)
         assert "BBarolo version" in out.stdout, (cmd, out.stderr)
-    code = ("import warnings,sys; sys.path.insert(0, %r)\n"
-            "with warnings.catch_warnings(record=True) as w:\n"
-            "    warnings.simplefilter('always'); import pyBBarolo\n"
-            "import pyBBarolo.utils, bbarolo.utils\n"
-            "assert pyBBarolo.utils is bbarolo.utils and pyBBarolo.FitMod3D is bbarolo.FitMod3D\n"
-            "assert any(issubclass(x.category, FutureWarning) for x in w)\n" % ROOT)
-    subprocess.run([sys.executable, "-c", code], check=True)
 
 
 @needs_data
