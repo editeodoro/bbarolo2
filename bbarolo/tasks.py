@@ -24,6 +24,7 @@ command line, in the same Python process.
 import os
 import io
 import sys
+import copy
 import time
 import shutil
 import tempfile
@@ -121,7 +122,7 @@ def _galmod(c, par, write=True, seed=None):
     from .galfit import initial_rings, final_norm
     from . import galfit_out
     p = c.pars()
-    gf = p.gf
+    gf = copy.deepcopy(p.gf)          # initial_rings fills it in; the next tasks see the parameters as given
     norm_par = final_norm(gf.NORM, "GALMOD", extra=("BOTH",))
     norm = "BOTH" if (write and par.debug) else norm_par
     c.checkBeam()

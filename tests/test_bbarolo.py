@@ -305,6 +305,27 @@ def test_3dfit_quick(tmp_path):
 
 
 @needs_data
+def test_3dfit_galmod_keep_parameters(tmp_path):
+    """3DFIT and GALMOD fill the ring parameters that are not given in a copy: the parameters of
+    the cube, which the next tasks read, are unchanged (as in C++). Before, a 2DFIT after a 3DFIT
+    fitted with DVDZ=0 (its free angle) set by 3DFIT instead of the default 15 degrees."""
+    import copy
+    from bbarolo.galfit import Galfit
+    from bbarolo.tasks import _galmod
+    p = Param()
+    p.readParamString(f"FITSFILE {N2403}\n3DFIT true\nRADII 105 195 285\nXPOS 77\nYPOS 77\nVSYS 132.8\n"
+                      f"VROT 120\nINC 60\nPA 123.7\nFREE VROT VDISP\nMASK SEARCH\nTHREADS 2\nVERBOSE false\n"
+                      f"OUTFOLDER {tmp_path}/\n")
+    assert p.checkPars(quiet=True)
+    c = Cube(N2403, par=p)
+    before = copy.deepcopy(c.pars().gf)
+    Galfit(c)
+    assert vars(c.pars().gf) == vars(before)
+    _galmod(c, c.pars(), write=False)
+    assert vars(c.pars().gf) == vars(before)
+
+
+@needs_data
 def test_python_equals_cli(tmp_path):
     """A task class gives the same outputs as the command line with the same parameters."""
     from bbarolo import Ellprof

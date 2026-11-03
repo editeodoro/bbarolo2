@@ -12,6 +12,7 @@ pool (the numba kernels and the FFTs release the GIL). The initial rings
 
 import sys
 import io
+import copy
 import math
 import time
 import types
@@ -335,7 +336,9 @@ class Galfit:
 
     def _init_from_cube(self, c):
         self.cin = c
-        par = c.pars().gf
+        # a copy, as in C++: initial_rings fills in the parameters that are not given, and the
+        # tasks that come next (2DFIT, SPACEPAR, ...) must see the parameters as given
+        par = copy.deepcopy(c.pars().gf)
         p = c.pars()
         self.verb = p.verbose
         c.checkBeam()
@@ -403,7 +406,6 @@ class Galfit:
 
     # ------------------------------------------------------------------
     def setup(self, c, inrings, gfpar):
-        import copy
         self.cin = c
         self.par = copy.deepcopy(gfpar)
         par = self.par
