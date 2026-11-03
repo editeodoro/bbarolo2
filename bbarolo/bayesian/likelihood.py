@@ -523,6 +523,14 @@ class LikelihoodMixin(object):
         fixed likelihood region and multiplied by self.likefactor2d (1/the measured spatial
         correlation area of the noise, 1/beam area in pixels with noisecorr='beam', 1/N with
         noisecorr=N), as in _log_likelihood.
+
+        The map of a real galaxy has structure that an axisymmetric disk does not reproduce, often
+        far above the noise (NGC 2403: about 30 times the noise in each pixel): the posterior is
+        then extremely narrow (the errors are too small) and the sampling slow. As in
+        _log_likelihood, a model error widens it: 'sigma' (the noise per voxel, free or given; the
+        noise of the map is map_rms * sigma / noiserms) and 'fracerr' (free or given: the variance
+        of a pixel is that of the noise plus (fracerr * model)^2), with the normalisation of the
+        Gaussian (relative to map_rms, so that the values without them do not change).
         """
         rings = self._update_rings(self._work, theta)
         if self._negative(rings, theta):
@@ -538,7 +546,18 @@ class LikelihoodMixin(object):
         map_mod = np.zeros_like(map_data, dtype=np.float64)
         map_mod[blo[1] - Lb[1]:bhi[1] - Lb[1], blo[0] - Lb[0]:bhi[0] - Lb[0]] = np.nansum(model, axis=0)
         ok = (map_rms > 0) & self._region[Lb[1]:Hb[1], Lb[0]:Hb[0]]
-        res = 0.5 * np.nansum(((map_data[ok] - map_mod[ok]) / map_rms[ok]) ** 2)
+        sigma = theta[self.freepar_idx['sigma']][0] if 'sigma' in self.freepar_idx else kwargs.get('sigma')
+        eps = theta[self.freepar_idx['fracerr']][0] if 'fracerr' in self.freepar_idx else kwargs.get('fracerr')
+        if sigma is None and not eps:
+            res = 0.5 * np.nansum(((map_data[ok] - map_mod[ok]) / map_rms[ok]) ** 2)
+        else:
+            if sigma is not None and not sigma > 0:
+                return -np.inf
+            s2 = map_rms[ok] ** 2
+            v = s2 * (float(sigma) / self.noiserms) ** 2 if sigma is not None else s2
+            if eps:
+                v = v + (float(eps) * map_mod[ok]) ** 2
+            res = 0.5 * np.nansum((map_data[ok] - map_mod[ok]) ** 2 / v + np.log(v / s2))
         return -self.likefactor2d * res
 
     def chi2_reduced(self, theta=None, fracerr=False):

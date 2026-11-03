@@ -116,6 +116,17 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **`run_geometry` with a model error**: `fracerr` and `sigma` (free, or given in `like_kwargs`)
+  in the likelihood of the total intensity map, as in that of the cube. The map of a real galaxy
+  has structure that an axisymmetric disk does not reproduce: on NGC 2403 the residuals are
+  about 30 times the noise in each pixel, so without a model error the posterior is extremely
+  narrow (the centre within 0.006 pixels), the errors meaningless and the sampling very slow
+  (a run with 100 live points did not converge in 20 minutes on 8 processes). Without them the
+  values do not change. (A total intensity map does not change with PA → PA + 180°: with the
+  default prior of PA, 0–360°, the posterior of `run_geometry` has two modes.)
+- **`performance/bayes_coverage.py`**: warped, thick and lagging disks (`--kind`), Monte-Carlo
+  fits (`--galmodtype MC`), 3DFIT on the same cubes (`--fit3d`), and the errors of the medians
+  in the summary.
 - **GUESSTYPE: new initial estimates** of the parameters that are not given (3DFIT, 2DFIT,
   SPACEPAR, BAYESIAN3DFIT). For now the default is LEGACY, the C++ algorithm.
   - **FIT**: starts from the ELLIPSE estimates and refines them. (1) A beam-convolved disk is fitted

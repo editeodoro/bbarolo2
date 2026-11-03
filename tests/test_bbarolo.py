@@ -1719,3 +1719,33 @@ def test_bayesian_one_blas_thread(tmp_path):
         f.run(freepar=['vrot_single'], threads=threads, log_like=check, verbose=False, dynamic=False,
               sampler_kwargs=dict(nlive=15, seed=1), run_kwargs=dict(maxiter=40))
         assert np.all(f.results.logl > -1e9)
+
+
+def test_bayesian_geometry_model_error(tmp_path):
+    """run_geometry accepts a model error: 'fracerr' and 'sigma' (free or given) in the likelihood of
+    the total intensity map, with the normalisation of the Gaussian; without them the values do not
+    change."""
+    pytest.importorskip("dynesty")
+    f = _bayes_mock(tmp_path)
+    f._setup(['inc_single', 'fracerr', 'sigma'])
+    g = _bayes_mock(tmp_path, outfolder=str(tmp_path / "g"))
+    g._setup(['inc_single'])
+    L0 = g._log_likelihood_geometry(np.array([55.]))
+    assert L0 == g._log_likelihood_geometry(np.array([55.]), fracerr=0.)
+    assert np.isclose(f._log_likelihood_geometry(np.array([55., 0., f.noiserms])), L0, rtol=1e-12)
+    # by hand, with the model map of the deconvolved profile
+    rings = f._update_rings(f._fit0.copy(), np.array([55., 0.1, 2. * f.noiserms]))
+    f._set_density(rings)
+    model, bhi, blo = f._calculate_model(rings)[:3]
+    Lb, Hb = f._likebox
+    d, s = f.data_mom0[Lb[1]:Hb[1], Lb[0]:Hb[0]], f.map_rms[Lb[1]:Hb[1], Lb[0]:Hb[0]]
+    m = np.zeros_like(d)
+    m[blo[1] - Lb[1]:bhi[1] - Lb[1], blo[0] - Lb[0]:bhi[0] - Lb[0]] = model.sum(axis=0)
+    ok = (s > 0) & f._region[Lb[1]:Hb[1], Lb[0]:Hb[0]]
+    v = 4. * s[ok] ** 2 + (0.1 * m[ok]) ** 2
+    expect = -f.likefactor2d * 0.5 * np.sum((d[ok] - m[ok]) ** 2 / v + np.log(v / s[ok] ** 2))
+    assert np.isclose(f._log_likelihood_geometry(np.array([55., 0.1, 2. * f.noiserms])), expect, rtol=1e-9)
+    assert f._log_likelihood_geometry(np.array([55., 0.1, -1.])) == -np.inf
+    g.run_geometry("inc_single fracerr", threads=1, verbose=False, dynamic=False,
+                   sampler_kwargs=dict(nlive=15, seed=1), run_kwargs=dict(maxiter=60))
+    assert g.freepar_names == ['inc', 'fracerr'] and np.all(np.isfinite(g.params))

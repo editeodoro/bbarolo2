@@ -526,7 +526,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                     (f"; model error: fractional, fracerr = {fe:.4g} (given)" if fe else "")
                 if log_like == self._log_likelihood_geometry:
                     print(f"Likelihood: total intensity map ({self._likemask_note}), noise per voxel sigma = "
-                          f"{sg}; log-likelihood x {fc}")
+                          f"{sg}{fe}; log-likelihood x {fc}")
                 else:
                     print(f"Likelihood: noise per voxel sigma = {sg}{fe}; log-likelihood x {fc}; "
                           f"{self.nvox} voxels ({self._likemask_note})")
@@ -605,10 +605,15 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             pass
 
     def run_geometry(self, freepar=('xpos_single', 'ypos_single', 'inc_single', 'phi_single'), **kwargs):
-        """ Fit only the geometry of the model on the total intensity map (Cannubi-style) """
+        """ Fit only the geometry of the model on the total intensity map (Cannubi-style; see
+        _log_likelihood_geometry). On real galaxies add 'fracerr' (or 'sigma') to the free
+        parameters: the structure of the map that the model does not reproduce otherwise makes
+        the posterior extremely narrow and the sampling slow. The map does not change with
+        PA -> PA + 180: restrict the prior of phi to one half (the default, 0-360, gives two
+        modes). """
         from ..params import bayes_name
         allowed = {'xpos_single', 'ypos_single', 'inc_single', 'phi_single', 'z0_single', 'dens', 'dens_single',
-                   'dens_func', 'radmax'}
+                   'dens_func', 'radmax', 'sigma', 'fracerr'}
         freepar = [bayes_name(p) for p in (freepar.replace(',', ' ').split() if isinstance(freepar, str) else freepar)]
         if not (freepar and set(freepar).issubset(allowed)):
             raise ValueError("ERROR! The function run_geometry only accepts the following free parameters: "
