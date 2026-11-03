@@ -27,12 +27,26 @@ measured + fracerr); the data in the dilated mask with the observed profile ('di
 mask with the first version of the deconvolved profile ('deconv_v1'; 'dilated_deconv_v1' and
 'dilated_deconv_fracerr_v1' are the first version of the current defaults).
 
+Kinds of galaxies (--kind):
+
+  flat    the flat disks above (the default)
+  warp    the warped disks of the warp experiment (INC and PA change linearly beyond 0.3-0.6
+          RMAX by up to 20 and 40 deg), with INC and PA fitted in each ring
+  thick   flat disks three times thicker (Z0 = 0.15 RMAX)
+  lag     thick disks with a vertical gradient of the rotation velocity, DVDZ = -0.1 VFLAT / Z0
+          (10% slower at one scale height)
+
+Z0 and DVDZ are fixed at their true values in the fits. --galmodtype MC fits Monte-Carlo models
+to the ANALYTIC simulations, and --fit3d also fits 3DFIT to the same cubes (free VROT, VDISP, INC
+and PA in each ring, one stage: its errors of the medians are shown with those of the posterior).
+
 For each fit the 16/50/84% quantiles of the posterior are stored with the true values. The
 summary gives, per configuration and parameter, the coverage (fraction of the true values
 within the 68% interval, ideally 0.68) and the pulls (median - true) / (half width of the
-68% interval), whose scatter should be ~1.
+68% interval), whose scatter should be ~1, and the errors of the medians (median - true).
 
     python bayes_coverage.py --ngal 12 --procs 2                  # run (resumable)
+    python bayes_coverage.py --kind warp --fit3d --ngal 12 --procs 12
     python bayes_coverage.py --summary                            # tables
 """
 
@@ -65,7 +79,16 @@ HISTORICAL = ["beam", "measured", "fracerr", "both", "sigma", "dilated", "dilate
               "dilated_sigma_fracerr", "none", "deconv_v1", "dilated_deconv_v1", "dilated_deconv_fracerr_v1"]
 
 
-def simulate(g, cg, snr, seed, wd, hanning):
+KINDS = ("flat", "warp", "thick", "lag")
+
+
+def vertical(g, kind):
+    """Scale height (arcsec) and vertical gradient of VROT (km/s/arcsec) of a galaxy of a kind."""
+    z0 = 3. * rs.Z0 if kind in ("thick", "lag") else rs.Z0
+    return z0, (-0.1 * g["vflat"] / z0 if kind == "lag" else 0.)
+
+
+def simulate(g, cg, snr, seed, wd, hanning, kind="flat"):
     """Noiseless ANALYTIC model + noise convolved with the beam (rms = peak / snr), Hanning
     smoothed along the spectral axis if hanning (the noise only). Returns (file, centre, total flux
     of the noiseless model)."""
@@ -79,8 +102,9 @@ def simulate(g, cg, snr, seed, wd, hanning):
     dr = max(rs.RMAX / 30., cg["pix"])
     R = (np.arange(int(round(rs.RMAX / dr))) + 0.5) * dr
     t = rs.profiles(g, R)
-    gm = GalMod(tmpl, radii=R, xpos=xc, ypos=xc, vsys=0., vrot=t["vrot"], vdisp=t["vdisp"], vrad=0., z0=rs.Z0,
-                inc=t["inc"], pa=t["pa"], dens=t["dens"], ltype=1, norm="NONE", mask="NONE",
+    z0, dvdz = vertical(g, kind)
+    gm = GalMod(tmpl, radii=R, xpos=xc, ypos=xc, vsys=0., vrot=t["vrot"], vdisp=t["vdisp"], vrad=0., z0=z0,
+                dvdz=dvdz, inc=t["inc"], pa=t["pa"], dens=t["dens"], ltype=1, norm="NONE", mask="NONE",
                 galmodtype="ANALYTIC", threads=1, verbose=False)
     clean = gm.model().data.astype(np.float64)
     rms = clean.max() / snr
@@ -98,23 +122,28 @@ def fit(job):
     warnings.simplefilter("ignore")
     from bbarolo.bayesian import BayesianBBarolo
     g, cg, cfg = job["galaxy"], job["cube"], CONFIGS[job["config"]]
+    kind, gtype = job.get("kind", "flat"), job.get("galmodtype", "ANALYTIC")
     rec = dict(key=job["key"], config=job["config"], gid=g["id"], snr=job["snr"], hanning=job["hanning"],
-               spatial=job["spatial"], inc=g["inc"])
+               spatial=job["spatial"], inc=g["inc"], kind=kind, galmodtype=gtype)
     t0 = time.time()
     try:
         with tempfile.TemporaryDirectory(prefix="bbcov_") as wd:
-            fn, xc, ftot = simulate(g, cg, job["snr"], job["seed"], wd, job["hanning"])
+            fn, xc, ftot = simulate(g, cg, job["snr"], job["seed"], wd, job["hanning"], kind)
             R = rs.fit_radii(cg["beam"])
             t = rs.profiles(g, R)
+            z0, dvdz = vertical(g, kind)
             f = BayesianBBarolo(fn, radii=list(R), xpos=xc, ypos=xc, vsys=0., vrot=120., vdisp=15., inc=g["inc"],
-                                pa=g["pa"], z0=rs.Z0, ltype=1, mask="SEARCH", galmodtype="ANALYTIC",
+                                pa=g["pa"], z0=z0, dvdz=dvdz, ltype=1, mask="SEARCH", galmodtype=gtype,
                                 outfolder=os.path.join(wd, "out"), verbose=False)
             f.priors['vrot'] = dict(name='uniform', loc=0., scale=400.)
             f.priors['vdisp'] = dict(name='uniform', loc=0., scale=60.)
-            lo, hi = max(5., g["inc"] - 20.), min(89., g["inc"] + 20.)
+            ilo, ihi = min(t["inc"]), max(t["inc"])
+            lo, hi = max(5., ilo - 20.), min(89., ihi + 20.)
             f.priors['inc'] = dict(name='uniform', loc=lo, scale=hi - lo)
-            f.priors['phi'] = dict(name='uniform', loc=g["pa"] - 30., scale=60.)
-            free = ['vrot', 'vdisp_single', 'inc_single', 'phi_single']
+            dpa = g.get("dpa", 0.)
+            f.priors['phi'] = dict(name='uniform', loc=g["pa"] - 30. + min(dpa, 0.), scale=60. + abs(dpa))
+            free = ['vrot', 'vdisp_single', 'inc', 'phi'] if kind == "warp" else \
+                ['vrot', 'vdisp_single', 'inc_single', 'phi_single']
             if cfg["fracerr"]:
                 free.append('fracerr')
             if cfg["sigma"]:
@@ -147,6 +176,8 @@ def fit(job):
                     truth[name] = float(g["inc"])
                 elif name == 'phi':
                     truth[name] = float(g["pa"])
+                elif name[:3] in ('inc', 'phi') and name[3:].isdigit():          # per ring (warps)
+                    truth[name] = float((t["inc"] if name[:3] == 'inc' else t["pa"])[int(name[3:]) - 1])
             rec.update(status="ok", names=list(f.freepar_names), q16=q[0].tolist(), q50=q[1].tolist(),
                        q84=q[2].tolist(), truth=truth, ess=float(f.ess), chi2=float(f.chi2_reduced()),
                        likefactor=float(f.likefactor), beam_area=float(f.beam_area), noiserms=float(f.noiserms),
@@ -155,54 +186,85 @@ def fit(job):
                        {k: (float(v) if isinstance(v, (float, int, np.floating)) else
                             (v.tolist() if isinstance(v, np.ndarray) else v)) for k, v in f.noise_correlation.items()},
                        ncall=int(getattr(f.sampler, 'n_like', 0)))
+            if job.get("fit3d"):
+                rec["fit3d"] = fit3d(fn, R, xc, g, z0, dvdz, gtype, wd)
+                rec["truth_rings"] = dict(vrot=[float(x) for x in t["vrot"]], vdisp=[float(g["sigma"])] * len(R),
+                                          inc=[float(x) for x in t["inc"]], phi=[float(x) for x in t["pa"]])
     except Exception as e:                       # a failed fit is a result too
         rec.update(status="failed", error=f"{type(e).__name__}: {e}"[:400])
     rec["time"] = time.time() - t0
     return rec
 
 
-def jobs(ngal, snrs, configs, spatial, hanning, nlive, neff, seed=2026):
-    gal = [j for j in rs.make_jobs(["geometry"], 24, 200, 120, seed) if j["fitmode"] == "truth"
-           and 30 <= j["galaxy"]["inc"] < 75][:ngal]
+def fit3d(fn, R, xc, g, z0, dvdz, gtype, wd):
+    """3DFIT on the same cube (free VROT, VDISP, INC, PA in each ring; one stage, starting from the
+    true geometry, as the posterior): the fitted rings."""
+    from bbarolo import FitMod3D
+    r = FitMod3D(fn, radii=list(R), xpos=xc, ypos=xc, vsys=0., vrot=120., vdisp=15., inc=g["inc"], pa=g["pa"], z0=z0,
+                 dvdz=dvdz, ltype=1, free="vrot vdisp inc pa", mask="SEARCH", galmodtype=gtype, twostage=False,
+                 outfolder=os.path.join(wd, "fit3d"), verbose=0, plots=0, threads=1).run()
+    return {k: [float(x) for x in r.rings[c]] for k, c in (("vrot", "vrot"), ("vdisp", "vdisp"), ("inc", "inc"),
+                                                            ("phi", "pa"))}
+
+
+def jobs(ngal, snrs, configs, spatial, hanning, nlive, neff, seed=2026, kind="flat", galmodtype="ANALYTIC",
+         fit3d=False):
+    if kind == "warp":
+        gal = [dict(galaxy=rs.draw_galaxy("warp", k, seed), seed=int(np.random.default_rng([seed, 7, k]).integers(2 ** 31)))
+               for k in range(ngal)]
+    else:
+        gal = [j for j in rs.make_jobs(["geometry"], 24, 200, 120, seed) if j["fitmode"] == "truth"
+               and 30 <= j["galaxy"]["inc"] < 75][:ngal]
+    pre = "" if kind == "flat" else f"{kind}/"
+    post = "" if galmodtype == "ANALYTIC" else f"/{galmodtype.lower()}"
     out = []
     for snr in snrs:
         for j in gal:
             g = j["galaxy"]
             cg = rs.geometry_of_cube(g, spatial, rs.REF["spectral"])
             for c in configs:
-                out.append(dict(key=f"{c}/snr{snr:g}/sp{spatial:g}/h{int(hanning)}/g{g['id']}", config=c, galaxy=g,
-                                cube=cg, snr=snr, spatial=spatial, hanning=hanning, nlive=nlive, neff=neff,
-                                seed=j["seed"] ^ int(snr)))
+                out.append(dict(key=f"{pre}{c}/snr{snr:g}/sp{spatial:g}/h{int(hanning)}/g{g['id']}{post}", config=c,
+                                galaxy=g, cube=cg, snr=snr, spatial=spatial, hanning=hanning, nlive=nlive, neff=neff,
+                                seed=j["seed"] ^ int(snr), kind=kind, galmodtype=galmodtype, fit3d=fit3d))
     return out
+
+
+def _matches(name, p):
+    """A free parameter name of the ring parameter p: p itself (single) or p<ring>."""
+    return name == p or (name.startswith(p) and name[len(p):].isdigit())
 
 
 def summary(path):
     recs = [json.loads(line) for line in open(path) if line.strip()]
     print(f"{len(recs)} fits, {sum(r['status'] != 'ok' for r in recs)} failed")
-    groups = sorted({(r["snr"], r["spatial"], r["hanning"]) for r in recs})
-    for snr, sp, han in groups:
-        print(f"\n=== S/N {snr:g}, disk radius {sp:g} beams, Hanning noise {bool(han)}")
+    key = lambda r: (r.get("kind", "flat"), r.get("galmodtype", "ANALYTIC"), r["snr"], r["spatial"], r["hanning"])
+    pars = ("vrot", "vdisp", "inc", "phi")
+    for grp in sorted({key(r) for r in recs}):
+        kind, gtype, snr, sp, han = grp
+        print(f"\n=== {kind} disks, {gtype} fits, S/N {snr:g}, disk radius {sp:g} beams, Hanning noise {bool(han)}")
         print(f"{'config':25s} {'fits':>4s} {'factor':>7s}  "
-              + "  ".join(f"{p + ': cover  pulls':>22s}" for p in ("vrot", "vdisp", "inc", "phi"))
+              + "  ".join(f"{p + ': cover  pulls':>22s}" for p in pars)
               + "   time  chi2  sigma/rms  fracerr")
+        errs = {}
         for c in list(CONFIGS) + HISTORICAL:
-            rr = [r for r in recs if r["config"] == c and r["snr"] == snr and r["spatial"] == sp
-                  and r["hanning"] == han and r["status"] == "ok"]
+            rr = [r for r in recs if r["config"] == c and key(r) == grp and r["status"] == "ok"]
             if not rr:
                 continue
             cols = []
-            for p in ("vrot", "vdisp", "inc", "phi"):
-                cov, pull = [], []
+            for p in pars:
+                cov, pull, err = [], [], []
                 for r in rr:
                     for i, n in enumerate(r["names"]):
-                        if (n.startswith("vrot") and p == "vrot") or n == p:
+                        if _matches(n, p):
                             tv = r["truth"][n]
                             hw = 0.5 * (r["q84"][i] - r["q16"][i])
                             cov.append(r["q16"][i] <= tv <= r["q84"][i])
                             pull.append((r["q50"][i] - tv) / hw if hw > 0 else np.nan)
+                            err.append(r["q50"][i] - tv)
                 pull = np.array(pull)
                 p16, p50, p84 = np.nanpercentile(pull, [16, 50, 84])
                 cols.append(f"{np.mean(cov):5.2f} {p50:+5.1f}+-{(p84 - p16) / 2:4.1f}")
+                errs.setdefault(c, {})[p] = err
             fac = np.median([1. / r["likefactor"] for r in rr])
 
             def fitted(name, scale=None):
@@ -212,8 +274,26 @@ def summary(path):
             print(f"{c:25s} {len(rr):4d} {fac:7.1f}  " + "  ".join(f"{x:>22s}" for x in cols)
                   + f"  {np.median([r['time'] for r in rr]):5.0f}s {np.median([r['chi2'] for r in rr]):5.2f}"
                   + f"  {fitted('sigma', 'noiserms')} {fitted('fracerr')}")
+            f3 = [r for r in rr if "fit3d" in r]
+            if f3:
+                errs.setdefault("3DFIT (" + c + ")", {})
+                for p in pars:
+                    e = [v - tv for r in f3 for v, tv in zip(r["fit3d"][p], r["truth_rings"][p])]
+                    errs["3DFIT (" + c + ")"][p] = e
         print("  (cover: fraction of the true values within the 68% interval; pulls: median and half 68% range of"
               " (median - true) / half-width; factor: voxels per independent measurement)")
+        print(f"  errors of the medians (median - true, median +- half 68% range; VROT and VDISP in km/s, INC and PA"
+              " in deg):")
+        for c, e in errs.items():
+            cells = []
+            for p in pars:
+                v = np.asarray(e.get(p, []), float)
+                v = v[np.isfinite(v)]
+                if p == "phi":
+                    v = (v + 180.) % 360. - 180.
+                cells.append(f"{p} {np.median(v):+6.2f} +- {0.5 * np.subtract(*np.percentile(v, [84, 16])):5.2f}"
+                             if v.size else f"{p} -")
+            print(f"    {c:32s} " + "   ".join(cells))
 
 
 def main():
@@ -223,6 +303,9 @@ def main():
     ap.add_argument("--snr", type=float, nargs="+", default=[20.])
     ap.add_argument("--configs", nargs="+", default=["dilated_deconv"], choices=list(CONFIGS))
     ap.add_argument("--spatial", type=float, default=3., help="disk radius in beams")
+    ap.add_argument("--kind", default="flat", choices=KINDS, help="the galaxies (see the documentation)")
+    ap.add_argument("--galmodtype", default="ANALYTIC", choices=("ANALYTIC", "MC"), help="the models of the fit")
+    ap.add_argument("--fit3d", action="store_true", help="also 3DFIT on the same cubes")
     ap.add_argument("--no-hanning", action="store_true", help="noise not Hanning-smoothed")
     ap.add_argument("--nlive", type=int, default=400, help="live points of nautilus")
     ap.add_argument("--neff", type=int, default=1500, help="effective sample size of nautilus")
@@ -237,7 +320,8 @@ def main():
     if os.path.isfile(args.out):
         done = {json.loads(line)["key"] for line in open(args.out) if line.strip()}
     todo = [j for j in jobs(args.ngal, args.snr, args.configs, args.spatial, not args.no_hanning, args.nlive,
-                            args.neff) if j["key"] not in done]
+                            args.neff, kind=args.kind, galmodtype=args.galmodtype, fit3d=args.fit3d)
+            if j["key"] not in done]
     print(f"{len(todo)} fits to run ({len(done)} done)", flush=True)
     t0 = time.time()
     with get_context("fork").Pool(args.procs, maxtasksperchild=4) as pool, open(args.out, "a") as fo:
