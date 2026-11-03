@@ -1548,3 +1548,41 @@ def test_result_data_residual_curve_plots(tmp_path):
         assert isinstance(f, matplotlib.figure.Figure)
     g = GalMod(N2403, norm="AZIM", **kw).run(write=False)
     assert g.residual.data.shape == g.model.data.shape and "rotation_curve" not in g
+
+
+def _mock_disk(tmp_path, inc=70., pa=40., snr=20., seed=3):
+    """A simulated disk (5 beams across, as in performance/run_suite.py) with noise; returns the file."""
+    from bbarolo import GalMod
+    n, beam, pix, dv = 41, 48., 12., 10.
+    tmpl = emptyfits([n, n, 60], [-pix / 3600., pix / 3600., dv], beam=beam / 3600., bunit="JY/BEAM", obj="MOCKD")
+    rs = (np.arange(24) + 0.5) * 10.
+    gm = GalMod(tmpl, radii=rs, xpos=20, ypos=20, vsys=0., vrot=150 * 2 / np.pi * np.arctan(rs / 40.), vdisp=12.,
+                z0=0., inc=inc, pa=pa, dens=np.exp(-rs / 90.), norm="NONE", mask="NONE", galmodtype="ANALYTIC",
+                threads=1, verbose=False)
+    clean = gm.model()
+    noisy = gm.diskmodel.addnoise(clean.data, float(clean.data.max()) / snr, seed=seed)
+    from astropy.io import fits
+    fn = str(tmp_path / "mockdisk.fits")
+    fits.PrimaryHDU(data=noisy, header=tmpl.header).writeto(fn, overwrite=True)
+    return fn
+
+
+@pytest.mark.parametrize("guesstype", ["ELLIPSE", "FIT"])
+def test_initial_estimates(tmp_path, guesstype):
+    """GUESSTYPE ELLIPSE (the C++ algorithm, corrected) and FIT (beam-convolved disk fitted to the map, 2D
+    fit of the velocity field) on a simulated disk at INC 70; given values stay as given."""
+    from bbarolo.paramguess import EstimateInitial
+    fn = _mock_disk(tmp_path)
+    tol = dict(ELLIPSE=6., FIT=3.)[guesstype]
+    p = Param()
+    p.readParamString(f"FITSFILE {fn}\nGUESSTYPE {guesstype}\nTHREADS 1\nVERBOSE false\nOUTFOLDER {tmp_path}/\n")
+    assert p.checkPars(quiet=True)
+    ip = EstimateInitial(Cube(fn, par=p), p.gf)
+    assert abs(ip.inclin - 70) < tol and abs((ip.posang - 40 + 180) % 360 - 180) < 3
+    assert np.hypot(ip.xcentre - 20, ip.ycentre - 20) < 1. and abs(ip.vsystem) < 5 and 100 < ip.vrot < 200
+    if guesstype == "FIT":
+        assert 6 < ip.vdisp < 20 and len(ip.rad_profile) >= 2
+    p.readParamString("INC 65\nVSYS 1\n")
+    p.checkPars(quiet=True)
+    ip = EstimateInitial(Cube(fn, par=p), p.gf)
+    assert ip.inclin == 65 and ip.vsystem == 1

@@ -1673,48 +1673,20 @@ class BayesianBBarolo(FitMod3D):
 
     def _profile_system(self, rings):
         """ The weighted least-squares system of the deconvolved profile (see
-        _deconvolved_profile): (A, b, ok, Rc), with A (npix, nr+1) the beam-convolved maps of
-        the rings and of the exterior annulus with unit density and b the total intensity map
-        of the data, both divided by the map noise, in the pixels ok (a mask of the likelihood
-        box), and Rc the radii of the rings and of the exterior annulus. None if there are
-        fewer than 2 nr pixels. """
-        from .galmod import outer_edge
-        from .rings import Rings
+        bbarolo.profile.profile_system), in the likelihood box: the data map data_mom0 with its
+        noise map_rms, in the pixels of the likelihood region with data. """
+        from .profile import profile_system
         Lb, Hb = self._likebox
-        model = self._galfit.model
-        r = rings.object
-        K = model.ring_maps(r, Lb, Hb)
         h = self._cube_obj.Head()
-        R = np.asarray(rings.r['radii'], float)
-        w = 2. * abs(h.Bmaj()) * 3600. if h.Bmaj() else 2. * float(np.max(np.diff(R), initial=R[-1]))
-        rext = outer_edge(r, model.ringmode) + w / 2.
-        ext = Rings().setRings(radii=[rext], xpos=r.xpos[-1], ypos=r.ypos[-1], vsys=r.vsys[-1], vrot=r.vrot[-1],
-                               vdisp=r.vdisp[-1], z0=r.z0[-1], inc=r.inc[-1], phi=r.phi[-1], dens=1., radsep=w)
-        K = np.concatenate([K, model.ring_maps(ext, Lb, Hb, ringmode="CENTRED")])
         sl = (slice(Lb[1], Hb[1]), slice(Lb[0], Hb[0]))
-        y, s = self.data_mom0[sl], self.map_rms[sl]
-        ok = self._region[sl] & (self._nvox_map[sl] > 0) & (s > 0) & np.isfinite(y)
-        if ok.sum() < 2 * rings.nr:
-            return None
-        return K[:, ok].T / s[ok, None], y[ok] / s[ok], ok, np.r_[R, rext]
+        ok = self._region[sl] & (self._nvox_map[sl] > 0)
+        return profile_system(self._galfit.model, rings.object, (Lb, Hb), self.data_mom0[sl], self.map_rms[sl], ok,
+                              beam_arcsec=abs(h.Bmaj()) * 3600. if h.Bmaj() else None)
 
     def _solve_profile(self, A, b, radii):
-        """ Non-negative least-squares solution of A dens = b (all the columns, including the
-        exterior annulus), with the smoothness prior of densprof_smooth on the profile at the
-        radii (see _deconvolved_profile). """
-        from scipy.optimize import nnls
-        n = A.shape[1]
-        alpha = float(self.like_kwargs.get('densprof_smooth') or 0.)
-        if alpha > 0 and n >= 3:
-            R = np.asarray(radii, float)
-            L = np.zeros((n - 2, n))
-            for i in range(1, n - 1):                   # second differences (any spacing)
-                d1, d2 = R[i] - R[i - 1], R[i + 1] - R[i]
-                L[i - 1, i - 1:i + 2] = np.array([1. / d1, -1. / d1 - 1. / d2, 1. / d2]) * 2. / (d1 + d2)
-            L *= math.sqrt(alpha * np.sum(A * A) / max(np.sum(L * L), 1e-300))
-            A, b = np.vstack([A, L]), np.r_[b, np.zeros(n - 2)]
-        q, r = np.linalg.qr(A)                         # nnls on the small (n x n) system
-        return nnls(r, q.T @ b)[0]
+        """ bbarolo.profile.solve_profile with the smoothness densprof_smooth of like_kwargs. """
+        from .profile import solve_profile
+        return solve_profile(A, b, radii, self.like_kwargs.get('densprof_smooth') or 0.)
 
     def deconvolved_profile_errors(self, nsamples=200, nmc=200, seed=0):
         """ Uncertainties of the deconvolved density profile of the best fit (DENS not fitted),

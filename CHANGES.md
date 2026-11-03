@@ -91,6 +91,37 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **GUESSTYPE: new initial estimates** of the parameters that are not given (3DFIT, 2DFIT,
+  SPACEPAR, BAYESIAN3DFIT). For now the default is LEGACY, the C++ algorithm.
+  - **FIT**: starts from the ELLIPSE estimates and refines them. (1) A beam-convolved disk is fitted
+    to the total intensity map (centre, INC, PA). The densities of its rings are deconvolved for each
+    geometry (the new `bbarolo.profile`, shared with BayesianBBarolo), the map is the cube summed over
+    the channels of the detection (not masked), and Z0 is used if given. (2) A 2D tilted-ring fit of
+    the velocity field on rings one beam wide gives the kinematic PA and VSYS (and radial profiles of
+    INC and PA, `rad_profile`, `inc_profile`, `pa_profile` of the estimates). (3) VDISP comes from the
+    second moment, corrected for the channel width, instead of the fixed 8 km/s.
+  - **ELLIPSE**: the C++ algorithm, corrected. The beam correction of the axes of the mask is
+    k·FWHM in quadrature (C++: a full FWHM subtracted, which over-corrected the minor axis at low
+    inclination, and no correction above 75°); no jumps (INC = 80 when the minor axis is smaller than
+    the beam, 25 below 10); VROT always deprojected (C++: only above 40°); the values given are not
+    replaced by the refinement with the 2D fit.
+  - Validation (`performance/estimates.py`, the simulated disks of the performance suite: 240 flat
+    disks at 3, 5 and 8 beams, INC 15–85°, peak S/N 5–40, and 80 warped disks). Error of the final
+    3DFIT INC (median ± robust scatter; centre, VSYS and Z0 given, FREE VROT VDISP INC PA):
+
+    | Estimates | 3 beams | 5 beams | 8 beams | warps | above 75° (3, 5, 8 beams) |
+    |---|---|---|---|---|---|
+    | LEGACY | +0.2 ± 9.1° | +1.7 ± 6.8° | +0.9 ± 4.9° | +0.8 ± 6.8° | −10.3, −4.7, −3.3° |
+    | FIT | +2.0 ± 5.1° | +0.9 ± 4.6° | −0.4 ± 4.9° | −0.1 ± 4.9° | +3.1, +0.2, −0.7° |
+
+    The bias of the initial INC of FIT (nothing given) is at most 2.6° in every bin of true INC
+    (LEGACY: +5.8° at 15–30°, −6.9° above 75°) and does not depend on the peak S/N. Below 30° all the
+    estimates scatter by 7–11°: a nearly round map hardly constrains INC. Started from ELLIPSE, 3DFIT
+    scatters as much as from LEGACY (6–7°), with −3.3° on the warps. Starting 3DFIT from the
+    radial INC and PA profiles did not recover warps better, so it is not an option. On NGC 2403 all
+    the estimates give INC = 50–52° (53–54° after 3DFIT).
+- **`performance/estimates.py`**: the bench of the initial estimates (simulated cubes, estimates with
+  any GUESSTYPE or code version, and 3DFIT started from them).
 - **Errors**: `bbarolo.BBaroloError` (a `ValueError`) for problems in the input, with a message that
   says what is wrong. The library never exits the Python session any more (a cube without a beam
   raised `SystemExit`), and errors no longer surface later as unrelated `AttributeError`s (SMOOTH to

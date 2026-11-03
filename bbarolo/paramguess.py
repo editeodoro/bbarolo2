@@ -10,6 +10,9 @@ from .bbutils import BBaroloError, AlltoVel, arcsconv, DeltaVel, getCenterCoordi
 from .stats import findMedian
 
 FLT_MAX = float(np.finfo(np.float32).max)
+# GUESSTYPE ELLIPSE: the semi-axes of the mask are widened by about BEAMCORR * FWHM of the beam, in
+# quadrature (calibrated on simulated disks, performance/estimates.py: 0.5 to 1 give similar results)
+BEAMCORR = 0.75
 
 
 def _lround(x):
@@ -135,6 +138,10 @@ class ParamGuess:
         self.radsep = c.Head().Bmaj() * arcsconv(c.Head().Cunit(0))
         self.xcentre = self.ycentre = self.vsystem = self.inclin = self.posang = self.Rmax = self.vrot = 0.
         self.nrings = 0
+        self.vdisp = None             # (GUESSTYPE FIT) velocity dispersion from the second moment
+        self.z0_given = 0.            # (FIT) the thickness of the map model: Z0 if given (arcsec), else 0
+        self.rad_profile, self.inc_profile, self.pa_profile = [], [], []   # (FIT) radial profiles
+        self.mode = "LEGACY"         # GUESSTYPE: LEGACY (as C++), ELLIPSE (C++ corrected) or FIT
         self.major_max = [0, 0]; self.major_min = [0, 0]
         self.minor_max = [0, 0]; self.minor_min = [0, 0]
 
@@ -156,8 +163,12 @@ class ParamGuess:
 
     def findRotationVelocity(self):
         self.vrot = abs(self.obj.getW50() / 2.)
-        if self.inclin > 40:
-            self.vrot /= math.sin(math.radians(self.inclin))
+        if self.mode == "LEGACY":
+            if self.inclin > 40:
+                self.vrot /= math.sin(math.radians(self.inclin))
+        else:
+            # always deprojected (C++: only above 40 deg, so VROT was too low at low inclination)
+            self.vrot /= math.sin(math.radians(max(self.inclin, 10.)))
 
     def findPositionAngle(self, algorithm=1):
         c, o, V = self.cin, self.obj, self.Vemap.ravel()
@@ -312,6 +323,9 @@ class ParamGuess:
                 raise BBaroloError("PARAMGUESS ERROR: Error while estimating inclination.")
             self.Rmax, self.inclin = float(mymin[0]), float(mymin[1])
             bm = c.Head().Bmaj() * 3600.
+            if self.mode != "LEGACY":
+                self._beam_corrected_inclination(bm)
+                return
             Axmin = self.Rmax * math.cos(math.radians(self.inclin))
             Axmin_corr = Axmin - bm
             Axmaj_corr = self.Rmax - bm
@@ -328,6 +342,17 @@ class ParamGuess:
         if self.inclin < 10:
             self.inclin = 25
 
+    def _beam_corrected_inclination(self, bm):
+        """INC from the semi-axes of the ellipse fitted to the mask, corrected for the beam: both are
+        widened by about k*FWHM, in quadrature (C++ subtracted a full FWHM from both, which over-
+        corrected the minor axis at low inclination, and did not correct above 75 deg). No jumps."""
+        k = BEAMCORR
+        a, b = self.Rmax, self.Rmax * math.cos(math.radians(self.inclin))
+        a2, b2 = a * a - (k * bm) ** 2, b * b - (k * bm) ** 2
+        if a2 > 0:
+            self.inclin = math.degrees(math.acos(min(math.sqrt(max(b2, 0.) / a2), 1.)))
+        self.inclin = min(max(self.inclin, 5.), 89.)
+
     def findRings(self):
         self.nrings = _lround(self.Rmax / self.radsep)
         if self.nrings < 20:
@@ -336,11 +361,11 @@ class ParamGuess:
         if self.nrings > 4:
             self.nrings -= 1
 
-    def tuneWithTiltedRing(self):
+    def tuneWithTiltedRing(self, given=None):
         from .ringmodel import Ringmodel, VEXP, INC
         c = self.cin
         rmax = self.Rmax / (c.Head().PixScale() * arcsconv(c.Head().Cunit(0))) - 2
-        rwidth = 1
+        rwidth = 1                   # (rings of one pixel: their median PA is good also at low resolution)
         nr = int(rmax / rwidth)
         if nr < 4:
             return
@@ -352,9 +377,10 @@ class ParamGuess:
         mpar[VEXP] = False
         mpar[INC] = False
         tr.setoption(mpar, 3, 2, 15.)
-        tr.ringfit(c.pars().threads, False, False)
-        with open(c.pars().outFolder + c.pars().outPrefix + "_2drings.txt", "w") as f:
-            tr.printfinal(f, c.Head())
+        tr.ringfit(c.pars().threads if self.mode == "LEGACY" else 1, False, False)
+        if self.mode == "LEGACY":
+            with open(c.pars().outFolder + c.pars().outPrefix + "_2drings.txt", "w") as f:
+                tr.printfinal(f, c.Head())
 
         def med(a):
             a = np.asarray(a[1:])
@@ -363,10 +389,170 @@ class ParamGuess:
         for attr, arr in (("xcentre", tr.xposf), ("ycentre", tr.yposf), ("vsystem", tr.vsysf),
                           ("inclin", tr.inclf), ("posang", tr.posaf)):
             m = med(arr)
-            if m is not None:
+            # (ELLIPSE, FIT: the parameters given are kept; C++ replaced them too, here and in the
+            # inclination estimated from them)
+            if m is not None and not (self.mode != "LEGACY" and given and given.get(attr)):
                 setattr(self, attr, m)
         self.findInclination(2)
         self.findRotationVelocity()
+
+    # ------------------------------------------------------------------ GUESSTYPE FIT
+    def fitGeometry(self, free):
+        """GUESSTYPE FIT: refine the estimates (from the ELLIPSE algorithm) with (1) a beam-convolved
+        disk fitted to the total intensity map of the detection (centre, INC, PA; the densities of the
+        rings are deconvolved for each geometry, bbarolo.profile), (2) a 2D tilted-ring fit of the
+        velocity field on rings one beam wide (PA, VSYS, VROT, and radial profiles of INC and PA),
+        (3) the velocity dispersion from the second moment. free: {name: True if not given}."""
+        self._fit_map(free)
+        self._fit_velfield(free)
+        self._estimate_vdisp()
+
+    def _beam_pix(self):
+        h = self.cin.Head()
+        return max(h.Bmaj() / h.PixScale(), 1.)
+
+    def _fit_map(self, free):
+        from scipy.optimize import least_squares
+        from scipy.ndimage import binary_dilation
+        from .galmod import DiskModel
+        from .rings import Rings
+        from .profile import profile_system, solve_profile
+        names = [n for n in ("xcentre", "ycentre", "inclin", "posang") if free.get(n, True)]
+        if not names:
+            return
+        c, h = self.cin, self.cin.Head()
+        arcs = h.PixScale() * arcsconv(h.Cunit(0))           # arcsec per pixel
+        bpix = self._beam_pix()
+        foot = np.asarray(self.Intmap) != 0
+        if foot.sum() < 20:
+            return
+        # the data: the cube summed over the channels of the detection, not masked (the mask cuts the
+        # faint outer emission at low S/N, which biases INC high); the noise is the same everywhere
+        o = self.obj
+        data = c.array[o.getZmin():o.getZmax() + 1].astype(np.float64).sum(axis=0)
+        rad = int(math.ceil(1.5 * bpix))
+        yy, xx = np.mgrid[-rad:rad + 1, -rad:rad + 1]
+        ok = binary_dilation(foot, structure=(xx * xx + yy * yy) <= rad * rad)   # zeros within a beam too
+        ys, xs = np.nonzero(ok)
+        m = 2 * rad
+        blo = (max(int(xs.min()) - m, 0), max(int(ys.min()) - m, 0))
+        bhi = (min(int(xs.max()) + m + 1, c.DimX()), min(int(ys.max()) + m + 1, c.DimY()))
+        sl = (slice(blo[1], bhi[1]), slice(blo[0], bhi[0]))
+        dmap, okb = data[sl], ok[sl]
+        w = max(h.Bmaj() * 3600. / 2., 1.5 * arcs)              # rings of half a beam
+        nr = max(int(math.ceil(self.Rmax / w)), 2)
+        radii = (np.arange(nr) + 0.5) * w
+        dm = DiskModel(c, par=c.pars().gf, ringmode="CENTRED", galmodtype="ANALYTIC", smooth=True)
+        start = {n: getattr(self, n) for n in ("xcentre", "ycentre", "inclin", "posang")}
+        rms = np.ones_like(dmap)
+
+        def model(th):
+            g = dict(start)
+            g.update(zip(names, th))
+            r = Rings().setRings(radii=radii, xpos=g["xcentre"], ypos=g["ycentre"], vsys=self.vsystem, vrot=100.,
+                                 vdisp=10., z0=self.z0_given, inc=g["inclin"], phi=g["posang"], dens=1., radsep=w)
+            sysm = profile_system(dm, r, (blo, bhi), dmap, rms, okb, beam_arcsec=h.Bmaj() * 3600.)
+            if sysm is None:
+                return None
+            A, b, _, Rc = sysm
+            return A @ solve_profile(A, b, Rc, 0.1) - b
+
+        lo = {"xcentre": start["xcentre"] - 2 * bpix, "ycentre": start["ycentre"] - 2 * bpix, "inclin": 5.,
+              "posang": start["posang"] - 60.}
+        hi = {"xcentre": start["xcentre"] + 2 * bpix, "ycentre": start["ycentre"] + 2 * bpix, "inclin": 89.,
+              "posang": start["posang"] + 60.}
+        x0 = np.array([min(max(start[n], lo[n] + 1e-6), hi[n] - 1e-6) for n in names])
+        r0 = model(x0)
+        if r0 is None:
+            return
+        try:
+            res = least_squares(lambda t: model(t), x0, bounds=([lo[n] for n in names], [hi[n] for n in names]),
+                                x_scale=[1. if n in ("xcentre", "ycentre") else 2. for n in names],
+                                diff_step=1e-3, max_nfev=60 * len(names))
+        except Exception:
+            return
+        ell_inc = self.inclin
+        for n, v in zip(names, res.x):
+            setattr(self, n, float(v))
+        if "inclin" in names and self.inclin < 15.:
+            # nearly round maps hardly constrain INC: the fit drifts to its lower bound (5 deg), where
+            # 3DFIT then stays; the ELLIPSE value is better there (on simulated disks)
+            self.inclin = ell_inc
+        self.posang %= 360.
+        self.map_fit_cost = float(res.cost)
+
+    def _fit_velfield(self, free):
+        from .ringmodel import Ringmodel, VSYS, VROT, VEXP, PA, INC, X0, Y0
+        c, h = self.cin, self.cin.Head()
+        bpix = self._beam_pix()
+        arcs = h.PixScale() * arcsconv(h.Cunit(0))
+        rmax = self.Rmax / arcs
+        w = max(bpix, 2.)
+        nr = int(rmax / w)
+        if nr < 2:
+            w = max(bpix / 2., 1.5)
+            nr = int(rmax / w)
+        if nr < 2:
+            return
+        radii = (np.arange(nr) + 0.5) * w
+        tr = Ringmodel()
+        tr.set(nr, radii, w, self.vsystem, max(self.vrot, 20.), 0., self.posang, self.inclin, self.xcentre,
+               self.ycentre)
+        tr.setfield(self.Vemap, c.DimX(), c.DimY())
+        mpar = [False] * 7
+        mpar[VROT] = True
+        mpar[PA] = free.get("posang", True)
+        mpar[INC] = True
+        mpar[VSYS] = free.get("vsystem", True)
+        tr.setoption(mpar, 3, 2, 15.)
+        with np.errstate(all="ignore"):
+            tr.ringfit(1, False, False)
+        ok = np.isfinite(tr.vrotf) & np.isfinite(tr.posaf) & np.isfinite(tr.inclf) & (tr.vrotf > 0)
+        if ok.sum() < 2:
+            return
+        self.rad_profile = (radii[ok] * arcs).tolist()
+        self.inc_profile = np.clip(tr.inclf[ok], 5., 89.).tolist()
+        self.pa_profile = (tr.posaf[ok] % 360.).tolist()
+        if free.get("posang", True):
+            # the kinematic PA: the median over the rings, near the PA of the map fit (same sense)
+            pa = np.asarray(self.pa_profile)
+            d = (pa - self.posang + 180.) % 360. - 180.
+            self.posang = float((self.posang + np.median(d)) % 360.)
+        if free.get("vsystem", True) and np.isfinite(tr.vsysf[ok]).any():
+            self.vsystem = float(np.median(tr.vsysf[ok]))
+        if free.get("vrot", True):
+            # W50/2 deprojected with the final INC (the velocity field is smoothed by the beam, and its
+            # rotation velocities were 20-25% low on simulated disks)
+            self.findRotationVelocity()
+
+    def _estimate_vdisp(self):
+        """VDISP from the second moment of the detection, in its outer half (less beam smearing),
+        corrected for the channel width."""
+        c, o = self.cin, self.obj
+        f = c.array[o.z, o.y, o.x].astype(np.float64)
+        v = np.asarray(AlltoVel(c.getZphys(o.z.astype(float)), c.Head()), float)
+        nx = c.DimX()
+        idx = o.y * nx + o.x
+        n = c.DimY() * nx
+        s0 = np.bincount(idx, f, n)
+        s1 = np.bincount(idx, f * v, n)
+        s2 = np.bincount(idx, f * v * v, n)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            m1 = s1 / s0
+            m2 = np.sqrt(np.maximum(s2 / s0 - m1 * m1, 0.))
+        h = c.Head()
+        arcs = h.PixScale() * arcsconv(h.Cunit(0))
+        yy, xx = np.divmod(np.arange(n), nx)
+        pa, inc = math.radians(self.posang), math.radians(self.inclin)
+        xr = -(xx - self.xcentre) * math.sin(pa) + (yy - self.ycentre) * math.cos(pa)
+        yr = (-(xx - self.xcentre) * math.cos(pa) - (yy - self.ycentre) * math.sin(pa)) / max(math.cos(inc), 0.1)
+        R = np.hypot(xr, yr) * arcs
+        sel = (s0 > 0) & np.isfinite(m2) & (R > 0.5 * self.Rmax) & (m2 > 0)
+        if sel.sum() < 5:
+            return
+        chw = abs(DeltaVel(h))
+        disp2 = np.median(m2[sel]) ** 2 - chw * chw / 12.
+        self.vdisp = float(math.sqrt(max(disp2, 4.)))
 
     def plotGuess(self, outfile="initial_guesses.pdf"):
         """Diagnostic plot of the initial guesses (direct matplotlib version)."""
@@ -474,6 +660,7 @@ def EstimateInitial(c, p):
     if largest is None:
         raise BBaroloError(" 3DFIT ERROR: No sources detected in the datacube. Cannot fit!!! ")
     ip = ParamGuess(c, largest)
+    ip.mode = getattr(p, "GUESSTYPE", "LEGACY")
     if p.VSYS != "-1": ip.vsystem = _given(p.VSYS)
     else: ip.findSystemicVelocity()
     if p.XPOS != "-1" and p.YPOS != "-1":
@@ -495,8 +682,21 @@ def EstimateInitial(c, p):
     else: ip.findRotationVelocity()
     if c.pars().plots >= 3:
         ip.plotGuess(c.pars().outPrefix + "_initialguesses_0.pdf")
+    given = dict(xcentre=p.XPOS != "-1" and p.YPOS != "-1", inclin=p.INC != "-1", posang=p.PHI != "-1",
+                 vsystem=p.VSYS != "-1", vrot=p.VROT != "-1")
+    given["ycentre"] = given["xcentre"]
     if ip.nrings > 3:
-        ip.tuneWithTiltedRing()
+        ip.tuneWithTiltedRing(given)         # (FIT: the ELLIPSE estimates are its starting point)
+        if ip.mode != "LEGACY":
+            # the tuning estimates INC and VROT again: the values given stay (C++ replaced them in its
+            # internal estimates; only the parameters not given are used, but the others are derived)
+            if given["inclin"]: ip.inclin = _given(p.INC)
+            if given["vrot"]: ip.vrot = _given(p.VROT)
+            elif given["inclin"]: ip.findRotationVelocity()
+    if ip.mode == "FIT":
+        if p.Z0 != "-1":
+            ip.z0_given = _given(p.Z0)
+        ip.fitGeometry({k: not v for k, v in given.items()})
     if c.pars().plots >= 2:
         ip.plotGuess(c.pars().outPrefix + "_initialguesses.pdf")
     if verb:

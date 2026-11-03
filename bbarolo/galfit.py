@@ -311,7 +311,9 @@ def initial_rings(c, par, galmod=False, write=True):
         if par.VROT == "-1": par.VROT = repr(float(ip.vrot))
         if par.INC == "-1": par.INC = repr(float(ip.inclin))
         if par.PHI == "-1": par.PHI = repr(float(ip.posang))
-    if par.VDISP == "-1": par.VDISP = "8.0"
+    if par.VDISP == "-1":
+        # (GUESSTYPE FIT: from the second moment; otherwise 8 km/s, as in C++)
+        par.VDISP = repr(float(ip.vdisp)) if ip is not None and getattr(ip, "vdisp", None) else "8.0"
     if par.Z0 == "-1": par.Z0 = "0.0"
     if par.VRAD == "-1": par.VRAD = "0.0"
     if par.DENS == "-1": par.DENS = "1.0"

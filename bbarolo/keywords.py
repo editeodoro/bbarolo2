@@ -353,6 +353,10 @@ KEYWORDS = [
       "VSYS, VRAD, or ALL. BAYESIAN3DFIT (required): a name alone has one value per ring, NAME_SINGLE one "
       "value for all the rings, NAME_FUNC a function of radius (VROT, VDISP, DENS), plus SIGMA, FRACERR and "
       "RADMAX"),
+    K("GUESSTYPE", "ustr", ["gf.GUESSTYPE"], ("3DFIT", "BAYESIAN3DFIT", "2DFIT", "SPACEPAR"),
+      "Initial estimates of the parameters that are not given: FIT (a beam-convolved disk fitted to the "
+      "total map and a 2D tilted-ring fit of the velocity field), ELLIPSE (the C++ algorithm, corrected) or "
+      "LEGACY (the C++ algorithm)"),
     K("SIDE", "ustr", ["gf.SIDE"], ("3DFIT", "SPACEPAR", "2DFIT", "ELLPROF"),
       "Side of the galaxy to be used (A=approaching, R=receding, B=both)"),
     K("BWEIGHT", "float", ["gf.BWEIGHT"], ("3DFIT", "SPACEPAR"), "Weight for blank pixels"),

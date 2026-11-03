@@ -168,6 +168,7 @@ class GalfitPar(GalmodPar):
     TOL: float = 1e-3
     NORM: str = "AZIM"
     FREE: str = "VROT VDISP INC PA"
+    GUESSTYPE: str = "LEGACY"        # initial estimates: LEGACY (as C++), ELLIPSE (corrected) or FIT
     SIDE: str = "B"
     TWOSTAGE: bool = True
     REGTYPE: str = "auto"
@@ -726,6 +727,10 @@ class Param:
             if int(self.ANTIALIAS) != self.ANTIALIAS and self.ANTIALIAS != 0.5:
                 out("PVSLICE error: ANTIALIAS can only be a positive integer or 0.5. Defaulting to 0.5 ")
                 self.ANTIALIAS = 0.5
+
+        if gf.GUESSTYPE not in ("LEGACY", "ELLIPSE", "FIT"):
+            out(f"GUESSTYPE error: unknown type of initial estimates {gf.GUESSTYPE} (FIT, ELLIPSE or LEGACY).")
+            good = False
 
         if self.galmodtype not in ("MC", "ANALYTIC"):
             out("GALMODTYPE can only be MC or ANALYTIC. Setting to MC.")
