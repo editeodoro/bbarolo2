@@ -7,6 +7,25 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **BayesianBBarolo: the rings of a run carried over (C++).** Every evaluation of the likelihood
+  wrote the sampled values (and RADMAX and the density profile) into the initial rings. A second
+  run on the same object then kept the parameters that were free in the first one at the last
+  sampled values, not at the initial ones, and `save_results` saved those rings. The initial rings
+  no longer change.
+- **BayesianBBarolo: other bugs.**
+  - `update()` discarded the priors given as distributions in `prior_distr` **(C++)**.
+  - A negative parameter of a function of radius had zero likelihood, e.g. the slope of
+    `vdisp_func`: half of its default prior **(C++)**. Only the values in the rings must now be
+    positive (VROT, VDISP, INC, XPOS, YPOS, Z0, DENS), as before for the other free parameters.
+  - `RUNOPTS dlogz` with dynesty's dynamic sampler, the default, raised a TypeError: it is
+    `dlogz_init` there **(C++)**. With nautilus, dlogz becomes f_live = 1 − exp(−dlogz) (it was
+    f_live = dlogz: the sampling stopped at once for dlogz ≥ 1), and `nlive` is accepted as
+    `n_live`. An unknown option of SAMPLEROPTS or RUNOPTS is an error before the setup, with the
+    options of the sampler (the samplers raised it after the setup).
+  - A sampling that failed, or was interrupted, left the worker processes running **(C++)**.
+  - `lambdas` with one ring raised an IndexError **(C++)**.
+  - `load_results` of a `run_geometry` fit used the likelihood of the cube (e.g. in `print_stats`).
+  - With MPI, dynesty's `queue_size` came from THREADS instead of the number of MPI workers.
 - **Spatial axes in arcsec or arcmin (C++).** BMAJ and BMIN are in degrees in FITS files, but the
   code compared them with CDELT in the units of the axes. For such cubes the beam area, the beam in
   pixels, the ring width estimated from the beam (0.008 arcsec: a blind 3DFIT stopped with "Radius

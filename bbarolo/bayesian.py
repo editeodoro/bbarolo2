@@ -396,6 +396,12 @@ def _parent_prior(u):
     return f._prior_transform(u)
 
 
+def _queue_size(pool, threads):
+    """ The number of proposals that dynesty evaluates at once: 4 per worker (the size of an MPI pool,
+    otherwise the number of processes, threads). """
+    return 4 * int(getattr(pool, 'size', None) or threads)
+
+
 def _make_pool(fitter, like_kwargs, nproc):
     key = id(fitter)
     _WORKER_REGISTRY[key] = (fitter, like_kwargs)
@@ -727,7 +733,8 @@ class BayesianBBarolo(FitMod3D):
         self.funcs.setdefault('vdisp', lambda R, p1, p2: p1 + p2 * R)                          # linear
         self.funcs.setdefault('dens', lambda R, p1, p2: p1 * np.exp(-R / p2))                  # exponential
 
-        self.prior_distr = {key: None for key in self.priors.keys()}
+        if self.prior_distr is None:            # (the distributions given are kept; those frozen by _setup are
+            self.prior_distr = {}               # frozen again when their definition in priors changes)
         # Lambda parameters for the smoothness penalty in the likelihood
         if not hasattr(self, 'lambdas'):
             self.lambdas = {key: 0.0 for key in ['vrot', 'vdisp', 'dens', 'vrad', 'phi', 'inc', 'xpos', 'ypos', 'z0']}
@@ -814,14 +821,20 @@ class BayesianBBarolo(FitMod3D):
         self._set_likefactor()
         self.map_rms = self._map_noise(self._nvox_map)
 
+        # The rings of the fit: _fit0, the initial rings (self._inri, never changed by the fit) with the
+        # density profile, and _work, the rings of the evaluations of the likelihood (overwritten at each
+        # call, so that nothing carries over to the next run or to the saved results)
+        self._fit0 = self._inri.copy()
+        self._free_positive = sorted({k.split('_')[0] for k in self.freepar_idx} & set(self._POSITIVE))
         # If the density is not fitted, the model is normalized with the azimuthal profile
         self.useNorm = not any('dens' in sub for sub in self.freepar_names)
         self.update_prof = False
         if self.useNorm and not self.useBBres:
-            self._set_density(self._inri)
+            self._set_density(self._fit0)
             # The profile changes during the fit only if the geometry (or the thickness) is fitted
             self.update_prof = any(sub in string for string in self.freepar_names
                                    for sub in ['inc', 'phi', 'xpos', 'ypos', 'radmax', 'z0'])
+        self._work = self._fit0.copy()
 
     def _setup_noise(self):
         """ Noise and correlation scale of the data, used by the likelihood.
@@ -1210,6 +1223,17 @@ class BayesianBBarolo(FitMod3D):
             nvox = getattr(self, 'nvox', 1)
         return 0.5 * ss + 0.5 * nvox * np.log(2. * np.pi * s2) + 0.5 * lg
 
+    # Ring parameters that cannot be negative
+    _POSITIVE = ('vrot', 'vdisp', 'inc', 'xpos', 'ypos', 'z0', 'dens')
+
+    def _negative(self, rings, theta):
+        """ True if RADMAX, or a value in the rings of a free VROT, VDISP, INC, XPOS, YPOS, Z0 or DENS
+        (per ring, single or function of radius), is negative: the likelihood is then zero. The
+        parameters of a function of radius may be negative (e.g. the slope of VDISP). """
+        if 'radmax' in self.freepar_idx and theta[self.freepar_idx['radmax'][0]] < 0:
+            return True
+        return any(np.any(rings.r[k] < 0) for k in self._free_positive)
+
     def _log_likelihood(self, theta, **kwargs):
         """ Log-likelihood of the parameters theta.
 
@@ -1231,11 +1255,9 @@ class BayesianBBarolo(FitMod3D):
         lambdas (dict of smoothness penalties, default self.lambdas, not multiplied by
         likefactor); any keyword accepted by user-defined residuals (_calculate_residuals).
         """
-        a = ('vrot', 'vdisp', 'inc', 'xpos', 'ypos', 'z0', 'dens', 'radmax')
-        for k in self.freepar_idx:
-            if k.startswith(a) and np.any(theta[self.freepar_idx[k]] < 0):
-                return -np.inf
-        rings = self._update_rings(self._inri, theta)
+        rings = self._update_rings(self._work, theta)
+        if self._negative(rings, theta):
+            return -np.inf
         if self.useBBres:
             return -self._galfit.calculateResiduals(rings.object)
 
@@ -1257,7 +1279,7 @@ class BayesianBBarolo(FitMod3D):
 
         # Smoothness penalty for ring-by-ring parameters
         lambdas = kwargs.get('lambdas', self.lambdas)
-        if any(lambdas[key] > 0 for key in lambdas):
+        if rings.nr > 1 and any(lambdas[key] > 0 for key in lambdas):
             dr = rings.r['radii'][1] - rings.r['radii'][0]
             for key in self.freepar_idx:
                 if key in lambdas and lambdas[key] > 0 and len(self.freepar_idx[key]) > 1:
@@ -1279,11 +1301,9 @@ class BayesianBBarolo(FitMod3D):
         correlation area of the noise, 1/beam area in pixels with noisecorr='beam', 1/N with
         noisecorr=N), as in _log_likelihood.
         """
-        a = ('inc', 'xpos', 'ypos', 'dens', 'z0', 'radmax')
-        for k in self.freepar_idx:
-            if k.startswith(a) and np.any(theta[self.freepar_idx[k]] < 0):
-                return -np.inf
-        rings = self._update_rings(self._inri, theta)
+        rings = self._update_rings(self._work, theta)
+        if self._negative(rings, theta):
+            return -np.inf
         if self.useNorm and self.update_prof:
             self._set_density(rings)
         model, bhi, blo = self._calculate_model(rings, fullcube=False)[:3]
@@ -1309,8 +1329,7 @@ class BayesianBBarolo(FitMod3D):
         fracerr=True: with the variance sigma^2 + (fracerr*model)^2 of each voxel, using the
         fitted fractional model error, or the one of like_kwargs (or a number: that value). """
         theta = self.params if theta is None else np.asarray(theta, float)
-        rings = self._inri.copy()
-        rings = self._update_rings(rings, theta)
+        rings = self._update_rings(self._fit0.copy(), theta)
         if self.useNorm and self.update_prof:
             self._set_density(rings)
         model, bhi, blo = self._calculate_model(rings)[:3]
@@ -1404,6 +1423,8 @@ class BayesianBBarolo(FitMod3D):
             seed = sampler_kwargs.pop('seed')
             sampler_kwargs.setdefault('rstate', np.random.default_rng(None if seed is None else int(seed)))
         run_kwargs = {**dflt.get('RUNOPTS', {}), **run_kwargs}
+        sampler_kwargs, run_kwargs = self._sampler_options(method, kwargs.get('dynamic', True), sampler_kwargs,
+                                                           run_kwargs)
         if threads is None:
             threads = int(self._params.get("THREADS", 1))
         # residuals replaced by the user (f._calculate_residuals = my_function)? a custom log-likelihood?
@@ -1443,67 +1464,66 @@ class BayesianBBarolo(FitMod3D):
             self.print_priors()
         self._check_likelihood(like_kwargs, custom, verbose)
 
-        # Functions for the sampler and (optional) parallel pool
+        # Functions for the sampler and (optional) parallel pool, closed also if the sampling fails
+        self._log_like_kind = ('geometry' if log_like == self._log_likelihood_geometry else
+                               'cube' if log_like is None or log_like == self._log_likelihood else 'custom')
         pool = None
+        failed = True
         _WORKER['parent'] = (self, like_kwargs)
-        loglike, prior = _parent_loglike, _parent_prior
-        if isMPI:
-            _WORKER['f'] = (self, like_kwargs)
-            pool = MPIPool()
-            if not pool.is_master():
-                pool.wait()
-                sys.exit(0)
-            loglike, prior = _worker_loglike, _worker_prior
-        elif threads > 1:
-            pool = _make_pool(self, like_kwargs, threads)
-            if pool is not None:
+        try:
+            loglike, prior = _parent_loglike, _parent_prior
+            if isMPI:
+                _WORKER['f'] = (self, like_kwargs)
+                pool = MPIPool()
+                if not pool.is_master():
+                    pool.wait()
+                    sys.exit(0)
                 loglike, prior = _worker_loglike, _worker_prior
+            elif threads > 1:
+                pool = _make_pool(self, like_kwargs, threads)
+                if pool is not None:
+                    loglike, prior = _worker_loglike, _worker_prior
 
-        toc = time.time()
-        if method == 'dynesty':
-            if dyn is None:
-                raise ImportError("BayesianBBarolo with method='dynesty' requires the package 'dynesty'.")
-            Sampler = dyn.DynamicNestedSampler if kwargs.get('dynamic', True) else dyn.NestedSampler
-            skw = dict(bound='multi')
-            if pool is not None:
-                # several proposals per worker keep the processes busy
-                skw.update(pool=pool, queue_size=4 * threads)
-            skw.update(sampler_kwargs)
-            self.sampler = Sampler(loglike, prior, ndim=self.ndim, **skw)
-            self.sampler.run_nested(**{'print_progress': verbose, **run_kwargs})
-            self.results = self.sampler.results
-            samples = self.results.samples
-            weights = np.exp(self.results.logwt - self.results.logz[-1])
-        elif method == 'nautilus':
-            try:
+            toc = time.time()
+            if method == 'dynesty':
+                Sampler = dyn.DynamicNestedSampler if kwargs.get('dynamic', True) else dyn.NestedSampler
+                skw = dict(bound='multi')
+                if pool is not None:
+                    # several proposals per worker keep the processes busy
+                    skw.update(pool=pool, queue_size=_queue_size(pool if isMPI else None, threads))
+                skw.update(sampler_kwargs)
+                self.sampler = Sampler(loglike, prior, ndim=self.ndim, **skw)
+                self.sampler.run_nested(**{'print_progress': verbose, **run_kwargs})
+                self.results = self.sampler.results
+                samples = self.results.samples
+                weights = np.exp(self.results.logwt - self.results.logz[-1])
+            else:
                 import nautilus
-            except ImportError:
-                raise ImportError("BayesianBBarolo requires the package nautilus when method='nautilus'.")
-            run_kwargs = dict(run_kwargs)
-            if 'dlogz' in run_kwargs and 'f_live' not in run_kwargs:
-                run_kwargs['f_live'] = run_kwargs.pop('dlogz')
-            skw = dict(pass_dict=False)
+                skw = dict(pass_dict=False)
+                if pool is not None:
+                    skw['pool'] = pool
+                skw.update(sampler_kwargs)
+                self.sampler = nautilus.Sampler(prior, loglike, n_dim=self.ndim, **skw)
+                self.sampler.run(**{'verbose': verbose, **run_kwargs})
+                samples, logw, _ = self.sampler.posterior()
+                weights = np.exp(logw - logw.max())
+                self.results = None
+            failed = False
+        finally:
             if pool is not None:
-                skw['pool'] = pool
-            skw.update(sampler_kwargs)
-            self.sampler = nautilus.Sampler(prior, loglike, n_dim=self.ndim, **skw)
-            self.sampler.run(**{'verbose': verbose, **run_kwargs})
-            samples, logw, _ = self.sampler.posterior()
-            weights = np.exp(logw - logw.max())
-            self.results = None
-        else:
-            if pool is not None:
-                pool.close()
-            raise ValueError(f"ERROR! Unknown method '{method}'.")
+                if failed and not isMPI:
+                    pool.terminate()            # (a failed sampling leaves no workers running)
+                else:
+                    pool.close()
+                if not isMPI:
+                    pool.join()
+            _WORKER_REGISTRY.pop(id(self), None)
+            _WORKER.pop('parent', None)
+            _WORKER.pop('f', None)
 
         dt = time.time() - toc
         dt = f'{dt:.2f} seconds' if dt < 60.00 else f'{dt / 60.00:.2f} minutes'
         vprint(verbose, f'\nSampling with {method} took {dt} to run.')
-        if pool is not None:
-            pool.close()
-            if not isMPI:
-                pool.join()
-        _WORKER_REGISTRY.pop(id(self), None)
 
         self.modCalculated = True
         self._set_sampling_stats(samples, weights)
@@ -1529,8 +1549,7 @@ class BayesianBBarolo(FitMod3D):
 
         # Best-fit rings (<prefix>_rings_final1.txt, with the errors from the posterior), with the
         # density profile at the best-fit geometry if DENS is not fitted
-        self.outri = self._inri.copy()
-        self.outri = self._update_rings(self.outri, self.params)
+        self.outri = self._update_rings(self._fit0.copy(), self.params)
         if self.useNorm and not self.useBBres:
             self._set_density(self.outri)
         self._galfit.outr = self.outri.object.copy()
@@ -1541,6 +1560,45 @@ class BayesianBBarolo(FitMod3D):
         with self._errors_in_outputs():
             pass
         return self
+
+    @staticmethod
+    def _sampler_options(method, dynamic, sampler_kwargs, run_kwargs):
+        """ Checks the options of the sampler (SAMPLEROPTS, sampler_kwargs) and of its run (RUNOPTS,
+        run_kwargs) against the arguments that the sampler accepts, before the setup: BBaroloError for
+        an unknown option. The names of dynesty are accepted by all the samplers: nlive (n_live of
+        nautilus) and dlogz, the stopping criterion of the static sampler of dynesty (dlogz_init for
+        its dynamic sampler, f_live = 1 - exp(-dlogz) for nautilus: the fraction of the evidence left
+        in the live points). Returns the options of the sampler and of the run. """
+        import inspect
+        from .bbutils import BBaroloError
+        sampler_kwargs, run_kwargs = dict(sampler_kwargs), dict(run_kwargs)
+        if method == 'dynesty':
+            if dyn is None:
+                raise ImportError("BayesianBBarolo with method='dynesty' requires the package 'dynesty'.")
+            Sampler = dyn.DynamicNestedSampler if dynamic else dyn.NestedSampler
+            runf, own = Sampler.run_nested, {'loglikelihood', 'prior_transform', 'ndim'}
+            if dynamic and 'dlogz' in run_kwargs:
+                run_kwargs.setdefault('dlogz_init', run_kwargs.pop('dlogz'))
+        elif method == 'nautilus':
+            try:
+                import nautilus
+            except ImportError:
+                raise ImportError("BayesianBBarolo requires the package nautilus when method='nautilus'.")
+            Sampler, runf, own = nautilus.Sampler, nautilus.Sampler.run, {'prior', 'likelihood', 'n_dim'}
+            if 'nlive' in sampler_kwargs:
+                sampler_kwargs.setdefault('n_live', sampler_kwargs.pop('nlive'))
+            if 'dlogz' in run_kwargs:
+                run_kwargs.setdefault('f_live', 1. - math.exp(-float(run_kwargs.pop('dlogz'))))
+        else:
+            raise ValueError(f"ERROR! Unknown method '{method}' (dynesty or nautilus).")
+        for what, func, opts in (("SAMPLEROPTS", Sampler, sampler_kwargs), ("RUNOPTS", runf, run_kwargs)):
+            ok = set(inspect.signature(func).parameters) - {'self'} - own
+            bad = sorted(set(opts) - ok)
+            if bad:
+                kind = (" (dynamic sampler)" if dynamic else " (static sampler)") if method == 'dynesty' else ""
+                raise BBaroloError(f"BAYESIAN3DFIT: {what}: unknown option(s) {', '.join(bad)} of {method}{kind}. "
+                                   f"Options: {', '.join(sorted(ok))}.")
+        return sampler_kwargs, run_kwargs
 
     def _check_likelihood(self, like_kwargs, custom, verbose=True):
         """ Warnings before sampling, from the log-likelihood at the centre of the priors: a free
@@ -1722,7 +1780,7 @@ class BayesianBBarolo(FitMod3D):
         if self.update_prof and getattr(self, 'samples_equal', None) is not None and nsamples > 0:
             S = np.asarray(self.samples_equal)
             idx = rng.choice(len(S), min(int(nsamples), len(S)), replace=False)
-            prof = [p for p in (self._deconvolved_profile(self._update_rings(self._inri.copy(), S[i])) for i in idx)
+            prof = [p for p in (self._deconvolved_profile(self._update_rings(self._fit0.copy(), S[i])) for i in idx)
                     if p is not None]
             if len(prof) > 1:
                 geo_lo, geo_hi = spread(prof)
@@ -1982,9 +2040,11 @@ class BayesianBBarolo(FitMod3D):
             raise ValueError("ERROR! Percentiles must be a list of three values.")
         results = self.results
         lk = getattr(self, '_like_kwargs', {})          # the likelihood options of run()
-        logl = self._log_like_func(self.params, **lk) if hasattr(self, '_log_like_func') else \
-            self._log_likelihood(self.params, **lk)
-        print(f"\nBest-fit parameters (log_likelihood = {logl:.2f}):")
+        llf = getattr(self, '_log_like_func', self._log_likelihood)
+        if llf is not None:
+            print(f"\nBest-fit parameters (log_likelihood = {llf(self.params, **lk):.2f}):")
+        else:
+            print("\nBest-fit parameters (user-defined log-likelihood, not saved with the results):")
         if getattr(self, 'ess', np.inf) < 20:
             print(f"  (effective sample size of the posterior: {self.ess:.1f}: the errors are not reliable)")
         q = np.quantile(self.samples_equal, quantiles, axis=0)
@@ -2026,7 +2086,8 @@ class BayesianBBarolo(FitMod3D):
                       inrings=self._inri.r, options={k: str(v) if isinstance(v, _FromFile) else v
                                                      for k, v in self.parameters.items()},
                       priors=self.priors,
-                      prior_distr=self.prior_distr, lambdas=self.lambdas, like_kwargs=like)
+                      prior_distr=self.prior_distr, lambdas=self.lambdas, like_kwargs=like,
+                      loglike=getattr(self, '_log_like_kind', 'cube'))
         np.save(outfile, tosave)
 
     def load_results(self, inputfile, sampler='dynesty'):
@@ -2059,6 +2120,11 @@ class BayesianBBarolo(FitMod3D):
                         densprof_smooth=r.get('densprof_smooth', 0.1))
         self._set_like_options(like, custom=True)
         self._setup(r['freepar_inp'])
+        # the likelihood of the fit: of the cube, of the total intensity map (run_geometry), or one given
+        # by the user (not saved: None)
+        self._log_like_kind = r.get('loglike', 'cube')
+        self._log_like_func = dict(cube=self._log_likelihood, geometry=self._log_likelihood_geometry).get(
+            self._log_like_kind)
         if sampler == 'dynesty' and r.get('results') is not None:
             self.results = r['results']
             weights = np.exp(self.results.logwt - self.results.logz[-1])
@@ -2068,8 +2134,7 @@ class BayesianBBarolo(FitMod3D):
             self._set_sampling_stats(r['samples'], r['weights'])
         else:
             raise ValueError(f"Error: cannot load results for sampler {sampler} from {inputfile}")
-        self.outri = self._inri.copy()
-        self.outri = self._update_rings(self.outri, self.params)
+        self.outri = self._update_rings(self._fit0.copy(), self.params)
         if self.useNorm and not self.useBBres:
             self._set_density(self.outri)
         self._galfit.outr = self.outri.object.copy()

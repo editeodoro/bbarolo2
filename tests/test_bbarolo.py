@@ -126,24 +126,24 @@ def test_bayesian_deconvolved_profile(tmp_path):
     # the observed profile (outputs only): too faint in the inner rings, and a model with it
     # does not fit the data
     f._setup(['vrot_single'])
-    ell = f._observed_profile(f._inri)
+    ell = f._observed_profile(f._fit0)
     obs = np.abs([ell.getSurfDensFaceOn(i) for i in range(8)]) / dens
     assert obs[0] < 0.8
-    dec = np.array(f._inri.r['dens'])
-    f._inri.modify_parameter("dens", obs * dens, makeobj=True)
+    dec = np.array(f._fit0.r['dens'])
+    f._fit0.modify_parameter("dens", obs * dens, makeobj=True)
     assert f.chi2_reduced(np.array([150.])) > 3
-    f._inri.modify_parameter("dens", dec, makeobj=True)
+    f._fit0.modify_parameter("dens", dec, makeobj=True)
     for smooth in (0., 0.1):
         f.like_kwargs['densprof_smooth'] = smooth
         f._setup(['vrot_single'])
-        assert np.all(np.abs(f._inri.r['dens'] / dens - 1) < 0.08)
+        assert np.all(np.abs(f._fit0.r['dens'] / dens - 1) < 0.08)
         assert f.chi2_reduced(np.array([150.])) < 1.05
     # saved and loaded
     f._set_sampling_stats(np.full((3, 1), 150.), np.ones(3))
     f.save_results(str(tmp_path / "res.npy"))
     g = BayesianBBarolo(fn, outfolder=str(tmp_path) + "/")
     g.load_results(str(tmp_path / "res.npy"), sampler='nautilus')
-    assert g.like_kwargs['densprof_smooth'] == 0.1 and np.allclose(g._inri.r['dens'], f._inri.r['dens'])
+    assert g.like_kwargs['densprof_smooth'] == 0.1 and np.allclose(g._fit0.r['dens'], f._fit0.r['dens'])
     # outputs: the profile of the model in rings_final1.txt (2 digits) and, at full precision
     # with the observed one, in densprof_deconvolved.txt; densprof.txt is the observed profile
     assert np.all(np.abs(g.outri.r['dens'] / dens - 1) < 0.08)
@@ -636,7 +636,7 @@ def test_bayesian_noisecorr_and_fracerr(tmp_path):
     L = f._log_likelihood(np.r_[th, 0.1])
     assert np.isclose(L, g._log_likelihood(th, fracerr=0.1), rtol=1e-12)
     # direct calculation
-    model, bhi, blo = g._calculate_model(g._update_rings(g._inri, th))[:3]
+    model, bhi, blo = g._calculate_model(g._update_rings(g._fit0.copy(), th))[:3]
     d = g.data[:, blo[1]:bhi[1], blo[0]:bhi[0]].astype(float)
     reg = g._region[blo[1]:bhi[1], blo[0]:bhi[0]][None] & np.isfinite(d) & g._likemask[:, blo[1]:bhi[1], blo[0]:bhi[0]]
     s2 = g.noiserms ** 2
@@ -703,7 +703,7 @@ def test_bayesian_likemask(tmp_path):
 
     def direct(g, use, d):
         """ log-likelihood and reduced chi2 over the voxels use, data d """
-        rings = g._update_rings(g._inri.copy(), th)
+        rings = g._update_rings(g._fit0.copy(), th)
         model = np.asarray(g._calculate_model(rings, fullcube=True)[0], float)
         assert g.nvox == use.sum()
         ss = np.sum((d[use] - model[use]) ** 2) / s2
@@ -785,7 +785,7 @@ def test_bayesian_errors_on_mock_data(tmp_path):
                         galmodtype="ANALYTIC")
     f._setup(['vrot', 'vdisp_single'])
     truth = np.array([80., 108., 120., 13.])
-    model = f._calculate_model(f._update_rings(f._inri, truth), fullcube=True)[0]
+    model = f._calculate_model(f._update_rings(f._fit0.copy(), truth), fullcube=True)[0]
     h = f._cube_obj.Head()
     sk = np.sqrt(h.Bmaj() * h.Bmin()) / abs(h.Cdelt(0)) / np.sqrt(2) / 2.3548   # correlation = beam
     rng = np.random.default_rng(3)
@@ -1619,3 +1619,85 @@ def test_spatial_axes_in_arcsec(tmp_path):
     for name in ("arcs", "arcm"):
         for a, b in zip(out[name], out["deg"]):
             assert np.allclose(a, b, rtol=1e-9, atol=0) if not isinstance(a, str) else a == b == "deg"
+
+
+def _bayes_mock(tmp_path, **kw):
+    from bbarolo.bayesian import BayesianBBarolo
+    fn = str(tmp_path / "mock.fits")
+    if not os.path.isfile(fn):
+        _mock_cube(tmp_path)
+    prm = dict(radii=[20, 60, 100, 140], xpos=31.5, ypos=31.5, vsys=0, vrot=120, vdisp=15, z0=0, inc=60, pa=45,
+               mask="SEARCH", outfolder=str(tmp_path / "bbb"))
+    return BayesianBBarolo(fn, **{**prm, **kw})
+
+
+def test_bayesian_rings_do_not_carry_over(tmp_path):
+    """The likelihood evaluations of a run do not change the initial rings: the parameters fixed in a
+    second run (and the rings saved with the results) are the initial ones, not the last sample."""
+    pytest.importorskip("dynesty")
+    f = _bayes_mock(tmp_path)
+    r0 = {k: np.array(v) for k, v in f._inri.r.items()}
+    f._setup(['vrot', 'inc_single', 'radmax'])
+    f._log_likelihood(np.array([150., 150, 150, 150, 50., 135.]))
+    assert all(np.array_equal(f._inri.r[k], r0[k]) for k in r0)
+    run = dict(threads=1, verbose=False, dynamic=False, sampler_kwargs=dict(nlive=15, seed=1),
+               run_kwargs=dict(maxiter=60))
+    f.run(freepar=['vrot_single'], **run)
+    f.run(freepar=['vdisp_single'], **run)
+    assert np.allclose(f.outri.r['vrot'], 120.) and np.allclose(f._inri.r['vrot'], 120.)
+    f.save_results(str(tmp_path / "res.npy"))
+    assert np.allclose(np.load(str(tmp_path / "res.npy"), allow_pickle=True).item()['inrings']['vrot'], 120.)
+
+
+def test_bayesian_priors_and_options(tmp_path):
+    """A prior given as a distribution survives update(); the slope of a parametric function may be
+    negative (only the values of the rings must be positive); unknown sampler and run options are
+    errors; dlogz works with the dynamic sampler of dynesty (as dlogz_init); one ring with lambdas."""
+    pytest.importorskip("dynesty")
+    from scipy import stats
+    from bbarolo.bbutils import BBaroloError
+    f = _bayes_mock(tmp_path)
+    d = stats.norm(150., 10.)
+    f.prior_distr['vrot'] = d
+    f.update(vdisp=12.)
+    f._setup(['vrot_single'])
+    assert f.prior_distr['vrot'] is d
+    f._setup(['vdisp_func'])                                   # p1 + p2 R
+    assert np.isfinite(f._log_likelihood(np.array([20., -0.05])))
+    assert f._log_likelihood(np.array([5., -0.1])) == -np.inf      # negative at the outer rings
+    run = dict(threads=1, verbose=False, sampler_kwargs=dict(nlive=15, seed=1))
+    with pytest.raises(BBaroloError, match="RUNOPTS.*dlogzz"):
+        f.run(freepar=['vrot_single'], run_kwargs=dict(dlogzz=1.), **run)
+    with pytest.raises(BBaroloError, match="SAMPLEROPTS.*nlivee"):
+        f.run(freepar=['vrot_single'], threads=1, verbose=False, sampler_kwargs=dict(nlivee=15))
+    f.run(freepar=['vrot_single'], dynamic=True, run_kwargs=dict(dlogz=50., maxiter=60), **run)
+    assert np.isfinite(f.params[0])
+    g = _bayes_mock(tmp_path, radii=[60.], outfolder=str(tmp_path / "one"))
+    g._setup(['vrot'])
+    assert np.isfinite(g._log_likelihood(np.array([150.]), lambdas=dict(vrot=1.)))
+
+
+def test_bayesian_pool_and_loaded_likelihood(tmp_path):
+    """A sampling that fails leaves no worker processes; load_results restores the likelihood of the
+    fit (run_geometry: the total intensity map); the queue of an MPI pool follows its size."""
+    pytest.importorskip("dynesty")
+    import multiprocessing as mp
+    from bbarolo import bayesian
+    f = _bayes_mock(tmp_path)
+
+    def bad(theta, **kw):
+        raise RuntimeError("failed likelihood")
+    with pytest.raises(RuntimeError, match="failed likelihood"):
+        f.run(freepar=['vrot_single'], threads=2, log_like=bad, verbose=False, sampler_kwargs=dict(nlive=15, seed=1))
+    assert not mp.active_children() and not bayesian._WORKER_REGISTRY and 'parent' not in bayesian._WORKER
+    f.run_geometry(freepar=['inc_single'], threads=1, verbose=False, dynamic=False,
+                   sampler_kwargs=dict(nlive=15, seed=1), run_kwargs=dict(maxiter=60))
+    f.save_results(str(tmp_path / "geo.npy"))
+    g = _bayes_mock(tmp_path, outfolder=str(tmp_path / "re"))
+    g.load_results(str(tmp_path / "geo.npy"))
+    assert g._log_like_func == g._log_likelihood_geometry
+    assert np.isclose(g._log_like_func(g.params), f._log_like_func(f.params))
+
+    class FakeMPIPool:
+        size = 7
+    assert bayesian._queue_size(FakeMPIPool(), 1) == 28 and bayesian._queue_size(None, 3) == 12
