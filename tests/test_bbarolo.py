@@ -1701,3 +1701,21 @@ def test_bayesian_pool_and_loaded_likelihood(tmp_path):
     class FakeMPIPool:
         size = 7
     assert sampling._queue_size(FakeMPIPool(), 1) == 28 and sampling._queue_size(None, 3) == 12
+
+
+def test_bayesian_one_blas_thread(tmp_path):
+    """The sampling (serial and in the worker processes) runs with one BLAS thread: the linear
+    algebra of the likelihood is on small matrices, and many threads made it 1.6-3x slower."""
+    pytest.importorskip("dynesty")
+    threadpoolctl = pytest.importorskip("threadpoolctl")
+    if not any(d["user_api"] == "blas" for d in threadpoolctl.threadpool_info()):
+        pytest.skip("no BLAS library found by threadpoolctl")
+    f = _bayes_mock(tmp_path)
+
+    def check(theta, **kw):                       # an unusable likelihood if BLAS has more threads
+        n = max(d["num_threads"] for d in threadpoolctl.threadpool_info() if d["user_api"] == "blas")
+        return -0.5 * ((theta[0] - 150.) / 10.) ** 2 if n == 1 else -1e10
+    for threads in (1, 2):
+        f.run(freepar=['vrot_single'], threads=threads, log_like=check, verbose=False, dynamic=False,
+              sampler_kwargs=dict(nlive=15, seed=1), run_kwargs=dict(maxiter=40))
+        assert np.all(f.results.logl > -1e9)

@@ -1,7 +1,26 @@
 """Small helpers of BayesianBBarolo."""
 
+import contextlib
 import numpy as np
 from scipy import stats
+
+# Threads of BLAS and OpenMP during the sampling and the errors of the density profile (None: no limit)
+BLAS_THREADS = 1
+
+
+def blas_threads():
+    """ A context in which BLAS and OpenMP use BLAS_THREADS threads, set with threadpoolctl (if it is
+    installed; otherwise nothing changes). The linear algebra of the likelihood (the deconvolved
+    density profile) works on small matrices, for which many threads are slower: with MKL on 224
+    cores, the likelihood with a free geometry took 1.6-2.2 times longer, and the processes of a
+    parallel sampling competed for the cores. The values do not change. """
+    if BLAS_THREADS is None:
+        return contextlib.nullcontext()
+    try:
+        from threadpoolctl import threadpool_limits
+    except ImportError:
+        return contextlib.nullcontext()
+    return threadpool_limits(limits=int(BLAS_THREADS))
 
 # A function to print only if verbose is True
 vprint = lambda verbose, *args, **kwargs: print(*args, **kwargs) if verbose else None

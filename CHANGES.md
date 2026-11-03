@@ -170,6 +170,15 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **BayesianBBarolo: faster sampling on machines with many cores.** BLAS (e.g. MKL with 112
+  threads on a 224-core server) gave many threads to the small matrices of the density profile in
+  each likelihood call, and the processes of a parallel sampling competed for the cores. The
+  sampling and the errors of the density profile now run with one BLAS thread per process
+  (threadpoolctl, added to the `bayesian` extras; without it nothing changes). On NGC 2403, with
+  the geometry free, a likelihood call takes 22 ms instead of 37 ms (MC: 32 instead of 70), and a
+  sampling makes 202 likelihood calls per second instead of 76 with 8 processes, 491 instead of
+  155 with 32. The values do not change. `performance/bench.py --sampling 1,8,32` times a
+  sampling.
 - **BayesianBBarolo is a package**, `bbarolo.bayesian` (it was a 2200-line module): the fitter,
   the likelihood, the density profile, the samplers and the pool, the outputs, the noise and the
   task in separate modules, and the setup of a fit in explicit steps (`_setup`). The imports

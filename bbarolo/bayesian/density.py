@@ -4,6 +4,8 @@ map (bbarolo.profile), with its errors, and the observed profile of the outputs.
 import math
 import numpy as np
 
+from .common import blas_threads
+
 
 class DensityMixin(object):
     """ The density profile of BayesianBBarolo (DENS not fitted). """
@@ -96,6 +98,10 @@ class DensityMixin(object):
         err_lo, err_hi (total 1-sigma errors), err_geom_lo, err_geom_hi, err_noise_lo,
         err_noise_hi, nsamples and nmc; None if DENS is fitted. The errors are also written in
         <prefix>_rings_final1.txt (E_DENS) and <prefix>_densprof_deconvolved.txt (write_bestmodel). """
+        with blas_threads():
+            return self._deconvolved_profile_errors(nsamples, nmc, seed)
+
+    def _deconvolved_profile_errors(self, nsamples, nmc, seed):
         from scipy.ndimage import gaussian_filter
         self.dens_profile = None
         if not (getattr(self, 'useNorm', False) and not self.useBBres and self.outri is not None):

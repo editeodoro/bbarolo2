@@ -9,6 +9,12 @@ one full model, on NGC 2403 (../examples/ngc2403.fits or --cube).
 Each likelihood case evaluates the log-likelihood at N parameter points drawn from the priors (a
 fixed seed), on one thread, as a sampler worker does. The values are saved, and --compare checks
 that they are identical (optimisations must not change results) and prints the speed-ups.
+
+    python performance/bench.py --sampling 1,8,32 [--nlive 100 --maxiter 2000] [--no-blas-limit]
+
+times instead a short sampling (dynesty, static, fixed seed) of the case "ANALYTIC, + inc + pa" with
+1, 8 and 32 processes: the time of the sampling, the number of likelihood calls and the calls per
+second. --no-blas-limit lets BLAS use all its threads (bbarolo.bayesian.common.BLAS_THREADS = None).
 """
 
 import os
@@ -52,6 +58,32 @@ def likelihood_case(cube, galmodtype, freepar, n, seed=1):
     return dict(ms_median=1e3 * float(np.median(times)), ms_mean=1e3 * float(np.mean(times)), values=vals)
 
 
+def sampling_case(cube, threads, nlive, maxiter, blas_limit=True, seed=1):
+    from bbarolo.bayesian import BayesianBBarolo, common, fitter
+    common.BLAS_THREADS = 1 if blas_limit else None
+    with contextlib.redirect_stdout(io.StringIO()):
+        f = BayesianBBarolo(cube, radii=np.arange(60, 700, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
+                            inc=60, pa=123.7, z0=10, mask="SEARCH", galmodtype="ANALYTIC",
+                            outfolder=os.path.join(os.environ.get("TMPDIR", "/tmp"), "bbbench") + "/", verbose=False)
+    spent = {}
+    sample = fitter.sample
+
+    def timed(*a, **k):                            # the time of the sampling only (not of the setup)
+        t0 = time.perf_counter()
+        out = sample(*a, **k)
+        spent['s'] = time.perf_counter() - t0
+        return out
+    fitter.sample = timed
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            f.run(freepar=CASES["ANALYTIC, + inc + pa"][1], threads=threads, dynamic=False, verbose=False,
+                  sampler_kwargs=dict(nlive=nlive, seed=seed), run_kwargs=dict(maxiter=maxiter))
+    finally:
+        fitter.sample = sample
+    ncall = int(np.sum(f.results.ncall))
+    return dict(seconds=spent['s'], ncall=ncall, calls_per_s=ncall / spent['s'], logz=float(f.results.logz[-1]))
+
+
 def model_case(cube, galmodtype, nrep=5):
     from bbarolo import Cube, DiskModel, Rings
     from bbarolo.params import Param
@@ -74,8 +106,18 @@ def main():
     ap.add_argument("-n", type=int, default=200, help="likelihood calls per case")
     ap.add_argument("-o", "--output", help="JSON file for the results")
     ap.add_argument("--compare", help="JSON file of a previous run")
+    ap.add_argument("--sampling", help="time a short sampling with these numbers of processes, e.g. 1,8,32")
+    ap.add_argument("--nlive", type=int, default=100)
+    ap.add_argument("--maxiter", type=int, default=2000)
+    ap.add_argument("--no-blas-limit", action="store_true", help="BLAS with all its threads")
     args = ap.parse_args()
     warnings.simplefilter("ignore")
+    if args.sampling:
+        print(f"{'processes':>9s} {'seconds':>9s} {'calls':>8s} {'calls/s':>9s} {'logz':>12s}")
+        for n in (int(x) for x in args.sampling.split(",")):
+            r = sampling_case(args.cube, n, args.nlive, args.maxiter, blas_limit=not args.no_blas_limit)
+            print(f"{n:9d} {r['seconds']:9.2f} {r['ncall']:8d} {r['calls_per_s']:9.1f} {r['logz']:12.3f}")
+        return 0
     res = {"likelihood": {}, "model": {}}
     for name, (gt, free) in CASES.items():
         res["likelihood"][name] = likelihood_case(args.cube, gt, free, args.n)

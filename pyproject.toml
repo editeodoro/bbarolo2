@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-bayesian = ["dynesty", "nautilus-sampler", "corner"]
+bayesian = ["dynesty", "nautilus-sampler", "corner", "threadpoolctl"]
 mpi = ["mpi4py", "schwimmbad"]
 test = ["pytest"]
 

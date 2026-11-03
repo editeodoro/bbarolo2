@@ -14,6 +14,8 @@ import time
 import multiprocessing as mp
 import numpy as np
 
+from . import common
+
 try:
     import dynesty as dyn
     from dynesty import utils as dyfunc
@@ -39,6 +41,7 @@ _WORKER = {}
 
 def _worker_init(key):
     _WORKER['f'] = _WORKER_REGISTRY[key]
+    _WORKER['blas'] = common.blas_threads()          # (also inherited from the parent)
 
 
 _WORKER_REGISTRY = {}
@@ -126,10 +129,15 @@ def sampler_options(method, dynamic, sampler_kwargs, run_kwargs):
 def sample(fitter, like_kwargs, method, threads, dynamic, sampler_kwargs, run_kwargs, verbose):
     """ Samples the posterior of the fitter (its _log_like_func with like_kwargs, its _prior_transform,
     its ndim) with method ('dynesty' or 'nautilus', the options checked by sampler_options), in
-    threads processes (or an MPI pool). The pool is closed, or terminated if the sampling fails, and
-    no workers are left running. Sets fitter.sampler (as soon as it exists) and fitter.results
-    (dynesty; None for nautilus). Returns the samples, their weights and the time of the sampling
-    (seconds). """
+    threads processes (or an MPI pool), with one BLAS thread in each (common.blas_threads). The
+    pool is closed, or terminated if the sampling fails, and no workers are left running. Sets
+    fitter.sampler (as soon as it exists) and fitter.results (dynesty; None for nautilus). Returns
+    the samples, their weights and the time of the sampling (seconds). """
+    with common.blas_threads():
+        return _sample(fitter, like_kwargs, method, threads, dynamic, sampler_kwargs, run_kwargs, verbose)
+
+
+def _sample(fitter, like_kwargs, method, threads, dynamic, sampler_kwargs, run_kwargs, verbose):
     pool = None
     failed = True
     _WORKER['parent'] = (fitter, like_kwargs)
@@ -183,4 +191,5 @@ def sample(fitter, like_kwargs, method, threads, dynamic, sampler_kwargs, run_kw
         _WORKER_REGISTRY.pop(id(fitter), None)
         _WORKER.pop('parent', None)
         _WORKER.pop('f', None)
+        _WORKER.pop('blas', None)
     return samples, weights, time.time() - toc
