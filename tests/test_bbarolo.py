@@ -1357,3 +1357,23 @@ def test_xpos_from_file_keeps_path_case():
     p = Param()
     p.readParamString("XPOS file(/Data/Rings.txt,10)\nYPOS 07H36M51S\n")
     assert p.gf.XPOS == "file(/Data/Rings.txt,10)" and p.gf.YPOS == "07h36m51s"
+
+
+@needs_data
+def test_relative_paths(tmp_path, monkeypatch):
+    """FITSFILE and OUTFOLDER relative to the current folder (e.g. ../../Data/HI/cube.fits) become
+    absolute paths: they are written in the plotting scripts, which failed when run from another
+    folder (plot_all.py)."""
+    import shutil
+    from bbarolo import Ellprof
+    (tmp_path / "Data" / "HI").mkdir(parents=True)
+    shutil.copy(N2403, tmp_path / "Data" / "HI" / "g.fits")
+    (tmp_path / "a" / "b").mkdir(parents=True)
+    monkeypatch.chdir(tmp_path / "a" / "b")
+    p = Param()
+    p.readParamString("FITSFILE ../../Data/HI/g.fits\nOUTFOLDER out\n")
+    assert p.checkPars(quiet=True)
+    assert p.imageFile == str(tmp_path / "Data" / "HI" / "g.fits") and p.outFolder == str(tmp_path / "a" / "b" / "out") + "/"
+    res = Ellprof("../../Data/HI/g.fits", nradii=5, radsep=60, xpos=77, ypos=77, inc=60, pa=123.7, verbose=False).run(
+        outfolder="out")
+    assert len(res.profile) == 5 and all(os.path.isabs(f) for f in res.files)

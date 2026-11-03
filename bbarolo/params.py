@@ -412,10 +412,13 @@ class Param:
                 for s in f:
                     s = checkHome(s.strip())
                     if s:
-                        self.images.append(s)
+                        self.images.append(os.path.abspath(s))
         else:
             self.imageFile = checkHome(self.imageFile)
             if self.imageFile != "":
+                # absolute paths (relative to the current folder): they are written in the plotting
+                # scripts and other outputs, which must work from any folder
+                self.imageFile = os.path.abspath(self.imageFile)
                 self.images.append(self.imageFile)
 
         if len(self.images) == 0:
@@ -427,8 +430,8 @@ class Param:
             self._beamConverted = True
 
         self.outFolder = checkHome(self.outFolder)
-        if self.outFolder != "" and not self.outFolder.endswith("/"):
-            self.outFolder += "/"
+        if self.outFolder != "":
+            self.outFolder = os.path.abspath(self.outFolder) + "/"
 
         if not self.verbose:
             self.showbar = False

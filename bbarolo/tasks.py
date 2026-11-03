@@ -1043,7 +1043,7 @@ class Task:
         else:
             tmp = tempfile.TemporaryDirectory(prefix="bbarolo_")
             of = tmp.name
-        of = of if of.endswith("/") else of + "/"
+        of = os.path.abspath(of) + "/"
         prm = self._all_params(outfolder=of, fitsfile=self._input_file(of))
         if not write and "PLOTS" not in self._params:
             prm["PLOTS"] = False

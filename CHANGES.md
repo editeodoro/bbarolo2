@@ -72,6 +72,10 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   results (the same chunks, seeds and order of the sums). The same for GALWIND.
 - **XPOS or YPOS from a ring file** (`file(path,col)`): the path was lowercased, so ring files in
   folders with capital letters were not found. **(C++)**
+- **Relative paths of FITSFILE, FITSLIST entries and OUTFOLDER** (e.g. `../../Data/HI/n5055.fits`)
+  were written as given in the plotting scripts, which then failed when run from another folder
+  (e.g. `plot_all.py` to redo the plots). They become absolute paths (relative to the current
+  folder) when the parameters are checked.
 - **Parameter files**: `inf` or `nan` given to an integer parameter (CDENS, NV, BOX, ...) raised
   an error; they are unreadable values, as in C++.
 
@@ -83,5 +87,7 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- The input file is recorded with its absolute path (in the HISTORY of the mask, the plotting
+  scripts and the printed parameters), and `Result.files` and `Result.outfolder` are absolute.
 - Output headers no longer carry the CD matrix of the input: the WCS is written as CDELT, plus PC
   when the axes are rotated (the same coordinates).
