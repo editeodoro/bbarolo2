@@ -658,8 +658,9 @@ class Cube:
             out[s == 0] = np.nan
             h.setCdelt(0, fac * self.head.Cdelt(0))
             h.setCdelt(1, fac * self.head.Cdelt(1))
-            h.setCrpix(0, round(self.head.Crpix(0) / float(fac)))
-            h.setCrpix(1, round(self.head.Crpix(1) / float(fac)))
+            # pixel k of the reduced grid covers pixels (k-1)*fac+1 ... k*fac of the original one
+            h.setCrpix(0, 0.5 + (self.head.Crpix(0) - 0.5) / float(fac))
+            h.setCrpix(1, 0.5 + (self.head.Crpix(1) - 0.5) / float(fac))
             h.calcArea()
             o = f"  Old beam size: {self.head.BeamArea():.6f} pixels"
             nn = f"  New beam size: {h.BeamArea():.6f} pixels"

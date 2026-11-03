@@ -298,6 +298,8 @@ def ConvertFluxUnits(argv, whichtype):
         factor = 1 / factor
         endbunit = "JY/BEAM"
     else:
+        from .bbutils import _jy_prefix
+        factor *= _jy_prefix(b)             # mJy/beam, uJy/beam
         endbunit = "K"
     if "*km/s" in b:
         endbunit += " * KM/S"

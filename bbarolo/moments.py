@@ -228,6 +228,8 @@ class MomentMap(Image2D):
         bmin = c.Head().Bmin() * arcsconv(c.Head().Cunit(1))
         dvel = abs(DeltaVel(c.Head()))
         val = self.array.astype(np.float64)
+        if isJY:
+            val = FluxtoJyBeam(val, c.Head())      # (the sum map is in the units of the cube, e.g. mJy/beam)
         if isK:
             val = val / (1360 * 21.106114 * 21.106114 / (bmaj * bmin))
         self.array = (8794 * val * dvel / (bmaj * bmin)).astype(np.float32)

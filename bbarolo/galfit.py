@@ -939,7 +939,9 @@ class Galfit:
         oldmpar, oldnfree = list(self.mpar), self.nfree
         for i in (INC, PA, VSYS, XPOS, YPOS, Z0):
             self.mpar[i] = False
-        self.nfree = int(self.mpar[VROT]) + int(self.mpar[VDISP]) + int(self.mpar[VRAD])
+        # VROT, VDISP, VRAD and DENS (free with FREE=ALL) stay free (C++ forgot DENS here, so with
+        # FREE=ALL the simplex was degenerate and the errors misaligned)
+        self.nfree = sum(self.mpar)
         if proceed:
             self.galfit()
         elif self.verb:

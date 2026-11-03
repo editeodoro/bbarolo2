@@ -95,6 +95,8 @@ def _wave_rest(h, zcent_default):
 
 
 _WAVE_UNITS = ("mum", "um", "micron", "a", "ang", "angstrom")
+# frequency units of the spectral axis -> Hz (rest frequencies are always in Hz)
+_FREQ_UNITS = {"hz": 1., "khz": 1E03, "mhz": 1E06, "ghz": 1E09}
 
 
 def AlltoVel(inval, h):
@@ -104,9 +106,9 @@ def AlltoVel(inval, h):
         return inval
     if cunit2 in ("m/s", "ms"):
         return inval / 1000.
-    if cunit2 in ("hz", "mhz"):
+    if cunit2 in _FREQ_UNITS:
         frest = h.Freq0() / (1 + h.Redshift())
-        return Freq2Vel(inval, frest, h.VelDef())
+        return Freq2Vel(inval * _FREQ_UNITS[cunit2], frest, h.VelDef())
     if cunit2 in _WAVE_UNITS:
         wrest = _wave_rest(h, h.Crpix(2) - 1)
         return Wave2Vel(inval, wrest, h.VelDef())
@@ -120,9 +122,9 @@ def Vel2Spec(inval, h):
         return inval
     if cunit2 in ("m/s", "ms"):
         return inval * 1000.
-    if cunit2 in ("hz", "mhz"):
+    if cunit2 in _FREQ_UNITS:
         frest = h.Freq0() / (1 + h.Redshift())
-        return Vel2Freq(inval, frest, h.VelDef())
+        return Vel2Freq(inval, frest, h.VelDef()) / _FREQ_UNITS[cunit2]
     if cunit2 in _WAVE_UNITS:
         wrest = _wave_rest(h, h.Crpix(2) - 1)
         return Vel2Wave(inval, wrest, h.VelDef())
@@ -141,15 +143,16 @@ def DeltaVel(h):
     i = np.arange(zdim - 1)
     ipix = (i + 1 - h.Crpix(2)) * h.Cdelt(2) + h.Crval(2)
     spix = (i + 2 - h.Crpix(2)) * h.Cdelt(2) + h.Crval(2)
-    if cunit2 in ("hz", "mhz"):
+    if cunit2 in _FREQ_UNITS:
+        fc = _FREQ_UNITS[cunit2]
         frest = h.Freq0() / (1 + h.Redshift())
         if h.VelDef() == "radio":
-            return -C_KMS * deltaV / frest
-        return float(np.sum(Freq2Vel(spix, frest, h.VelDef()) - Freq2Vel(ipix, frest, h.VelDef())) / (zdim - 1))
+            return -C_KMS * deltaV * fc / frest
+        return float(np.sum(Freq2Vel(spix * fc, frest, h.VelDef()) - Freq2Vel(ipix * fc, frest, h.VelDef()))
+                     / (zdim - 1))
     if cunit2 in _WAVE_UNITS:
+        # (radio velocities of a wavelength axis are not linear in wavelength: averaged as the others)
         wrest = _wave_rest(h, h.DimAx(2) / 2. - 1)
-        if h.VelDef() == "radio":
-            return -C_KMS * wrest / deltaV
         return float(np.sum(Wave2Vel(spix, wrest, h.VelDef()) - Wave2Vel(ipix, wrest, h.VelDef())) / (zdim - 1))
     return deltaV
 
@@ -162,14 +165,23 @@ def isFluxUnitKnown(h):
     return ("w.u." in b or "wu" in b) or ("jy" in b) or b in ("k", "k(tmb)")
 
 
+def _jy_prefix(b):
+    """Factor of a prefixed Jansky unit (mJy, uJy) to Jy (C++ took mJy as Jy)."""
+    if b.startswith("mjy"):
+        return 1E-3
+    if b.startswith(("ujy", "µjy", "μjy", "mujy")):
+        return 1E-6
+    return 1.
+
+
 def FluxtoJyBeam(inval, h):
     b = h.Bunit().lower().replace(" ", "")
     if "w.u." in b or "wu" in b:
         return inval * 5E-3
     if "jy/b" in b or "j/b" in b:
-        return inval
+        return inval * _jy_prefix(b)
     if "jy" in b and h.BeamArea() != 0:
-        return inval * h.BeamArea()
+        return inval * _jy_prefix(b) * h.BeamArea()
     if b in ("k", "k(tmb)"):
         return inval * (h.Bmaj() * 3600. * h.Bmin() * 3600.) / (1360. * 21.106 * 21.106)
     return inval

@@ -251,7 +251,8 @@ def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, 
         naz = max(int(3 * circ_pix + 0.5), 16)
         nrad = 2
         vrot, vrad, vvert = sr[1, ir], sr[2, ir], sr[3, ir]
-        sig = math.sqrt(sr[4, ir] * sr[4, ir] + sig_instr * sig_instr)
+        # (VDISP=0 with no instrumental broadening: a line narrower than a channel, in one channel)
+        sig = max(math.sqrt(sr[4, ir] * sr[4, ir] + sig_instr * sig_instr), 1e-6 * abs(chwidth))
         K = int(5.0 * sig / chwidth) + 2      # beyond 5 sigma: < 3e-7 of the line
         z0, dvdz, zcyl = sr[6, ir], sr[7, ir], sr[8, ir]
         sinc, cinc = math.sin(sr[9, ir]), math.cos(sr[9, ir])
@@ -262,7 +263,11 @@ def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, 
         # vertical samples: at least 4, and spaced by <~0.5 pixels once projected
         nzz = 1
         if z0 > 0 and nzq > 1:
-            nzz = min(max(4, int(6.0 * z0 * abs(sinc) / pixsize) + 1), nzq)
+            nz_pix = max(4, int(6.0 * z0 * abs(sinc) / pixsize) + 1)
+            # with a vertical gradient, consecutive samples (about 6*z0/nzz apart) must also differ
+            # by <~0.5 sigma in velocity, or the line profiles of the samples form a comb
+            nz_vel = int(12.0 * abs(dvdz) * z0 * abs(sinc) / sig) + 1 if dvdz != 0 else 1
+            nzz = min(max(nz_pix, nz_vel), nzq)
         if nzz != nzcur:
             _zquantiles(zq, nzz, ltype)
             nzcur = nzz
@@ -532,11 +537,15 @@ class GalmodSetup:
             if self.freq0 == 0:
                 self.freq0 = 0.1420405751786E10
             if len(gm.RESTFREQ) > 1:
-                self.relvel = np.array([AlltoVel(f * (1 + reds), h) * 1000. for f in gm.RESTFREQ])
+                # observed frequency of each line: f/(1+z) (C++ used f*(1+z))
+                self.relvel = np.array([AlltoVel(f / (1 + reds) / hz, h) * 1000. for f in gm.RESTFREQ])
                 self.relint = np.array(gm.RELINT, float)
         elif "velo" in sptype:
             self.axtyp = 4
-            msconv = 1. if cunit3 in ("m/s", "ms") else (1.0E03 if cunit3 == "km/s" else 1.0E-03)
+            # the units of AlltoVel and DeltaVel (C++ took any other unit, e.g. kms, as cm/s)
+            msconv = {"m/s": 1., "ms": 1., "km/s": 1.0E03, "kms": 1.0E03}.get(cunit3)
+            if msconv is None:
+                raise ValueError(f"GALMOD ERROR: unknown CUNIT3={cunit3}. Cannot convert to m/s.")
             self.freq0 = h.Freq0() / (1 + reds)
             if self.freq0 == 0:
                 self.freq0 = 0.1420405751786E10
@@ -711,7 +720,8 @@ class GalmodSetup:
         if nsub == 0:
             return out
         if gtype == "ANALYTIC":
-            nzq = 1 if not np.any(sr[6] > 0) else 64      # maximum number of vertical samples
+            # maximum number of vertical samples (more with a vertical gradient: see _galmod_analytic)
+            nzq = 1 if not np.any(sr[6] > 0) else (256 if np.any(sr[7] != 0) else 64)
             args = (sr, self.radsep, self.cdens, self.pixarea, self.cdelt[0], self.cdelt[1], self.crota2,
                     blo[0], blo[1], bhi[0], bhi[1], self.ltype, self.sig_instr, self._vedges,
                     self.relvel, self.relint, self.cd2i, nzq, self.axtyp, self.velsys, self.freq0,

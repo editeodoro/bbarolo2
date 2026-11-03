@@ -56,8 +56,8 @@ python3 -m pytest -q --ignore=tests/test_BBB tests   # 31 tests, about 1 minute
   biases are documented, not fixed: fixing them changes results with respect to C++).
 - Remove obsolete options cleanly: no deprecation shims and no warnings for old saved files
   (reading old formats silently is fine).
-- Document every behavioural change. `README.md` is now short, so ask the user where the
-  detailed documentation should go (in the Cowork phase it was the README).
+- Record every behavioural change and bug fix in `CHANGES.md` (under "Unreleased"), marking
+  with **(C++)** the bugs that are also in the C++ code.
 - Run the tests after every change.
 
 ## Conventions

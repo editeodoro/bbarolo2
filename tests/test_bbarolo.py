@@ -988,3 +988,134 @@ def test_bayesian_task(tmp_path, capsys):
     h.update(free=None)
     with pytest.raises(ValueError, match="give the free parameters"):
         h.run()
+
+
+# --------------------------------------------------------------------------
+# Fixes of November 2026 (CHANGES.md)
+# --------------------------------------------------------------------------
+def test_nelder_mead_keeps_clamped_point():
+    """The simplex of the initial guesses keeps the point clamped by the function, as in C++
+    (funcEllipse folds inc > 90 to 180 - inc): the minimum at 89.5 is found, not 90.5."""
+    from bbarolo.paramguess import NelderMead
+
+    def f(par):
+        if par[1] > 90:
+            par[1] = 180 - par[1]
+        return (par[0] - 10) ** 2 + 0.01 * (par[1] - 89.5) ** 2
+    res = NelderMead().minimize([9.5, 84.], [1., 8.4], f)
+    assert abs(res[1] - 89.5) < 0.01 and abs(res[0] - 10) < 0.01
+
+
+def test_reduce_spatial_crpix(synthetic_cube):
+    """Spatial REDUCE: the WCS of a reduced pixel is that of the centre of the pixels it averages."""
+    c = synthetic_cube
+    h = c.Head()
+    h.setCrpix(0, 33.)
+    h.setCrpix(1, 33.)
+    for fac in (2, 3):
+        r = c.Reduce(fac, "spatial").Head()
+        for i in (0, 1):
+            # reduced pixel 1 averages the original pixels 1..fac, centred at (1 + fac) / 2
+            x_old = (1 + fac) / 2.
+            assert np.isclose((1 - r.Crpix(i)) * r.Cdelt(i), (x_old - h.Crpix(i)) * h.Cdelt(i))
+
+
+@needs_data
+def test_analytic_dvdz_and_zero_width():
+    """ANALYTIC models: a lagging thick disk is sampled finely enough in height (its global
+    spectrum agrees with a converged MC model), and VDISP=0 with LINEAR=0 works."""
+    from bbarolo import DiskModel
+    c = Cube(N2403, par=Param(verbose=False))
+    dm = DiskModel(c, smooth=False)
+    r = Rings().setRings(radii=np.arange(15, 600, 30), xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8, z0=30,
+                         inc=80, phi=123.7, dens=1, dvdz=2., zcyl=5.)
+    a = dm.array(r, galmodtype="ANALYTIC").sum((0, 1))
+    dm.setup.cdens = 400.
+    ref = dm.array(r, galmodtype="MC", seed=3, threads=8).sum((0, 1))
+    assert np.abs(a - ref).max() / ref.max() < 0.04             # 0.146 before
+    c.pars().linear = 0.
+    dm = DiskModel(c, smooth=False)
+    r = Rings().setRings(radii=np.arange(15, 600, 30), xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=0, z0=0,
+                         inc=60, phi=123.7, dens=1)
+    assert np.isclose(dm.array(r, galmodtype="ANALYTIC").sum(), dm.array(r, galmodtype="MC").sum(), rtol=1e-6)
+
+
+def _freq_cube(path, unit, scale, f1, z):
+    from astropy.io import fits
+    h = fits.Header()
+    for k, v in dict(NAXIS=3, NAXIS1=64, NAXIS2=64, NAXIS3=120, CTYPE1="RA---SIN", CTYPE2="DEC--SIN", CTYPE3="FREQ",
+                     CRPIX1=32.5, CRPIX2=32.5, CRPIX3=40, CRVAL1=150., CRVAL2=30., CRVAL3=f1 / (1 + z) / scale,
+                     CDELT1=-10 / 3600., CDELT2=10 / 3600., CDELT3=-2e4 / scale, CUNIT1="deg", CUNIT2="deg",
+                     CUNIT3=unit, BMAJ=30 / 3600., BMIN=30 / 3600., BPA=0., BUNIT="JY/BEAM", RESTFREQ=f1,
+                     OBJECT="FREQ").items():
+        h[k] = v
+    fits.writeto(path, np.zeros((120, 64, 64), np.float32), h, overwrite=True)
+    return path
+
+
+def test_frequency_axes_lines_and_units(tmp_path):
+    """Frequency cubes: several lines at REDSHIFT > 0 sit at their velocities (C++ multiplied the rest
+    frequencies by 1+z and the model was empty), and MHz axes give the same model as Hz axes."""
+    from bbarolo import DiskModel
+    from bbarolo.bbutils import DeltaVel
+    f1, z, C = 1.420405751786e9, 0.01, 299792.458
+    f2 = f1 * (1 - 300 / C)
+    specs = []
+    for unit, scale in (("Hz", 1.), ("MHz", 1e6)):
+        p = Param()
+        p.readParamString(f"RESTFREQ {f1} {f2}\nRELINT 1 1\nREDSHIFT {z}\nVERBOSE false\n")
+        c = Cube(_freq_cube(str(tmp_path / f"f{unit}.fits"), unit, scale, f1, z), par=p)
+        assert np.isclose(DeltaVel(c.Head()), C * 2e4 / (f1 / (1 + z)), rtol=1e-4)
+        dm = DiskModel(c, smooth=False)
+        assert np.allclose(dm.setup.relvel / 1000., [0., 300.], atol=0.5)
+        r = Rings().setRings(radii=np.arange(15, 200, 30), xpos=31.5, ypos=31.5, vsys=0., vrot=100, vdisp=10, z0=0,
+                             inc=60, phi=45, dens=1)
+        specs.append(dm.array(r, galmodtype="ANALYTIC").sum((0, 1)))
+    assert specs[0].sum() > 0 and np.allclose(specs[0], specs[1], rtol=1e-6)
+
+
+@needs_data
+def test_velocity_flux_and_wavelength_units(tmp_path):
+    """CUNIT3=kms is km/s (C++ took it as cm/s: empty model), mJy/beam and uJy/beam are scaled to
+    Jy/beam, and radio velocities of a wavelength axis have the right channel width."""
+    from astropy.io import fits
+    from bbarolo import DiskModel
+    from bbarolo.bbutils import DeltaVel, FluxtoJyBeam
+    d, h0 = fits.getdata(N2403), fits.getheader(N2403)
+    assert h0["CUNIT3"].lower() == "m/s"
+    r = Rings().setRings(radii=np.arange(15, 600, 30), xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8, z0=10, inc=60,
+                         phi=123.7, dens=1)
+    flux = []
+    for cu, sc in (("m/s", 1.), ("kms", 1e-3)):
+        h = h0.copy()
+        h["CUNIT3"], h["CRVAL3"], h["CDELT3"] = cu, h0["CRVAL3"] * sc, h0["CDELT3"] * sc
+        fits.writeto(tmp_path / "u.fits", d, h, overwrite=True)
+        flux.append(DiskModel(Cube(str(tmp_path / "u.fits"), par=Param(verbose=False)), smooth=False).array(r).sum())
+    assert flux[1] > 0 and np.isclose(flux[0], flux[1])
+    for bu, fac in (("JY/BEAM", 1.), ("mJy/beam", 1e-3), ("uJy/beam", 1e-6)):
+        h = h0.copy()
+        h["BUNIT"] = bu
+        fits.writeto(tmp_path / "u.fits", d, h, overwrite=True)
+        assert FluxtoJyBeam(1., Cube(str(tmp_path / "u.fits"), par=Param(verbose=False)).Head()) == fac
+    h = fits.Header()
+    for k, v in dict(NAXIS=3, NAXIS1=8, NAXIS2=8, NAXIS3=50, CTYPE1="RA---SIN", CTYPE2="DEC--SIN", CTYPE3="WAVE",
+                     CUNIT1="deg", CUNIT2="deg", CUNIT3="Angstrom", CRPIX3=25, CRVAL3=6563., CDELT3=0.5, CDELT1=-1e-4,
+                     CDELT2=1e-4, BMAJ=3e-4, BMIN=3e-4, BUNIT="JY/BEAM").items():
+        h[k] = v
+    fits.writeto(tmp_path / "w.fits", np.zeros((50, 8, 8), np.float32), h, overwrite=True)
+    p = Param(verbose=False)
+    p.gf.RESTWAVE = [6563.]
+    p.ma.veldef = "radio"
+    assert np.isclose(DeltaVel(Cube(str(tmp_path / "w.fits"), par=p).Head()), 299792.458 * 0.5 / 6563., rtol=1e-3)
+
+
+@needs_data
+def test_free_all_two_stages_with_errors(tmp_path):
+    """FREE=ALL with two stages and FLAGERRORS: DENS stays free in the second stage and the errors
+    have one column per free parameter (C++: degenerate simplex; the port crashed)."""
+    from bbarolo import FitMod3D
+    res = FitMod3D(N2403, radii=[90, 210, 330], xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=8, z0=10, inc=60,
+                   pa=123.7, free="ALL", mask="SEARCH", flagerrors=True, twostage=True, threads=3, plots=False,
+                   verbose=False).run(outfolder=str(tmp_path))
+    cols = res.rings.colnames
+    assert {"e_vrot1", "e_vdisp1", "e_dens1", "e_vrad1"} <= set(cols) and len(res.rings) == 3

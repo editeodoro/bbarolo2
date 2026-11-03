@@ -40,6 +40,7 @@ class NelderMead:
             ptry = psum * fac1 - p[ihi] * fac2
             pl = list(ptry)
             ytry = func(pl)
+            ptry = np.asarray(pl, float)       # func may clamp the point in place (as in C++, keep it)
             if ytry < y[ihi]:
                 y[ihi] = ytry
                 psum[:] += np.asarray(ptry) - p[ihi]
