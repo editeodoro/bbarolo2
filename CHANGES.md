@@ -76,6 +76,8 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   were written as given in the plotting scripts, which then failed when run from another folder
   (e.g. `plot_all.py` to redo the plots). They become absolute paths (relative to the current
   folder) when the parameters are checked.
+- **Memory of long Bayesian samplings with a free centre, Z0 or RADMAX**: a kernel transform was
+  cached for every new model box size, without limit. Only the 32 most recent ones are kept now.
 - **Parameter files**: `inf` or `nan` given to an integer parameter (CDENS, NV, BOX, ...) raised
   an error; they are unreadable values, as in C++.
 

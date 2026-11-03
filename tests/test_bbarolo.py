@@ -1377,3 +1377,16 @@ def test_relative_paths(tmp_path, monkeypatch):
     res = Ellprof("../../Data/HI/g.fits", nradii=5, radsep=60, xpos=77, ypos=77, inc=60, pa=123.7, verbose=False).run(
         outfolder="out")
     assert len(res.profile) == 5 and all(os.path.isabs(f) for f in res.files)
+
+
+def test_fft_kernel_cache_is_bounded():
+    """The cache of kernel transforms keeps the most recent shapes only (it grew with every new box
+    size, e.g. in BayesianBBarolo with a free centre or RADMAX), and gives the same convolutions."""
+    from bbarolo.smooth import FFTConvolver
+    rng = np.random.default_rng(2)
+    cv = FFTConvolver(rng.random((7, 7)))
+    a = rng.random((3, 20, 24))
+    ref = cv(a)
+    for n in range(10, 10 + 3 * FFTConvolver.MAXCACHE):
+        cv(rng.random((n, n)))
+    assert len(cv._cache) == FFTConvolver.MAXCACHE and np.array_equal(cv(a), ref)

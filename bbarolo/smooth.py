@@ -9,6 +9,7 @@ channels at once, with the kernel transform cached for each array shape.
 
 import math
 import threading
+import collections
 import numpy as np
 import scipy.fft as sfft
 
@@ -96,12 +97,16 @@ def gaussian_scalefactor(oldbeam_rot, confie, gridspace):
 # FFT convolution engine ("same" linear convolution, as LINEAR_SAME in conv2D)
 # --------------------------------------------------------------------------
 class FFTConvolver:
-    """Convolve stacks of 2D images with a fixed kernel. Kernel FFTs are cached per shape."""
+    """Convolve stacks of 2D images with a fixed kernel. Kernel FFTs are cached per shape (the
+    MAXCACHE most recent shapes: with free centre, thickness or RADMAX, the likelihood of
+    BayesianBBarolo makes models in boxes of many sizes)."""
+
+    MAXCACHE = 32
 
     def __init__(self, kernel, workers=1):
         self.kernel = np.asarray(kernel, dtype=np.float64)
         self.workers = workers
-        self._cache = {}
+        self._cache = collections.OrderedDict()
         self._lock = threading.Lock()
 
     def __getstate__(self):
@@ -113,15 +118,20 @@ class FFTConvolver:
 
     def _kfft(self, ny, nx):
         key = (ny, nx)
-        k = self._cache.get(key)
-        if k is None:
-            ky, kx = self.kernel.shape
-            Ny = sfft.next_fast_len(ny + ky // 2, real=True)
-            Nx = sfft.next_fast_len(nx + kx // 2, real=True)
-            kf = sfft.rfft2(self.kernel, s=(Ny, Nx))
-            k = (Ny, Nx, kf)
-            with self._lock:
-                self._cache[key] = k
+        with self._lock:
+            k = self._cache.get(key)
+            if k is not None:
+                self._cache.move_to_end(key)
+                return k
+        ky, kx = self.kernel.shape
+        Ny = sfft.next_fast_len(ny + ky // 2, real=True)
+        Nx = sfft.next_fast_len(nx + kx // 2, real=True)
+        kf = sfft.rfft2(self.kernel, s=(Ny, Nx))
+        k = (Ny, Nx, kf)
+        with self._lock:
+            self._cache[key] = k
+            while len(self._cache) > self.MAXCACHE:
+                self._cache.popitem(last=False)
         return k
 
     def __call__(self, data, workers=None):
