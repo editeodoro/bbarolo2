@@ -34,3 +34,8 @@ packages = ["bbarolo"]
 
 [tool.setuptools.dynamic]
 version = {attr = "bbarolo._version.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# tests/test_BBB holds the author's own scripts, not tests
+addopts = "--ignore=tests/test_BBB"
