@@ -903,7 +903,7 @@ def test_bayesian_task(tmp_path, capsys):
     statistics and the plots), bbarolo.run and BayesianBBarolo.from_parfile."""
     pytest.importorskip("dynesty")
     from bbarolo import BayesianBBarolo
-    from bbarolo.bayesian import _task_fitter
+    from bbarolo.bayesian.task import _task_fitter
     from bbarolo.cli import main
     import bbarolo
     fn = _mock_cube(tmp_path)
@@ -1682,14 +1682,14 @@ def test_bayesian_pool_and_loaded_likelihood(tmp_path):
     fit (run_geometry: the total intensity map); the queue of an MPI pool follows its size."""
     pytest.importorskip("dynesty")
     import multiprocessing as mp
-    from bbarolo import bayesian
+    from bbarolo.bayesian import sampling
     f = _bayes_mock(tmp_path)
 
     def bad(theta, **kw):
         raise RuntimeError("failed likelihood")
     with pytest.raises(RuntimeError, match="failed likelihood"):
         f.run(freepar=['vrot_single'], threads=2, log_like=bad, verbose=False, sampler_kwargs=dict(nlive=15, seed=1))
-    assert not mp.active_children() and not bayesian._WORKER_REGISTRY and 'parent' not in bayesian._WORKER
+    assert not mp.active_children() and not sampling._WORKER_REGISTRY and 'parent' not in sampling._WORKER
     f.run_geometry(freepar=['inc_single'], threads=1, verbose=False, dynamic=False,
                    sampler_kwargs=dict(nlive=15, seed=1), run_kwargs=dict(maxiter=60))
     f.save_results(str(tmp_path / "geo.npy"))
@@ -1700,4 +1700,4 @@ def test_bayesian_pool_and_loaded_likelihood(tmp_path):
 
     class FakeMPIPool:
         size = 7
-    assert bayesian._queue_size(FakeMPIPool(), 1) == 28 and bayesian._queue_size(None, 3) == 12
+    assert sampling._queue_size(FakeMPIPool(), 1) == 28 and sampling._queue_size(None, 3) == 12

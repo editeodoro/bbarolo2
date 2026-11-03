@@ -170,6 +170,11 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **BayesianBBarolo is a package**, `bbarolo.bayesian` (it was a 2200-line module): the fitter,
+  the likelihood, the density profile, the samplers and the pool, the outputs, the noise and the
+  task in separate modules, and the setup of a fit in explicit steps (`_setup`). The imports
+  (`from bbarolo.bayesian import BayesianBBarolo, noise_correlation, dilate_mask`) and the
+  results do not change.
 - **Output file names**: every output is now `<prefix>_<what>` (the prefix is OUTPREFIX, by default
   the OBJECT of the header). Before, some names had no prefix and others had it without the
   underscore. The contents do not change. With the prefix `ngc2403`:

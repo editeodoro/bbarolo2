@@ -30,7 +30,7 @@ BBarolo = "bbarolo.cli:main"
 Homepage = "https://bbarolo.readthedocs.io"
 
 [tool.setuptools]
-packages = ["bbarolo"]
+packages = ["bbarolo", "bbarolo.bayesian"]
 
 [tool.setuptools.dynamic]
 version = {attr = "bbarolo._version.__version__"}
