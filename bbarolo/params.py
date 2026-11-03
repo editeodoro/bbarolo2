@@ -1091,8 +1091,8 @@ def bayes_options(opts, none=True):
 # Those of LIKE_SETUP set up the likelihood; sigma, fracerr and lambdas are passed to the
 # log-likelihood at each call (None: not given).
 LIKE_OPTIONS = dict(likemask="dilated", dilation=(1., 3), noisecorr="measured", densprof_smooth=0.1, bbres=False,
-                    sigma=None, fracerr=None, lambdas=None)
-LIKE_SETUP = ("likemask", "dilation", "noisecorr", "densprof_smooth", "bbres")
+                    radmax="ring", radmax_width=None, sigma=None, fracerr=None, lambdas=None)
+LIKE_SETUP = ("likemask", "dilation", "noisecorr", "densprof_smooth", "bbres", "radmax", "radmax_width")
 _LIKE_ALIASES = {"usebbres": "bbres", "likemask_dilation": "dilation"}
 
 
@@ -1110,6 +1110,12 @@ def bayes_like_option(name, value):
       densprof_smooth  smoothness of the deconvolved density profile (default 0.1; 0: none)
       bbres            True: the residuals of BBarolo's 3DFIT instead of the Gaussian
                        likelihood (also usebbres)
+      radmax           what the free parameter RADMAX is: 'ring' (default: the radius of the
+                       last ring, which moves), 'edge' (the outer edge of the disk, with the
+                       rings fixed: no emission beyond it) or 'taper' (a Gaussian edge of width
+                       radmax_width)
+      radmax_width     the width (sigma, arcsec) of the edge with radmax='taper' (default a
+                       quarter of the beam FWHM)
       sigma            fixed noise per voxel (default: the measured noise rms)
       fracerr          fixed fractional model error (default 0)
       lambdas          dict of smoothness penalties of the ring parameters, e.g. {'vrot': 1}"""
@@ -1156,11 +1162,16 @@ def bayes_like_option(name, value):
         if isinstance(value, (bool, np.bool_, int, np.integer)) and value in (0, 1):
             return key, bool(value)
         raise ValueError(f"bbres: true or false, not {value!r}")
+    if key == "radmax":
+        v = str(value).strip().lower()
+        if v not in ("ring", "edge", "taper"):
+            raise ValueError(f"radmax: 'ring', 'edge' or 'taper', not {value!r}")
+        return key, v
     if key == "lambdas":
         if not isinstance(value, dict):
             raise ValueError(f"lambdas: a dict of smoothness penalties, e.g. {{'vrot': 1}}, not {value!r}")
         return key, {bayes_name(k): number(v) for k, v in value.items()}
-    return key, number(value, positive=(key == "sigma"))         # densprof_smooth, sigma, fracerr
+    return key, number(value, positive=(key == "sigma"))         # densprof_smooth, sigma, fracerr, radmax_width
 
 
 def bayes_likeopts(opts):

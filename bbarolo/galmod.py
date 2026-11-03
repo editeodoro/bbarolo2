@@ -701,6 +701,9 @@ class GalmodSetup:
             vals = V[:, i1 - 1] + slope * dr
             vals[:, const] = V[:, [0]]
             sr[1:] = vals
+        edge = getattr(rings, "edge", None)
+        if edge is not None and nsub:
+            sr[5] *= edge_weights(sr[0] * 60., radsep * 60., float(edge), float(getattr(rings, "edgewidth", 0.)))
         nvtmp = self.nvpar if self.nvpar >= 1 else self.nsubs
         nv = np.where(sr[4] == 0, 1, nvtmp).astype(np.int64)
         return np.ascontiguousarray(sr), nv
@@ -957,6 +960,18 @@ def model_rings(rings, mode="CENTRED", subring=0.):
     return out
 
 
+def edge_weights(R, dr, edge, width=0.):
+    """Weights of the density of sub-rings at radii R (arcsec, each dr wide) for a disk with an
+    outer edge at the radius edge (arcsec): with width = 0 (a sharp edge), the fraction of each
+    sub-ring, R - dr/2 to R + dr/2, within edge (continuous in edge); with width > 0 (arcsec), a
+    Gaussian edge, 1/2 erfc((R - edge) / (sqrt(2) width))."""
+    from scipy.special import erfc
+    R = np.asarray(R, float)
+    if width > 0:
+        return 0.5 * erfc((R - edge) / (math.sqrt(2.) * width))
+    return np.clip((edge - (R - dr / 2.)) / dr, 0., 1.) if dr > 0 else (R <= edge).astype(float)
+
+
 def outer_edge(rings, mode="CENTRED"):
     """Outer radius (arcsec) of the disk of the rings with a ring convention."""
     mode = ringmode_name(mode)
@@ -1095,7 +1110,8 @@ class DiskModel:
         """Weights of the densities of the rings in the sub-rings of the model (the densities
         are interpolated linearly between the radii, with the ring convention): arrays
         (nsub, 2) of ring indices (-1: none) and weights. Cached by radii and convention."""
-        key = (tuple(np.asarray(rings.radii, float)), float(rings.radsep), ringmode)
+        key = (tuple(np.asarray(rings.radii, float)), float(rings.radsep), ringmode, getattr(rings, "edge", None),
+               float(getattr(rings, "edgewidth", 0.)))
         cache = self.__dict__.setdefault("_wcache", {})
         if key in cache:
             return cache[key]

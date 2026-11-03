@@ -309,6 +309,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         self.useBBres = bool(self.like_kwargs.get('bbres', False))
         self._parse_freepar(freepar)
         self._setup_engine()
+        self._setup_radmax()
         self._freeze_priors()
         self._setup_likelihood()
         self._setup_fit_rings()
@@ -364,6 +365,21 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             self.mask = c.Mask()
             self.data = c.array
             self._setup_noise()
+
+    def _setup_radmax(self):
+        """ What the free parameter RADMAX is (like_kwargs radmax): 'ring', the radius of the last
+        ring (which moves, with its annulus: the default); 'edge', the outer edge of the disk, with
+        the rings fixed (the model has no emission beyond it: see galmod.edge_weights); 'taper', a
+        Gaussian edge of width radmax_width (default a quarter of the beam FWHM). With CENTRED or
+        SHIFTED rings the default prior is the same interval in the three cases, the last ring:
+        its radius +- half the ring separation. """
+        self._radmax_mode = str(self.like_kwargs.get('radmax') or 'ring')
+        w = self.like_kwargs.get('radmax_width')
+        if self._radmax_mode != 'taper':
+            w = 0.
+        elif w is None:
+            w = 0.25 * abs(self._cube_obj.Head().Bmaj()) * 3600.
+        self._radmax_width = float(w)
 
     def _freeze_priors(self):
         """ The priors of the free parameters as frozen distributions, prior_distr (sigma: None
@@ -533,6 +549,11 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             if self.useNorm and not useBBres:
                 print(f"Density profile: deconvolved (fit of the total intensity map with the beam-convolved "
                       f"rings, smoothness {self.like_kwargs['densprof_smooth']:g})")
+            if 'radmax' in self.freepar_idx:
+                print(dict(ring="RADMAX: the radius of the last ring (the ring moves)",
+                           edge="RADMAX: the outer edge of the disk (sharp; the rings do not move)",
+                           taper=f"RADMAX: the outer edge of the disk (Gaussian, width {self._radmax_width:.3g} "
+                                 "arcsec; the rings do not move)")[self._radmax_mode])
             self.print_priors()
         self._check_likelihood(like_kwargs, custom, verbose)
 
@@ -640,7 +661,10 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         """ Update rings with the parameters theta """
         freepar_idx = copy.copy(self.freepar_idx)
         if 'radmax' in freepar_idx:
-            rings.r['radii'][-1] = theta[freepar_idx['radmax']][0]
+            if getattr(self, '_radmax_mode', 'ring') == 'ring':
+                rings.r['radii'][-1] = theta[freepar_idx['radmax']][0]
+            else:                                   # the outer edge of the disk (the rings do not move)
+                rings.edge, rings.edgewidth = float(theta[freepar_idx['radmax']][0]), self._radmax_width
         whatFunctional = np.unique([key.split('_')[0] for key in freepar_idx if '_p' in key])
         for p in whatFunctional:
             keys = [key for key in freepar_idx if key.startswith(p + '_p')]

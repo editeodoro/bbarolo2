@@ -11,11 +11,17 @@ RING_KEYS = ("radii", "xpos", "ypos", "vsys", "vrot", "vdisp", "vrad", "vvert",
 
 
 class Rings:
-    """A set of tilted rings. Each parameter is a float64 numpy array of length nr."""
+    """A set of tilted rings. Each parameter is a float64 numpy array of length nr.
+
+    edge (arcsec, default None): the outer edge of the disk of the model, within the rings: the
+    density of the model beyond it is zero (edgewidth = 0: a sharp edge) or falls as
+    1/2 erfc((R - edge) / (sqrt(2) edgewidth)) (edgewidth > 0, arcsec: a Gaussian edge). See
+    galmod.edge_weights. Used by BayesianBBarolo for RADMAX."""
 
     def __init__(self, nr=0):
         self.radsep = 0.            # (as in C++; -1 shrank SHIFTED disks by 0.5)
         self.id = 0
+        self.edge, self.edgewidth = None, 0.
         for k in RING_KEYS:
             setattr(self, k, np.zeros(nr))
 
@@ -26,6 +32,7 @@ class Rings:
     def copy(self):
         r = Rings()
         r.radsep, r.id = self.radsep, self.id
+        r.edge, r.edgewidth = self.edge, self.edgewidth
         for k in RING_KEYS:
             setattr(r, k, np.array(getattr(self, k), dtype=float, copy=True))
         return r
@@ -55,6 +62,7 @@ class Rings:
     def subset(self, idx):
         r = Rings()
         r.radsep, r.id = self.radsep, self.id
+        r.edge, r.edgewidth = self.edge, self.edgewidth
         for k in RING_KEYS:
             setattr(r, k, np.atleast_1d(np.asarray(getattr(self, k))[idx]).astype(float))
         return r

@@ -290,9 +290,10 @@ class LikelihoodMixin(object):
             blo, bhi = [0, 0], [xs, ys]
         else:
             rings = self._inri.object.copy()
-            rings.radii[-1] = upper('radmax', float(rings.radii[-1]))
-            if 'radmax' in self.freepar_idx and rings.nr > 1:
-                rings.radsep = float(np.float32(rings.radii[-1] - rings.radii[-2]))
+            if self._radmax_mode == 'ring':             # (otherwise the edge is within the rings)
+                rings.radii[-1] = upper('radmax', float(rings.radii[-1]))
+                if 'radmax' in self.freepar_idx and rings.nr > 1:
+                    rings.radsep = float(np.float32(rings.radii[-1] - rings.radii[-2]))
             rings.z0[-1] = upper('z0', float(np.max(rings.z0)))
             xp, yp = float(rings.xpos[-1]), float(rings.ypos[-1])
             corners = []
@@ -319,8 +320,8 @@ class LikelihoodMixin(object):
         r = self._inri.r
         radii = np.asarray(r['radii'], float)
         radsep = float(radii[-1] - radii[-2]) if len(radii) > 1 else 0.
-        rout = upper('radmax', float(radii[-1]))
-        if 'radmax' in self.freepar_idx and len(radii) > 1:
+        rout = upper('radmax', float(radii[-1])) if self._radmax_mode == 'ring' else float(radii[-1])
+        if 'radmax' in self.freepar_idx and len(radii) > 1 and self._radmax_mode == 'ring':
             radsep = rout - float(radii[-2])
         rout += radsep / 2.
         z0max = upper('z0', float(np.max(r['z0'])))

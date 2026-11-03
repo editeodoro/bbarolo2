@@ -939,7 +939,7 @@ def test_bayesian_task(tmp_path, capsys):
     g.load_results(str(cli / "MOCK_dynesty_results.npy"))
     assert g.freepar_names == ['vrot', 'vdisp'] and 100 < g.params[0] < 200
     assert g.like_kwargs == dict(likemask='dilated', dilation=(1., 3), noisecorr='measured', densprof_smooth=0.1,
-                                 bbres=False)
+                                 bbres=False, radmax='ring', radmax_width=None)
     capsys.readouterr()
     # bbarolo.run (the same parameters, quiet, no plots): a Result with the fitter
     res = bbarolo.run(str(par), outfolder=str(tmp_path / "run"), verbose=False, plots=False,
@@ -1749,3 +1749,44 @@ def test_bayesian_geometry_model_error(tmp_path):
     g.run_geometry("inc_single fracerr", threads=1, verbose=False, dynamic=False,
                    sampler_kwargs=dict(nlive=15, seed=1), run_kwargs=dict(maxiter=60))
     assert g.freepar_names == ['inc', 'fracerr'] and np.all(np.isfinite(g.params))
+
+
+def test_bayesian_radmax_edge(tmp_path):
+    """RADMAX as the outer edge of the disk (like_kwargs radmax='edge' or 'taper'): the rings do not
+    move, the model has no emission beyond the edge (also with the deconvolved density profile), and
+    the likelihood is continuous in RADMAX; radmax='ring' (default) moves the last ring."""
+    pytest.importorskip("dynesty")
+    from bbarolo.galmod import edge_weights
+    assert np.allclose(edge_weights([10., 20., 30.], 10., 20.), [1., 0.5, 0.])
+    assert np.allclose(edge_weights([20.], 10., 20., 5.), 0.5)
+    f = _bayes_mock(tmp_path)
+    f._set_like_options(dict(radmax='edge'))
+    f._setup(['vrot_single', 'radmax'])
+    assert f.prior_distr['radmax'].ppf(0.) == 120. and f.prior_distr['radmax'].ppf(1.) == 160.
+    r0 = np.array(f._fit0.r['radii'])
+    L = [f._log_likelihood(np.array([150., e])) for e in np.linspace(125., 160., 36)]
+    assert np.all(np.isfinite(L)) and np.max(np.abs(np.diff(L))) < 0.2 * np.ptp(L)
+    rings = f._update_rings(f._fit0.copy(), np.array([150., 130.]))
+    f._set_density(rings)
+    assert np.array_equal(rings.r['radii'], r0) and rings.object.edge == 130.
+    model = f._galfit.model.array(rings.object)
+    yy, xx = np.mgrid[:64, :64]
+    dx, dy = (xx - 31.5) * 10., (yy - 31.5) * 10.
+    sp, cp = np.sin(np.radians(45.)), np.cos(np.radians(45.))
+    rr = np.hypot(-dx * sp + dy * cp, (-dx * cp - dy * sp) / np.cos(np.radians(60.)))
+    reach = {}                                   # the largest radius with emission (not convolved)
+    for e in (100., 130., None):
+        r = rings.object.copy()
+        r.edge = e
+        raw = f._galfit.model.setup.build(r, (0, 0), (64, 64)).sum(axis=0)
+        reach[e] = rr[raw > 0].max()
+    # (pixels of 10" at INC 60: the centre of a pixel is up to 2 x 7" from the points of the disk in it)
+    assert reach[100.] <= 115. and reach[100.] < reach[130.] <= 145. and reach[130.] < reach[None]
+    assert 0 < model.sum()
+    g = _bayes_mock(tmp_path, outfolder=str(tmp_path / "g"))
+    g._set_like_options(dict(radmax='taper', radmax_width=8.))
+    g._setup(['vrot_single', 'radmax'])
+    assert g._radmax_width == 8. and np.isfinite(g._log_likelihood(np.array([150., 140.])))
+    h = _bayes_mock(tmp_path, outfolder=str(tmp_path / "h"))
+    h._setup(['vrot_single', 'radmax'])                       # 'ring': the last ring moves
+    assert h._update_rings(h._fit0.copy(), np.array([150., 130.])).r['radii'][-1] == 130.

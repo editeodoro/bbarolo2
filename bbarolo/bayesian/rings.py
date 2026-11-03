@@ -18,6 +18,7 @@ class _RingDict(object):
         self.nr = int(nrings)
         self.r = {k: None for k in PARAMS}
         self.object = None
+        self.edge, self.edgewidth = None, 0.        # the outer edge of the disk (RADMAX: 'edge', 'taper')
 
     @classmethod
     def from_rings(cls, rings):
@@ -30,6 +31,7 @@ class _RingDict(object):
     def copy(self):
         rd = _RingDict(self.nr)
         rd.r = {k: np.array(v) for k, v in self.r.items()}
+        rd.edge, rd.edgewidth = self.edge, self.edgewidth
         rd.make_object()
         return rd
 
@@ -56,5 +58,6 @@ class _RingDict(object):
         r = Rings()
         r.setRings(**{k: np.asarray(v, dtype=np.float64) for k, v in self.r.items()})
         r.radsep = float(np.float32(self.r['radii'][-1] - self.r['radii'][-2])) if self.nr > 1 else 0.
+        r.edge, r.edgewidth = self.edge, self.edgewidth
         self.object = r
         return r

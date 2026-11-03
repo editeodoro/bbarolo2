@@ -116,6 +116,15 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **RADMAX as the outer edge of the disk** (BayesianBBarolo, `like_kwargs` / LIKEOPTS
+  `radmax`), to compare with the RADMAX of the original module, which moves the last ring (so the
+  posterior of that ring mixes different annuli): `radmax=edge` keeps the rings and the model has
+  no emission beyond RADMAX (a sharp edge, continuous in RADMAX: each sub-ring of the model
+  weighted by its fraction within the edge), `radmax=taper` a Gaussian edge of width
+  `radmax_width` (default a quarter of the beam FWHM). The default, `radmax=ring`, does not
+  change. The model engine has the edge too (`Rings.edge`, `Rings.edgewidth`), also in the
+  density profile. `performance/radmax.py` compares the ways of fitting the edge on simulated
+  disks.
 - **`run_geometry` with a model error**: `fracerr` and `sigma` (free, or given in `like_kwargs`)
   in the likelihood of the total intensity map, as in that of the cube. The map of a real galaxy
   has structure that an axisymmetric disk does not reproduce: on NGC 2403 the residuals are
