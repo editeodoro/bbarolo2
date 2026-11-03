@@ -120,7 +120,7 @@ def helpscreen(stream=None):
 def versionInfo(stream=None):
     import numba, scipy, astropy
     stream = stream or sys.stdout
-    stream.write(f"\nThis is BBarolo version {__version__} (pure-Python port of BBarolo {__cpp_reference__})\n"
+    stream.write(f"\nThis is BBarolo version {__version__}\n"
                  f"\nExecutable: {sys.argv[0]}\n"
                  f"Python {sys.version.split()[0]}, numpy {np.__version__}, scipy {scipy.__version__}, "
                  f"astropy {astropy.__version__}, numba {numba.__version__}\n\n")
