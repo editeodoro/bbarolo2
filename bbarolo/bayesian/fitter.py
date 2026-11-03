@@ -549,6 +549,12 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             if self.useNorm and not useBBres:
                 print(f"Density profile: deconvolved (fit of the total intensity map with the beam-convolved "
                       f"rings, smoothness {self.like_kwargs['densprof_smooth']:g})")
+            if not useBBres and (log_like is None or log_like == self._log_likelihood_geometry):
+                fb = self._flux_beyond_rings()
+                if fb > 0.05:
+                    print(f"WARNING: {fb:.0%} of the flux of the total intensity map lies beyond the outermost ring "
+                          "(+ half a beam,\n         at the initial geometry): the model cannot reproduce it, and "
+                          "with a wide prior\n         of INC it biases INC low. Extend the rings to the whole disk.")
             if 'radmax' in self.freepar_idx:
                 print(dict(ring="RADMAX: the radius of the last ring (the ring moves)",
                            edge="RADMAX: the outer edge of the disk (sharp; the rings do not move)",
@@ -627,11 +633,15 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
 
     def run_geometry(self, freepar=('xpos_single', 'ypos_single', 'inc_single', 'phi_single'), **kwargs):
         """ Fit only the geometry of the model on the total intensity map (Cannubi-style; see
-        _log_likelihood_geometry). On real galaxies add 'fracerr' (or 'sigma') to the free
-        parameters: the structure of the map that the model does not reproduce otherwise makes
-        the posterior extremely narrow and the sampling slow. The map does not change with
-        PA -> PA + 180: restrict the prior of phi to one half (the default, 0-360, gives two
-        modes). """
+        _log_likelihood_geometry). On real galaxies:
+          * add 'sigma' to the free parameters: the structure of the map that the model does not
+            reproduce otherwise makes the posterior extremely narrow and the sampling slow
+            (NGC 2403: 81 s on 16 processes with sigma, no convergence in 20 minutes without);
+            'fracerr' is not suitable here (it weights the faint outer disk);
+          * let the rings cover the whole disk (a warning tells when they do not): the emission
+            beyond them biases INC low;
+          * restrict the prior of phi to one half: the map does not change with PA -> PA + 180
+            (the default prior, 0-360, gives two modes). """
         from ..params import bayes_name
         allowed = {'xpos_single', 'ypos_single', 'inc_single', 'phi_single', 'z0_single', 'dens', 'dens_single',
                    'dens_func', 'radmax', 'sigma', 'fracerr'}

@@ -1790,3 +1790,18 @@ def test_bayesian_radmax_edge(tmp_path):
     h = _bayes_mock(tmp_path, outfolder=str(tmp_path / "h"))
     h._setup(['vrot_single', 'radmax'])                       # 'ring': the last ring moves
     assert h._update_rings(h._fit0.copy(), np.array([150., 130.])).r['radii'][-1] == 130.
+
+
+def test_bayesian_flux_beyond_rings(tmp_path, capsys):
+    """A warning when the rings do not cover the disk: the emission beyond them, in the region of the
+    likelihood (that of the lowest INC allowed), biases the geometry."""
+    pytest.importorskip("dynesty")
+    f = _bayes_mock(tmp_path)
+    f._setup(['vrot_single'])
+    assert f._flux_beyond_rings() < 0.05
+    g = _bayes_mock(tmp_path, radii=[20., 60.], outfolder=str(tmp_path / "g"))
+    g._setup(['vrot_single'])
+    assert g._flux_beyond_rings() > 0.05
+    g.run(freepar=['vrot_single'], threads=1, dynamic=False, sampler_kwargs=dict(nlive=15, seed=1),
+          run_kwargs=dict(maxiter=20, print_progress=False))
+    assert "lies beyond the outermost ring" in capsys.readouterr().out

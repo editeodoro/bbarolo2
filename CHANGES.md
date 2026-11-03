@@ -125,14 +125,21 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   change. The model engine has the edge too (`Rings.edge`, `Rings.edgewidth`), also in the
   density profile. `performance/radmax.py` compares the ways of fitting the edge on simulated
   disks.
-- **`run_geometry` with a model error**: `fracerr` and `sigma` (free, or given in `like_kwargs`)
-  in the likelihood of the total intensity map, as in that of the cube. The map of a real galaxy
-  has structure that an axisymmetric disk does not reproduce: on NGC 2403 the residuals are
-  about 30 times the noise in each pixel, so without a model error the posterior is extremely
-  narrow (the centre within 0.006 pixels), the errors meaningless and the sampling very slow
-  (a run with 100 live points did not converge in 20 minutes on 8 processes). Without them the
-  values do not change. (A total intensity map does not change with PA → PA + 180°: with the
-  default prior of PA, 0–360°, the posterior of `run_geometry` has two modes.)
+- **`run_geometry` with a model error**: `sigma` and `fracerr` (free, or given in `like_kwargs`)
+  in the likelihood of the total intensity map, as in that of the cube; without them the values
+  do not change. The map of a real galaxy has structure that an axisymmetric disk does not
+  reproduce: on NGC 2403 the residuals are about 20 times the noise in each pixel, so without a
+  model error the posterior is extremely narrow (the centre within 0.006 pixels), the errors
+  meaningless and the sampling very slow (100 live points: no convergence in 20 minutes on 8
+  processes). With `sigma` free (it scales the noise of all the pixels) the fit converges in
+  81 s on 16 processes: INC 50.9 ± 0.5°, PA 122.4 ± 0.7°, σ = 17.5 times the noise. `fracerr`
+  does not suit the map: it weights the faint outer disk, and drove INC to 0.
+- **Warning when the rings do not cover the disk** (BayesianBBarolo): more than 5% of the flux of
+  the total intensity map beyond the outermost ring (+ half a beam). The region of the likelihood
+  is that of the lowest INC allowed by the prior, so with a wide prior that emission biases INC
+  low: on NGC 2403, with rings to 720" (8% of the flux beyond), the map gave INC 30–45° instead
+  of 51°. A total intensity map does not change with PA → PA + 180°: restrict the prior of PA in
+  `run_geometry` (the default, 0–360°, gives two modes).
 - **`performance/bayes_coverage.py`**: warped, thick and lagging disks (`--kind`), Monte-Carlo
   fits (`--galmodtype MC`), 3DFIT on the same cubes (`--fit3d`), and the errors of the medians
   in the summary.

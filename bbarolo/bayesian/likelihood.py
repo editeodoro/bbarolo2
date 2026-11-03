@@ -526,12 +526,15 @@ class LikelihoodMixin(object):
         noisecorr=N), as in _log_likelihood.
 
         The map of a real galaxy has structure that an axisymmetric disk does not reproduce, often
-        far above the noise (NGC 2403: about 30 times the noise in each pixel): the posterior is
+        far above the noise (NGC 2403: about 20 times the noise in each pixel): the posterior is
         then extremely narrow (the errors are too small) and the sampling slow. As in
         _log_likelihood, a model error widens it: 'sigma' (the noise per voxel, free or given; the
         noise of the map is map_rms * sigma / noiserms) and 'fracerr' (free or given: the variance
         of a pixel is that of the noise plus (fracerr * model)^2), with the normalisation of the
-        Gaussian (relative to map_rms, so that the values without them do not change).
+        Gaussian (relative to map_rms, so that the values without them do not change). 'sigma'
+        scales the noise of all the pixels: the best geometry is that of the likelihood without
+        it, and the posterior gets a realistic width. 'fracerr' instead weights the pixels where the
+        model is faint, the outer disk: on NGC 2403 it drove INC to zero (and fracerr to 1).
         """
         rings = self._update_rings(self._work, theta)
         if self._negative(rings, theta):
@@ -560,6 +563,28 @@ class LikelihoodMixin(object):
                 v = v + (float(eps) * map_mod[ok]) ** 2
             res = 0.5 * np.nansum((map_data[ok] - map_mod[ok]) ** 2 / v + np.log(v / s2))
         return -self.likefactor2d * res
+
+    def _flux_beyond_rings(self):
+        """ The fraction of the flux of the total intensity map of the likelihood (data_mom0, in the
+        region) beyond the outer edge of the initial rings plus half a beam, at their geometry (that
+        of the last ring). The model cannot reproduce it, and the region of the likelihood is that
+        of the lowest INC allowed by the prior: with a wide prior of INC, it biases INC low (NGC
+        2403, rings to 720" with 8% of the flux beyond them: the INC of the map 30-45 instead of
+        51 deg, and 0 with fracerr). """
+        from ..galmod import outer_edge
+        h = self._cube_obj.Head()
+        pix = 0.5 * (abs(h.Cdelt(0)) + abs(h.Cdelt(1))) * 3600.
+        r = self._inri.r
+        edge = outer_edge(self._inri.object, self._galfit.model.ringmode) + 0.5 * abs(h.Bmaj()) * 3600.
+        ny, nx = self.data_mom0.shape
+        yy, xx = np.mgrid[:ny, :nx]
+        dx, dy = (xx - float(r['xpos'][-1])) * pix, (yy - float(r['ypos'][-1])) * pix
+        sp, cp = math.sin(math.radians(float(r['phi'][-1]))), math.cos(math.radians(float(r['phi'][-1])))
+        cinc = max(math.cos(math.radians(float(r['inc'][-1]))), 1e-3)
+        rr = np.hypot(-dx * sp + dy * cp, (-dx * cp - dy * sp) / cinc)
+        m = self._region & np.isfinite(self.data_mom0)
+        tot = float(np.sum(self.data_mom0[m]))
+        return float(np.sum(self.data_mom0[m & (rr > edge)]) / tot) if tot > 0 else 0.
 
     def chi2_reduced(self, theta=None, fracerr=False):
         """ Reduced chi-square of the (Gaussian) likelihood for the parameters theta (default:
