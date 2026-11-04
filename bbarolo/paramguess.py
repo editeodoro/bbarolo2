@@ -139,7 +139,7 @@ class ParamGuess:
         self.xcentre = self.ycentre = self.vsystem = self.inclin = self.posang = self.Rmax = self.vrot = 0.
         self.nrings = 0
         self.vdisp = None             # (GUESSTYPE FIT) velocity dispersion from the second moment
-        self.z0_given = 0.            # (FIT) the thickness of the map model: Z0 if given (arcsec), else 0
+        self.z0_given = 0.            # (FIT) the thickness of the map model (arcsec): Z0, or its default
         self.rad_profile, self.inc_profile, self.pa_profile = [], [], []   # (FIT) radial profiles
         self.mode = "LEGACY"         # GUESSTYPE: LEGACY (as C++), ELLIPSE (C++ corrected) or FIT
         self.major_max = [0, 0]; self.major_min = [0, 0]
@@ -694,8 +694,8 @@ def EstimateInitial(c, p):
             if given["vrot"]: ip.vrot = _given(p.VROT)
             elif given["inclin"]: ip.findRotationVelocity()
     if ip.mode == "FIT":
-        if p.Z0 != "-1":
-            ip.z0_given = _given(p.Z0)
+        from .galfit import default_z0
+        ip.z0_given = _given(p.Z0) if p.Z0 != "-1" else default_z0(c.Head())
         ip.fitGeometry({k: not v for k, v in given.items()})
     if c.pars().plots >= 2:
         ip.plotGuess(c.pars().outPrefix + "_initialguesses.pdf")

@@ -1866,3 +1866,23 @@ def test_bayesian_flux_beyond_rings(tmp_path, capsys):
     g.run(freepar=['vrot_single'], threads=1, dynamic=False, sampler_kwargs=dict(nlive=15, seed=1),
           run_kwargs=dict(maxiter=20, print_progress=False))
     assert "lies beyond the outermost ring" in capsys.readouterr().out
+
+
+def test_z0_default_one_pixel(tmp_path):
+    """Z0 not given: the fits (3DFIT and BayesianBBarolo) use a thin disk, one pixel (10" here), not a disk
+    with no thickness; GALMOD needs Z0."""
+    pytest.importorskip("dynesty")
+    import copy
+    from bbarolo.galfit import initial_rings
+    f = _bayes_mock(tmp_path, z0=None)
+    assert np.allclose(f._inri.r['z0'], 10.)
+    fn = str(tmp_path / "mock.fits")
+    rings = f"RADII 20 60\nXPOS 31.5\nYPOS 31.5\nVSYS 0\nVROT 120\nVDISP 15\nINC 60\nPA 45\n"
+    p = Param()
+    p.readParamString(f"FITSFILE {fn}\n3DFIT true\n{rings}MASK NONE\nVERBOSE 0\nOUTFOLDER {tmp_path}/\n")
+    c = Cube(fn, par=p)
+    ini = initial_rings(c, copy.deepcopy(p.gf), write=False)
+    assert np.allclose(ini.rings.z0, 10.) and ini.estimated["Z0"]
+    g = Param()
+    g.readParamString(f"FITSFILE {fn}\nGALMOD true\n{rings}")
+    assert not g.checkPars(quiet=True)

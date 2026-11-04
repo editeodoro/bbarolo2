@@ -208,7 +208,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         3DFIT), and the default priors. """
         from ..rings import readRings
         from ..paramguess import EstimateInitial
-        from ..galfit import ringfile_values
+        from ..galfit import ringfile_values, default_z0
         c = self._cube_obj if self._cube_obj is not None else self._load_cube()
         par = copy.deepcopy(c.pars().gf)
         ringfile_values(par)                     # RINGFILE: the values not given
@@ -229,8 +229,8 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             if par.VROT == "-1": par.VROT = repr(float(ip.vrot))
             if par.INC == "-1": par.INC = repr(float(ip.inclin))
             if par.PHI == "-1": par.PHI = repr(float(ip.posang))
-        for k, v in (("VDISP", "8.0"), ("Z0", "0.0"), ("VRAD", "0.0"), ("DENS", "1.0"), ("VVERT", "0.0"),
-                     ("DVDZ", "0.0"), ("ZCYL", "0.0")):
+        for k, v in (("VDISP", "8.0"), ("Z0", repr(default_z0(c.Head()))), ("VRAD", "0.0"), ("DENS", "1.0"),
+                     ("VVERT", "0.0"), ("DVDZ", "0.0"), ("ZCYL", "0.0")):
             if getattr(par, k) == "-1":
                 setattr(par, k, v)
         inR = readRings(par, c.Head())

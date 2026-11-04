@@ -200,6 +200,11 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **Default Z0: one pixel.** When Z0 is not given, 3DFIT, BAYESIAN3DFIT, SPACEPAR and the initial
+  estimates (GUESSTYPE FIT) use a thin disk, one pixel thick, instead of a disk with no thickness (C++:
+  Z0 = 0). GALMOD still needs Z0. The examples give Z0, so their outputs do not change. On NGC 2403
+  (pixel 16", beam 59", INC, PA, VROT and VDISP free, one stage) the medians over the 42 rings change
+  by −0.2° in INC, +0.6 km/s in VROT and less than 0.05 in PA and VDISP.
 - **No DISTANCE: the outputs are in arcsec.** DISTANCE only converted arcsec to kpc in the outputs
   (no fit, model or likelihood used it; without it the distance was VSYS/70 Mpc). It is gone, and so
   is what it gave:

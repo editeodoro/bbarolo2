@@ -275,13 +275,19 @@ def check_vsys(c, rings, fatal=True):
     print(f" WARNING: {msg}")
 
 
+def default_z0(h):
+    """The default scale height of the fits (arcsec), when Z0 is not given: one pixel of the header h, a
+    thin disk. (C++ uses 0, a disk with no thickness.)"""
+    return float(h.PixScale() * arcsconv(h.Cunit(0)))
+
+
 def initial_rings(c, par, galmod=False, write=True):
     """The initial rings of 3DFIT, or the rings of GALMOD (galmod=True), from the
     parameters par (a GalfitPar; changed in place: the values that are not given are set).
 
     Values not given are read from RINGFILE, estimated from the data (centre, systemic and
     rotation velocity, inclination, position angle, number and width of the rings), or set
-    to the defaults (VDISP=8, Z0=0, VRAD=0, DENS=1, VVERT=0, DVDZ=0, ZCYL=0). With write=True
+    to the defaults (VDISP=8, Z0=one pixel, VRAD=0, DENS=1, VVERT=0, DVDZ=0, ZCYL=0). With write=True
     the rings are written in rings_model.txt (GALMOD) or rings_initial.txt (3DFIT).
 
     Returns a namespace with: rings (a Rings object), fromfile (the rings were read from a
@@ -313,7 +319,7 @@ def initial_rings(c, par, galmod=False, write=True):
     if par.VDISP == "-1":
         # (GUESSTYPE FIT: from the second moment; otherwise 8 km/s, as in C++)
         par.VDISP = repr(float(ip.vdisp)) if ip is not None and getattr(ip, "vdisp", None) else "8.0"
-    if par.Z0 == "-1": par.Z0 = "0.0"
+    if par.Z0 == "-1": par.Z0 = repr(default_z0(c.Head()))
     if par.VRAD == "-1": par.VRAD = "0.0"
     if par.DENS == "-1": par.DENS = "1.0"
     if par.VVERT == "-1": par.VVERT = "0.0"

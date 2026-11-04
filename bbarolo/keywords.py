@@ -309,7 +309,8 @@ KEYWORDS = [
     K("RADSEP", "float", _g(G2, "RADSEP"), RING, "Separation between radii (arcsec)"),
     K("VROT", "str", _g(G3, "VROT"), RING + ("GALWIND",), "Rotation velocity (km/s)"),
     K("VRAD", "str", _g(G2, "VRAD"), RING, "Radial velocity (km/s)"),
-    K("Z0", "str", _g(G2, "Z0"), MOD, "Scale height of the disk (arcsec)"),
+    K("Z0", "str", _g(G2, "Z0"), MOD, "Scale height of the disk (arcsec); the fits use one pixel if not given "
+      "(a thin disk), GALMOD needs it"),
     K("VVERT", "str", _g(G2, "VVERT"), ("GALMOD", "BAYESIAN3DFIT"), "Vertical velocity (km/s)"),
     K("DVDZ", "str", _g(G2, "DVDZ"), ("GALMOD", "BAYESIAN3DFIT"), "Vertical gradient of rotation velocity (km/s/arcs)"),
     K("ZCYL", "str", _g(G2, "ZCYL"), ("GALMOD", "BAYESIAN3DFIT"), "Height where the gradient begins (arcs)"),
