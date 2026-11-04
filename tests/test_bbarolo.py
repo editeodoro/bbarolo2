@@ -939,7 +939,7 @@ def test_bayesian_task(tmp_path, capsys):
     g.load_results(str(cli / "MOCK_dynesty_results.npy"))
     assert g.freepar_names == ['vrot', 'vdisp'] and 100 < g.params[0] < 200
     assert g.like_kwargs == dict(likemask='dilated', dilation=(1., 3), noisecorr='measured', densprof_smooth=0.1,
-                                 bbres=False, radmax='ring', radmax_width=None)
+                                 bbres=False, radmax='edge', radmax_width=None)
     capsys.readouterr()
     # bbarolo.run (the same parameters, quiet, no plots): a Result with the fitter
     res = bbarolo.run(str(par), outfolder=str(tmp_path / "run"), verbose=False, plots=False,
@@ -1679,7 +1679,8 @@ def test_bayesian_priors_and_options(tmp_path):
 
 def test_bayesian_pool_and_loaded_likelihood(tmp_path):
     """A sampling that fails leaves no worker processes; load_results restores the likelihood of the
-    fit (run_geometry: the total intensity map); the queue of an MPI pool follows its size."""
+    fit (run_geometry: the total intensity map; RADMAX of the last ring for files saved before the
+    option radmax); the queue of an MPI pool follows its size."""
     pytest.importorskip("dynesty")
     import multiprocessing as mp
     from bbarolo.bayesian import sampling
@@ -1697,6 +1698,12 @@ def test_bayesian_pool_and_loaded_likelihood(tmp_path):
     g.load_results(str(tmp_path / "geo.npy"))
     assert g._log_like_func == g._log_likelihood_geometry
     assert np.isclose(g._log_like_func(g.params), f._log_like_func(f.params))
+    assert g.like_kwargs['radmax'] == 'edge'
+    r = np.load(str(tmp_path / "geo.npy"), allow_pickle=True).item()
+    del r['like_kwargs']['radmax']
+    np.save(str(tmp_path / "old.npy"), r)
+    g.load_results(str(tmp_path / "old.npy"))
+    assert g.like_kwargs['radmax'] == 'ring' and g._radmax_mode == 'ring'
 
     class FakeMPIPool:
         size = 7
@@ -1752,16 +1759,18 @@ def test_bayesian_geometry_model_error(tmp_path):
 
 
 def test_bayesian_radmax_edge(tmp_path):
-    """RADMAX as the outer edge of the disk (like_kwargs radmax='edge' or 'taper'): the rings do not
-    move, the model has no emission beyond the edge (also with the deconvolved density profile), and
-    the likelihood is continuous in RADMAX; radmax='ring' (default) moves the last ring."""
+    """RADMAX as the outer edge of the disk (like_kwargs radmax='edge', the default, or 'taper'): the
+    rings do not move, the model has no emission beyond the edge (also with the deconvolved density
+    profile), and the likelihood is continuous in RADMAX; radmax='ring' moves the last ring. The
+    default prior is the last ring; with NODES rings, whose disk ends at the last radius, the half of
+    it inside the last radius."""
     pytest.importorskip("dynesty")
     from bbarolo.galmod import edge_weights
     assert np.allclose(edge_weights([10., 20., 30.], 10., 20.), [1., 0.5, 0.])
     assert np.allclose(edge_weights([20.], 10., 20., 5.), 0.5)
     f = _bayes_mock(tmp_path)
-    f._set_like_options(dict(radmax='edge'))
     f._setup(['vrot_single', 'radmax'])
+    assert f.like_kwargs['radmax'] == 'edge' and f._radmax_mode == 'edge'
     assert f.prior_distr['radmax'].ppf(0.) == 120. and f.prior_distr['radmax'].ppf(1.) == 160.
     r0 = np.array(f._fit0.r['radii'])
     L = [f._log_likelihood(np.array([150., e])) for e in np.linspace(125., 160., 36)]
@@ -1788,8 +1797,15 @@ def test_bayesian_radmax_edge(tmp_path):
     g._setup(['vrot_single', 'radmax'])
     assert g._radmax_width == 8. and np.isfinite(g._log_likelihood(np.array([150., 140.])))
     h = _bayes_mock(tmp_path, outfolder=str(tmp_path / "h"))
+    h._set_like_options(dict(radmax='ring'))
     h._setup(['vrot_single', 'radmax'])                       # 'ring': the last ring moves
     assert h._update_rings(h._fit0.copy(), np.array([150., 130.])).r['radii'][-1] == 130.
+    n = _bayes_mock(tmp_path, outfolder=str(tmp_path / "n"), ringmode="NODES")
+    n._setup(['vrot_single', 'radmax'])
+    assert n.prior_distr['radmax'].ppf(0.) == 120. and n.prior_distr['radmax'].ppf(1.) == 140.
+    n._set_like_options(dict(radmax='ring'))
+    n._setup(['vrot_single', 'radmax'])
+    assert n.prior_distr['radmax'].ppf(0.) == 120. and n.prior_distr['radmax'].ppf(1.) == 160.
 
 
 def test_bayesian_flux_beyond_rings(tmp_path, capsys):

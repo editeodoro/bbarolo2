@@ -324,6 +324,8 @@ class OutputsMixin(object):
                         likemask=r['likemask'] if r.get('likemask') in ('dilated', 'none') else 'dilated',
                         dilation=tuple(r.get('likemask_dilation', (1., 3))),
                         densprof_smooth=r.get('densprof_smooth', 0.1))
+        if 'radmax' not in like:                       # (files saved before the option: the last ring)
+            like = dict(like, radmax='ring')
         self._set_like_options(like, custom=True)
         self._setup(r['freepar_inp'])
         # the likelihood of the fit: of the cube, of the total intensity map (run_geometry), or one given

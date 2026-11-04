@@ -10,10 +10,10 @@ beam from the centre to RMAX). They are simulated with GALMOD (ANALYTIC, nodes u
 convolved with the beam, and fitted with BayesianBBarolo (nautilus): VROT in each ring, VDISP, INC
 and PA (centre, VSYS and Z0 fixed at the true values), and
 
-  ring     RADMAX free, the radius of the last ring (like_kwargs radmax='ring', the default of
-           BayesianBBarolo): the last ring moves, and its annulus with it
-  edge     RADMAX free, the outer edge of the disk (radmax='edge'): the rings stay, and the model
-           has no emission beyond RADMAX
+  ring     RADMAX free, the radius of the last ring (like_kwargs radmax='ring', the RADMAX of the
+           original module): the last ring moves, and its annulus with it
+  edge     RADMAX free, the outer edge of the disk (radmax='edge', the default of BayesianBBarolo
+           since these tests): the rings stay, and the model has no emission beyond RADMAX
   taper    as edge, with a Gaussian edge a quarter of a beam wide (radmax='taper')
   evid     no RADMAX: N-1, N and N+1 rings (N: those up to RMAX), compared by their evidence
 

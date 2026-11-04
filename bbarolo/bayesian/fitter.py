@@ -10,6 +10,7 @@ import numpy as np
 from scipy import stats
 
 from ..tasks import FitMod3D, build_param, _checked
+from ..galmod import ringmode_name
 from .common import vprint, get_distribution
 from .rings import _RingDict
 from .likelihood import LikelihoodMixin
@@ -367,13 +368,14 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             self._setup_noise()
 
     def _setup_radmax(self):
-        """ What the free parameter RADMAX is (like_kwargs radmax): 'ring', the radius of the last
-        ring (which moves, with its annulus: the default); 'edge', the outer edge of the disk, with
-        the rings fixed (the model has no emission beyond it: see galmod.edge_weights); 'taper', a
-        Gaussian edge of width radmax_width (default a quarter of the beam FWHM). With CENTRED or
-        SHIFTED rings the default prior is the same interval in the three cases, the last ring:
-        its radius +- half the ring separation. """
-        self._radmax_mode = str(self.like_kwargs.get('radmax') or 'ring')
+        """ What the free parameter RADMAX is (like_kwargs radmax): 'edge' (the default), the outer
+        edge of the disk, with the rings fixed (the model has no emission beyond it: see
+        galmod.edge_weights); 'taper', a Gaussian edge of width radmax_width (default a quarter of
+        the beam FWHM); 'ring', the radius of the last ring (which moves, with its annulus: the
+        RADMAX of the original module). The default prior is the last ring, its radius +- half the
+        ring separation; with NODES rings, whose disk ends at the last radius, the edge lies within
+        half a ring separation inside it (see _prior_kwargs). """
+        self._radmax_mode = str(self.like_kwargs.get('radmax') or 'edge')
         w = self.like_kwargs.get('radmax_width')
         if self._radmax_mode != 'taper':
             w = 0.
@@ -426,8 +428,13 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         """ Parameters of the prior of key (self.priors without 'name'). For sigma, None values
         are relative to the measured noise rms: loguniform a = 0.5 rms, b = 1000 rms (the
         default prior: scale-invariant between half and 1000 times the noise); scale = rms
-        (e.g. halfcauchy, the default before November 2026). """
+        (e.g. halfcauchy, the default before November 2026). The default prior of an edge (radmax
+        'edge' or 'taper') with NODES rings is the half of the last ring inside its radius. """
         kw = {k: v for k, v in self.priors[key].items() if k != "name"}
+        if key == 'radmax' and self.priors[key] == getattr(self, '_default_pri', {}).get(key) \
+                and self._galfit is not None and getattr(self, '_radmax_mode', 'edge') != 'ring' \
+                and ringmode_name(self._galfit.model.ringmode) == 'NODES':
+            kw['scale'] = 0.5 * kw['scale']     # (the disk of NODES rings ends at the last radius)
         if key == 'sigma':
             for k, f in (('a', 0.5), ('b', 1000.), ('scale', 1.)):
                 if k in kw and kw[k] is None:
@@ -671,7 +678,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         """ Update rings with the parameters theta """
         freepar_idx = copy.copy(self.freepar_idx)
         if 'radmax' in freepar_idx:
-            if getattr(self, '_radmax_mode', 'ring') == 'ring':
+            if getattr(self, '_radmax_mode', 'edge') == 'ring':
                 rings.r['radii'][-1] = theta[freepar_idx['radmax']][0]
             else:                                   # the outer edge of the disk (the rings do not move)
                 rings.edge, rings.edgewidth = float(theta[freepar_idx['radmax']][0]), self._radmax_width

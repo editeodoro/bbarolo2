@@ -27,12 +27,14 @@ Free parameters are given as names: 'vrot' (one value per ring), 'vrot_single' (
 for all rings), 'vrot_func' (parametric function of radius, see ``funcs``), plus
 'sigma' (noise of the likelihood; default prior log-uniform between 0.5 and 1000 times the
 measured noise), 'fracerr' (fractional model error: the variance of a voxel is
-sigma^2 + (fracerr*model)^2) and 'radmax' (outer radius). Priors are frozen scipy.stats
+sigma^2 + (fracerr*model)^2) and 'radmax' (the outer edge of the disk; like_kwargs radmax='ring'
+moves the last ring instead, as in the original module). Priors are frozen scipy.stats
 distributions (``priors`` dictionary or ``prior_distr``).
 
 The options of the likelihood are given in run(like_kwargs=...) (LIKEOPTS in parameter files;
 the options of the fit are in f.like_kwargs): likemask, dilation, noisecorr, densprof_smooth,
-bbres (BBarolo's 3DFIT residuals), sigma and fracerr (fixed values) and lambdas.
+bbres (BBarolo's 3DFIT residuals), radmax and radmax_width (what RADMAX is), sigma and fracerr
+(fixed values) and lambdas.
 
 Correlated noise: the log-likelihood is multiplied by 1/(number of voxels per independent
 measurement). By default (noisecorr='measured') this is the correlation volume of the noise

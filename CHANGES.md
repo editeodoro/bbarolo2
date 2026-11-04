@@ -116,28 +116,6 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
-- **RADMAX as the outer edge of the disk** (BayesianBBarolo, `like_kwargs` / LIKEOPTS
-  `radmax`), to compare with the RADMAX of the original module, which moves the last ring (so the
-  posterior of that ring mixes different annuli): `radmax=edge` keeps the rings and the model has
-  no emission beyond RADMAX (a sharp edge, continuous in RADMAX: each sub-ring of the model
-  weighted by its fraction within the edge), `radmax=taper` a Gaussian edge of width
-  `radmax_width` (default a quarter of the beam FWHM). The default, `radmax=ring`, does not
-  change. The model engine has the edge too (`Rings.edge`, `Rings.edgewidth`), also in the
-  density profile. `performance/radmax.py` compares the ways of fitting the edge on simulated
-  disks with a sharp edge inside the last ring (12 disks at 3 and 5 beams, S/N 20; errors in
-  units of the ring width w):
-
-  | RADMAX | edge: error, coverage (3 beams) | (5 beams) | VROT of the last ring: coverage |
-  |---|---|---|---|
-  | ring (default) | −0.02 ± 0.30 w, 0.75 | −0.04 ± 0.27 w, 0.83 | 0.83, 0.92 |
-  | edge | −0.02 ± 0.27 w, 0.75 | −0.13 ± 0.28 w, 0.75 | 1.00, 1.00 |
-  | taper | −0.08 ± 0.30 w, 0.75 | −0.16 ± 0.31 w, 0.67 | 1.00, 1.00 |
-  | evidence of N−1, N, N+1 rings | −0.21 ± 0.69 w | +0.86 ± 0.72 w | 0.83, 1.00 |
-
-  RADMAX locates the edge as well with `ring` as with `edge`, but with `ring` the model extends
-  half a ring beyond RADMAX and the last ring's VROT refers to a radius that changes from sample
-  to sample. `taper` brings nothing for sharp edges, and the evidence is coarse (it chose an
-  empty extra ring in 5 of 12 disks at 5 beams). Times are the same.
 - **`run_geometry` with a model error**: `sigma` and `fracerr` (free, or given in `like_kwargs`)
   in the likelihood of the total intensity map, as in that of the cube; without them the values
   do not change. The map of a real galaxy has structure that an axisymmetric disk does not
@@ -222,6 +200,31 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **BayesianBBarolo: RADMAX is the outer edge of the disk.** In the original module RADMAX moved the
+  radius of the last ring, so the posterior of that ring mixed different annuli and the model
+  extended half a ring beyond RADMAX. Now the rings stay, and the model has no emission beyond
+  RADMAX (a sharp edge, continuous in RADMAX: each sub-ring of the model is weighted by its fraction
+  within the edge), also in the density profile. The option `radmax` of `like_kwargs` / LIKEOPTS
+  chooses: `edge` (the default), `taper` (a Gaussian edge of width `radmax_width`, by default a
+  quarter of the beam FWHM) or `ring` (the RADMAX of the original module; results saved before
+  the option existed are loaded with it). The default prior is still the last ring, its radius ±
+  half the ring separation; with NODES rings, whose disk ends at the last radius, the edge lies
+  in the half of it inside the last radius. The model engine has the edge too (`Rings.edge`,
+  `Rings.edgewidth`). `performance/radmax.py` compares the ways of fitting the edge on simulated
+  disks with a sharp edge inside the last ring (12 disks at 3 and 5 beams, S/N 20; errors in
+  units of the ring width w):
+
+  | RADMAX | edge: error, coverage (3 beams) | (5 beams) | VROT of the last ring: coverage |
+  |---|---|---|---|
+  | ring (before) | −0.02 ± 0.30 w, 0.75 | −0.04 ± 0.27 w, 0.83 | 0.83, 0.92 |
+  | edge (default) | −0.02 ± 0.27 w, 0.75 | −0.13 ± 0.28 w, 0.75 | 1.00, 1.00 |
+  | taper | −0.08 ± 0.30 w, 0.75 | −0.16 ± 0.31 w, 0.67 | 1.00, 1.00 |
+  | evidence of N−1, N, N+1 rings | −0.21 ± 0.69 w | +0.86 ± 0.72 w | 0.83, 1.00 |
+
+  RADMAX locates the edge as well with `ring` as with `edge`, but with `ring` the model extends
+  half a ring beyond RADMAX and the last ring's VROT refers to a radius that changes from sample
+  to sample. `taper` brings nothing for sharp edges, and the evidence is coarse (it chose an
+  empty extra ring in 5 of 12 disks at 5 beams). Times are the same.
 - **BayesianBBarolo: faster sampling on machines with many cores.** BLAS (e.g. MKL with 112
   threads on a 224-core server) gave many threads to the small matrices of the density profile in
   each likelihood call, and the processes of a parallel sampling competed for the cores. The

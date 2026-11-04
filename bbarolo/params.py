@@ -1091,7 +1091,7 @@ def bayes_options(opts, none=True):
 # Those of LIKE_SETUP set up the likelihood; sigma, fracerr and lambdas are passed to the
 # log-likelihood at each call (None: not given).
 LIKE_OPTIONS = dict(likemask="dilated", dilation=(1., 3), noisecorr="measured", densprof_smooth=0.1, bbres=False,
-                    radmax="ring", radmax_width=None, sigma=None, fracerr=None, lambdas=None)
+                    radmax="edge", radmax_width=None, sigma=None, fracerr=None, lambdas=None)
 LIKE_SETUP = ("likemask", "dilation", "noisecorr", "densprof_smooth", "bbres", "radmax", "radmax_width")
 _LIKE_ALIASES = {"usebbres": "bbres", "likemask_dilation": "dilation"}
 
@@ -1110,10 +1110,10 @@ def bayes_like_option(name, value):
       densprof_smooth  smoothness of the deconvolved density profile (default 0.1; 0: none)
       bbres            True: the residuals of BBarolo's 3DFIT instead of the Gaussian
                        likelihood (also usebbres)
-      radmax           what the free parameter RADMAX is: 'ring' (default: the radius of the
-                       last ring, which moves), 'edge' (the outer edge of the disk, with the
-                       rings fixed: no emission beyond it) or 'taper' (a Gaussian edge of width
-                       radmax_width)
+      radmax           what the free parameter RADMAX is: 'edge' (default: the outer edge of
+                       the disk, with the rings fixed: no emission beyond it), 'taper' (a
+                       Gaussian edge of width radmax_width) or 'ring' (the radius of the last
+                       ring, which moves, as in the original module)
       radmax_width     the width (sigma, arcsec) of the edge with radmax='taper' (default a
                        quarter of the beam FWHM)
       sigma            fixed noise per voxel (default: the measured noise rms)

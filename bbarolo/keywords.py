@@ -392,8 +392,9 @@ KEYWORDS = [
     K("LIKEOPTS", "str", ["gf.LIKEOPTS"], BAYES,
       "Options of the likelihood, key=value (defaults first): likemask=dilated|none, dilation=1,3 (radius in "
       "beams, channels), noisecorr=measured|beam|<voxels per independent noise value>, densprof_smooth=0.1, "
-      "bbres=false|true (3DFIT residuals), sigma=<fixed noise, default: measured>, fracerr=<fixed model error, "
-      "default: 0>",
+      "bbres=false|true (3DFIT residuals), radmax=edge|taper|ring (the free RADMAX: the outer edge of the disk, "
+      "sharp or Gaussian of width radmax_width, or the radius of the last ring), sigma=<fixed noise, default: "
+      "measured>, fracerr=<fixed model error, default: 0>",
       aliases=["like_kwargs"]),
 
     # ---------------------------------------------------------------- GALWIND
