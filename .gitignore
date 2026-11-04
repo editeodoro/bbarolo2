@@ -16,3 +16,6 @@ dist/
 # Outputs of BBarolo runs (default OUTFOLDER is ./output/<OBJECT>/)
 output/
 output_py/
+
+# Documentation build
+docs/_build/

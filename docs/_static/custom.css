@@ -1,0 +1,21 @@
+/* BBarolo documentation: small additions to pydata-sphinx-theme */
+:root {
+  --pst-color-primary: #8b1a1a;          /* Barolo red */
+  --pst-color-secondary: #c0712b;
+}
+html[data-theme="dark"] {
+  --pst-color-primary: #e0706a;
+  --pst-color-secondary: #e3a063;
+}
+
+/* Landing page */
+.bb-hero { padding: 2.5rem 0 1.5rem; }
+.bb-hero h1 { font-size: 2.6rem; margin-bottom: 0.3rem; }
+.bb-hero .bb-tagline { font-size: 1.25rem; color: var(--pst-color-text-muted); margin-bottom: 1.2rem; }
+.bb-gallery img { border-radius: 6px; }
+
+/* Parameter lists (bbparams) */
+dl.bbparams > dt { margin-top: 1.1rem; font-size: 1.02rem; }
+dl.bbparams > dt code { font-weight: 600; }
+dl.bbparams .bbparams-aliases { color: var(--pst-color-text-muted); font-size: 0.9rem; }
+dl.bbparams > dd > p:last-child { color: var(--pst-color-text-muted); font-size: 0.92rem; }
