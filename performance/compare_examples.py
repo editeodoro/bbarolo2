@@ -9,7 +9,8 @@ bbarolo2, and report the output files that differ.
 The parameter files are those of <examples>/*.par and <examples>/test/*.par, where <examples> is
 ../examples (next to this repository) or --examples. They are run from the folder that contains
 <examples>, as their FITSFILE paths expect, with PLOTS=false. Known non-deterministic outputs are
-ignored: the noisy model (*mod_noise.fits, unseeded noise) and the plot scripts (they contain the
+ignored: the noisy model (*mod_noise.fits, unseeded noise), the parameters of the run (*_params.par: date
+and folder) and the plot scripts (they contain the
 output folder). For FITS files the report gives the largest data difference and the header
 keywords that changed; for text files the number of lines that differ.
 """
@@ -26,7 +27,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-IGNORE = ("mod_noise.fits", "/plotscripts/")
+IGNORE = ("mod_noise.fits", "/plotscripts/", "_params.par")
 
 
 def run(code, parfile, outfolder, cwd, threads):

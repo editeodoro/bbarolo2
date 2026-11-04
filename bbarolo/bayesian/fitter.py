@@ -631,10 +631,11 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                         print(f"WARNING: '{key}' is a free parameter, but the user-defined residuals do not depend "
                               f"on it.\n         _calculate_residuals(model, data, mask, **kwargs) receives {what}.\n")
             if verbose and np.isfinite(logl) and logl < -1e6:
-                print(f"NOTE: the log-likelihood at the centre of the priors is {logl:.3g}. dynesty prints "
-                      "values below\n      -1e6 as -inf (and the error of logz as nan): they are finite. "
-                      "Such values mean\n      that the residuals are much larger than the noise sigma: the "
-                      "posterior will be\n      extremely narrow unless 'sigma' or 'fracerr' is free (and used).\n")
+                print(f"BBAROLO WARNING: the log-likelihood at the centre of the priors is {logl:.3g}. dynesty "
+                      "prints\n                 values below -1e6 as -inf (and the error of logz as nan): they are "
+                      "finite.\n                 Such values mean that the residuals are much larger than the "
+                      "noise sigma:\n                 the posterior will be extremely narrow unless 'sigma' or "
+                      "'fracerr' is free\n                 (and used).\n")
         except Exception:
             pass
 

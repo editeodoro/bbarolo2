@@ -755,15 +755,51 @@ class Param:
             stream.write(f"\n----------------- Default parameters for {whichtask} -----------------\n\n")
         printParams(stream, Param(), defaults=True, whichtask=whichtask)
 
-    def write_parameterfile(self, fileout):
-        """Write all non-default parameters in a BBarolo parameter file."""
+    def write_parameterfile(self, fileout, tasks=()):
+        """Write the parameter file of to_parfile(tasks) in fileout."""
         with open(fileout, "w") as f:
-            f.write(self.to_parfile())
+            f.write(self.to_parfile(tasks))
 
-    def to_parfile(self):
-        """Return the content of a parameter file reproducing this Param (main keys only)."""
-        lines = ["// Parameter file written by bbarolo (pure-Python BBarolo)"]
-        lines.append(f"FITSFILE  {self.imageFile}")
+    def to_parfile(self, tasks=()):
+        """A parameter file (a string) with all the parameters of the tasks (names as in keywords, e.g.
+        '3DFIT') and the general ones: first those given, as given (FITSFILE, the cube of this run, and
+        OUTFOLDER as absolute paths), then the defaults of the others. BBarolo -p runs it again with the
+        same parameters (paths in other parameters, e.g. RINGFILE, are relative to the folder of the run,
+        written in the header)."""
+        import datetime
+        given = {k: v for k, v in getattr(self, "_given", {}).items()
+                 if k not in ("FITSFILE", "FITSLIST", "OUTFOLDER")}
+        uses = {t: {k.name for k in _kw.keywords_for(t)} for t in tasks}
+        names = set().union(*uses.values()) if uses else set()
+        when = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        lines = [f"// BBarolo parameter file of a run of bbarolo {BBVERSION} ({when}, in {os.getcwd()}):",
+                 "// the parameters given, then the defaults of the others" + (f" (tasks: {', '.join(tasks)})"
+                                                                              if tasks else "") + ".", ""]
+        w = max(len(k.name) for k in _kw.KEYWORDS) + 1
+        if self.imageFile:
+            lines.append(f"{'FITSFILE':<{w}}{os.path.abspath(self.imageFile)}")
+        if self.outFolder:
+            lines.append(f"{'OUTFOLDER':<{w}}{os.path.abspath(self.outFolder)}/")
+        lines += [f"{k:<{w}}{v}" for k, v in given.items()]
+        lines += ["", "// Defaults"]
+        d = _default_param()
+        for kw in _kw.KEYWORDS:
+            # (not the switches of the tasks, nor the keywords that do more than set their value, e.g.
+            # THRESHOLD, which also replaces SNRCUT)
+            if kw.name in given or kw.flag or kw.also or kw.name in ("FITSFILE", "FITSLIST", "OUTFOLDER"):
+                continue
+            if "ALL" not in kw.tasks and kw.name not in names:
+                continue
+            if len({str(_kw._getattr(d, t)) for t in kw.targets}) > 1:
+                continue                         # (a default that depends on the task, e.g. VROT of GALWIND)
+            v = kw.value(d)
+            users = [t for t in tasks if kw.name in uses[t]]
+            tdef = {_kw._fmtval(_kw.TASK_DEFAULTS.get(t, {}).get(kw.name, v)) for t in users}
+            if len(tdef) > 1:
+                continue                         # (e.g. GALMODTYPE: ANALYTIC for BAYESIAN3DFIT, MC for 3DFIT)
+            s = tdef.pop() if tdef else _kw._fmtval(v)
+            if s.strip() and s != '""':
+                lines.append(f"{kw.name:<{w}}{s}")
         return "\n".join(lines) + "\n"
 
     def createTemplate(self, fname="param.par"):
@@ -1204,17 +1240,18 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
     gf, gm, gw, se, ma = p.gf, p.gm, p.gw, p.se, p.ma
     R = lambda name, desc, val: recordParam(Str, name, desc, val)
 
+    from .bbutils import shortpath                 # (paths relative to the current folder, on screen)
     if defaults:
         R("[FITSFILE]", "FITS file to be analysed", p.imageFile)
         R("[FITSLIST]", "List of FITS files to be analysed", p.imageList)
     else:
-        if p.imageList == "NONE": R("[FITSFILE]", "FITS file to be analysed", p.imageFile)
-        else: R("[FITSLIST]", "List of FITS files to be analysed", p.imageList)
+        if p.imageList == "NONE": R("[FITSFILE]", "FITS file to be analysed", shortpath(p.imageFile))
+        else: R("[FITSLIST]", "List of FITS files to be analysed", shortpath(p.imageList))
     R("[THREADS]", "Number of threads", p.threads)
     R("[PLOTS]", "Producing output plots?", stringize(p.plots))
     R("[SHOWBAR]", "Showing progress bars?", stringize(p.showbar))
     R("[VERBOSE]", "Output messages (0 none, 1 main, 2 all)?", int(p.verbose))
-    if p.outFolder != "" or defaults: R("[OUTFOLDER]", "Directory where outputs are written", p.outFolder)
+    if p.outFolder != "" or defaults: R("[OUTFOLDER]", "Directory where outputs are written", shortpath(p.outFolder))
     if p.outPrefix != "" or defaults: R("[OUTPREFIX]", "Prefix for output files", p.outPrefix)
     R("[LOGFILE]", "Redirect output messages to a file?", stringize(p.logFile))
     R("[flagRobustStats]", "Using robust statistics?", stringize(p.flagRobustStats))

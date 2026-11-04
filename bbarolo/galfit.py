@@ -938,17 +938,20 @@ class Galfit:
         names = [("VROT", VROT, "vrot"), ("VDISP", VDISP, "vdisp"), ("DENS", DENS, "dens"), ("Z0", Z0, "z0"),
                  ("INC", INC, "inc"), ("PA", PA, "phi"), ("XPOS", XPOS, "xpos"), ("YPOS", YPOS, "ypos"),
                  ("VSYS", VSYS, "vsys"), ("VRAD", VRAD, "vrad")]
-        cols = [x for x in names if self.mpar[x[1]]]
+        # (the second stage shows the columns of the first: the parameters that are not fitted any more,
+        # regularised, are marked (r))
+        shown = getattr(self, "_shown", None) or self.mpar
+        cols = [x for x in names if shown[x[1]]]
         o = self.outr
-        head = f"   {'#':>3s} {'RAD(arcs)':>9s}" + "".join(f" {x[0]:>8s}" for x in cols)
+        head = f"   {'#':>3s} {'RAD':>9s}" + "".join(f" {x[0] + ('' if self.mpar[x[1]] else '(r)'):>8s}" for x in cols)
         print(head + f" {'fmin':>10s}  outcome")
         for ir in rings:
             st, fmin = self._ringstat.get(ir, ("not fitted", None))
             line = f"   {ir + 1:3d} {o.radii[ir]:9.2f}"
             fitted = st == "ok" or st.startswith("rejected") or st == "not converged"
-            for _, _, attr in cols:
+            for _, idx, attr in cols:
                 v = getattr(o, attr)[ir]
-                line += f" {v:8.2f}" if fitted else f" {'-':>8s}"
+                line += f" {v:8.2f}" if fitted or not self.mpar[idx] else f" {'-':>8s}"
             line += f" {fmin:10.4g}" if fmin is not None else f" {'-':>10s}"
             print(line + "  " + st)
         sys.stdout.flush()
@@ -985,6 +988,7 @@ class Galfit:
             if s == "bezier": return -1
             if s == "median": return -2
             return -3
+        auto = [False] * 6
         Polyn = self.par.REGTYPE.lower().split()
         keys = [w.split("=", 1) for w in Polyn if "=" in w]
         if len(Polyn) == 1 and not keys:
@@ -995,6 +999,7 @@ class Galfit:
                     reg[regstr.index(k)] = getval(v)
         for i in range(6):
             if reg[i] == -3:
+                auto[i] = True
                 if i < 2:
                     if nr <= 4:
                         reg[i] = 1
@@ -1009,14 +1014,25 @@ class Galfit:
                     reg[i] = -2
         self.inr = self.outr.copy()
         proceed = True
-        for flag, key, r, name in ((m[INC], "inc", reg[0], "inclination"), (m[PA], "phi", reg[1], "position angle"),
-                                   (m[VSYS], "vsys", reg[2], "systemic velocity"), (m[XPOS], "xpos", reg[3], "X center"),
-                                   (m[YPOS], "ypos", reg[4], "Y center"), (m[Z0], "z0", reg[5], "disk thickness")):
+        how = []
+        for flag, key, r, name, short, unit, a in (
+                (m[INC], "inc", reg[0], "inclination", "INC", "deg", auto[0]),
+                (m[PA], "phi", reg[1], "position angle", "PA", "deg", auto[1]),
+                (m[VSYS], "vsys", reg[2], "systemic velocity", "VSYS", "km/s", auto[2]),
+                (m[XPOS], "xpos", reg[3], "X center", "XPOS", "pix", auto[3]),
+                (m[YPOS], "ypos", reg[4], "Y center", "YPOS", "pix", auto[4]),
+                (m[Z0], "z0", reg[5], "disk thickness", "Z0", "arcs", auto[5])):
             if flag:
                 ok, out = self.regularizeParams(self.inr.radii, getattr(self.inr, key), r, name)
                 if ok:
                     setattr(self.inr, key, out)
+                    deg = (max(r - 1, 0) if nr > r else 0) if r > 0 else None
+                    how.append(f"{short} " + (f"median = {out[0]:.2f} {unit}" if r == -2 else "Bezier curve" if r == -1
+                                               else f"constant = {out[0]:.2f} {unit}" if deg == 0
+                                               else f"polynomial of degree {deg}") + (" (auto)" if a else ""))
                 proceed = proceed and ok
+        if proceed and self.verb:
+            print(" Regularised for the second stage (then fixed): " + ", ".join(how) + ".")
         oldmpar, oldnfree = list(self.mpar), self.nfree
         for i in (INC, PA, VSYS, XPOS, YPOS, Z0):
             self.mpar[i] = False
@@ -1024,7 +1040,11 @@ class Galfit:
         # FREE=ALL the simplex was degenerate and the errors misaligned)
         self.nfree = sum(self.mpar)
         if proceed:
-            self.galfit()
+            self._shown = oldmpar
+            try:
+                self.galfit()
+            finally:
+                self._shown = None
         elif self.verb:
             sys.stderr.write("3DFIT ERROR: Regularization failed. I will not proceed to second fitting stage. \n")
         self.mpar, self.nfree = oldmpar, oldnfree
@@ -1054,7 +1074,7 @@ class Galfit:
                 sys.stderr.write(f"3DFIT ERROR: cannot least-square fit {whichpar}.\n")
             return False, y
         yout = np.polyval(coeff[::-1], x)
-        if self.verb:
+        if self.verb >= 2:
             print(f"  Best parameters for {whichpar}:")
             for i in range(rtype):
                 print(f"{'a' + str(i) + ' = ':>43}{coeff[i]:9.4g}{' ±':>4}{coefferr[i]:9.4g}")

@@ -34,7 +34,7 @@ from astropy.io import fits
 
 from .params import Param, value_to_string
 from . import keywords as _kw
-from .bbutils import mkdirp, BBaroloError
+from .bbutils import mkdirp, BBaroloError, shortpath
 
 __all__ = ['FitMod3D', 'GalMod', 'GalWind', 'Search', 'FitMod2D', 'Ellprof', 'Smooth', 'SmoothSpec', 'Maps',
            'PVSlice', 'SpacePar', 'Rend3D', 'ContSub', 'Stats', 'MakeMask', 'run', 'Result', 'Task',
@@ -293,6 +293,14 @@ def run_steps(c, par, collect=False):
     p = c.pars()
     if par.AUTO and not p.gf.flagBAYESIAN:          # (BBarolo -f cube.fits BAYESIAN3DFIT=true: no 3DFIT)
         p.gf.flagGALFIT = True
+    # all the parameters of the run, in a parameter file in the output folder
+    tasks = [name for name, requested, _ in STEPS if requested(par, p)]
+    if any(t in tasks for t in ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "MAPS", "ELLPROF")):
+        mask = str(p.MaskType).upper()
+        tasks += [t for t, k in (("SEARCH", "SEARCH"), ("MAKEMASK", "SMOOTH")) if k in mask and t not in tasks]
+    if p.outFolder:
+        mkdirp(p.outFolder)
+        p.write_parameterfile(p.outFolder + p.outPrefix + "_params.par", tasks)
     out = {}
     for name, requested, step in STEPS:
         if not requested(par, p):
@@ -335,12 +343,13 @@ def BBcore(par, collect=False):
         try:
             h = Header(p.imageFile, warning=False)
         except Exception:
-            print(f"{p.imageFile} is not a readable FITS file!")
+            print(f"{shortpath(p.imageFile)} is not a readable FITS file!")
             return False
         outfolder = os.getcwd() + "/output/" + h.Name() + "/"
         p.setOutfolder(outfolder)
     if p.verbose and os.path.isdir(outfolder) and os.listdir(outfolder):
-        print(f" NOTE: the output folder {outfolder} already exists: its files will be overwritten.")
+        print(f" BBAROLO WARNING: the output folder {shortpath(outfolder)} already exists: its files will be "
+              "overwritten.")
     mkdirp(outfolder)
     with _logfile(par, outfolder):
         if par.logFile:
@@ -353,7 +362,7 @@ def BBcore(par, collect=False):
             print(e)
             ok = False
         if not ok:
-            print(f"{p.imageFile} is not a readable FITS file!")
+            print(f"{shortpath(p.imageFile)} is not a readable FITS file!")
             return False
         out = run_steps(c, par, collect)
     return (out, c) if collect else True
@@ -374,7 +383,7 @@ def run_par(par, banner=True, collect=False):
     for im, img in enumerate(images):
         if len(images) > 1 and verbose and not par.logFile:
             print("\n" + "_" * 69 + "\n")
-            print(f"Working on {img} ".rjust(70) + "\n")
+            print(f"Working on {shortpath(img)} ".rjust(70) + "\n")
             print(f" File {im + 1} of {len(images)}\n")
         par.imageFile = img
         r = BBcore(par, collect)
@@ -1030,7 +1039,7 @@ class Task:
                     ignored.append(kname)
                 fpar.pop(kname)
         if ignored:
-            print(f" {cls.__name__}: {', '.join(ignored)} in {parfile} ignored "
+            print(f" {cls.__name__}: {', '.join(ignored)} in {shortpath(parfile)} ignored "
                   "(bbarolo.run runs all the tasks of a parameter file).")
         t = cls(cube, **fpar)          # (all the parameters at once: BayesianBBarolo sets its rings here)
         t.update(**params)
@@ -1236,6 +1245,8 @@ class Task:
         if prm["FITSFILE"] != self._cube:            # the copy of an in-memory cube (or with a new beam)
             res.files.append(prm["FITSFILE"])
         prefix = c.pars().outPrefix
+        if os.path.isfile(of + prefix + "_params.par"):     # (the parameters of the run, see run_steps)
+            res.files.append(of + prefix + "_params.par")
         for name, (mem, files) in outs.items():
             res.files = sorted(set(res.files) | set(files))
             _fill(res, name, mem, files, prefix, cube=c)

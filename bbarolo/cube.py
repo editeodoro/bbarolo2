@@ -17,7 +17,7 @@ from .header import Header
 from .params import Param, stringize
 from .stats import Stats, findMADFM
 from .bbutils import (BBaroloError, arcsconv, DeltaVel, FluxtoJy, FluxtoJyBeam, isFluxUnitKnown, AlltoVel,
-                      ProgressBar, mkdirp, randomAdjective)
+                      ProgressBar, mkdirp, randomAdjective, shortpath)
 
 
 class Cube:
@@ -185,7 +185,7 @@ class Cube:
 
         if p.verbose:
             npx = dims[0] * dims[1] * dims[2]
-            print(f"\nOpening file {fname}")
+            print(f"\nOpening file {shortpath(fname)}")
             print(f"Reading {dims[0]} x {dims[1]} x {dims[2]} pixels FITS file ({4 * npx / 1048576.:.1f} MB)... ", end="")
         data = np.asarray(getdata())
         if data.ndim == 4:

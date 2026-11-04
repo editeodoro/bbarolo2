@@ -116,6 +116,11 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **The parameters of each run** in `<prefix>_params.par`, in the output folder (and in the `files`
+  of the result): the parameters given (FITSFILE and OUTFOLDER as absolute paths), then the defaults of
+  the other parameters of the tasks that ran (and of SEARCH or MAKEMASK when they make the mask), with
+  the date and the folder of the run. `BBarolo -p <prefix>_params.par` runs it again with the same
+  parameters. `Param.to_parfile(tasks)` gives it as a string.
 - **`run_geometry` with a model error**: `sigma` and `fracerr` (free, or given in `like_kwargs`)
   in the likelihood of the total intensity map, as in that of the cube; without them the values
   do not change. The map of a real galaxy has structure that an axisymmetric disk does not
@@ -186,8 +191,7 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   numbers, lists of numbers, `file(...)` or WCS positions (also when a task class is built: e.g.
   `inc="sixty"`); unknown names in FREE (they were ignored); VSYS outside the velocity range of the
   cube (an error for 3DFIT, with a hint when it looks like m/s; a warning for GALMOD); a beam from
-  BMAJ/BMIN/BEAMFWHM smaller than a quarter of a pixel (degrees given instead of arcsec). A note
-  gives the distance assumed from the Hubble flow when DISTANCE is not given.
+  BMAJ/BMIN/BEAMFWHM smaller than a quarter of a pixel (degrees given instead of arcsec).
 - **Result** of 3DFIT (and GALMOD, BAYESIAN3DFIT): `data` and `residual` (data − model, NaN outside
   the mask), computed when first used; `rotation_curve` (radius, VROT and its errors as positive
   numbers); `plot_rings()`, `plot_maps()` and `plot_pv()`, which return matplotlib figures.
@@ -195,11 +199,17 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   and one line per ring in order of radius, with the outcome of the ring (e.g. why it was
   rejected); 2 everything, as before (the parameters, every ring in detail).
 - **SPECRES**: the spectral resolution of the models (σ, in channels). LINEAR still sets it when
-  SPECRES is not given, as in C++, but LINEAR is also the new resolution of SMOOTH (in kpc): the
-  parameter check now warns when one run uses LINEAR for both.
+  SPECRES is not given, as in C++.
 
 ### Changed
 
+- **Screen output.** Paths are relative to the current folder (unless that goes up more than two
+  folders); the outputs, e.g. the plotting scripts, keep absolute paths. The notes are warnings
+  (BBAROLO WARNING), like the other messages. With VERBOSE 1, the table of the second stage of 3DFIT
+  has the columns of the first: the parameters regularised after the first stage, and then fixed, are
+  marked (r), e.g. INC(r), with their regularised values, and a line between the stages says how they
+  were regularised (e.g. `INC median = 52.85 deg (auto), PA Bezier curve`); the radii are RAD. The
+  coefficients of the regularising polynomials are printed with VERBOSE 2 only.
 - **Default Z0: one pixel.** When Z0 is not given, 3DFIT, BAYESIAN3DFIT, SPACEPAR and the initial
   estimates (GUESSTYPE FIT) use a thin disk, one pixel thick, instead of a disk with no thickness (C++:
   Z0 = 0). GALMOD still needs Z0. The examples give Z0, so their outputs do not change. On NGC 2403
@@ -220,7 +230,8 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   DISTANCE in a parameter file is an unknown keyword (ignored, with a warning); `distance=` in Python
   is an error. RINGFILE now finds the columns by their names in the header, so it reads the ring files
   of bbarolo2 and of C++ (and `rings_initial.txt`, whose columns it read wrongly before); a file without
-  a header must have the columns of C++. A parameter read with `file(name,n)` from a BBarolo ring file
+  a header must have the columns of C++, and the plotting scripts read the ring files by the names of
+  their columns. A parameter read with `file(name,n)` from a BBarolo ring file
   must come from its own column: e.g. `VROT file(rings_final1.txt,3)` on a file of bbarolo2 (column 3
   is DISP) is an error that gives the right column, so the column numbers of the C++ files cannot read
   another quantity without notice.
@@ -287,13 +298,13 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   were too many). The ring tables do not depend on THREADS; MC final models do (one seed per chunk).
 - **Default output** is much shorter (VERBOSE 1, above): about 140 lines for the NGC 2403 3DFIT
   instead of about 400. Progress bars are drawn on a terminal only (in a log file their backspaces
-  piled up). A note says when an existing output folder is overwritten.
+  piled up). A warning says when an existing output folder is overwritten.
 - **A misspelled keyword in a parameter file** (very close to a real one, e.g. VDSIP) is an error;
   other unknown keywords are still ignored with a warning. All the keywords of the C++ code are
   known, so valid parameter files are not affected.
 - **A velocity axis without CUNIT3** is taken as m/s if its channels are wider than 100, otherwise as
   km/s (C++: always km/s, or m/s when no CUNIT is given at all).
-- **Help**: `-d TASK` lists DISTANCE and the beam keywords; `bbarolo.help('dist')` prints the close
+- **Help**: `-d TASK` lists the beam keywords; `bbarolo.help('dist')` prints the close
   matches instead of raising; clearer help for FREE; the FitMod3D docstring lists the columns of the
   results and the convention of the errors.
 - **BayesianBBarolo and BAYESIAN3DFIT use ANALYTIC models by default** (GALMODTYPE; 3DFIT, GALMOD

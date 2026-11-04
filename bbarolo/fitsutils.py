@@ -21,6 +21,8 @@ import sys
 import numpy as np
 from astropy.io import fits
 
+from .bbutils import shortpath
+
 STRUCT_KEYS = re.compile(r"^(SIMPLE|BITPIX|NAXIS\d*|EXTEND|XTENSION|PCOUNT|GCOUNT|TFIELDS|TFORM\d+|"
                          r"TBCOL\d+|THEAP|END|GROUPS|BLOCKED)$")
 
@@ -314,5 +316,5 @@ def ConvertFluxUnits(argv, whichtype):
     h.keys.append(f"HISTORY BBAROLO {taskname}: Converted from {bunit} to {endbunit} with factor {factor:.4f}")
     outfile = argv[1] if len(argv) == 2 else argv[0]
     c.fitswrite_3d(outfile, True)
-    print(f"\n New FITS file written to {outfile}")
+    print(f"\n New FITS file written to {shortpath(outfile)}")
     return 0

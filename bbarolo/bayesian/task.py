@@ -6,6 +6,7 @@ import numpy as np
 from ..tasks import _FromFile
 from .fitter import BayesianBBarolo
 from .common import vprint
+from ..bbutils import shortpath
 
 
 def _task_fitter(c, par):
@@ -59,7 +60,7 @@ def run_task(c, par):
     of, pre = cp.outFolder, cp.outPrefix
     fn = os.path.join(of, f"{pre}_{method}_results.npy")
     f.save_results(fn)
-    vprint(verbose, f"Posterior samples written in {fn} (see BayesianBBarolo.load_results)")
+    vprint(verbose, f"Posterior samples written in {shortpath(fn)} (see BayesianBBarolo.load_results)")
     if p.plots > 0:
         import logging
         import warnings
@@ -77,7 +78,7 @@ def run_task(c, par):
                     fig = make()
                     fig.savefig(out, bbox_inches='tight')
                 plt.close(fig)
-                vprint(verbose, f"Plot written in {out}")
+                vprint(verbose, f"Plot written in {shortpath(out)}")
             except Exception as e:
                 plt.close('all')
                 print(f"BAYESIAN3DFIT WARNING: no {name} plot ({e})")

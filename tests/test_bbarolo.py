@@ -1886,3 +1886,54 @@ def test_z0_default_one_pixel(tmp_path):
     g = Param()
     g.readParamString(f"FITSFILE {fn}\nGALMOD true\n{rings}")
     assert not g.checkPars(quiet=True)
+
+
+def test_plot_scripts_ring_columns():
+    """The plotting scripts read the ring files by the names of their columns (galfit.RING_COLUMNS), not by
+    fixed numbers: with the columns of C++ two scripts read past the last column (or the errors)."""
+    import re
+    import bbarolo.plotscripts as ps
+    from bbarolo.galfit import RING_COLUMNS
+    src = open(ps.__file__).read()
+    assert not re.findall(r"(?:rings_final[12]\.txt'|frile),usecols=\(\d", src)
+    for k, name in zip(ps._RING_KEYS, ("RAD(", "VROT(", "DISP(", "INC(", "P.A.(", "Z0(", "DENS(", "XPOS(",
+                                       "YPOS(", "VSYS(", "VRAD(")):
+        assert RING_COLUMNS[int(ps._uc(k)[1:-1])].startswith(name)
+
+
+@needs_data
+def test_two_stage_table_and_run_parameters(tmp_path, capsys):
+    """VERBOSE 1: the second stage shows the columns of the first, the regularised parameters marked (r),
+    after a line on how they were regularised. Every run writes <prefix>_params.par, with all its parameters
+    (as given, then the defaults), which gives the same parameters when read again. Paths on screen are
+    relative to the current folder, unless far from it."""
+    from bbarolo import FitMod3D
+    from bbarolo.bbutils import shortpath
+    from bbarolo import keywords as K
+    from bbarolo.tasks import STEPS
+    assert shortpath(os.path.abspath("a/b.fits")) == os.path.join("a", "b.fits")
+    assert shortpath(os.path.abspath("a") + "/") == "a/" and shortpath(str(tmp_path / "x")) == str(tmp_path / "x")
+    kw = dict(radii=[150, 250, 350, 450, 550], xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8, inc=60, pa=123.7,
+              z0=10, free="VROT INC", twostage=True, regtype="median", threads=4, plots=False)
+    for i in range(2):
+        res = FitMod3D(N2403, **kw).run(outfolder=str(tmp_path / "f"))
+    out = capsys.readouterr().out
+    assert "BBAROLO WARNING: the output folder" in out and "NOTE" not in out
+    assert "Regularised for the second stage (then fixed): INC median = " in out
+    heads = [ln.split() for ln in out.splitlines() if ln.strip().endswith("outcome")]
+    assert heads[-2][:4] == ["#", "RAD", "VROT", "INC"] and heads[-1][:4] == ["#", "RAD", "VROT", "INC(r)"]
+    fn = str(tmp_path / "f" / "ngc2403_params.par")
+    assert fn in res.files
+    q = Param()
+    q.readParamFile(fn)
+    assert q.checkPars(quiet=True) and q.imageFile == os.path.abspath(N2403) and q.gf.flagGALFIT
+    assert q.gf.FREE == "VROT INC" and q.gf.REGTYPE == "median" and q.threads == 4
+    # the parameter file of a parameter file: the same values
+    p = Param()
+    p.readParamString(f"FITSFILE {N2403}\n3DFIT true\nRADII 150 250\nVROT 120\nFREE VROT VDISP\nMASK SEARCH\n"
+                      "THRESHOLD 0.01\nREGTYPE bezier\n")
+    p.checkPars(quiet=True)
+    q = Param()
+    q.readParamString(p.to_parfile([n for n, r, _ in STEPS if r(p, p)] + ["SEARCH"]))
+    q.checkPars(quiet=True)
+    assert all(K._getattr(p, t) == K._getattr(q, t) for k in K.KEYWORDS for t in k.targets)

@@ -31,6 +31,24 @@ def mkdirp(path):
     return True
 
 
+def shortpath(path):
+    """A path for the messages on screen: relative to the current folder, unless that goes up more than
+    two folders (then absolute). The outputs (e.g. the plotting scripts) keep absolute paths, which work
+    from any folder."""
+    if not path:
+        return path
+    s = str(path)
+    try:
+        rel = os.path.relpath(s)
+    except ValueError:                          # (another drive, on Windows)
+        return s
+    if rel.split(os.sep)[:3] == [os.pardir] * 3:
+        return s
+    if s.endswith(os.sep) and not rel.endswith(os.sep):
+        rel += os.sep
+    return rel
+
+
 def fexists(filename):
     return os.path.isfile(filename)
 

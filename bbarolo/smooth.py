@@ -13,7 +13,7 @@ import collections
 import numpy as np
 import scipy.fft as sfft
 
-from .bbutils import BBaroloError, arcsconv, FluxtoJyBeam, Smooth1D
+from .bbutils import BBaroloError, arcsconv, FluxtoJyBeam, Smooth1D, shortpath
 
 CUTOFFRATIO = 1.0 / 10000.0
 MAXCONV = 512 * 512
@@ -352,5 +352,5 @@ class SpectralSmooth3D:
             out.Head().setMinMax(np.nanmin(out.array), np.nanmax(out.array))
             out.fitswrite_3d(outname, True)
         if p.verbose:
-            print(f" Spectrally-smoothed datacube written in {outname}")
+            print(f" Spectrally-smoothed datacube written in {shortpath(outname)}")
         return outname
