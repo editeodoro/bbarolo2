@@ -28,7 +28,7 @@ out = "./output/tutorial/"
 # The rings (single values or one value per ring) and the options, all at once.
 # Parameters that are not given are estimated or take the parameter-file defaults.
 f3d = FitMod3D(fitsname, radii=np.arange(15, 450, 30), xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8,
-               vrad=0, z0=10, inc=60, pa=123.7, mask="SEARCH", free="VROT VDISP", wfunc=2, distance=3.2,
+               vrad=0, z0=10, inc=60, pa=123.7, mask="SEARCH", free="VROT VDISP", wfunc=2,
                ltype=2, outfolder=out + "3dfit", beam=(60, 60, -80), threads=4)
 print(f3d)                      # the parameters that are set
 res = f3d.run()                 # writes the usual outputs (and plots) in outfolder

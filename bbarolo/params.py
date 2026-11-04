@@ -175,7 +175,6 @@ class GalfitPar(GalmodPar):
     BWEIGHT: float = 1.0
     STARTRAD: int = 0
     flagERRORS: bool = False
-    DISTANCE: float = -1.0
     flagADRIFT: bool = False
     ADRIFTPOL1: int = 3
     ADRIFTPOL2: int = 3
@@ -374,9 +373,6 @@ class Param:
 
     def getRestfreq(self):
         return self.gf.RESTFREQ[0]
-
-    def getDistance(self):
-        return self.gf.DISTANCE
 
     # ------------------------------------------------------------------
     # Reading parameters
@@ -676,17 +672,9 @@ class Param:
                 out("GALWIND error: HTOT" + msg); good = False
 
         if self.flagSmooth:
-            if self.bmaj == -1 and self.bmin == -1 and self.linear == -1 and self.factor == -1:
-                out("SMOOTH error: you need to specify either the new beam (BMAJ, BMIN, BPA) "
-                    "or the parameters LINEAR and DISTANCE.")
+            if self.bmaj == -1 and self.bmin == -1 and self.factor == -1:
+                out("SMOOTH error: you need to specify either the new beam (BMAJ, BMIN, BPA) or FACTOR.")
                 good = False
-            if self.linear != -1 and gf.DISTANCE == -1:
-                out("SMOOTH error: with LINEAR parameter you must specify also the DISTANCE. ")
-                good = False
-            if self.linear != -1 and self.specres == -1 and (gf.flagGALFIT or gf.flagBAYESIAN or gm.flagGALMOD
-                                                              or self.flagSpace):
-                out(f"SMOOTH warning: LINEAR={self.linear} is also the spectral resolution of the models (sigma, "
-                    "in channels), as in C++. Give SPECRES to set it independently.")
             if self.bmaj != -1 and self.bmin == -1:
                 self.bmin = self.bmaj
 
@@ -1298,10 +1286,8 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
             R("[BMIN]", "   New minor beam (arcsec)", p.bmin)
             R("[BPA]", "   New beam position angle (degree)", p.bpa)
             R("[FACTOR]", "   New beam factor (times old beam)", p.factor)
-            R("[LINEAR]", "   New linear resolution (kpc)", p.linear)
         else:
-            if p.linear != -1: R("[LINEAR]", "   New linear resolution (kpc)", p.linear)
-            elif p.bmaj != -1 and p.bmin != -1:
+            if p.bmaj != -1 and p.bmin != -1:
                 R("[BMAJ]", "   New major beam (arcsec)", p.bmaj)
                 R("[BMIN]", "   New minor beam (arcsec)", p.bmin)
                 R("[BPA]", "   New beam position angle (degree)", p.bpa)
@@ -1361,8 +1347,6 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
         R("[MASK]", "   Type of mask", p.MaskType)
         if isGalfit or isGalmod or isSpacepar: R("[NORM]", "   Type of normalization", gf.NORM)
         if isGalfit: R("[SIDE]", "   Side of the galaxy to be used", gf.SIDE)
-        if gf.DISTANCE != -1 or defaults:
-            R("[DISTANCE]", "   Distance of the galaxy (Mpc; -1: from VSYS)?", gf.DISTANCE)
         typ = {1: "gaussian", 2: "sech2", 3: "exponential", 4: "Lorentzian", 5: "box"}.get(gf.LTYPE, "")
         R("[LTYPE]", "   Layer type along z direction", typ)
         gmt = p.galmodtype

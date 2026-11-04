@@ -23,21 +23,8 @@ C_MS = 2.99792458e08        # speed of light in m/s
 
 
 # --------------------------------------------------------------------------
-# Misc / distances
+# Misc
 # --------------------------------------------------------------------------
-def KpcPerArc(d):
-    """Kpc per arcsec at distance d (Mpc)."""
-    return 2 * d * np.tan(np.pi / 2 / 180) / 3.6
-
-
-def VeltoDist(vsys, H0=70):
-    return vsys / H0
-
-
-def RedtoDist(redshift, H0=70):
-    return redshift * C_KMS / H0
-
-
 def mkdirp(path):
     if path:
         os.makedirs(path, exist_ok=True)

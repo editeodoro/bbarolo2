@@ -366,8 +366,6 @@ KEYWORDS = [
     K("REGTYPE", "lstr", ["gf.REGTYPE"], ("3DFIT",), "Regularization of the second stage (auto, bezier, median, "
       "degree of polynomial)", aliases=["polyn"]),
     K("STARTRAD", "int", ["gf.STARTRAD"], ("3DFIT",), "Starting radius (ring index)"),
-    K("DISTANCE", "float", ["gf.DISTANCE"], ("3DFIT", "BAYESIAN3DFIT", "SPACEPAR", "SMOOTH"),
-      "Distance of the galaxy (Mpc)"),
     K("ADRIFT", "flag", ["gf.flagADRIFT"], ("3DFIT",), "Computing asymmetric drift correction?"),
     K("ADRIFTPOL1", "int", ["gf.ADRIFTPOL1"], ("3DFIT",), "Polynomial for VDISP2 regularisation"),
     K("ADRIFTPOL2", "int", ["gf.ADRIFTPOL2"], ("3DFIT",), "Polynomial for SIGMA regularisation"),
@@ -421,9 +419,8 @@ KEYWORDS = [
     K("OBMAJ", "float", ["obmaj"], ("SMOOTH",), "Old major beam (arcsec)"),
     K("OBMIN", "float", ["obmin"], ("SMOOTH",), "Old minor beam (arcsec)"),
     K("OBPA", "float", ["obpa"], ("SMOOTH",), "Old beam position angle (degree)"),
-    K("LINEAR", "float", ["linear"], ("SMOOTH", "3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR"),
-      "New linear resolution (kpc) for SMOOTH; for the models, also their spectral resolution (sigma, "
-      "channels) when SPECRES is not given (as in C++)"),
+    K("LINEAR", "float", ["linear"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR"),
+      "Spectral resolution of the models (sigma, channels) when SPECRES is not given (as in C++)"),
     K("SPECRES", "float", ["specres"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR"),
       "Spectral resolution of the models (sigma, in channels; default: LINEAR if given, else "
       "1/2.355, i.e. a FWHM of one channel)"),

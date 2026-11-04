@@ -10,7 +10,7 @@ parameter file, case-insensitive) and runs the same code as the command line:
     >>> from bbarolo import FitMod3D
     >>> f = FitMod3D("ngc2403.fits", radii=np.arange(15, 1200, 30), xpos=77, ypos=77,
     ...              vsys=132.8, vrot=120, vdisp=8, z0=10, inc=60, pa=123.7,
-    ...              free="VROT VDISP", mask="SEARCH", distance=3.2, threads=4)
+    ...              free="VROT VDISP", mask="SEARCH", threads=4)
     >>> res = f.run()
     >>> res.rings, res.model
 

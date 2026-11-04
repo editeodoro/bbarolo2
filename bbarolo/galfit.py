@@ -21,10 +21,10 @@ import numpy as np
 import numba as nb
 from concurrent.futures import ThreadPoolExecutor
 
-from .rings import Rings, readRings
+from .rings import Rings, readRings, ring_file_columns
 from .galmod import DiskModel
 from .stats import findMedian, findMADFM, madfmToSigma
-from .bbutils import (BBaroloError, arcsconv, AlltoVel, VeltoDist, KpcPerArc, DeltaVel, bezier_interp, polyfit_lsq,
+from .bbutils import (BBaroloError, arcsconv, AlltoVel, DeltaVel, bezier_interp, polyfit_lsq,
                       ProgressBar, mkdirp)
 
 VROT, VDISP, DENS, Z0, INC, PA, XPOS, YPOS, VSYS, VRAD, MAXPAR = range(11)
@@ -241,21 +241,20 @@ def writeInitialRings(inr, outfile):
 
 def ringfile_values(par):
     """RINGFILE: the ring parameters that are not given (par, a GalfitPar, changed in place)
-    are read from the columns of a BBarolo ring file (e.g. rings_final1.txt)."""
+    are read from the columns of a BBarolo ring file (e.g. rings_final1.txt), found by their names in
+    the header (files of bbarolo2 and of C++ BBarolo, whose columns differ); a file without a header
+    must have the columns of the ring files of C++ BBarolo."""
     if not par.ringfile:
         return
     rf = par.ringfile
-    if par.RADII == "-1" and (par.NRADII == -1 or par.RADSEP == -1): par.RADII = f"file({rf},2)"
-    if par.VROT == "-1": par.VROT = f"file({rf},3)"
-    if par.VDISP == "-1": par.VDISP = f"file({rf},4)"
-    if par.INC == "-1": par.INC = f"file({rf},5)"
-    if par.PHI == "-1": par.PHI = f"file({rf},6)"
-    if par.Z0 == "-1": par.Z0 = f"file({rf},8)"
-    if par.DENS == "-1": par.DENS = f"file({rf},9)"
-    if par.XPOS == "-1": par.XPOS = f"file({rf},10)"
-    if par.YPOS == "-1": par.YPOS = f"file({rf},11)"
-    if par.VSYS == "-1": par.VSYS = f"file({rf},12)"
-    if par.VRAD == "-1": par.VRAD = f"file({rf},13)"
+    cols, _ = ring_file_columns(rf)
+    if cols is None:
+        cols = dict(RADII=2, VROT=3, VDISP=4, INC=5, PHI=6, Z0=8, DENS=9, XPOS=10, YPOS=11, VSYS=12, VRAD=13)
+    if par.RADII == "-1" and (par.NRADII == -1 or par.RADSEP == -1) and "RADII" in cols:
+        par.RADII = f"file({rf},{cols['RADII']})"
+    for k in ("VROT", "VDISP", "INC", "PHI", "Z0", "DENS", "XPOS", "YPOS", "VSYS", "VRAD"):
+        if getattr(par, k) == "-1" and k in cols:
+            setattr(par, k, f"file({rf},{cols[k]})")
 
 
 def check_vsys(c, rings, fatal=True):
@@ -440,11 +439,6 @@ class Galfit:
         h = c.Head()
         self.arcconv = arcsconv(h.Cunit(0))
         check_vsys(c, self.inr, fatal=True)
-        self.distance = VeltoDist(abs(self.inr.vsys[0])) if par.DISTANCE == -1 else par.DISTANCE
-        if par.DISTANCE == -1 and self.verb and not getattr(c, "_distnote", False):
-            c._distnote = True
-            print(f" NOTE: DISTANCE is not given: {self.distance:.3g} Mpc from VSYS and the Hubble flow "
-                  "(H0 = 70 km/s/Mpc), for the radii in kpc and Z0 in pc.")
         self.chan_noise = np.ones(c.DimZ(), np.float64)
         if not c.StatsDef():
             c.setCubeStats()
@@ -804,11 +798,11 @@ class Galfit:
     def _check_vrot(self, ir):
         return self.outr.vrot[ir] <= self._max_vrot(ir)
 
-    def _fit_ring(self, ir, errors, fitok, nthreads, toKpc, modsoFar=None):
+    def _fit_ring(self, ir, errors, fitok, nthreads, modsoFar=None):
         # the generator of this ring is used only during its fit (see _rng)
         self._tls.rng = np.random.default_rng([12345, self.n_galfit, ir])
         try:
-            self._fit_one_ring(ir, errors, fitok, nthreads, toKpc, modsoFar)
+            self._fit_one_ring(ir, errors, fitok, nthreads, modsoFar)
         finally:
             self._tls.rng = None
             bar = getattr(self, "_bar", None)
@@ -817,11 +811,11 @@ class Galfit:
                     self._ndone += 1
                     bar.update(self._ndone)
 
-    def _fit_one_ring(self, ir, errors, fitok, nthreads, toKpc, modsoFar=None):
+    def _fit_one_ring(self, ir, errors, fitok, nthreads, modsoFar=None):
         inr = self.inr
         if self.verb >= 2 and nthreads == 1:
-            print(f"\n Working on ring #{ir + 1} at radius {inr.radii[ir]:.2f} arcsec "
-                  f"({inr.radii[ir] * toKpc:.2f} Kpc)... [{time.strftime('%H:%M:%S')}]")
+            print(f"\n Working on ring #{ir + 1} at radius {inr.radii[ir]:.2f} arcsec... "
+                  f"[{time.strftime('%H:%M:%S')}]")
         dring = self._make_dring(ir)
         if modsoFar is None and not self.reverse:
             blo, bhi = self.model.box(dring)
@@ -859,7 +853,7 @@ class Galfit:
         self._ringstat[ir] = ("ok", minimum)
         if self.verb >= 2:
             with self._lock:
-                printRing(sys.stdout, self.outr, ir, minimum, toKpc, self.mpar, nthreads)
+                printRing(sys.stdout, self.outr, ir, minimum, self.mpar, nthreads)
         if self.par.flagERRORS:
             self.getErrors(dring, errors[ir], ir, minimum)
 
@@ -888,7 +882,6 @@ class Galfit:
         errors = np.zeros((nr, 2, self.nfree))
         fitok = [False] * nr
         nthreads = p.threads
-        toKpc = KpcPerArc(self.distance)
         self._ringstat, self._ndone, self._bar = {}, 0, None
         start = self.par.STARTRAD if self.par.STARTRAD < nr else 0
         if self.verb == 1:                       # (VERBOSE 2: every ring, as in C++)
@@ -896,15 +889,15 @@ class Galfit:
             self._bar.init(f" Stage {n}: fitting {nr - start} rings with {max(1, nthreads)} threads ", nr - start)
         try:
             if self.reverse:
-                self.fit_reverse(errors, fitok, toKpc)
+                self.fit_reverse(errors, fitok)
             else:
                 start = self.par.STARTRAD if self.par.STARTRAD < nr else 0
                 if nthreads <= 1:
                     for ir in range(start, nr):
-                        self._fit_ring(ir, errors, fitok, 1, toKpc)
+                        self._fit_ring(ir, errors, fitok, 1)
                 else:
                     with ThreadPoolExecutor(nthreads) as ex:
-                        futs = [ex.submit(self._fit_ring, ir, errors, fitok, nthreads, toKpc) for ir in range(start, nr)]
+                        futs = [ex.submit(self._fit_ring, ir, errors, fitok, nthreads) for ir in range(start, nr)]
                         for f in futs:
                             f.result()
         finally:
@@ -914,14 +907,14 @@ class Galfit:
                 self._bar.fillSpace(" Done.\n")
                 self._bar = None
         if self.verb == 1:
-            self._print_rings(range(start, nr), toKpc)
+            self._print_rings(range(start, nr))
         self.fitok = fitok
         self.errors = errors
         with open(fileo, "w") as fout:
             writeHeader(fout, self.mpar, self.par.flagERRORS, self.par.flagBADOUT)
             for ir in range(nr):
                 if fitok[ir] or self.par.flagBADOUT:
-                    writeRing(fout, self.outr, ir, toKpc, self.nfree, self.par.flagERRORS, errors,
+                    writeRing(fout, self.outr, ir, self.nfree, self.par.flagERRORS, errors,
                               self.par.flagBADOUT, fitok[ir])
         m = self.mpar
         is2 = m[INC] or m[PA] or m[Z0] or m[XPOS] or m[YPOS] or m[VSYS]
@@ -934,18 +927,18 @@ class Galfit:
             print("=" * 69 + "\n")
             p.verbose = self.verb
 
-    def _print_rings(self, rings, toKpc):
+    def _print_rings(self, rings):
         """The rings of a stage, in order of radius: the free parameters, fmin and the outcome."""
         names = [("VROT", VROT, "vrot"), ("VDISP", VDISP, "vdisp"), ("DENS", DENS, "dens"), ("Z0", Z0, "z0"),
                  ("INC", INC, "inc"), ("PA", PA, "phi"), ("XPOS", XPOS, "xpos"), ("YPOS", YPOS, "ypos"),
                  ("VSYS", VSYS, "vsys"), ("VRAD", VRAD, "vrad")]
         cols = [x for x in names if self.mpar[x[1]]]
         o = self.outr
-        head = f"   {'#':>3s} {'RAD(arcs)':>9s} {'RAD(kpc)':>8s}" + "".join(f" {x[0]:>8s}" for x in cols)
+        head = f"   {'#':>3s} {'RAD(arcs)':>9s}" + "".join(f" {x[0]:>8s}" for x in cols)
         print(head + f" {'fmin':>10s}  outcome")
         for ir in rings:
             st, fmin = self._ringstat.get(ir, ("not fitted", None))
-            line = f"   {ir + 1:3d} {o.radii[ir]:9.2f} {o.radii[ir] * toKpc:8.3f}"
+            line = f"   {ir + 1:3d} {o.radii[ir]:9.2f}"
             fitted = st == "ok" or st.startswith("rejected") or st == "not converged"
             for _, _, attr in cols:
                 v = getattr(o, attr)[ir]
@@ -954,7 +947,7 @@ class Galfit:
             print(line + "  " + st)
         sys.stdout.flush()
 
-    def fit_reverse(self, errors, fitok, toKpc):
+    def fit_reverse(self, errors, fitok):
         inr = self.inr
         start = self.par.STARTRAD if self.par.STARTRAD < inr.nr else 0
         for ir in range(inr.nr - 1, start - 1, -1):
@@ -965,7 +958,7 @@ class Galfit:
                 d2.id = ir + 1
                 blo, bhi = self.model.box(self.outr)
                 modsoFar = self.model.setup.build(d2, blo, bhi, layout="yxz")
-            self._fit_ring(ir, errors, fitok, 1, toKpc, modsoFar=modsoFar if modsoFar is not None else None)
+            self._fit_ring(ir, errors, fitok, 1, modsoFar=modsoFar)
 
     # ------------------------------------------------------------------
     # Second stage
@@ -1184,11 +1177,10 @@ class Galfit:
     # ------------------------------------------------------------------
     def writeRingFile(self, filename, r, errors=None):
         fileo = self.cin.pars().outFolder + self.cin.pars().outPrefix + "_" + filename
-        toKpc = KpcPerArc(self.distance)
         with open(fileo, "w") as fout:
             writeHeader(fout, self.mpar, self.par.flagERRORS, self.par.flagBADOUT)
             for i in range(r.nr):
-                writeRing(fout, r, i, toKpc, self.nfree, self.par.flagERRORS and errors is not None, errors, False, False)
+                writeRing(fout, r, i, self.nfree, self.par.flagERRORS and errors is not None, errors, False, False)
 
     def showInitial(self, inr, stream, pp=None):
         pp = self.cin.pars().gf if pp is None else pp
@@ -1216,7 +1208,7 @@ class Galfit:
         nc = [-1] * MAXPAR
         for j in range(MAXPAR):
             if self.par.flagERRORS and self.mpar[j]:
-                nc[j] = 13 + 2 * free.index(j)
+                nc[j] = NCOLS + 2 * free.index(j)
         return nc
 
     def writeModel(self, normtype, makeplots=True):
@@ -1238,10 +1230,17 @@ class Galfit:
 # --------------------------------------------------------------------------
 # Writing rings
 # --------------------------------------------------------------------------
+# The columns of the ring files of the fits (rings_final1.txt, ...), followed by the errors of the free
+# parameters. The files of C++ BBarolo also have RAD(Kpc), first, and Z0(pc), before Z0(arcs).
+RING_COLUMNS = ("RAD(arcs)", "VROT(km/s)", "DISP(km/s)", "INC(deg)", "P.A.(deg)", "Z0(arcs)", "DENS(un)",
+                "XPOS(pix)", "YPOS(pix)", "VSYS(km/s)", "VRAD(km/s)")
+NCOLS = len(RING_COLUMNS)
+
+
 def writeHeader(fout, mpar, writeErrors, writeBadRings):
     m = 10
-    s = (f"{'#RAD(Kpc)':<{m}}{'RAD(arcs)':<{m + 1}}{'VROT(km/s)':<{m + 1}}{'DISP(km/s)':<{m + 1}}{'INC(deg)':<{m}}"
-         f"{'P.A.(deg)':<{m}}{'Z0(pc)':<{m}}{'Z0(arcs)':<{m}}{'DENS(un)':<{m}}{'XPOS(pix)':<{m}}{'YPOS(pix)':<{m}}"
+    s = (f"{'#RAD(arcs)':<{m + 1}}{'VROT(km/s)':<{m + 1}}{'DISP(km/s)':<{m + 1}}{'INC(deg)':<{m}}"
+         f"{'P.A.(deg)':<{m}}{'Z0(arcs)':<{m}}{'DENS(un)':<{m}}{'XPOS(pix)':<{m}}{'YPOS(pix)':<{m}}"
          f"{'VSYS(km/s)':<{m + 1}}{'VRAD(km/s)':<{m + 1}}")
     if writeErrors:
         names = ["VROT", "DISP", "DENS", "Z0", "INC", "PA", "XPOS", "YPOS", "VSYS", "VRAD"]
@@ -1253,10 +1252,10 @@ def writeHeader(fout, mpar, writeErrors, writeBadRings):
     fout.write(s + "\n")
 
 
-def writeRing(fout, r, i, toKpc, nfree, writeErrors, errors, writeBadRings, fitOK):
+def writeRing(fout, r, i, nfree, writeErrors, errors, writeBadRings, fitOK):
     m = 10
-    s = (f"{r.radii[i] * toKpc:<{m}.3f}{r.radii[i]:<{m + 1}.3f}{r.vrot[i]:<{m + 1}.3f}{r.vdisp[i]:<{m + 1}.3f}"
-         f"{r.inc[i]:<{m}.3f}{r.phi[i]:<{m}.3f}{r.z0[i] * toKpc * 1000:<{m}.3f}{r.z0[i]:<{m}.3f}"
+    s = (f"{r.radii[i]:<{m + 1}.3f}{r.vrot[i]:<{m + 1}.3f}{r.vdisp[i]:<{m + 1}.3f}"
+         f"{r.inc[i]:<{m}.3f}{r.phi[i]:<{m}.3f}{r.z0[i]:<{m}.3f}"
          f"{r.dens[i]:<{m}.1e}{r.xpos[i]:<{m}.3f}{r.ypos[i]:<{m}.3f}{r.vsys[i]:<{m + 1}.3f}{r.vrad[i]:<{m + 1}.3f}")
     if writeErrors:
         for kk in range(nfree):
@@ -1266,11 +1265,11 @@ def writeRing(fout, r, i, toKpc, nfree, writeErrors, errors, writeBadRings, fitO
     fout.write(s + "\n")
 
 
-def printRing(fout, r, i, minimum, toKpc, mpar, nthreads):
+def printRing(fout, r, i, minimum, mpar, nthreads):
     k, n = 8, 11
     s = ""
     if nthreads > 1:
-        s += f"\n Ring #{i + 1} at radius {r.radii[i]:.2f} arcsec ({r.radii[i] * toKpc:.2f} Kpc)... \n"
+        s += f"\n Ring #{i + 1} at radius {r.radii[i]:.2f} arcsec... \n"
     s += f"  Best parameters for ring #{i + 1} (fmin = {minimum:.3e}):\n"
 
     def f(name, idx, val, unit, first):
@@ -1282,7 +1281,7 @@ def printRing(fout, r, i, minimum, toKpc, mpar, nthreads):
     s += f("    Vrad", VRAD, r.vrad[i], "  km/s", True) + f("        Vsys", VSYS, r.vsys[i], "  km/s", False)
     s += f("    Inc", INC, r.inc[i], "  deg", True) + f("        PA", PA, r.phi[i], "  deg", False)
     s += f("    Xpos", XPOS, r.xpos[i], "  pix", True) + f("        Ypos", YPOS, r.ypos[i], "  pix", False)
-    s += f("    Z0", Z0, r.z0[i] * toKpc, "  Kpc", True) + "\n"
+    s += f("    Z0", Z0, r.z0[i], "  arcs", True) + "\n"
     fout.write(s)
     fout.flush()
 

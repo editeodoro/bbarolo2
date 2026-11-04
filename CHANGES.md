@@ -200,6 +200,25 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **No DISTANCE: the outputs are in arcsec.** DISTANCE only converted arcsec to kpc in the outputs
+  (no fit, model or likelihood used it; without it the distance was VSYS/70 Mpc). It is gone, and so
+  is what it gave:
+  - the ring files of 3DFIT, BAYESIAN3DFIT and GALMOD (`rings_final1.txt`, ...) have no RAD(Kpc) and
+    Z0(pc) columns. The columns are RAD(arcs), VROT, DISP, INC, P.A., Z0(arcs), DENS, XPOS, YPOS,
+    VSYS, VRAD, then the errors: VROT is column 2, not 3 as in the files of C++;
+  - the ring tables of the results have no `rad_kpc` and `z0_pc` (nor has `rotation_curve`), the
+    screen output has the radii and Z0 in arcsec, and the note on the distance from the Hubble flow
+    is gone;
+  - SMOOTH has no LINEAR (a resolution in kpc): the new beam is BMAJ, BMIN, BPA or FACTOR. LINEAR is
+    still the spectral resolution of the models when SPECRES is not given.
+
+  DISTANCE in a parameter file is an unknown keyword (ignored, with a warning); `distance=` in Python
+  is an error. RINGFILE now finds the columns by their names in the header, so it reads the ring files
+  of bbarolo2 and of C++ (and `rings_initial.txt`, whose columns it read wrongly before); a file without
+  a header must have the columns of C++. A parameter read with `file(name,n)` from a BBarolo ring file
+  must come from its own column: e.g. `VROT file(rings_final1.txt,3)` on a file of bbarolo2 (column 3
+  is DISP) is an error that gives the right column, so the column numbers of the C++ files cannot read
+  another quantity without notice.
 - **BayesianBBarolo: RADMAX is the outer edge of the disk.** In the original module RADMAX moved the
   radius of the last ring, so the posterior of that ring mixed different annuli and the model
   extended half a ring beyond RADMAX. Now the rings stay, and the model has no emission beyond

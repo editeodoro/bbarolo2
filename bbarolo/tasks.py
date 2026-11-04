@@ -7,7 +7,7 @@ keywords as in a parameter file, case-insensitive; see :func:`bbarolo.help`):
     >>> from bbarolo import FitMod3D
     >>> f = FitMod3D("ngc2403.fits", radii=np.arange(15, 1200, 30), xpos=77, ypos=77,
     ...              vsys=132.8, vrot=120, vdisp=8, z0=10, inc=60, pa=123.7,
-    ...              free="VROT VDISP", mask="SEARCH", distance=3.2, threads=4)
+    ...              free="VROT VDISP", mask="SEARCH", threads=4)
     >>> res = f.run()
     >>> res.rings, res.model, res.maps
 
@@ -715,8 +715,8 @@ def _base(f, prefix):
 
 
 def _rotation_curve(t):
-    """The rotation curve of a ring table: radius (arcsec, and kpc), VROT and its errors (lower and upper,
-    as positive numbers: the table has e_vrot1 < 0 and e_vrot2 > 0)."""
+    """The rotation curve of a ring table: radius (arcsec; also kpc for the files of C++ BBarolo), VROT and
+    its errors (lower and upper, as positive numbers: the table has e_vrot1 < 0 and e_vrot2 > 0)."""
     from astropy.table import Table
     rc = Table()
     for k in ("radii", "rad_kpc", "vrot"):
@@ -1349,11 +1349,11 @@ class MakeMask(Task):
 _doc(FitMod3D, """Fit a 3D tilted-ring model to a datacube (3DFIT).
 
     Result:
-      rings          Table of the final rings: radii (arcsec), rad_kpc, vrot, vdisp, vrad, vsys
-                     (km/s), inc, pa (deg), z0 (arcsec), z0_pc, dens, xpos, ypos (pixels); with
+      rings          Table of the final rings: radii (arcsec), vrot, vdisp, vrad, vsys (km/s),
+                     inc, pa (deg), z0 (arcsec), dens, xpos, ypos (pixels); with
                      FLAGERRORS, the errors e_<name>1 (lower, negative) and e_<name>2 (upper) of
                      the free parameters
-      rotation_curve radii, rad_kpc, vrot and its errors e_vrot_lo, e_vrot_hi (positive)
+      rotation_curve radii, vrot and its errors e_vrot_lo, e_vrot_hi (positive)
       rings_stage1, rings_initial   the rings of the first stage and the initial rings
       model          HDU of the model (NORM of the last stage); models: all the models written
       data, residual HDUs of the data analysed and of data - model (NaN outside the mask),
@@ -1365,7 +1365,7 @@ _doc(FitMod3D, """Fit a 3D tilted-ring model to a datacube (3DFIT).
 
     >>> f = FitMod3D("ngc2403.fits", radii=np.arange(15, 1200, 30), xpos=77, ypos=77,
     ...              vsys=132.8, vrot=120, vdisp=8, z0=10, inc=60, pa=123.7,
-    ...              free="VROT VDISP", mask="SEARCH", distance=3.2)
+    ...              free="VROT VDISP", mask="SEARCH")
     >>> res = f.run(threads=4)""")
 _doc(GalMod, """Make a 3D model of a disk galaxy on the grid of a datacube (GALMOD).
 
@@ -1397,7 +1397,7 @@ _doc(Ellprof, """Radial profiles in elliptical rings (ELLPROF).
 
     Result: profile (Table), map (HDU of the map used), mask.""")
 _doc(Smooth, """Smooth a datacube spatially to a new beam (SMOOTH): BMAJ, BMIN, BPA (arcsec,
-    degrees), or FACTOR (times the old beam), or LINEAR (kpc) with DISTANCE.
+    degrees), or FACTOR (times the old beam).
 
     Result: cube (HDU of the smoothed cube).""")
 _doc(SmoothSpec, """Smooth a datacube spectrally (SMOOTHSPEC): WINDOW_TYPE, WINDOW_SIZE.

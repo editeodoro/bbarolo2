@@ -164,11 +164,11 @@ def test_bayesian_deconvolved_profile(tmp_path):
     with pytest.raises(ValueError):
         BayesianBBarolo(fn, **kw, pa=45., outfolder=str(tmp_path) + "/").ring_errors('vrot')
     g.write_bestmodel(plots=False, verbose=False)
-    ring_dens = np.loadtxt(str(tmp_path / "MOCK_rings_final1.txt"), usecols=8)
+    ring_dens = np.loadtxt(str(tmp_path / "MOCK_rings_final1.txt"), usecols=6)
     assert np.allclose(ring_dens, g.outri.r['dens'], rtol=0.06)
     head = open(str(tmp_path / "MOCK_rings_final1.txt")).readline().split()
-    assert head[13:] == ["E_VROT1", "E_VROT2", "E_DENS1", "E_DENS2"]
-    e_dens = np.loadtxt(str(tmp_path / "MOCK_rings_final1.txt"), usecols=(15, 16))
+    assert head[11:] == ["E_VROT1", "E_VROT2", "E_DENS1", "E_DENS2"]
+    e_dens = np.loadtxt(str(tmp_path / "MOCK_rings_final1.txt"), usecols=(13, 14))
     assert np.allclose(e_dens, np.c_[-dp['err_lo'], dp['err_hi']], rtol=1e-2, atol=1e-3)
     t = np.loadtxt(str(tmp_path / "MOCK_densprof_deconvolved.txt"))
     assert np.allclose(t[:, 0], radii) and np.allclose(t[:, 1], g.outri.r['dens'], rtol=1e-5)
@@ -294,7 +294,7 @@ def test_2dfit_matches_cpp(tmp_path):
 def test_3dfit_quick(tmp_path):
     from bbarolo import FitMod3D
     f3d = FitMod3D(N2403, radii=np.arange(105, 400, 90), xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8, vrad=0,
-                   z0=10, inc=60, pa=123.7, mask="SEARCH", free="VROT VDISP", wfunc=2, distance=3.2,
+                   z0=10, inc=60, pa=123.7, mask="SEARCH", free="VROT VDISP", wfunc=2,
                    twostage=False, threads=2, plots=False, verbose=False)
     res = f3d.run(outfolder=str(tmp_path))
     vrot = np.asarray(res.rings['vrot'])
@@ -484,7 +484,7 @@ def test_analytic_residuals_match_mc(tmp_path):
     p = Param()
     p.readParamString(f"FITSFILE {N2403}\n3DFIT true\nNRADII 20\nRADSEP 30\nXPOS 77\nYPOS 77\nVSYS 132.8\n"
                       f"VROT 120\nVDISP 8\nINC 60\nPA 123.7\nZ0 10\nMASK SEARCH\nFTYPE 2\nWFUNC 2\n"
-                      f"DISTANCE 3.2\nVERBOSE false\nOUTFOLDER {tmp_path}/\n")
+                      f"VERBOSE false\nOUTFOLDER {tmp_path}/\n")
     assert p.checkPars(quiet=True)
     g = Galfit(Cube(N2403, par=p))
     g.n_galfit = 1
@@ -526,7 +526,7 @@ def test_bayesian_quick(tmp_path):
     # the posterior errors are written as the 3DFIT error columns (and FREE is restored)
     # (with the errors of the deconvolved density profile)
     head = open(os.path.join(str(tmp_path), "ngc2403_rings_final1.txt")).readline().split()
-    assert head[13:] == ["E_VROT1", "E_VROT2", "E_DISP1", "E_DISP2", "E_DENS1", "E_DENS2"]
+    assert head[11:] == ["E_VROT1", "E_VROT2", "E_DISP1", "E_DISP2", "E_DENS1", "E_DENS2"]
     assert not f._galfit.par.flagERRORS
     f.write_bestmodel(plots=False, verbose=False)
     assert os.path.isfile(os.path.join(str(tmp_path), "ngc2403_mod_none.fits"))
@@ -934,7 +934,7 @@ def test_bayesian_task(tmp_path, capsys):
                  "MOCK_dynesty_results.npy", "MOCK_corner.pdf", "MOCK_profiles.pdf", "MOCK_parameters.pdf"):
         assert (cli / name).is_file(), name
     head = open(cli / "MOCK_rings_final1.txt").readline().split()
-    assert head[13:] == ["E_VROT1", "E_VROT2", "E_DISP1", "E_DISP2", "E_DENS1", "E_DENS2"]
+    assert head[11:] == ["E_VROT1", "E_VROT2", "E_DISP1", "E_DISP2", "E_DENS1", "E_DENS2"]
     g = BayesianBBarolo(fn, outfolder=str(tmp_path / "re"))
     g.load_results(str(cli / "MOCK_dynesty_results.npy"))
     assert g.freepar_names == ['vrot', 'vdisp'] and 100 < g.params[0] < 200
@@ -1275,7 +1275,7 @@ def test_analytic_lorentzian_layer():
 
 def test_specres_keyword(synthetic_cube, capsys):
     """SPECRES sets the spectral resolution of the models; LINEAR still does when SPECRES is not given
-    (as in C++), with a warning when LINEAR is also the resolution of SMOOTH."""
+    (as in C++). LINEAR is no longer a resolution (kpc) of SMOOTH."""
     from bbarolo import DiskModel
     c = synthetic_cube
     r = _rings()
@@ -1287,11 +1287,56 @@ def test_specres_keyword(synthetic_cube, capsys):
         models[k] = DiskModel(c, smooth=False).array(r, galmodtype="ANALYTIC")
     assert np.array_equal(models["linear"], models["specres"]) and not np.allclose(models["default"], models["linear"])
     p = Param()
-    p.readParamString(f"FITSFILE {N2403}\nSMOOTH true\nLINEAR 0.5\nDISTANCE 3\nGALMOD true\nRADII 100 200\n"
+    from bbarolo.keywords import lookup
+    p.readParamString(f"FITSFILE {N2403}\nSMOOTH true\nLINEAR 0.5\nGALMOD true\nRADII 100 200\n"
                       "XPOS 77\nYPOS 77\nVSYS 130\nVROT 100\nVDISP 8\nINC 60\nPA 120\nZ0 0\n")
-    p.checkPars()
-    assert "SPECRES" in capsys.readouterr().out
+    assert p.checkPars() is not False
+    assert "LINEAR" not in capsys.readouterr().out and "SMOOTH" not in lookup("linear").tasks
 
+
+
+def test_ring_files_in_arcsec(tmp_path, capsys):
+    """No DISTANCE: the ring files have the radii and Z0 in arcsec only (C++ also wrote RAD(Kpc), first, and
+    Z0(pc)). RINGFILE finds the columns by their names, in the files of bbarolo2 and of C++, and
+    file(name,n) of a ring file must read the column of the parameter (old column numbers are an error)."""
+    import io
+    from bbarolo.galfit import writeHeader, writeRing, ringfile_values, RING_COLUMNS
+    from bbarolo.params import GalfitPar
+    from bbarolo.rings import readRings
+    from bbarolo.bbutils import BBaroloError, getDataColumn
+    from bbarolo.keywords import lookup, UnknownParameterError
+    assert lookup("distance") is None
+    with pytest.raises(UnknownParameterError):
+        Param().set("distance", 3.2)
+    Param().readParamString("DISTANCE 3.2\n")                 # an old parameter file: ignored, with a warning
+    assert "DISTANCE" in capsys.readouterr().err.upper()
+    r = _rings(3)
+    r.vrot = np.array([100., 120., 130.])
+    f = io.StringIO()
+    writeHeader(f, [False] * 10, False, False)
+    for i in range(r.nr):
+        writeRing(f, r, i, 0, False, None, False, False)
+    new = tmp_path / "rings_new.txt"
+    new.write_text(f.getvalue())
+    assert f.getvalue().split("\n")[0].lstrip("#").split() == list(RING_COLUMNS)
+    cpp = tmp_path / "rings_cpp.txt"
+    cpp.write_text("#RAD(Kpc) RAD(arcs)  VROT(km/s) DISP(km/s) INC(deg)  P.A.(deg) Z0(pc)    Z0(arcs)  DENS(un)  "
+                   "XPOS(pix) YPOS(pix) VSYS(km/s) VRAD(km/s)\n" + "".join(
+                       f"{R * 0.0155:.3f} {R:.3f} {v:.3f} 10.0 60.0 45.0 0.0 0.0 1.0e+00 31.5 31.5 0.0 0.0\n"
+                       for R, v in zip(r.radii, r.vrot)))
+    for fn, col in ((new, 2), (cpp, 3)):
+        par = GalfitPar()
+        par.ringfile = str(fn)
+        ringfile_values(par)
+        assert par.VROT == f"file({fn},{col})" and getDataColumn(par.VROT) == [100., 120., 130.]
+        assert getDataColumn(par.RADII) == list(r.radii) and getDataColumn(par.INC) == [60.] * 3
+    par = GalfitPar()
+    par.RADII, par.VROT = f"file({cpp},2)", f"file({cpp},2)"
+    with pytest.raises(BBaroloError, match="column 2 .* is RAD\\(arcs\\); VROT is column 3"):
+        readRings(par, None)
+    par.RADII, par.VROT = f"file({new},1)", f"file({new},3)"
+    with pytest.raises(BBaroloError, match="DISP\\(km/s\\); VROT is column 2"):
+        readRings(par, None)
 
 _C, _F0, _W0, _NZ, _DV, _V0 = 299792.458, 1.420405751786e9, 6562.8, 60, 10., 1000.
 _b = _V0 / _C
@@ -1516,7 +1561,7 @@ def test_verbosity_levels(tmp_path, capsys):
     in C++."""
     from bbarolo import FitMod3D
     kw = dict(radii=[150, 250, 350], xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8, inc=60, pa=123.7, z0=10,
-              free="VROT VDISP", twostage=False, threads=3, plots=False, distance=3.2)
+              free="VROT VDISP", twostage=False, threads=3, plots=False)
     out = {}
     for v in (0, 1, 2):
         FitMod3D(N2403, verbose=v, **kw).run(outfolder=str(tmp_path / f"v{v}"))
@@ -1535,7 +1580,7 @@ def test_result_data_residual_curve_plots(tmp_path):
     matplotlib.use("Agg")
     from bbarolo import FitMod3D, GalMod
     kw = dict(radii=[150, 250, 350], xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8, inc=60, pa=123.7, z0=10,
-              twostage=False, threads=3, plots=False, verbose=0, distance=3.2)
+              twostage=False, threads=3, plots=False, verbose=0)
     res = FitMod3D(N2403, free="VROT VDISP", flagerrors=True, **kw).run(write=False)
     assert "data" in res and "data" in res._lazy                 # not computed yet
     assert res.data.data.shape == res.model.data.shape == res.residual.data.shape
@@ -1543,7 +1588,7 @@ def test_result_data_residual_curve_plots(tmp_path):
     assert np.all(np.isnan(res.residual.data[~m]))
     assert np.allclose(res.residual.data[m], (res.data.data - res.model.data)[m])
     rc = res.rotation_curve
-    assert rc.colnames == ["radii", "rad_kpc", "vrot", "e_vrot_lo", "e_vrot_hi"] and np.all(rc["e_vrot_lo"] >= 0)
+    assert rc.colnames == ["radii", "vrot", "e_vrot_lo", "e_vrot_hi"] and np.all(rc["e_vrot_lo"] >= 0)
     for f in (res.plot_rings(), res.plot_maps(), res.plot_pv()):
         assert isinstance(f, matplotlib.figure.Figure)
     g = GalMod(N2403, norm="AZIM", **kw).run(write=False)

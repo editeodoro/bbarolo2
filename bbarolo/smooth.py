@@ -13,7 +13,7 @@ import collections
 import numpy as np
 import scipy.fft as sfft
 
-from .bbutils import BBaroloError, arcsconv, KpcPerArc, FluxtoJyBeam, Smooth1D
+from .bbutils import BBaroloError, arcsconv, FluxtoJyBeam, Smooth1D
 
 CUTOFFRATIO = 1.0 / 10000.0
 MAXCONV = 512 * 512
@@ -267,12 +267,8 @@ class Smooth3D:
                   f"Assuming a {p.beamFWHM * 3600} arcsec beam.Change this value with beamFWHM parameter.")
             OB[0] = OB[1] = p.beamFWHM * 3600
         npa = OB[2] if p.bpa == -1 else p.bpa
-        if p.linear != -1:
-            b = p.linear / KpcPerArc(p.gf.DISTANCE)
-            NB = [b, b, OB[2]]
-        else:
-            NB = [p.factor * OB[0] if p.bmaj == -1 else p.bmaj,
-                  p.factor * OB[1] if p.bmin == -1 else p.bmin, npa]
+        NB = [p.factor * OB[0] if p.bmaj == -1 else p.bmaj,
+              p.factor * OB[1] if p.bmin == -1 else p.bmin, npa]
         dims = [c.DimX(), c.DimY(), c.DimZ()]
         Blo, Bhi = [0, 0, 0], list(dims)
         for j in range(3):

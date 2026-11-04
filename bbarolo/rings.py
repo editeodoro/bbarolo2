@@ -2,9 +2,11 @@
 Tilted rings (port of Arrays/rings.hh and readRings in utils.cpp).
 """
 
+import os
+import re
 import numpy as np
 
-from .bbutils import getDataColumn, getCenterCoordinates
+from .bbutils import BBaroloError, getDataColumn, getCenterCoordinates
 
 RING_KEYS = ("radii", "xpos", "ypos", "vsys", "vrot", "vdisp", "vrad", "vvert",
              "dvdz", "zcyl", "dens", "z0", "inc", "phi")
@@ -114,6 +116,53 @@ def firstValue(s):
     return repr(lst[0]) if lst is not None else s
 
 
+# The ring parameters in the columns of BBarolo ring files (rings_final1.txt, rings_initial.txt, ...,
+# of bbarolo2 and of C++), by the name of the column in the header. The other columns (RAD(Kpc) and
+# Z0(pc) of the C++ files, the errors) hold none.
+_RING_FILE_NAMES = {"RAD(ARCS)": "RADII", "VROT(KM/S)": "VROT", "DISP(KM/S)": "VDISP", "INC(DEG)": "INC",
+                    "P.A.(DEG)": "PHI", "Z0(ARCS)": "Z0", "DENS(UN)": "DENS", "SIG(E20)": "DENS",
+                    "XPOS(PIX)": "XPOS", "YPOS(PIX)": "YPOS", "VSYS(KM/S)": "VSYS", "VRAD(KM/S)": "VRAD"}
+
+
+def ring_file_columns(filename):
+    """The columns (1-based) of the ring parameters in a BBarolo ring file, from its header: a dict
+    {parameter: column} (RADII, VROT, VDISP, INC, PHI, Z0, DENS, XPOS, YPOS, VSYS, VRAD) and the list of
+    the names of the columns; (None, None) if the file has no header of a ring file."""
+    try:
+        with open(os.path.expanduser(str(filename))) as f:
+            for line in f:
+                s = line.strip()
+                if not s.startswith("#"):
+                    break                                   # (the header is before the data)
+                names = s.lstrip("#").split()
+                if names and names[0].upper().startswith("RAD(") and "VROT(KM/S)" in (n.upper() for n in names):
+                    cols = {}
+                    for i, n in enumerate(names):
+                        p = _RING_FILE_NAMES.get(n.upper())
+                        if p is not None and p not in cols:
+                            cols[p] = i + 1
+                    return cols, names
+    except OSError:
+        pass
+    return None, None
+
+
+def check_ring_column(pkey, val):
+    """A ring parameter given as file(name,n) from a BBarolo ring file must be read from its own column:
+    a BBaroloError otherwise (the ring files of C++ BBarolo have two more columns, RAD(Kpc) and Z0(pc),
+    so their column numbers differ from those of bbarolo2)."""
+    m = re.search(r"file\(\s*([^,)]+?)\s*(?:,\s*(\d+)\s*)?(?:,[^)]*)?\)", str(val), re.I)
+    if m is None:
+        return
+    fname, n = m.group(1), int(m.group(2) or 1)
+    cols, names = ring_file_columns(fname)
+    if cols is None or pkey not in cols or cols[pkey] == n:
+        return
+    name = {"PHI": "PA"}.get(pkey, pkey)
+    what = f"column {n} of {fname} is {names[n - 1]}" if 0 < n <= len(names) else f"{fname} has no column {n}"
+    raise BBaroloError(f"{name} {val}: {what}; {name} is column {cols[pkey]}")
+
+
 def readRings(par, h, return_fromfile=False):
     """Build a Rings object from a GALFIT/GALMOD parameter structure (port of readRings)."""
     fr = {}
@@ -122,6 +171,8 @@ def readRings(par, h, return_fromfile=False):
                       ("zcyl", "ZCYL"), ("vdisp", "VDISP"), ("z0", "Z0"), ("dens", "DENS"),
                       ("inc", "INC"), ("phi", "PHI")):
         val = str(getattr(par, pkey))
+        if "file(" in val.lower():
+            check_ring_column(pkey, val)
         fr[key] = getDataColumn(val) if "file(" in val.lower() else None
     fromfile = any(v is not None for v in fr.values())
     for key, pkey in (("xpos", "XPOS"), ("ypos", "YPOS"), ("vsys", "VSYS"), ("vrot", "VROT"), ("vrad", "VRAD"),
