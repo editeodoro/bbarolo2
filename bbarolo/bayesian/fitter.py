@@ -534,7 +534,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         if verbose:
             print(f"\nFitting {self.ndim} parameters: {self.freepar_names}")
             if custom and not useBBres and log_like is None:
-                print(f"Likelihood: user-defined residuals (_calculate_residuals); log-likelihood x "
+                print(f"\nLikelihood: user-defined residuals (_calculate_residuals); log-likelihood x "
                       f"{self._likefactor_note}")
             elif (not useBBres and log_like is None) or log_like == self._log_likelihood_geometry:
                 sg = like_kwargs.get('sigma')
@@ -548,10 +548,10 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                 fe = "; model error: fractional, free parameter 'fracerr'" if 'fracerr' in self.freepar_idx else \
                     (f"; model error: fractional, fracerr = {fe:.4g} (given)" if fe else "")
                 if log_like == self._log_likelihood_geometry:
-                    print(f"Likelihood: total intensity map ({self._likemask_note}), noise per voxel sigma = "
+                    print(f"\nLikelihood: total intensity map ({self._likemask_note}), noise per voxel sigma = "
                           f"{sg}{fe}; log-likelihood x {fc}")
                 else:
-                    print(f"Likelihood: noise per voxel sigma = {sg}{fe}; log-likelihood x {fc}; "
+                    print(f"\nLikelihood: noise per voxel sigma = {sg}{fe}; log-likelihood x {fc}; "
                           f"{self.nvox} voxels ({self._likemask_note})")
             if self.useNorm and not useBBres:
                 print(f"Density profile: deconvolved (fit of the total intensity map with the beam-convolved "
@@ -563,7 +563,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                           "(+ half a beam,\n         at the initial geometry): the model cannot reproduce it, and "
                           "with a wide prior\n         of INC it biases INC low. Extend the rings to the whole disk.")
             if 'radmax' in self.freepar_idx:
-                print(dict(ring="RADMAX: the radius of the last ring (the ring moves)",
+                print("\n" + dict(ring="RADMAX: the radius of the last ring (the ring moves)",
                            edge="RADMAX: the outer edge of the disk (sharp; the rings do not move)",
                            taper=f"RADMAX: the outer edge of the disk (Gaussian, width {self._radmax_width:.3g} "
                                  "arcsec; the rings do not move)")[self._radmax_mode])
