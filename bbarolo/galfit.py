@@ -1201,12 +1201,17 @@ class Galfit:
     # ------------------------------------------------------------------
     # Outputs
     # ------------------------------------------------------------------
-    def writeRingFile(self, filename, r, errors=None):
+    def writeRingFile(self, filename, r, errors=None, extra=None):
+        """<prefix>_<filename> in the output folder: the rings r (and the errors of the free parameters).
+        extra: {NAME: integer value of each ring}, written as the last columns (e.g. INDISK of
+        BayesianBBarolo)."""
         fileo = self.cin.pars().outFolder + self.cin.pars().outPrefix + "_" + filename
+        extra = extra or {}
         with open(fileo, "w") as fout:
-            writeHeader(fout, self.mpar, self.par.flagERRORS, self.par.flagBADOUT)
+            writeHeader(fout, self.mpar, self.par.flagERRORS, False, extra=list(extra))
             for i in range(r.nr):
-                writeRing(fout, r, i, self.nfree, self.par.flagERRORS and errors is not None, errors, False, False)
+                writeRing(fout, r, i, self.nfree, self.par.flagERRORS and errors is not None, errors, False, False,
+                          extra=[v[i] for v in extra.values()])
 
     def showInitial(self, inr, stream, pp=None):
         pp = self.cin.pars().gf if pp is None else pp
@@ -1263,7 +1268,7 @@ RING_COLUMNS = ("RAD(arcs)", "VROT(km/s)", "DISP(km/s)", "INC(deg)", "P.A.(deg)"
 NCOLS = len(RING_COLUMNS)
 
 
-def writeHeader(fout, mpar, writeErrors, writeBadRings):
+def writeHeader(fout, mpar, writeErrors, writeBadRings, extra=()):
     m = 10
     s = (f"{'#RAD(arcs)':<{m + 1}}{'VROT(km/s)':<{m + 1}}{'DISP(km/s)':<{m + 1}}{'INC(deg)':<{m}}"
          f"{'P.A.(deg)':<{m}}{'Z0(arcs)':<{m}}{'DENS(un)':<{m}}{'XPOS(pix)':<{m}}{'YPOS(pix)':<{m}}"
@@ -1275,10 +1280,12 @@ def writeHeader(fout, mpar, writeErrors, writeBadRings):
                 s += f"{'E_' + nm + '1':<{m}}{'E_' + nm + '2':<{m}}"
     if writeBadRings:
         s += f"{'FITOK':<{m}}"
+    for nm in extra:
+        s += f"{nm:<{m}}"
     fout.write(s + "\n")
 
 
-def writeRing(fout, r, i, nfree, writeErrors, errors, writeBadRings, fitOK):
+def writeRing(fout, r, i, nfree, writeErrors, errors, writeBadRings, fitOK, extra=()):
     m = 10
     s = (f"{r.radii[i]:<{m + 1}.3f}{r.vrot[i]:<{m + 1}.3f}{r.vdisp[i]:<{m + 1}.3f}"
          f"{r.inc[i]:<{m}.3f}{r.phi[i]:<{m}.3f}{r.z0[i]:<{m}.3f}"
@@ -1288,6 +1295,8 @@ def writeRing(fout, r, i, nfree, writeErrors, errors, writeBadRings, fitOK):
             s += f"{errors[i][0][kk]:<{m}.3f}{errors[i][1][kk]:<{m}.3f}"
     if writeBadRings:
         s += f"{int(fitOK):<{m}d}"
+    for v in extra:
+        s += f"{int(v):<{m}d}"
     fout.write(s + "\n")
 
 

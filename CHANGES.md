@@ -7,6 +7,10 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **BayesianBBarolo: `load_results` replaced the output folder** given to the object with that of the
+  saved fit, so `write_bestmodel` after `load_results` overwrote the outputs of the original fit. The
+  folder given is kept now. Also, `rings_final1.txt` had a FITOK column in the header, without values,
+  when BADOUT was set.
 - **BayesianBBarolo: the rings of a run carried over (C++).** Every evaluation of the likelihood
   wrote the sampled values (and RADMAX and the density profile) into the initial rings. A second
   run on the same object then kept the parameters that were free in the first one at the last
@@ -218,6 +222,12 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **BayesianBBarolo: the rings beyond RADMAX are marked.** With RADMAX as the edge of the disk, the
+  model has no gas beyond it, and the values of a ring whose radius lies beyond it are extrapolations of
+  the profiles inside the edge (the model interpolates the ring values between the radii), not
+  measurements. Such rings now have INDISK = 0 in `rings_final1.txt` (1 within the edge; the column is
+  written only when RADMAX is the edge), the region beyond RADMAX is shaded in the plots of the
+  parameters, `print_stats` names them, and `in_disk` and `disk_edge` give them in Python.
 - **Screen output.** Paths are relative to the current folder (unless that goes up more than two
   folders); the outputs, e.g. the plotting scripts, keep absolute paths. The notes are warnings
   (BBAROLO WARNING), like the other messages. With VERBOSE 1, the table of the second stage of 3DFIT

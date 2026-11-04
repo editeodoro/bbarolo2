@@ -2048,3 +2048,36 @@ def test_galmod3d_mc_flux_errors():
         GalMod3D(hdu, flux="measured", mask="NONE", **kw).model()
     with pytest.raises(TypeError):
         GalMod3D(hdu, vrot=10., **kw)
+
+
+def test_bayesian_rings_beyond_radmax(tmp_path, capsys):
+    """With RADMAX as the edge of the disk, the rings beyond it are marked: in_disk, INDISK = 0 in
+    rings_final1.txt, a note of print_stats and the region beyond RADMAX shaded in the plots of the
+    parameters. load_results keeps the output folder given to the object."""
+    pytest.importorskip("dynesty")
+    from bbarolo.plotscripts import writeScripts_Python
+    from bbarolo.tasks import read_table
+    f = _bayes_mock(tmp_path)
+    f.priors['radmax'] = dict(name='uniform', loc=80., scale=50.)
+    f.run(freepar=['vrot_single', 'radmax'], threads=1, verbose=False, dynamic=False,
+          sampler_kwargs=dict(nlive=15, seed=1), run_kwargs=dict(maxiter=60))
+    assert 80 <= f.disk_edge <= 130 and list(f.in_disk) == [True, True, True, False]
+    f.write_bestmodel(plots=False, verbose=False)
+    fn = tmp_path / "bbb" / "MOCK_rings_final1.txt"
+    t = read_table(str(fn))
+    assert list(t["indisk"]) == [1, 1, 1, 0] and t.colnames[-1] == "indisk"
+    capsys.readouterr()
+    f.print_stats()
+    assert "Ring 4 (R = 140) lies beyond it" in capsys.readouterr().out.replace("\n", " ")
+    with f._errors_in_outputs():
+        writeScripts_Python(f._galfit)
+    assert "axvspan(radmax" in (tmp_path / "bbb" / "plotscripts" / "plot_parameters.py").read_text()
+    f.save_results(str(tmp_path / "res.npy"))
+    g = _bayes_mock(tmp_path, outfolder=str(tmp_path / "other"))
+    g.load_results(str(tmp_path / "res.npy"))
+    assert g._outfolder() == str(tmp_path / "other") + "/" and list(g.in_disk) == [True, True, True, False]
+    h = _bayes_mock(tmp_path, outfolder=str(tmp_path / "ring"))
+    h.priors['radmax'] = dict(name='uniform', loc=120., scale=40.)
+    h.run(freepar=['vrot_single', 'radmax'], like_kwargs=dict(radmax='ring'), threads=1, verbose=False,
+          dynamic=False, sampler_kwargs=dict(nlive=15, seed=1), run_kwargs=dict(maxiter=40))
+    assert h.disk_edge is None and h.in_disk.all()

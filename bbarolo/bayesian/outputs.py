@@ -112,21 +112,45 @@ class OutputsMixin(object):
             errors[:, 1, k] = np.clip(np.nan_to_num(np.asarray(hi, float)), 0, None)
         return mpar, errors
 
+    @property
+    def disk_edge(self):
+        """ The outer edge of the disk (arcsec) of the best fit: RADMAX, when it is free and is the edge of
+        the disk (like_kwargs radmax='edge' or 'taper'); None otherwise. """
+        if 'radmax' not in getattr(self, 'freepar_idx', {}) or getattr(self, '_radmax_mode', 'edge') == 'ring':
+            return None
+        e = getattr(getattr(self, 'outri', None), 'object', None)
+        e = getattr(e, 'edge', None) if e is not None else None
+        return None if e is None else float(e)
+
+    @property
+    def in_disk(self):
+        """ For each ring of the best fit (outri): True if its radius is within the outer edge of the disk
+        (disk_edge, RADMAX), False beyond it. The model has no gas beyond the edge: the values of a ring
+        beyond it are those, at its radius, of the profiles interpolated between the rings, i.e. an
+        extrapolation of the profiles of the gas inside the edge (by half a ring or more, the ring only
+        sets their slope inside the edge). All True without an edge. """
+        r = np.asarray(self.outri.r['radii'], float)
+        edge = self.disk_edge
+        return np.ones(r.size, bool) if edge is None else r <= edge
+
     @contextlib.contextmanager
     def _errors_in_outputs(self):
-        """ Writes <prefix>_rings_final1.txt with the errors from the posterior. Inside the context,
-        the free parameters of the sampling (instead of FREE) and the error columns are used
-        by the outputs of the 3DFIT engine, so that the plots (_parameters.pdf) show the
-        errors. """
+        """ Writes <prefix>_rings_final1.txt with the errors from the posterior (and, with RADMAX as the edge
+        of the disk, the column INDISK: 1 for the rings within the edge, 0 beyond it, see in_disk). Inside
+        the context, the free parameters of the sampling (instead of FREE) and the error columns are
+        used by the outputs of the 3DFIT engine, so that the plots (_parameters.pdf) show the errors
+        (and the region beyond the edge). """
         gf = self._galfit
-        old = (gf.mpar, gf.nfree, gf.par.flagERRORS)
+        old = (gf.mpar, gf.nfree, gf.par.flagERRORS, getattr(gf, '_disk_edge', None))
         mpar, errors = self._posterior_errors()
         gf.mpar, gf.nfree, gf.par.flagERRORS = mpar, int(sum(mpar)), bool(any(mpar))
+        gf._disk_edge = self.disk_edge
+        extra = {} if self.disk_edge is None else {'INDISK': self.in_disk.astype(int)}
         try:
-            gf.writeRingFile("rings_final1.txt", self.outri.object, errors)
+            gf.writeRingFile("rings_final1.txt", self.outri.object, errors, extra=extra)
             yield
         finally:
-            gf.mpar, gf.nfree, gf.par.flagERRORS = old
+            gf.mpar, gf.nfree, gf.par.flagERRORS, gf._disk_edge = old
 
     def corner_plot(self, samples=None, labels=None, truths=None, quantiles=[0.15865, 0.50, 0.84135],
                     plot_dynesty=False, **kwargs):
@@ -263,6 +287,18 @@ class OutputsMixin(object):
             for i in range(len(dp['radii'])):
                 print("  R = %8.2f   %10.4g %+10.3g %+10.3g" % (dp['radii'][i], dp['dens'][i], -dp['err_lo'][i],
                                                                 dp['err_hi'][i]))
+        edge = self.disk_edge
+        out = np.flatnonzero(~self.in_disk)
+        if edge is not None and out.size:
+            import textwrap
+            r = np.asarray(self.outri.r['radii'], float)
+            rings = ", ".join(f"{i + 1} (R = {r[i]:g})" for i in out)
+            many = out.size > 1
+            msg = (f"RADMAX = {edge:.4g} arcsec is the outer edge of the disk: beyond it the model has no gas. "
+                   f"Ring{'s' if many else ''} {rings} lie{'' if many else 's'} beyond it: "
+                   f"{'their' if many else 'its'} values are extrapolations of the profiles of the gas inside the "
+                   "edge, not measurements (INDISK = 0 in rings_final1.txt; see in_disk).")
+            print("\n" + textwrap.fill(msg, 100))
         if results is not None:
             max_index = results.logl.argmax()
             print(f"\nMaximum logl: {results.logl.max()} at:")
@@ -297,7 +333,9 @@ class OutputsMixin(object):
         np.save(outfile, tosave)
 
     def load_results(self, inputfile, sampler='dynesty'):
-        """ Load results saved with save_results() (dynesty or nautilus). """
+        """ Load results saved with save_results() (dynesty or nautilus): the samples, the priors, the rings
+        and the parameters of the fit. The output folder is that of the fit unless this object has one
+        (outfolder given). """
         r = np.load(inputfile, allow_pickle=True).item()
         rr = r['inrings']
         self._galfit = self._ellprof = None
@@ -309,6 +347,8 @@ class OutputsMixin(object):
         rings['NRADII'] = None
         rings['RADSEP'] = None
         opts = {lookup(k).name: v for k, v in opts.items()}
+        if self._params.get("OUTFOLDER") not in (None, ""):
+            opts.pop("OUTFOLDER", None)        # (the output folder given to this object, not that of the fit)
         opts.update(rings)
         FitMod3D.update(self, **opts)     # (not that of BayesianBBarolo)
         self._cube_obj = None
