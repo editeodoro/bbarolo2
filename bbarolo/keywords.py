@@ -382,7 +382,8 @@ KEYWORDS = [
       "Priors of the free parameters, NAME=(distribution,arguments) with the distributions of scipy.stats, "
       "e.g. VROT=(uniform,loc=0,scale=300) INC=(norm,60,5) (default: see bbarolo.BayesianBBarolo)"),
     K("SAMPLEROPTS", "str", ["gf.SAMPLEROPTS"], BAYES,
-      "Options of the sampler, key=value, e.g. nlive=200 dynamic=false seed=1 (dynesty) or n_live=1000 "
+      "Options of the sampler, key=value, e.g. nlive=200 dynamic=true seed=1 (dynesty; the static sampler unless "
+      "dynamic=true) or n_live=1000 "
       "seed=1 (nautilus)",
       aliases=["sampler_kwargs"]),
     K("RUNOPTS", "str", ["gf.RUNOPTS"], BAYES,

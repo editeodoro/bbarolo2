@@ -222,6 +222,8 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **BayesianBBarolo uses dynesty's static sampler by default** (`dynamic=False`; the dynamic sampler
+  was the default): `run(dynamic=True)` or SAMPLEROPTS `dynamic=true` selects the dynamic one.
 - **BayesianBBarolo: the rings beyond RADMAX are marked.** With RADMAX as the edge of the disk, the
   model has no gas beyond it, and the values of a ring whose radius lies beyond it are extrapolations of
   the profiles inside the edge (the model interpolates the ring values between the radii), not

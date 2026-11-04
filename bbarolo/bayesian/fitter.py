@@ -485,10 +485,11 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                                 penalties); with user-defined residuals or log_like, also their
                                 own keywords
           sampler_kwargs (dict): arguments for the sampler (e.g. nlive), added to SAMPLEROPTS if
-                                given (there, dynamic=False: the static sampler of dynesty; seed=N:
+                                given (there, dynamic=True: the dynamic sampler of dynesty; seed=N:
                                 a reproducible sampling, also with dynesty)
           run_kwargs (dict):    arguments for the run (e.g. dlogz, maxiter), added to RUNOPTS if given
-          kwargs:               verbose (bool), dynamic (bool, dynesty only), and any BBarolo parameter
+          kwargs:               verbose (bool), dynamic (bool, dynesty only: the dynamic sampler;
+                                default False, the static one), and any BBarolo parameter
         """
         moved = [k for k in ('useBBres', 'noisecorr', 'likemask') if k in kwargs]
         if moved:
@@ -512,13 +513,13 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         method = str(dflt.get('SAMPLER', 'dynesty') if method is None else method).lower()
         self._method = method
         sampler_kwargs = {**dflt.get('SAMPLEROPTS', {}), **sampler_kwargs}
-        if 'dynamic' in sampler_kwargs:              # dynesty: dynamic (default) or static sampler
+        if 'dynamic' in sampler_kwargs:              # dynesty: static (default) or dynamic sampler
             kwargs.setdefault('dynamic', bool(sampler_kwargs.pop('dynamic')))
         if method == 'dynesty' and 'seed' in sampler_kwargs:     # (nautilus: its own option seed)
             seed = sampler_kwargs.pop('seed')
             sampler_kwargs.setdefault('rstate', np.random.default_rng(None if seed is None else int(seed)))
         run_kwargs = {**dflt.get('RUNOPTS', {}), **run_kwargs}
-        sampler_kwargs, run_kwargs = sampler_options(method, kwargs.get('dynamic', True), sampler_kwargs,
+        sampler_kwargs, run_kwargs = sampler_options(method, kwargs.get('dynamic', False), sampler_kwargs,
                                                       run_kwargs)
         if threads is None:
             threads = int(self._params.get("THREADS", 1))
@@ -572,7 +573,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
 
         self._log_like_kind = ('geometry' if log_like == self._log_likelihood_geometry else
                                'cube' if log_like is None or log_like == self._log_likelihood else 'custom')
-        samples, weights, dt = sample(self, like_kwargs, method, threads, kwargs.get('dynamic', True), sampler_kwargs,
+        samples, weights, dt = sample(self, like_kwargs, method, threads, kwargs.get('dynamic', False), sampler_kwargs,
                                       run_kwargs, verbose)
         dt = f'{dt:.2f} seconds' if dt < 60.00 else f'{dt / 60.00:.2f} minutes'
         vprint(verbose, f'\nSampling with {method} took {dt} to run.')
