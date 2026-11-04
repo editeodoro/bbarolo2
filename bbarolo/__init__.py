@@ -26,8 +26,9 @@ BayesianBBarolo (BAYESIAN3DFIT: 3D fit with nested sampling; needs dynesty or na
 Command line: ``BBarolo -p param.par`` (after pip install), ``python -m bbarolo -p
 param.par``, or the launchers run_bbarolo.py and bin/BBarolo (no install needed).
 
-Other tools: DiskModel (the model engine of GALMOD, 3DFIT and BayesianBBarolo: models
-of a set of Rings on the grid of a Cube, in memory), pv_path, pv_sample, pv_extract (PV
+Other tools: GalMod3D (model cubes from 3D fields of the density and velocity of the gas, as
+functions of (R, z), (R, phi, z) or (x, y, z); Python only), DiskModel (the model engine of
+GALMOD, 3DFIT and BayesianBBarolo: models of a set of Rings on the grid of a Cube, in memory), pv_path, pv_sample, pv_extract (PV
 slices in memory), SimulatedGalaxyCube and emptyfits (utils), Param (all the parameters),
 Cube, Rings. The modules with the computational engines (galmod, galfit, ringmodel,
 search, ...) can also be used directly.
@@ -41,13 +42,14 @@ from .params import Param
 from .cube import Cube
 from .rings import Rings
 from .galmod import DiskModel
+from .galmod3d import GalMod3D
 from .pvslice import pv_path, pv_sample, pv_extract
 from .utils import SimulatedGalaxyCube, emptyfits
 from .bbutils import BBaroloError
 
 __all__ = ['FitMod3D', 'GalMod', 'GalWind', 'Search', 'FitMod2D', 'Ellprof', 'Smooth', 'SmoothSpec', 'Maps',
            'PVSlice', 'SpacePar', 'Rend3D', 'ContSub', 'Stats', 'MakeMask', 'BayesianBBarolo', 'run',
-           'Result', 'read_parfile', 'Param', 'Cube', 'Rings', 'DiskModel', 'pv_path', 'pv_sample',
+           'Result', 'read_parfile', 'Param', 'Cube', 'Rings', 'DiskModel', 'GalMod3D', 'pv_path', 'pv_sample',
            'pv_extract', 'SimulatedGalaxyCube', 'emptyfits', 'BBaroloError', '__version__']
 
 version = __version__

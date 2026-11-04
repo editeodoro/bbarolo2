@@ -116,6 +116,21 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **GalMod3D: model cubes from 3D fields** (Python only, `bbarolo.GalMod3D`; GALMOD does not change).
+  The gas is described by its density, velocity and isotropic velocity dispersion as functions of
+  (R, z) (axisymmetric), (R, φ, z) or (x, y, z) in the frame of the galaxy, with the geometry of GALMOD
+  (XPOS, YPOS, VSYS, INC, PA): e.g. flaring and lagging thick disks, bars and spiral arms with streaming
+  motions, or the fields of a simulation. Each field is a number, a function of the coordinates, or
+  values on a grid of the coordinates (interpolated linearly; φ periodic). The density is in any units;
+  the model is scaled to a total flux in Jy km/s, or to the flux of the data in the mask of the cube
+  (`flux="measured"`). The fields are sampled on a Cartesian grid in the frame of the galaxy (a third of
+  a pixel by default) and each point is deposited with its Gaussian line integrated over the channels,
+  as the ANALYTIC models (or as random clouds, `galmodtype="MC"`), with the spectral axis, several lines,
+  the instrumental broadening and the beam convolution of GALMOD. A GALMOD disk written as fields gives
+  the GALMOD ANALYTIC model within 0.05% of the peak (rms), apart from the central pixels (2%, where
+  GALMOD samples the innermost sub-ring coarsely). A thick disk on the NGC 2403 grid (150×150×62,
+  |z| ≤ 60") takes 1.7 s. `examples/galmod3d.py` makes three models: a thick lagging disk, a bar with
+  spiral arms and a warped disk on a Cartesian grid.
 - **The parameters of each run** in `<prefix>_params.par`, in the output folder (and in the `files`
   of the result): the parameters given (FITSFILE and OUTFOLDER as absolute paths), then the defaults of
   the other parameters of the tasks that ran (and of SEARCH or MAKEMASK when they make the mask), with

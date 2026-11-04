@@ -1937,3 +1937,114 @@ def test_two_stage_table_and_run_parameters(tmp_path, capsys):
     q.readParamString(p.to_parfile([n for n, r, _ in STEPS if r(p, p)] + ["SEARCH"]))
     q.checkPars(quiet=True)
     assert all(K._getattr(p, t) == K._getattr(q, t) for k in K.KEYWORDS for t in k.targets)
+
+
+def _g3d_cube():
+    from bbarolo import emptyfits
+    return emptyfits([64, 64, 40], [-10 / 3600., 10 / 3600., 10.], beam=30 / 3600., bunit="JY/BEAM", obj="SYNTH")
+
+
+def test_galmod3d_vs_galmod():
+    """GalMod3D with the fields of a GALMOD disk (Gaussian layer, VRAD, VVERT, NODES rings: the values
+    interpolated linearly in radius) gives the GALMOD ANALYTIC model (the largest differences, ~2% of the
+    peak, are in the central pixels, where GALMOD samples the innermost sub-ring coarsely)."""
+    from bbarolo import GalMod3D, DiskModel
+    hdu = _g3d_cube()
+    p = Param()
+    p.verbose = False
+    c = Cube(par=p)
+    c.readHDU(hdu)
+    radii = np.arange(0, 261, 10.)
+    sig = np.exp(-radii / 80.) * np.clip((250 - radii) / 50., 0, 1)
+    vrot = 150 * np.tanh(radii / 40.)
+    p.gf.LTYPE = 1
+    dm = DiskModel(c, ringmode="NODES", galmodtype="ANALYTIC", densflux=True)
+    g = dm.hdu(Rings().setRings(radii=radii, xpos=31.5, ypos=31.5, vsys=0., vrot=vrot, vrad=15., vvert=5.,
+                                vdisp=10., z0=8., dens=sig, inc=60, phi=45)).data.astype(float)
+    m = GalMod3D(hdu, coords="Rz", xpos=31.5, ypos=31.5, inc=60, pa=45, rmax=260, zmax=40, step=(10 / 3., 2.),
+                 dens=lambda R, z: np.interp(R, radii, sig, right=0) * np.exp(-z * z / 128.),
+                 vphi=lambda R, z: np.interp(R, radii, vrot), vr=15., vz=5., vdisp=10.)
+    f = m.model().data.astype(float)
+    f *= g.sum() / f.sum()
+    assert np.sqrt(np.mean((f - g) ** 2)) < 1e-3 * g.max() and np.abs(f - g).max() < 0.03 * g.max()
+    assert np.corrcoef(f.ravel(), g.ravel())[0, 1] > 0.9999
+
+
+def test_galmod3d_conventions_coords_grids():
+    """The geometry of GALMOD: phi=0 is the receding half of the major axis (at PA), y > 0 the far side,
+    v_los = vsys + v_y sin(i) + v_z cos(i). The same disk as a function of (R, z), (R, phi, z) or (x, y, z)
+    gives the same cube, and as values on a grid the same within the interpolation."""
+    from bbarolo import GalMod3D
+    hdu = _g3d_cube()
+    h = hdu.header
+    vaxis = h["CRVAL3"] + (np.arange(40) + 1 - h["CRPIX3"]) * h["CDELT3"]
+    geo = dict(xpos=31.5, ypos=31.5, vsys=0, inc=60, pa=45)
+    si, ci = np.sin(np.radians(60)), np.cos(np.radians(60))
+
+    def blob(x0, y0, z0, **v):
+        d = GalMod3D(hdu, coords="xyz", rmax=150, zmax=40, **geo, **v,
+                     dens=lambda x, y, z: np.exp(-((x - x0) ** 2 + (y - y0) ** 2 + (z - z0) ** 2) / 50.)
+                     ).model(smooth=False).data.astype(float)
+        _, yy, xx = np.indices(d.shape)
+        return np.array([(d * xx).sum(), (d * yy).sum(), (d.sum(axis=(1, 2)) * vaxis).sum()]) / d.sum()
+    s45 = np.sin(np.radians(45))
+    assert np.allclose(blob(100, 0, 0, vy=100.), [31.5 - 10 * s45, 31.5 + 10 * s45, 100 * si], atol=0.1)
+    assert np.allclose(blob(0, 100, 0, vy=50.), [31.5 + 10 * ci * s45, 31.5 + 10 * ci * s45, 50 * si], atol=0.1)
+    assert np.allclose(blob(0, 0, 30, vz=40.), [31.5 - 3 * si * s45, 31.5 - 3 * si * s45, 40 * ci], atol=0.1)
+    vp = lambda R: 150 * np.tanh(R / 40.)
+    S = lambda R, z: np.exp(-R / 80.) * np.exp(-z * z / 128.)
+    kw = dict(**geo, rmax=250, zmax=30, vdisp=10.)
+    a = GalMod3D(hdu, coords="Rz", dens=S, vphi=lambda R, z: vp(R), vr=10., **kw).model().data
+    b = GalMod3D(hdu, coords="cylindrical", dens=lambda R, p, z: S(R, z), vphi=lambda R, p, z: vp(R), vr=10.,
+                 **kw).model().data
+
+    def vxy(x, y, z):
+        R = np.hypot(x, y)
+        return (10 * x - vp(R) * y) / np.where(R > 0, R, 1), (10 * y + vp(R) * x) / np.where(R > 0, R, 1)
+    c = GalMod3D(hdu, coords="xyz", dens=lambda x, y, z: S(np.hypot(x, y), z), vx=lambda *p: vxy(*p)[0],
+                 vy=lambda *p: vxy(*p)[1], **kw).model().data
+    assert np.allclose(a, b, rtol=0, atol=1e-6 * a.max()) and np.allclose(a, c, rtol=0, atol=1e-6 * a.max())
+    Rg, zg = np.linspace(0, 360, 181), np.linspace(-30, 30, 61)
+    RR, ZZ = np.meshgrid(Rg, zg, indexing="ij")
+    g = GalMod3D(hdu, coords="Rz", dens=((Rg, zg), S(RR, ZZ)), vphi=((Rg, zg), vp(RR)), vr=10., **kw).model().data
+    assert np.abs(g - a).max() < 2e-3 * a.max()
+    # (R, phi, z) on a grid, periodic in phi: a constant phi pattern gives the axisymmetric model
+    pg = np.linspace(0, 2 * np.pi, 16, endpoint=False)
+    R3, P3, Z3 = np.meshgrid(Rg, pg, zg, indexing="ij")
+    g3 = GalMod3D(hdu, coords="Rphiz", dens=((Rg, pg, zg), S(R3, Z3)), vphi=((Rg, pg, zg), vp(R3)), vr=10.,
+                  **kw).model().data
+    assert np.abs(g3 - g).max() < 1e-5 * a.max()
+
+
+def test_galmod3d_mc_flux_errors():
+    """MC: the flux of the deterministic model, the same shape, reproducible with a seed. flux: a number
+    (Jy km/s) or 'measured' (the data of the cube in its mask). Errors name what is wrong."""
+    from bbarolo import GalMod3D, BBaroloError
+    from bbarolo.bbutils import FluxtoJy
+    hdu = _g3d_cube()
+    kw = dict(coords="Rz", xpos=31.5, ypos=31.5, inc=60, pa=45, rmax=250, zmax=30, vdisp=10.,
+              dens=lambda R, z: np.exp(-R / 80.) * np.exp(-z * z / 128.), vphi=lambda R, z: 150 * np.tanh(R / 40.))
+    a = GalMod3D(hdu, **kw).model().data
+    m = GalMod3D(hdu, **kw)
+    mc = m.model(galmodtype="MC", nclouds=1e6, seed=2).data
+    assert abs(mc.sum() / a.sum() - 1) < 1e-5 and np.corrcoef(mc.ravel(), a.ravel())[0, 1] > 0.999
+    assert np.array_equal(mc, m.model(galmodtype="MC", nclouds=1e6, seed=2).data)
+    f = GalMod3D(hdu, flux=100., **kw)
+    d = f.model().data.astype(float)
+    assert abs(float(FluxtoJy(d.sum(), f.cube.Head())) * 10. - 100.) < 1e-3
+    data = hdu.copy()
+    data.data = (2 * d + np.random.default_rng(1).normal(0, 1e-4, d.shape)).astype(np.float32)
+    meas = GalMod3D(data, flux="measured", mask="NONE", **kw).model().data
+    assert np.isclose(meas.sum(), data.data.sum(), rtol=1e-5)
+    with pytest.raises(BBaroloError, match="coords"):
+        GalMod3D(hdu, **{**kw, "coords": "spherical"})
+    with pytest.raises(BBaroloError, match="vx is not a velocity"):
+        GalMod3D(hdu, vx=10., **kw)
+    with pytest.raises(BBaroloError, match="grid of dens has 3 axes"):
+        GalMod3D(hdu, **{**kw, "dens": (([0, 1], [0, 1], [0, 1]), np.ones((2, 2, 2)))})
+    with pytest.raises(BBaroloError, match="no emission inside the cube"):
+        GalMod3D(hdu, **{**kw, "xpos": 500}).model()
+    with pytest.raises(BBaroloError, match="no positive flux"):
+        GalMod3D(hdu, flux="measured", mask="NONE", **kw).model()
+    with pytest.raises(TypeError):
+        GalMod3D(hdu, vrot=10., **kw)
