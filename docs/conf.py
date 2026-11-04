@@ -74,5 +74,24 @@ def _plain_docstring(app, what, name, obj, options, lines):
         lines[:] = ["::", ""] + ["    " + ln for ln in lines] + [""]
 
 
+# -- The parameter pages of the tasks, generated from the keyword table at every build -----------------
+# (folder of the task in tasks/, task name of the keywords, title); folder None: tasks/general.md
+PARAMETER_PAGES = [
+    (None, "ALL", "General parameters"),
+    ("3dfit", "3DFIT", "3DFIT"), ("bayesian3dfit", "BAYESIAN3DFIT", "BAYESIAN3DFIT"), ("galmod", "GALMOD", "GALMOD"),
+    ("galwind", "GALWIND", "GALWIND"), ("2dfit", "2DFIT", "2DFIT"), ("spacepar", "SPACEPAR", "SPACEPAR"),
+    ("search", "SEARCH", "SEARCH"), ("makemask", "MAKEMASK", "MAKEMASK"), ("smooth", "SMOOTH", "SMOOTH"),
+    ("smoothspec", "SMOOTHSPEC", "SMOOTHSPEC"), ("contsub", "CONTSUB", "CONTSUB"), ("stats", "STATS", "STATS"),
+    ("maps", "MAPS", "Moment maps and profiles"), ("pvslice", "PVSLICE", "PVSLICE"), ("ellprof", "ELLPROF", "ELLPROF"),
+    ("rend3d", "REND3D", "REND3D"),
+]
+
+
+def _parameter_pages(app):
+    from bbparams import write_parameter_pages
+    write_parameter_pages(app.srcdir, PARAMETER_PAGES)
+
+
 def setup(app):
     app.connect("autodoc-process-docstring", _plain_docstring)
+    app.connect("builder-inited", _parameter_pages)

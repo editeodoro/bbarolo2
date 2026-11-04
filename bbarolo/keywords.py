@@ -136,6 +136,7 @@ RING = ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "ELLPROF")
 BAYES = ("BAYESIAN3DFIT",)
 MOD3 = ("3DFIT", "GALMOD", "SPACEPAR")        # not BAYESIAN3DFIT
 MAPS = ("TOTALMAP", "VELOCITYMAP", "DISPERSIONMAP", "MASSDENSMAP", "RMSMAP", "GLOBALPROFILE")
+MAPSM = ("TOTALMAP", "VELOCITYMAP", "DISPERSIONMAP", "MASSDENSMAP", "RMSMAP")   # the maps that use the mask
 
 
 class Keyword:
@@ -150,8 +151,14 @@ class Keyword:
     also:     extra attributes set to a constant when the keyword is given
               (e.g. THRESHOLD also sets se.UserThreshold = True)
     flag:     True if the keyword switches a task on
+
+    From bbarolo/keywords_doc.py (the documentation of the parameters):
+    doc:      the full description (Markdown), shown by help('KEYWORD') and on the website
+    group:    the section of the parameter pages of its tasks (a name, or {task: name, "*": name})
+    default_text: the default as words, when the default value is a placeholder (e.g. -1)
     """
-    __slots__ = ("name", "kind", "targets", "tasks", "help", "aliases", "also", "flag")
+    __slots__ = ("name", "kind", "targets", "tasks", "help", "aliases", "also", "flag", "doc", "group",
+                 "default_text")
 
     def __init__(self, name, kind, targets, tasks, help, aliases=(), also=None, flag=False):
         self.name = name
@@ -162,6 +169,14 @@ class Keyword:
         self.aliases = tuple(aliases)
         self.also = dict(also or {})
         self.flag = flag
+        self.doc = self.group = self.default_text = None
+
+    def group_for(self, task=None):
+        """The section of the parameter page of task where the keyword is listed."""
+        g = self.group
+        if isinstance(g, dict):
+            return g.get(task, g.get("*"))
+        return g
 
     def read(self, rest):
         return READERS[self.kind](rest)
@@ -231,13 +246,14 @@ KEYWORDS = [
     K("CONTORDER", "int", ["cont_order"], ("CONTSUB",), "Order of polynomial for continuum fit"),
     K("MAKEMASK", "flag", ["makeMask"], ("MAKEMASK",), "Writing the mask to a fitsfile", flag=True),
     K("MASK", "str", ["MaskType"], ("MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "ELLPROF",
-                                    "REND3D") + MAPS,
+                                    "REND3D") + MAPSM,
       "Type of mask: SMOOTH, SEARCH, SMOOTH&SEARCH, THRESHOLD, NEGATIVE, NONE or FILE(mask.fits)"),
-    K("BLANKCUT", "float", ["blankCut"], ("MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "GALMOD", "2DFIT", "ELLPROF") + MAPS,
+    K("BLANKCUT", "float", ["blankCut"], ("MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT",
+                                          "ELLPROF", "REND3D") + MAPSM,
       "S/N cut for the SMOOTH mask"),
     K("STATS", "flag", ["flagStats"], ("STATS",), "Calculate and print statistics?", flag=True),
     K("GALMODTYPE", "ustr", ["galmodtype"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "GALWIND"),
-      "Type of model: MC (Monte Carlo) or ANALYTIC (noiseless, pure-Python only). Default MC, but "
+      "Type of model: MC (Monte Carlo) or ANALYTIC (noiseless). Default MC, but "
       "ANALYTIC for BAYESIAN3DFIT"),
     K("RINGMODE", "ustr", ["ringmode"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD"),
       "Rings of the models: CENTRED (each ring is an annulus centred on its radius, reaching "
@@ -284,7 +300,8 @@ KEYWORDS = [
     K("DISPERSIONMAP", "flag", ["ma.dispersionmap"], ("DISPERSIONMAP",),
       "Saving velocity dispersion map to FITS file?", flag=True),
     K("RMSMAP", "flag", ["ma.rmsmap"], ("RMSMAP",), "Saving RMS map to FITS file?", flag=True),
-    K("MAPTYPE", "ustr", ["ma.maptype"], MAPS, "How to extract the maps (MOMENT or GAUSSIAN)?"),
+    K("MAPTYPE", "ustr", ["ma.maptype"], ("TOTALMAP", "VELOCITYMAP", "DISPERSIONMAP"),
+      "How to extract the maps (MOMENT or GAUSSIAN)?"),
     K("SNMAP", "flag", ["ma.SNmap"], ("TOTALMAP", "SEARCH"), "Computing also S/N map for intensity map?"),
     K("TAPER", "lstr", ["ma.taper"], ("TOTALMAP",), "Type of velocity taper used for the S/N map"),
     K("CONTCHANS", "ivec", ["ma.contChans"], ("TOTALMAP",), "Channels used for continuum subtraction (S/N map)"),
@@ -311,9 +328,9 @@ KEYWORDS = [
     K("VRAD", "str", _g(G2, "VRAD"), RING, "Radial velocity (km/s)"),
     K("Z0", "str", _g(G2, "Z0"), MOD, "Scale height of the disk (arcsec); the fits use one pixel if not given "
       "(a thin disk), GALMOD needs it"),
-    K("VVERT", "str", _g(G2, "VVERT"), ("GALMOD", "BAYESIAN3DFIT"), "Vertical velocity (km/s)"),
-    K("DVDZ", "str", _g(G2, "DVDZ"), ("GALMOD", "BAYESIAN3DFIT"), "Vertical gradient of rotation velocity (km/s/arcs)"),
-    K("ZCYL", "str", _g(G2, "ZCYL"), ("GALMOD", "BAYESIAN3DFIT"), "Height where the gradient begins (arcs)"),
+    K("VVERT", "str", _g(G2, "VVERT"), MOD, "Vertical velocity (km/s)"),
+    K("DVDZ", "str", _g(G2, "DVDZ"), MOD, "Vertical gradient of rotation velocity (km/s/arcs)"),
+    K("ZCYL", "str", _g(G2, "ZCYL"), MOD, "Height where the gradient begins (arcs)"),
     K("VDISP", "str", _g(G3, "VDISP"), MOD + ("GALWIND",), "Velocity dispersion (km/s)"),
     K("XPOS", "pos", _g(G3, "XPOS"), RING + ("GALWIND",), "X center of the galaxy (pixel, or WCS with a unit)"),
     K("YPOS", "pos", _g(G3, "YPOS"), RING + ("GALWIND",), "Y center of the galaxy (pixel, or WCS with a unit)"),
@@ -321,8 +338,9 @@ KEYWORDS = [
     K("INC", "str", _g(G3, "INC"), RING + ("GALWIND",), "Inclination angle (degrees)"),
     K("PA", "str", _g(G3, "PHI"), RING + ("GALWIND",),
       "Position angle of the receding half of the major axis (degrees, anticlockwise from North)", aliases=["phi"]),
-    K("DENS", "str", _g(G3, "DENS"), MOD + ("GALWIND",), "Gas column density (1E20 atoms/cm2)"),
-    K("CDENS", "cdens", _g(G3, "CDENS"), MOD + ("GALWIND",), "Surface density of clouds in a ring (1E20)"),
+    K("DENS", "str", _g(G3, "DENS"), MOD + ("GALWIND",), "Gas surface density (a flux per arcsec2 or a column "
+      "density, see DENSFLUX)"),
+    K("CDENS", "cdens", _g(G3, "CDENS"), MOD + ("GALWIND",), "Surface density of the clouds of MC models (per pixel)"),
     K("CMODE", "int", _g(G3, "CMODE"), MOD, "Mode of clouds-surface density"),
     K("ISEED", "int", _g(G3, "ISEED"), MOD + ("GALWIND",), "Seed for random number generator"),
     K("NV", "int", _g(G3, "NV"), MOD + ("GALWIND",), "Number of subclouds per profile"),
@@ -332,7 +350,7 @@ KEYWORDS = [
     K("RESTWAVE", "fvec", _g(G2, "RESTWAVE"), MOD, "Rest wavelength(s) of the line(s)"),
     K("RESTFREQ", "fvec", _g(G2, "RESTFREQ"), MOD, "Rest frequency(ies) of the line(s)"),
     K("RELINT", "fvec", _g(G2, "RELINT"), MOD, "Relative intensities of the lines"),
-    K("NOISERMS", "float", _g(G2, "NOISERMS"), MOD3, "RMS noise to add to the model"),
+    K("NOISERMS", "float", _g(G2, "NOISERMS"), ("3DFIT", "GALMOD"), "RMS noise to add to the model"),
     K("RINGFILE", "str", _g(G2, "ringfile"), MOD, "A BBarolo output file with the rings"),
     K("EMPTY", "flag", _g(G3, "EMPTY"), MOD, "Whether to leave empty inner part"),
     K("DENSFLUX", "flag", _g(G3, "DENSFLUX"), ("GALMOD",), "Whether DENS is integrated flux / arcs2"),
@@ -366,7 +384,7 @@ KEYWORDS = [
     K("NORM", "ustr", ["gf.NORM"], MOD3, "Type of normalization (LOCAL, AZIM or NONE)"),
     K("REGTYPE", "lstr", ["gf.REGTYPE"], ("3DFIT",), "Regularization of the second stage (auto, bezier, median, "
       "degree of polynomial)", aliases=["polyn"]),
-    K("STARTRAD", "int", ["gf.STARTRAD"], ("3DFIT",), "Starting radius (ring index)"),
+    K("STARTRAD", "int", ["gf.STARTRAD"], ("3DFIT", "SPACEPAR"), "Starting radius (ring index)"),
     K("ADRIFT", "flag", ["gf.flagADRIFT"], ("3DFIT",), "Computing asymmetric drift correction?"),
     K("ADRIFTPOL1", "int", ["gf.ADRIFTPOL1"], ("3DFIT",), "Polynomial for VDISP2 regularisation"),
     K("ADRIFTPOL2", "int", ["gf.ADRIFTPOL2"], ("3DFIT",), "Polynomial for SIGMA regularisation"),
@@ -426,7 +444,8 @@ KEYWORDS = [
     K("SPECRES", "float", ["specres"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR"),
       "Spectral resolution of the models (sigma, in channels; default: LINEAR if given, else "
       "1/2.355, i.e. a FWHM of one channel)"),
-    K("FACTOR", "float", ["factor"], ("SMOOTH", "MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "2DFIT", "ELLPROF") + MAPS,
+    K("FACTOR", "float", ["factor"], ("SMOOTH", "MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "SPACEPAR", "2DFIT", "ELLPROF",
+                                      "REND3D") + MAPSM,
       "New beam factor (times old beam), also used by the SMOOTH mask"),
     K("SCALEFACTOR", "float", ["scalefactor"], ("SMOOTH",), "Scaling factor for the smoothed cube"),
     K("FFT", "flag", ["flagFFT"], ("SMOOTH",), "Using FFT for convolution?"),
@@ -468,6 +487,12 @@ for _k in KEYWORDS:
         LOOKUP[_n.lower()] = _k
 
 TASK_FLAGS = [k for k in KEYWORDS if k.flag]
+
+# The full descriptions of the keywords (doc, group, default_text)
+from .keywords_doc import DOCS as _DOCS, GROUPS  # noqa: E402
+for _k in KEYWORDS:
+    _e = _DOCS.get(_k.name, {})
+    _k.doc, _k.group, _k.default_text = _e.get("doc"), _e.get("group"), _e.get("default")
 
 
 def lookup(name):
@@ -536,12 +561,26 @@ TASK_DEFAULTS = {"BAYESIAN3DFIT": {"GALMODTYPE": "ANALYTIC"}}
 
 
 def describe(kw, default=None):
-    """One keyword as text: name, aliases, default, tasks and description."""
+    """One keyword as text: name, aliases, default, tasks and description (the full one, kw.doc, if the
+    keyword has it, else its one-line help)."""
+    import textwrap
     s = f"{kw.name}"
     if kw.aliases:
         s += f" (also: {', '.join(kw.aliases)})"
-    s += f"\n    {kw.help}."
-    if default is not None:
+    if kw.doc:
+        paras = [p.strip() for p in kw.doc.strip().split("\n\n")]
+        out = []
+        for p in paras:
+            if p.lstrip().startswith(("- ", "* ", "1. ")):        # lists: keep their lines
+                out.append("\n".join("    " + ln.strip() for ln in p.splitlines()))
+            else:
+                out.append(textwrap.fill(" ".join(p.split()), 96, initial_indent="    ", subsequent_indent="    "))
+        s += "\n" + "\n\n".join(out)
+    else:
+        s += f"\n    {kw.help}."
+    if kw.default_text:
+        s += f"\n    Default: {kw.default_text}."
+    elif default is not None:
         s += f"\n    Default: {_fmtval(default)}"
     tasks = "all tasks" if kw.tasks == ("ALL",) else ", ".join(t for t in kw.tasks if t != "ALL")
     s += f"   Used by: {tasks}"

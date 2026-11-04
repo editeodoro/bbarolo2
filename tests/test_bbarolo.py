@@ -2081,3 +2081,23 @@ def test_bayesian_rings_beyond_radmax(tmp_path, capsys):
     h.run(freepar=['vrot_single', 'radmax'], like_kwargs=dict(radmax='ring'), threads=1, verbose=False,
           dynamic=False, sampler_kwargs=dict(nlive=15, seed=1), run_kwargs=dict(maxiter=40))
     assert h.disk_edge is None and h.in_disk.all()
+
+
+def test_keyword_docs():
+    """Every keyword has its full description (keywords_doc.py, shown by help('KEYWORD') and on the website)
+    and a section of the parameter page of each of its tasks."""
+    import io
+    from bbarolo import keywords as K
+    from bbarolo.keywords_doc import GROUPS, DOCS
+    assert set(DOCS) == {k.name for k in K.KEYWORDS}
+    for k in K.KEYWORDS:
+        assert k.doc and len(k.doc.split()) >= 8, k.name
+        assert all(len(ln) <= 110 for ln in k.doc.splitlines()), k.name
+        assert k.default_text is None or k.default_text.strip(), k.name
+        if isinstance(k.group, dict):
+            assert "*" in k.group and set(k.group) - {"*"} <= set(k.tasks), k.name
+        for t in k.tasks:
+            assert k.group_for(t) in GROUPS, (k.name, t)
+    s = io.StringIO()
+    K.help("free", stream=s)
+    assert "NAME_SINGLE" in s.getvalue() and "Default: " in s.getvalue()

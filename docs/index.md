@@ -83,45 +83,6 @@ with the results as astropy objects.
 :::
 ::::
 
-## Gallery
-
-::::{grid} 1 1 2 2
-:gutter: 3
-:class-container: bb-gallery
-
-:::{grid-item}
-```{figure} _static/gallery/n2403_parameters.png
-:alt: The rings of NGC 2403 fitted by 3DFIT
-
-The rotation curve, dispersion and geometry of NGC 2403 (3DFIT).
-```
-:::
-
-:::{grid-item}
-```{figure} _static/gallery/n2403_pv.png
-:alt: Position-velocity diagrams of NGC 2403 and of the model
-
-Position-velocity diagrams along the major and minor axes: data and model.
-```
-:::
-
-:::{grid-item}
-```{figure} _static/gallery/n2403_chanmaps.png
-:alt: Channel maps of NGC 2403 and of the model
-
-Channel maps of the data (blue) and of the best model (red).
-```
-:::
-
-:::{grid-item}
-```{figure} _static/gallery/galmod3d_models.png
-:alt: Three models of GalMod3D
-
-Models from 3D fields (GalMod3D): total maps and velocity fields.
-```
-:::
-::::
-
 ## News
 
 - **BBarolo 2.0** (in development): the pure-Python BBarolo, with the Bayesian fit

@@ -120,6 +120,13 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **Documentation website** (`docs/`, Sphinx, for Read the Docs): getting started, a page of parameters
+  for every task, generated from the keyword table at every build, and pages on the algorithms (in
+  preparation). Every keyword has a full description (`bbarolo/keywords_doc.py`), shown on the website
+  and by `bbarolo.help('KEYWORD')`. The lists of tasks of a few keywords now match the code: MAPTYPE
+  (the three moment maps), MASK, BLANKCUT and FACTOR (not GLOBALPROFILE, which uses the whole cube;
+  BLANKCUT and FACTOR also SPACEPAR and REND3D, which use the mask), VVERT, DVDZ and ZCYL (also 3DFIT
+  and SPACEPAR, whose models use them), STARTRAD (also SPACEPAR), NOISERMS (not SPACEPAR).
 - **GalMod3D: model cubes from 3D fields** (Python only, `bbarolo.GalMod3D`; GALMOD does not change).
   The gas is described by its density, velocity and isotropic velocity dispersion as functions of
   (R, z) (axisymmetric), (R, φ, z) or (x, y, z) in the frame of the galaxy, with the geometry of GALMOD
