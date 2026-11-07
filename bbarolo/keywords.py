@@ -378,6 +378,8 @@ KEYWORDS = [
       "LEGACY (the C++ algorithm)"),
     K("SIDE", "ustr", ["gf.SIDE"], ("3DFIT", "SPACEPAR", "2DFIT", "ELLPROF"),
       "Side of the galaxy to be used (A=approaching, R=receding, B=both)"),
+    K("FREEANGLE", "float", ["gf.FREEANGLE"], ("2DFIT",),
+      "Angle around the minor axis left out of the fit of the velocity field (degrees)"),
     K("BWEIGHT", "float", ["gf.BWEIGHT"], ("3DFIT", "SPACEPAR"), "Weight for blank pixels"),
     K("TWOSTAGE", "flag", ["gf.TWOSTAGE"], ("3DFIT",), "Two stages minimization?"),
     K("FLAGERRORS", "flag", ["gf.flagERRORS"], ("3DFIT",), "Estimating errors?", aliases=["errors"]),
@@ -533,6 +535,8 @@ _CLASS_TASK = {"fitmod3d": "3DFIT", "galmod": "GALMOD", "galwind": "GALWIND", "s
 
 
 def _fmtval(v):
+    if v is None:
+        return ""                                   # (not given: no line in parameter files)
     if isinstance(v, bool):
         return stringize(v)
     if isinstance(v, float):

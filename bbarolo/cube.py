@@ -90,19 +90,26 @@ class Cube:
     def checkBeam(self):
         h, p = self.head, self.par
         if h.BeamArea() == 0:
-            bmaj, bmin, bpa = p.bmaj / 3600., p.bmin / 3600., p.bpa
-            if p.bmaj < 0: bmaj = -1
-            if p.bmin < 0: bmin = -1
+            # With SMOOTH, BMAJ, BMIN and BPA are the new beam: the beam of the data is OBMAJ, OBMIN, OBPA
+            names = ("OBMAJ/OBMIN/OBPA", "OBMAJ, OBMIN and OBPA") if p.flagSmooth else ("BMAJ/BMIN/BPA",
+                                                                                      "BMAJ, BMIN and BPA")
+            pmaj, pmin, pbpa = (p.obmaj, p.obmin, p.obpa) if p.flagSmooth else (p.bmaj, p.bmin, p.bpa)
+            bmaj, bmin, bpa = pmaj / 3600., pmin / 3600., (0. if pbpa is None else pbpa)
+            if pmaj < 0: bmaj = -1
+            if pmin < 0: bmin = -1
             if bmaj > 0 and bmin < 0: bmin = bmaj
             if bmin > 0 and bmaj < 0: bmaj = bmin
+            # (BMAJ and BMIN are then the beam of the data, also for the SMOOTH masks)
+            self._beamFromBmaj = bmaj > 0 and not p.flagSmooth
             if bmaj < 0 and bmin < 0 and p.beamFWHM > 0:
                 bmaj = bmin = p.beamFWHM
             if bmaj < 0 and bmin < 0:
-                raise BBaroloError("No beam information available for the data: set the beam with BMAJ, BMIN "
-                                   "and BPA, or BEAMFWHM (in arcsec), or beam=(bmaj, bmin, bpa) in Python.")
+                raise BBaroloError(f"No beam information available for the data: set the beam with {names[1]}, or "
+                                   "BEAMFWHM (in arcsec), or beam=(bmaj, bmin, bpa) in Python."
+                                   + (" BMAJ, BMIN and BPA are the new beam of SMOOTH." if p.flagSmooth else ""))
             print(f"\n WARNING: Beam not available in the header: using a {bmaj * 3600.:.5g}x{bmin * 3600.:.5g}"
                   f" arcsec (BPA={bpa:.5g}).\n"
-                  "          You can set the beam with BMAJ/BMIN/BPA or BeamFWHM params (in arcsec).\n")
+                  f"          You can set the beam with {names[0]} or BeamFWHM params (in arcsec).\n")
             pix = h.PixScale()
             if min(bmaj, bmin) < 0.25 * pix:
                 raise BBaroloError(f"The beam ({bmaj * 3600.:.4g}x{bmin * 3600.:.4g} arcsec) is smaller than a "
@@ -269,7 +276,7 @@ class Cube:
                 good &= ~(np.abs(a) > thresh)
                 olds = self.stats.getSpread()
                 self.stats.calculate(a, good)
-                ftol = abs(olds - self.stats.getSpread()) / olds + self.stats.getSpread()
+                ftol = abs(olds - self.stats.getSpread()) / olds
                 if ftol < 0.001:
                     break
         self.stats.setThresholdSNR(p.se.snrCut)
@@ -391,7 +398,7 @@ class Cube:
         maps[1].fitswrite_2d(p.outFolder + p.outPrefix + "_mom1st.fits")
         maps[2].fitswrite_2d(p.outFolder + p.outPrefix + "_mom2nd.fits")
         if p.ma.SNmap:
-            maps[0].SNMap(True)
+            maps[0].SNMap(True, name="_mom0th")         # (TOTALMAP writes _map_0th_RMS.fits, _map_0th_SN.fits)
 
     def extractCubelet(self, obj, edges):
         dims = self.AxisDim()
@@ -490,6 +497,18 @@ class Cube:
             self.BlankMask()
         return arr * self.mask
 
+    def _maskBeam(self, bmaj, bmin, bpa):
+        """FACTOR and the new beam (arcsec, deg) of the SMOOTH masks, from the beam of the data: BMAJ, BMIN
+        and BPA if given, otherwise FACTOR (default 2) times the beam, at the same angle. BMAJ and BMIN taken
+        as the beam of the data (not in the header) do not count."""
+        p = self.par
+        factor = 2 if p.factor == -1 else p.factor
+        given = not getattr(self, "_beamFromBmaj", False)
+        nbmaj = p.bmaj if (given and p.bmaj != -1) else factor * bmaj
+        nbmin = p.bmin if (given and p.bmin != -1) else factor * bmin
+        nbpa = p.bpa if (given and p.bpa is not None) else bpa
+        return factor, nbmaj, nbmin, nbpa
+
     def BlankMask(self, channel_noise=None, onlyLargest=True):
         """Build the mask (self.mask) according to the MASK parameter."""
         from .smooth import Smooth3D, SpectralSmooth3D
@@ -509,10 +528,7 @@ class Cube:
                     bmaj = h.Bmaj() * arcsconv(h.Cunit(0))
                     bmin = h.Bmin() * arcsconv(h.Cunit(0))
                     bpa = h.Bpa()
-                    factor = 2 if p.factor == -1 else p.factor
-                    nbmaj = factor * bmaj if p.bmaj == -1 else p.bmaj
-                    nbmin = factor * bmin if p.bmin == -1 else p.bmin
-                    nbpa = bpa if p.bpa == -1 else p.bpa
+                    factor, nbmaj, nbmin, nbpa = self._maskBeam(bmaj, bmin, bpa)
                     sm = Smooth3D()
                     arr = sm.smooth(self, (bmaj, bmin, bpa), (nbmaj, nbmin, nbpa))
                     sm_c.array = np.nan_to_num(arr).astype(self.array.dtype)
@@ -546,10 +562,7 @@ class Cube:
                 bmaj = h.Bmaj() * arcsconv(h.Cunit(0))
                 bmin = h.Bmin() * arcsconv(h.Cunit(0))
                 bpa = h.Bpa()
-                factor = 2 if p.factor == -1 else p.factor
-                nbmaj = factor * bmaj if p.bmaj == -1 else p.bmaj
-                nbmin = factor * bmin if p.bmin == -1 else p.bmin
-                nbpa = bpa if p.bpa == -1 else p.bpa
+                factor, nbmaj, nbmin, nbpa = self._maskBeam(bmaj, bmin, bpa)
                 sm = Smooth3D()
                 arr = sm.smooth(self, (bmaj, bmin, bpa), (nbmaj, nbmin, nbpa))
                 st = Stats(p.flagRobustStats)
@@ -620,7 +633,8 @@ class Cube:
             s.append(sh + (f"THRESHOLD={se.threshold:.6f}" if se.threshold != 0 else f"SNRCUT={se.snrCut:.6f}"))
             s.append(sh + "FLAGGROWTH=" + stringize(se.flagGrowth))
             if se.flagGrowth:
-                s.append(sh + (f"GROWTHTHRESHOLD={se.threshold:.6f}" if se.growthThreshold != 0 else f"GROWTHCUT={se.growthCut:.6f}"))
+                s.append(sh + (f"GROWTHTHRESHOLD={se.growthThreshold:.6f}" if se.growthThreshold != 0
+                               else f"GROWTHCUT={se.growthCut:.6f}"))
             s.append(sh + "REJECTBEFOREMERGE=" + stringize(se.RejectBeforeMerge))
             s.append(sh + "TWOSTAGEMERGING=" + stringize(se.TwoStageMerging))
             s.append(sh + f"THRESHVELOCITY={se.threshVelocity}")
@@ -718,7 +732,7 @@ class Cube:
                 m, n = mad(a[:, y, :].ravel())
                 if m is None:
                     bad_y.append(y); continue
-                if m > 1.5 * madfm_all and n / nz > 0.7 * ny:
+                if m > 1.5 * madfm_all and n / nz > 0.7 * nx:         # (a line of nx pixels; C++ had ny)
                     bad_y.append(y); a[:, y, :] = 0
             print(" All pixel columns are good.\n" if not bad_y else
                   " Following pixel columns have been erased: " + " ".join(str(y + 1) for y in bad_y) + "\n")
@@ -727,7 +741,7 @@ class Cube:
                 m, n = mad(a[:, :, x].ravel())
                 if m is None:
                     bad_x.append(x); continue
-                if m > 1.5 * madfm_all and n / nz > 0.7 * nx:
+                if m > 1.5 * madfm_all and n / nz > 0.7 * ny:         # (a line of ny pixels; C++ had nx)
                     bad_x.append(x); a[:, :, x] = 0
             print(" All pixel rows are good.\n" if not bad_x else
                   " Following pixel rows have been erased: " + " ".join(str(x + 1) for x in bad_x) + "\n")
@@ -751,9 +765,7 @@ class Cube:
         p.verbose = oldv
         if oldv:
             print("\n" + str(self.stats))
-        name = p.imageFile
-        f = name.lower().find(".fits")
-        name = name[:f] + "_clean" + name[f:]
+        name = p.outFolder + p.outPrefix + "_clean.fits"       # (C++ wrote <input>_clean.fits next to the input)
         sub = a[cz0:nz - cz1, cy0:ny - cy1, cx0:nx - cx1].copy()
         sub[(sub == 0)] = np.nan
         out = Cube.fromArray(sub, self.head, p)
@@ -769,19 +781,20 @@ class Cube:
         p = self.par
         nz = self.DimZ()
         toex = np.zeros(nz, bool)
-        for w in str(p.exclude_windows).split():
-            kv = None
-            for d in (":", "~"):
-                if d in w:
-                    kv = w.split(d, 1)
-                    break
-            if kv is not None:
-                if not (kv[0].isdigit() and kv[1].isdigit()):
-                    continue
-                a, b = sorted((int(kv[0]), int(kv[1])))
+        ex = str(p.exclude_windows).strip()
+        if ex.upper() != "NONE":
+            import re
+            for w in ex.replace(",", " ").split():
+                m = re.fullmatch(r"(\d+)(?:[:~](\d+))?", w)
+                if m is None:
+                    raise BBaroloError(f"EXCLWIND {ex}: {w} is not a channel or a range of channels (first:last), "
+                                       "counted from 0.")
+                a, b = sorted((int(m.group(1)), int(m.group(2) or m.group(1))))
+                if b >= nz:
+                    raise BBaroloError(f"EXCLWIND {ex}: channel {b} is outside the cube (channels 0 to {nz - 1}).")
                 toex[a:b + 1] = True
-            elif w.isdigit():
-                toex[int(w)] = True
+            if toex.all():
+                raise BBaroloError(f"EXCLWIND {ex}: all the channels are excluded, no continuum to fit.")
         z = np.arange(nz, dtype=np.float64)
         ncoeff = p.cont_order + 1
         V = np.vander(z, ncoeff, increasing=True)

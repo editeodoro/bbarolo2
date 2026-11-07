@@ -25,7 +25,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
     BBarolo parameter, including the rings (radii or nradii/radsep, xpos, ypos, vsys, vrot,
     vdisp, inc, pa, z0, vrad, dens, vvert, dvdz, zcyl: single values or one value per ring).
     Ring parameters not fitted are kept fixed. Geometric parameters that are not given are
-    estimated as in 3DFIT (VDISP=8, Z0=0, VRAD=0, DENS=1 if not given).
+    estimated as in 3DFIT (VDISP=8, Z0=one pixel, VRAD=VVERT=DVDZ=ZCYL=0, DENS=1 if not given).
 
     The parameters of the BAYESIAN3DFIT task of parameter files are accepted too: FREE (the
     free parameters, e.g. 'VROT VDISP_SINGLE INC_SINGLE'; run() needs them, as FREE or as
@@ -260,7 +260,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             inc=dict(name='uniform', loc=0, scale=90),                        # 0-90 degrees
             phi=dict(name='uniform', loc=0, scale=360),                       # 0-360 degrees
             vvert=dict(name='uniform', loc=0, scale=30),                      # 0-30 km/s
-            dvdz=dict(name='uniform', loc=0, scale=2),                        # 0-2 km/s/pc
+            dvdz=dict(name='uniform', loc=0, scale=2),                        # 0-2 km/s/arcsec
             zcyl=dict(name='uniform', loc=0, scale=5),                        # 0-5 arcsec
             dens=dict(name='uniform', loc=0.1, scale=200),                    # 0.1-200 1E20 cm^-2
             z0=dict(name='uniform', loc=0, scale=10),                         # 0-10 arcsec

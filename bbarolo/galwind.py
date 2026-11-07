@@ -12,7 +12,13 @@ Differences with the C++ code (all bugs in the original):
   * each cylinder/cone gets its own random seed (C++ set ISEED on the 3DFIT
     parameters, which were not used, so all cylinders shared the same random numbers);
   * CDENS and NV given to the GalWind constructor are honoured (C++ ignored them
-    for cylindrical models and used the GALMOD values).
+    for cylindrical models and used the GALMOD values);
+  * cylindrical model: VWIND > 0 is an outflow, as in the spherical model (C++ gave the
+    cylinders the opposite velocities, an inflow), and the cylinders are centred on the
+    projected axis of the disk also for rotated or mirrored axes;
+  * spherical model: NV 1 is one sub-cloud (C++ took any NV up to 1 as 20);
+  * VWIND, VDISP, DENS, VROT, OPENANG and RADII also as lists, one value per cylinder or
+    shell (C++ used the first value).
 """
 
 import math
@@ -21,7 +27,7 @@ import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 
 from .galmod import GalmodSetup, _galmod_wind, _seed, _sum_chunks
-from .rings import Rings
+from .rings import Rings, ringList
 from .smooth import Smooth3D
 from .moments import MomentMap
 from .pvslice import PositionVelocity
@@ -31,9 +37,24 @@ from .plotscripts import run_scripts, F
 
 
 def _column(s):
-    """Return the list of values of a parameter given as a file column, else None."""
+    """Return the list of values of a parameter given as a file column or as a list of numbers (one value
+    per cylinder or shell, separated by spaces or commas), else None."""
     s = str(s)
-    return getDataColumn(s) if "file(" in s.lower() else None
+    return getDataColumn(s) if "file(" in s.lower() else ringList(s)
+
+
+def _values(name, s, n):
+    """The n values of the GALWIND parameter name (value s): a file column or a list with at least n values,
+    or a single value for all."""
+    col = _column(s)
+    if col is None:
+        try:
+            return np.full(n, float(str(s).strip()))
+        except ValueError:
+            raise BBaroloError(f"GALWIND: {name} {s} is not a number, a list of numbers or file(name,column)") from None
+    if len(col) < n:
+        raise BBaroloError(f"GALWIND: {name} has {len(col)} values, fewer than the {n} cylinders or shells.")
+    return np.asarray(col[:n], float)
 
 
 class GalWind:
@@ -61,11 +82,13 @@ class GalWind:
             from .params import GalwindPar
             p = GalwindPar()
             p.flagGALWIND = True
+            def text(v):                # (a list: one value per cylinder or shell)
+                return " ".join(str(x) for x in np.ravel(v)) if np.ndim(v) else str(v)
             p.XPOS, p.YPOS = str(vals["x0"]), str(vals["y0"])
             p.PHI, p.INC = str(vals["pa"]), str(vals["inc"])
-            p.VDISP, p.DENS = str(vals["disp"]), str(vals["dens"])
-            p.VSYS, p.VWIND = str(vals["vsys"]), str(vals["vw"])
-            p.OPENANG, p.HTOT = str(vals["openang"]), float(vals["htot"])
+            p.VDISP, p.DENS = text(vals["disp"]), text(vals["dens"])
+            p.VSYS, p.VWIND = str(vals["vsys"]), text(vals["vw"])
+            p.OPENANG, p.HTOT = text(vals["openang"]), float(vals["htot"])
             p.DENSTYPE, p.NTOT = int(vals["denstype"]), int(vals["ntot"])
             p.CDENS, p.NV = int(vals["cdens"]), int(vals["nv"])
             self.par = p
@@ -98,27 +121,34 @@ class GalWind:
 
     def _cylindrical(self, out):
         c, par = self.cin, self.par
-        h = c.Head()
-        PixSize = h.PixScale() * arcsconv(h.Cunit(0))
-        OpA = float(par.OPENANG)
+        try:
+            OpA = float(str(par.OPENANG).strip())
+        except ValueError:
+            raise BBaroloError(f"GALWIND: OPENANG {par.OPENANG}: with cylinders (WTYPE 0) the opening angle is "
+                               "one value.") from None
         ntot = int(par.NTOT)
         z0 = par.HTOT / (2 * ntot)                          # half-height of cylinders (arcsec)
-        zpix = z0 / PixSize
         width = (2 * z0) * math.tan(OpA / 2. * math.pi / 180.)
         PA, inc, Vsys = float(par.PHI), float(par.INC), float(par.VSYS)
         x0, y0 = self._center()
 
-        def column(s, dflt):
+        def column(name, s):
             col = _column(s)
-            return list(col) if col is not None else [float(str(dflt).split()[0])] * ntot
-        Vwind, Vdisp = column(par.VWIND, par.VWIND), column(par.VDISP, par.VDISP)
-        Dens, Vrot = column(par.DENS, par.DENS), column(par.VROT, par.VROT)
-        if not (len(Vwind) == len(Vdisp) == len(Dens) == len(Vrot) == ntot):
-            raise BBaroloError(f"GALWIND: VWIND, VDISP, DENS and VROT must have NTOT={ntot} values (one per layer).")
+            if col is not None and len(col) != ntot:
+                raise BBaroloError(f"GALWIND: VWIND, VDISP, DENS and VROT must have NTOT={ntot} values (one per "
+                                   f"cylinder): {name} has {len(col)}.")
+            return list(_values(name, s, ntot))
+        Vwind, Vdisp = column("VWIND", par.VWIND), column("VDISP", par.VDISP)
+        Dens, Vrot = column("DENS", par.DENS), column("VROT", par.VROT)
 
         setup = GalmodSetup(c, gmpar=self._gmpar())
         gtype = getattr(c.pars(), "galmodtype", "MC")
-        cpa, spa, sinc = math.cos(math.radians(PA)), math.sin(math.radians(PA)), math.sin(math.radians(inc))
+        # pixel offset of the point at height z = 1 arcsec on the axis of the disk, projected as the clouds
+        # of GALMOD are (sky y = -z sin(inc)): the cylinder k of each cone is centred at z = ±(2k-1)·z0
+        sinc = math.sin(math.radians(inc))
+        phi = math.radians(PA) + setup.crota2
+        dx = sinc * math.cos(phi) / (60. * setup.cdelt[0])
+        dy = -sinc * math.sin(phi) / (60. * setup.cdelt[1])
         base = _seed(par.ISEED)
 
         def cylinder(k):
@@ -131,14 +161,15 @@ class GalWind:
             ang = F_ * OpA / 2. * math.pi / 180.
             r = Rings().setRings(radii=Rin + np.arange(nr) * radsep, vsys=Vsys, vdisp=Vdisp[k - 1],
                                  inc=inc, phi=PA, z0=z0, dens=dens, vrot=Vrot[k - 1], radsep=radsep)
-            r.vrad = -Vwind[k - 1] * np.sin(ang)
-            r.vvert = Vwind[k - 1] * np.cos(ang)
+            # an outflow for VWIND > 0 (as the shells of WTYPE 1): along the lines through the centre, away
+            # from it (C++ had the opposite signs, an inflow)
+            r.vrad = Vwind[k - 1] * np.sin(ang)
             cones = []
-            for sgn in (1, -1):
-                r.xpos[:] = x0 + sgn * (2. * k - 1) * zpix * cpa * sinc
-                r.ypos[:] = y0 + sgn * (2. * k - 1) * zpix * spa * sinc
-                if sgn < 0:
-                    r.vvert = -r.vvert
+            for sgn in (1, -1):                 # the cone above the plane, then the one below
+                z = sgn * (2. * k - 1) * z0
+                r.xpos[:] = x0 + z * dx
+                r.ypos[:] = y0 + z * dy
+                r.vvert = sgn * Vwind[k - 1] * np.cos(ang)
                 cones.append(r.copy())
             return cones
 
@@ -172,12 +203,11 @@ class GalWind:
             nr = len(Radii)
         radii = np.asarray(Radii, float) if Radii is not None else np.arange(nr) * radsep + radsep / 2.
 
-        def column(s):
-            col = _column(s)
-            return np.asarray(col[:nr], float) if col is not None else np.full(nr, float(str(s).split()[0]))
-        U = np.vstack([column(par.VROT) * 1000., column(par.VWIND) * 1000., column(par.VDISP) * 1000.,
-                       column(par.DENS), np.full(nr, math.radians(inc)), np.full(nr, math.radians(PA)),
-                       np.radians(column(par.OPENANG)), np.full(nr, x0), np.full(nr, y0),
+        def column(name):
+            return _values(name, getattr(par, name), nr)
+        U = np.vstack([column("VROT") * 1000., column("VWIND") * 1000., column("VDISP") * 1000.,
+                       column("DENS"), np.full(nr, math.radians(inc)), np.full(nr, math.radians(PA)),
+                       np.radians(column("OPENANG")), np.full(nr, x0), np.full(nr, y0),
                        np.full(nr, Vsys * 1000.)])
         if np.any(U[2] < 0):
             raise BBaroloError("GALMOD error: Negative velocity dispersion not allowed.")
@@ -200,7 +230,7 @@ class GalWind:
         if rads:
             sr[0] = rads
             sr[1:] = np.array(vals).T
-        nvpar = par.NV if par.NV > 1 else 20
+        nvpar = par.NV if par.NV > 0 else 20                # (NV not given: 20; C++ also took NV 1 as 20)
         nv = np.where(sr[3] == 0, 1, nvpar if nvpar >= 1 else setup.nsubs).astype(np.int64)
         return np.ascontiguousarray(sr), nv, sep
 

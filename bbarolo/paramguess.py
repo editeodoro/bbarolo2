@@ -97,7 +97,8 @@ def _given(s):
         if not col:
             raise ValueError(f"3DFIT ERROR: cannot read the values of {s}")
         return float(col[0])
-    return float(s.split()[0])
+    from .rings import ringTokens
+    return float(ringTokens(s)[0])
 
 
 def funcEllipse(mypar, c, pa, xcen, ycen, Vf):
@@ -678,6 +679,13 @@ def EstimateInitial(c, p):
         ip.radsep, ip.nrings = p.RADSEP, p.NRADII
     else:
         ip.findRings()
+        if p.RADSEP != -1:
+            # RADSEP alone: rings of RADSEP out to the estimated extent of the disk (C++ kept the number of
+            # the beam-wide rings, so the extent scaled with RADSEP)
+            ip.radsep = p.RADSEP
+            ip.nrings = max(1, _lround(ip.Rmax / ip.radsep))
+            if ip.nrings > 4:
+                ip.nrings -= 1
     if p.VROT != "-1": ip.vrot = _given(p.VROT)
     else: ip.findRotationVelocity()
     if c.pars().plots >= 3:

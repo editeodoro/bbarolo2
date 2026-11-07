@@ -51,6 +51,14 @@ def convpars(oldbeam, newbeam):
     return (2 * a1, 2 * b1, th1 / d2r)
 
 
+def perBeam(h):
+    """Whether the flux unit of the header h is per beam (Jy/beam, mJy/beam, uJy/beam, W.U., or a unit not
+    known), so that SMOOTH rescales the data by the ratio of the beam areas. Units per pixel (Jy, mJy) and K
+    are not."""
+    b = h.Bunit().lower().replace(" ", "")
+    return FluxtoJyBeam(1., h) == 1 or "jy/b" in b or "j/b" in b or "w.u." in b or "wu" in b
+
+
 def fillgauss2d(beam, gridspace, ampl=1.0, norm=True, cutoff=CUTOFFRATIO):
     """Rotated 2D Gaussian sampled on the pixel grid (port of Fillgauss2d).
     beam=(bmaj,bmin,pa[deg, wrt +X]) in the same units as gridspace. Returns array (ny,nx)."""
@@ -261,12 +269,12 @@ class Smooth3D:
         OB = [p.obmaj, p.obmin, p.obpa]
         if OB[0] == -1: OB[0] = h.Bmaj() * unittoarc
         if OB[1] == -1: OB[1] = h.Bmin() * unittoarc
-        if OB[2] == 0: OB[2] = h.Bpa()
+        if OB[2] is None: OB[2] = h.Bpa()
         if OB[0] == 0 or OB[1] == 0:
             print("SMOOTH warning: BMAJ, BMIN keywords are not in the FITS header."
                   f"Assuming a {p.beamFWHM * 3600} arcsec beam.Change this value with beamFWHM parameter.")
             OB[0] = OB[1] = p.beamFWHM * 3600
-        npa = OB[2] if p.bpa == -1 else p.bpa
+        npa = OB[2] if p.bpa is None else p.bpa
         NB = [p.factor * OB[0] if p.bmaj == -1 else p.bmaj,
               p.factor * OB[1] if p.bmin == -1 else p.bmin, npa]
         dims = [c.DimX(), c.DimY(), c.DimZ()]
@@ -277,8 +285,8 @@ class Smooth3D:
             Bhi[j] = dims[j] if (hi < 0 or hi > dims[j]) else hi
         self.fft = p.flagFFT
         self.scalefac = p.scalefactor
-        if self.scalefac == -1 and FluxtoJyBeam(1., h) != 1:
-            self.scalefac = 1
+        if self.scalefac == -1 and not perBeam(h):
+            self.scalefac = 1                   # (units not per beam: the data are not rescaled)
         return self.smooth(c, OB, NB, bhi=Bhi, blo=Blo)
 
     def fitswrite(self, outname=None):

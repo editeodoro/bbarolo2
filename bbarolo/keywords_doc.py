@@ -138,7 +138,8 @@ than a quarter of a pixel is an error (the value is in arcsec, not degrees). In 
         doc="""\
 Checks the cube for bad channels, rows or columns and erases them (sets them to 0) before the other
 tasks. A channel (row, column) is bad when it is blank, or when its noise (the MADFM of its
-non-blank pixels) is more than 1.5 times that of the whole cube. Values:
+non-blank pixels) is more than 1.5 times that of the whole cube; a row or a column only if more than 70%
+of its pixels are not blank. Values:
 
 - `0`: no check (default);
 - `1`: channels, rows and columns;
@@ -148,8 +149,8 @@ non-blank pixels) is more than 1.5 times that of the whole cube. Values:
 - `5`: only rows (x).
 
 If something is erased, the statistics of the cube are computed again, and the cleaned cube, without
-the bad planes at its edges, is written next to the input file as `<name>_clean.fits`. Other values
-are set to 0.
+the bad planes at its edges, is written in `OUTFOLDER` as `<prefix>_clean.fits` (BBarolo 1.8 wrote it
+next to the input file). Other values are set to 0.
 """),
     'AUTO': dict(
         group='Task',
@@ -197,9 +198,9 @@ It runs before all the other tasks, which then analyse the subtracted cube. The 
         default='none (all the channels are used)',
         doc="""\
 The channels excluded from the continuum fit of `CONTSUB`, i.e. those with line emission: single
-channels or ranges `first:last` (also `first~last`, both included), separated by spaces, e.g.
-`EXCLWIND 20:45 60`. Channels are counted from 0. Items that are not non-negative integers are
-ignored.
+channels or ranges `first:last` (also `first~last`, both included), separated by spaces or commas, e.g.
+`EXCLWIND 20:45 60`. Channels are counted from 0. Any other item, or a channel outside the cube, is an
+error, as is a window that excludes all the channels.
 
 If not given, the continuum is fitted to all the channels, including those of the line.
 """),
@@ -327,15 +328,16 @@ How the objects are found:
   `BMIN`, `BPA` or `FACTOR`); the noise and the thresholds are those of the smoothed cube, the fluxes
   are measured on the original cube.
 
-Case-insensitive. For the SEARCH task another value is replaced by `spatial`, with a message. A 2D
-image is always searched spatially.
+Case-insensitive. Another value is replaced by `spatial`, with a message (also when the source finder
+only builds a mask, `MASK SEARCH`). A 2D image is always searched spatially.
 """),
     'ITERNOISE': dict(
         group={'STATS': 'Options', '*': 'Thresholds'},
         doc="""\
 Whether to estimate the noise of the cube iteratively: the voxels whose absolute value exceeds the
-middle plus 3 times the noise are excluded and the statistics computed again, up to 20 times. This
-reduces the contribution of the emission to the noise when it fills a large part of the cube.
+middle plus 3 times the noise are excluded and the statistics computed again, until the noise changes
+by less than 0.1% (at most 20 times). This reduces the contribution of the emission to the noise when
+it fills a large part of the cube.
 
 It changes the statistics of the cube wherever they are used: the thresholds of SEARCH (and of the
 masks of the source finder), STATS, `SNMAP` and the noise of 3DFIT.
@@ -441,16 +443,16 @@ secondary threshold (`GROWTHCUT` or `GROWTHTHRESHOLD`). Objects joined by the gr
         group='Thresholds',
         doc="""\
 The secondary threshold for the growth of the detections (`FLAGGROWTH`), in units of the noise of the
-cube (as `SNRCUT`). It must not exceed `SNRCUT`: otherwise the SEARCH task turns the growth off, with
-a message. Ignored if `GROWTHTHRESHOLD` is given.
+cube (as `SNRCUT`). It must not exceed `SNRCUT`: otherwise the growth is turned off, with a message
+(for SEARCH and for the masks of the source finder). Ignored if `GROWTHTHRESHOLD` is given.
 """),
     'GROWTHTHRESHOLD': dict(
         group='Thresholds',
         default='none (GROWTHCUT is used)',
         doc="""\
 The secondary threshold for the growth of the detections in the flux units of the cube, instead of
-`GROWTHCUT`. With `THRESHOLD`, it must not exceed it: otherwise the SEARCH task turns the growth off,
-with a message.
+`GROWTHCUT`. With `THRESHOLD`, it must not exceed it: otherwise the growth is turned off, with a
+message (for SEARCH and for the masks of the source finder).
 """),
     'CUBELETS': dict(
         group='Outputs',
@@ -577,7 +579,8 @@ the continuum subtraction (`CONTCHANS`) and the spectral taper (`TAPER`). It wri
 (the S/N).
 
 With `TOTALMAP` the maps refer to the total map of the cube; with `SEARCH`, to the total map of the
-detections (`<prefix>_mom0th.fits`; same file names) and of each cubelet (`CUBELETS`).
+detections (`<prefix>_mom0th.fits`), written as `<prefix>_mom0th_RMS.fits` and `<prefix>_mom0th_SN.fits`,
+and to that of each cubelet (`CUBELETS`).
 """),
     'TAPER': dict(
         group='Maps',
@@ -727,8 +730,9 @@ Computes the residuals of 3DFIT over a grid of two ring parameters, `P1` and `P2
 shows the shape of the parameter space and whether the minimum found by 3DFIT is the right one. It can
 be slow. `true` runs the task.
 
-The rings are those of 3DFIT (given or estimated), from the ring `STARTRAD`; the residuals use
-`FTYPE`, `WFUNC`, `BWEIGHT`, `SIDE` and `NORMALCUBE`, with the `LOCAL` normalisation. The outputs are
+The rings are those of 3DFIT (given or estimated, without the 2D refinement of PA and VROT that 3DFIT
+does), from the ring `STARTRAD`; the residuals use `FTYPE`, `WFUNC`, `BWEIGHT`, `SIDE` and `NORMALCUBE`,
+with the normalisation of the first stage of 3DFIT (`NORM`). The outputs are
 `<prefix>_spacepar.fits`, a cube with, in each ring, the relative difference of the residuals from their
 minimum, |f − f_min|/f_min, and its plot `<prefix>_spacepar.pdf`.
 """),
@@ -750,7 +754,7 @@ of rings from the extent of the emission (see `GUESSTYPE`). GALMOD and ELLPROF n
         default='from NRADII and RADSEP',
         doc="""\
 The radii of the rings (arcsec), in increasing order, as an alternative to `NRADII` and `RADSEP`. It can
-be a list of values separated by spaces (`30 60 90 120`; in Python, a list or an array);
+be a list of values separated by spaces or commas (`30 60 90 120`; in Python, a list or an array);
 `Rmin~Rmax:step`, e.g. `60~180:60` for 60, 120 and 180 arcsec (up to Rmax, included); or a column of a text
 file, `file(name,column)` or `file(name,column,rows)` (see `VROT`).
 
@@ -766,7 +770,8 @@ The separation between consecutive rings (arcsec), which is also the width of ea
 `NRADII` when `RADII` is not given (with `RADII` it is ignored, except for a single radius).
 
 If it is not given, 3DFIT, BAYESIAN3DFIT, SPACEPAR and 2DFIT use the FWHM of the major axis of the
-beam, or half of it when that gives fewer than 20 rings across the emission. GALMOD and ELLPROF need it
+beam, or half of it when that gives fewer than 20 rings across the emission. Given without `NRADII`, the
+number of rings is estimated so that rings of RADSEP cover the emission. GALMOD and ELLPROF need it
 (or `RADII`).
 """),
     'VROT': dict(
@@ -775,7 +780,7 @@ beam, or half of it when that gives fewer than 20 rings across the emission. GAL
         doc="""\
 The rotation velocity of the rings (km/s): the initial value of the fits, or the value of the model
 (GALMOD). Like the other ring parameters, it can be one value for all the rings; one value per ring,
-separated by spaces (in Python, a list or an array); or a column of a text file, `file(name,column)`
+separated by spaces or commas (in Python, a list or an array); or a column of a text file, `file(name,column)`
 with the column counted from 1, `file(name,column,N)` from row N to the end, or
 `file(name,column,N:M)` rows N to M. The rows are the lines of the file, counted from 1, and the lines
 without a number in that column are skipped. A column of a BBarolo ring file (e.g.
@@ -788,7 +793,7 @@ inclination (see `GUESSTYPE`); GALMOD needs it. In 3DFIT the fitted VROT of each
 `DELTAVROT` of its initial value.
 
 In GALWIND, VROT is the rotation of the outflowing gas around the axis of the cones (default 0): one
-value, or a file column with one value per cylinder or shell.
+value, or one value per cylinder or shell (a list or a file column).
 """),
     'VRAD': dict(
         group='Rings',
@@ -835,8 +840,8 @@ plane (it needs `Z0` > 0). One value, one value per ring or `file(name,column)` 
 given.
 
 BAYESIAN3DFIT fits it when `FREE` includes it; the models of 3DFIT and SPACEPAR use the value given,
-fixed. 2DFIT reads DVDZ as another quantity, as BBarolo 1.8 did: the angle (degrees, default 15) around
-the minor axis within which the pixels of the velocity field are left out of the fit.
+fixed. (2DFIT of BBarolo 1.8 read DVDZ as the angle around the minor axis left out of the fit, now
+`FREEANGLE`.)
 """),
     'ZCYL': dict(
         group='Rings',
@@ -859,8 +864,8 @@ quadrature the instrumental broadening `SPECRES` (or `LINEAR`). One value, one v
 
 When it is not given, 3DFIT, SPACEPAR and BAYESIAN3DFIT start from 8 km/s; with `GUESSTYPE` `FIT`,
 3DFIT and SPACEPAR use instead an estimate from the second moment of the emission (in the outer half of
-the disk, corrected for the channel width). GALMOD and GALWIND need it (in GALWIND: one value, or a file
-column with one value per cylinder or shell). When `FREE` includes VDISP, 3DFIT fits it between
+the disk, corrected for the channel width). GALMOD and GALWIND need it (in GALWIND: one value, or one
+value per cylinder or shell, as a list or a file column). When `FREE` includes VDISP, 3DFIT fits it between
 `MINVDISP` and `MAXVDISP`.
 """),
     'XPOS': dict(
@@ -871,8 +876,8 @@ The x coordinate of the centre of the rings: a pixel, counted from 0 (unlike GIP
 coordinate, in degrees with a `d` (`114.2142d`) or sexagesimal (`07:36:51.4` or `07h36m51.4s`: hours on
 a right ascension axis, degrees otherwise). A pixel can also be one value per ring or
 `file(name,column)` (see `VROT`); a world coordinate is one position for all the rings, and GALWIND
-takes one value. Give `XPOS` and `YPOS` in the same form: both pixels or both world coordinates, and
-both as lists or file columns if one is.
+takes one value. Give `XPOS` and `YPOS` in the same form, both pixels or both world coordinates; when
+one is a list or a file column, the other can be a single value in pixels, used for all the rings.
 
 When it is not given, 3DFIT, BAYESIAN3DFIT, SPACEPAR and 2DFIT estimate it from the largest source in
 the cube (see `GUESSTYPE`); GALMOD, ELLPROF and GALWIND need it. When `FREE` includes XPOS, 3DFIT fits
@@ -953,8 +958,8 @@ BAYESIAN3DFIT fits it when `FREE` includes it, otherwise it uses a density profi
 total intensity map of the data.
 
 In GALWIND, DENS is the density of the cylinders (`WTYPE` 0, as in GALMOD) or of the spherical shells
-(`WTYPE` 1, a column density in 1E20 atoms/cm²): one value, or a file column with one value per
-cylinder or shell.
+(`WTYPE` 1, a column density in 1E20 atoms/cm²): one value, or one value per cylinder or shell (a list
+or a file column).
 """),
     'CDENS': dict(
         group='Model',
@@ -996,8 +1001,8 @@ with velocities drawn from its line profile (`VDISP` plus the instrumental broad
 VDISP = 0 have one. Fewer sub-clouds give faster and noisier models.
 
 ANALYTIC models do not use it, except to decide which model voxels count as blanks in the residuals of
-3DFIT (see `BWEIGHT`). For the spherical shells of GALWIND (`WTYPE` 1) the default, or any value up to 1,
-is 20.
+3DFIT (see `BWEIGHT`). For the spherical shells of GALWIND (`WTYPE` 1) the default is 20 (BBarolo 1.8
+also took 1 as 20).
 """),
     'SM': dict(
         group='Model',
@@ -1143,7 +1148,7 @@ voxels, where m is the model and o the data (the noise rms where the data are no
 - 4: (m − o)².
 
 Each term is weighted by `WFUNC`; the sum is divided by the number of voxels and multiplied by the
-penalty for blanks (`BWEIGHT`). 3DFIT replaces other values with 2, with a warning.
+penalty for blanks (`BWEIGHT`). 3DFIT and SPACEPAR replace other values with 2, with a warning.
 """),
     'WFUNC': dict(
         group='Free parameters and fit',
@@ -1151,8 +1156,8 @@ penalty for blanks (`BWEIGHT`). 3DFIT replaces other values with 2, with a warni
 The weight of each pixel in the residuals, as a function of its azimuthal angle θ in the plane of the
 disk (0 on the receding major axis): 0 uniform; 1 |cos θ|; 2 cos²θ (the default); −1 |sin θ|;
 −2 sin²θ. The cosine weights favour the pixels near the major axis, which carry most of the information
-on the rotation. Used by 3DFIT, SPACEPAR and 2DFIT (on the velocity field); 3DFIT replaces values beyond
-±2 with 1, with a warning.
+on the rotation. Used by 3DFIT, SPACEPAR and 2DFIT (on the velocity field); 3DFIT and SPACEPAR replace
+values beyond ±2 with 1, with a warning.
 """),
     'TOL': dict(
         group='Free parameters and fit',
@@ -1171,7 +1176,8 @@ parameters stay at their initial values.
 
 3DFIT: any of `VROT`, `VDISP` (or `DISP`), `INC`, `PA` (or `PHI`), `Z0`, `XPOS`, `YPOS`, `VSYS` and
 `VRAD`, or `ALL`, which also frees `DENS` (`DENS` alone is not fitted). When `PA` is free and there are at
-least 5 rings, the initial PA and VROT of the rings are first refined by a 2D fit of the velocity field.
+least 5 rings, the initial PA (and VROT, if free) of the rings are first refined by a 2D fit of the
+velocity field.
 2DFIT: `VROT`, `INC`, `PA`, `XPOS`, `YPOS`, `VSYS`, `VRAD` (or `VEXP`) or `ALL`, the others are ignored;
 with `SIDE` `A` or `R` the centre and VSYS stay fixed.
 
@@ -1211,8 +1217,16 @@ moment (3DFIT and SPACEPAR). On simulated disks its initial INC is biased by at 
 The half of the galaxy that is used, divided by the minor axis: `A` the approaching side, `R` the
 receding side, `B` both (the default). 3DFIT and SPACEPAR use only the pixels of that side in the
 residuals, 2DFIT in the fit of the velocity field (with one side it keeps the centre and `VSYS` fixed),
-ELLPROF in the radial profile. 3DFIT also accepts `APPROACHING`, `RECEDING`, `BOTH` and their
-abbreviations (`APP`, `REC`, ...).
+ELLPROF in the radial profile. All these tasks also accept `APPROACHING`, `RECEDING`, `BOTH` and their
+abbreviations (`APP`, `REC`, ...); other values are taken as `B`, with a warning.
+"""),
+    'FREEANGLE': dict(
+        group='Free parameters and fit',
+        doc="""\
+The angle (degrees) on either side of the minor axis, in the plane of the disk, within which 2DFIT
+leaves the pixels of the velocity field out of the fit: near the minor axis the line-of-sight velocity
+carries little information on the rotation. Between 0 (no pixel left out) and 90; 15 by default. In
+BBarolo 1.8, 2DFIT read this angle from `DVDZ`.
 """),
     'BWEIGHT': dict(
         group='Free parameters and fit',
@@ -1255,8 +1269,9 @@ profile of the data; `NONE`, no normalisation: the flux of the model is set by `
 3DFIT takes up to three values: the normalisation of the first stage, of the second stage
 (`TWOSTAGE`) and of the final model; one value is used for all, and with two the second is also that of
 the final model. The final model can also be `BOTH`, which writes the `AZIM` and the `LOCAL` model.
-GALMOD takes one value (the second, if more are given): `AZIM`, `LOCAL`, `NONE` or `BOTH`. Values not
-recognised become `LOCAL`, with a warning. SPACEPAR always uses `LOCAL`, as BBarolo 1.8.
+GALMOD takes one value (the second, if more are given): `AZIM`, `LOCAL`, `NONE` or `BOTH`. `AZIMUTHAL`
+is the same as `AZIM`. Values not recognised become `LOCAL`, with a warning. SPACEPAR uses the first
+value, the normalisation of the first stage of 3DFIT (BBarolo 1.8 always used `LOCAL`).
 """),
     'REGTYPE': dict(
         group='Free parameters and fit',
@@ -1474,15 +1489,16 @@ along the axis (`WTYPE` 0), or the outer radius of the spherical shells (`WTYPE`
 The full opening angle of the cones of GALWIND (degrees). With cylinders (`WTYPE` 0), the cylinder k,
 counted from the centre, has a radius of k·(`HTOT`/`NTOT`)·tan(OPENANG/2); with spherical shells
 (`WTYPE` 1), the gas fills the polar angles from 0 to OPENANG/2 from the axis, uniformly in angle. One
-value; with `WTYPE` 1 also `file(name,column)`, one value per shell. Required.
+value (an error otherwise with `WTYPE` 0); with `WTYPE` 1 also one value per shell (a list or a file
+column). Required.
 """),
     'NTOT': dict(
         group='Wind',
         doc="""\
 The number of cylinders in each cone of GALWIND (`WTYPE` 0), or the number of spherical shells (`WTYPE`
 1), each `HTOT`/NTOT thick. With `WTYPE` 1 the radii of the shells can be read instead from a file
-column given with `RADII` `file(name,column)`. With cylinders, `VWIND`, `VDISP`, `DENS` and `VROT` given
-as file columns must have NTOT values.
+column or a list given with `RADII`. With cylinders, `VWIND`, `VDISP`, `DENS` and `VROT` given as lists
+or file columns must have NTOT values; with shells, at least as many values as shells.
 """),
     'VWIND': dict(
         group='Wind',
@@ -1490,9 +1506,10 @@ as file columns must have NTOT values.
         doc="""\
 The velocity of the gas of the outflow along the cones (km/s). With spherical shells (`WTYPE` 1) it is
 radial, away from the centre. With cylinders (`WTYPE` 0) it is directed along the lines through the
-centre: along the axis on the axis and at `OPENANG`/2 from it at the edge of the cylinders (see
-`DENSTYPE`). With the same parameters, the two models give opposite line-of-sight velocities to each
-cone. One value, or a file column with one value per cylinder or shell. Required.
+centre, away from it: along the axis on the axis and at `OPENANG`/2 from it at the edge of the cylinders
+(see `DENSTYPE`). A positive VWIND is an outflow in both models (in BBarolo 1.8 the cylinders had the
+opposite velocities, an inflow). One value, or one value per cylinder or shell (a list or a file
+column). Required.
 """),
     'DENSTYPE': dict(
         group='Wind',
@@ -1578,16 +1595,17 @@ reference pixels shifted accordingly.
         doc="""\
 The major axis (FWHM, arcsec) of a beam, with two uses:
 
-- for every task, the beam of the data when the FITS header has none (no BMAJ/BMIN keywords and no beam
-  in the HISTORY). With only one of `BMAJ` and `BMIN` the beam is circular; they take precedence over
-  `BEAMFWHM`. When the header has a beam, they do not change it.
+- for every task except `SMOOTH`, the beam of the data when the FITS header has none (no BMAJ/BMIN
+  keywords and no beam in the HISTORY). With only one of `BMAJ` and `BMIN` the beam is circular; they
+  take precedence over `BEAMFWHM`. When the header has a beam, they do not change it.
 - for `SMOOTH`, the major axis of the new beam (by default `FACTOR` times the old one; if only `BMAJ` is
   given, `BMIN` is the same). It is also the beam to which the SMOOTH mask (`MASK SMOOTH` or
-  `SMOOTH&SEARCH`) smooths the cube before building the mask.
+  `SMOOTH&SEARCH`) smooths the cube before building the mask, unless BMAJ is the beam of the data (a
+  header without a beam): the mask then uses `FACTOR` times it.
 
-Since the two uses share the keyword, with a header without a beam `BMAJ` and `BMIN` are also the old
-beam of `SMOOTH`, which then does not change the resolution: give the old beam with `OBMAJ` and
-`OBMIN`. In Python, the beam of the data can also be given as `beam=(bmaj, bmin, bpa)`.
+With `SMOOTH` and a header without a beam, the beam of the data is given by `OBMAJ`, `OBMIN` and `OBPA`
+(or `BEAMFWHM`), never by `BMAJ` and `BMIN`. In Python, the beam of the data can also be given as
+`beam=(bmaj, bmin, bpa)`.
 """),
     'BMIN': dict(
         group={'SMOOTH': 'New beam', '*': 'Input'},
@@ -1600,24 +1618,24 @@ minor axis of the new beam (by default `FACTOR` times the old one, or `BMAJ` if 
 """),
     'BPA': dict(
         group={'SMOOTH': 'New beam', '*': 'Input'},
+        default='0 (SMOOTH: the angle of the old beam)',
         doc="""\
 The position angle of the major axis of a beam (degrees, anticlockwise from North), with the two uses
 of `BMAJ`: the beam of the data when the FITS header has none, and for `SMOOTH` and the SMOOTH mask
 the position angle of the new beam.
 
-For `SMOOTH` the default is a position angle of 0°, also when the new beam is `FACTOR` times the old
-one: `BPA -1` keeps the position angle of the old beam.
+If not given, the beam of the data has a position angle of 0°, and the new beam of `SMOOTH` and of the
+SMOOTH mask that of the old beam. Any value given is an angle (in BBarolo 1.8 the default was 0° also
+for the new beam, and −1 kept the old angle).
 """),
     'OBMAJ': dict(
         group='Old beam',
         default='the beam of the header',
         doc="""\
 The major axis (FWHM, arcsec) of the beam of the input cube, for `SMOOTH`: it replaces that of the
-header. If not given, the beam of the header (or, when the header has none, that given by `BMAJ` and
-`BMIN` or `BEAMFWHM`).
-
-`OBMAJ` and `OBMIN` are not taken as the beam of the data by the other checks: with a header without
-a beam, `SMOOTH` also needs `BMAJ` and `BMIN` or `BEAMFWHM`, otherwise BBarolo stops with an error.
+header. If not given, the beam of the header. When the header has no beam, `OBMAJ` and `OBMIN` (or
+`BEAMFWHM`) give it, for `SMOOTH` and for the other tasks of the same run; without them BBarolo stops
+with an error (`BMAJ` and `BMIN` are the new beam of `SMOOTH`).
 """),
     'OBMIN': dict(
         group='Old beam',
@@ -1628,11 +1646,11 @@ header, as `OBMAJ`. If not given, the minor axis of the beam of the header.
 """),
     'OBPA': dict(
         group='Old beam',
-        default='the BPA of the header',
+        default='the BPA of the header (0 if the header has no beam)',
         doc="""\
-The position angle (degrees, anticlockwise from North) of the beam of the input cube, for `SMOOTH`.
-The default, 0, takes the position angle of the beam of the header, so an old beam at exactly 0°
-cannot be imposed when the header gives another angle.
+The position angle (degrees, anticlockwise from North) of the beam of the input cube, for `SMOOTH`: it
+replaces that of the header. Any value given is an angle, also 0 (in BBarolo 1.8, 0 meant the angle of
+the header).
 """),
     'LINEAR': dict(
         group='Model',
@@ -1657,29 +1675,32 @@ profile, which the models add in quadrature to `VDISP`: the lines of the models 
         doc="""\
 The factor by which the beam is enlarged when no new beam is given with `BMAJ` and `BMIN`:
 
-- `SMOOTH`: the new beam is `FACTOR` times the old one along both axes, with the position angle `BPA`;
-  an axis given with `BMAJ` or `BMIN` takes that value instead. `SMOOTH` needs either the new beam or
-  `FACTOR`.
+- `SMOOTH`: the new beam is `FACTOR` times the old one along both axes, at the angle of the old beam
+  (or `BPA`); an axis given with `BMAJ` or `BMIN` takes that value instead. `SMOOTH` needs either the
+  new beam or `FACTOR`.
 - the SMOOTH mask (`MASK SMOOTH` or `SMOOTH&SEARCH`, used by `3DFIT`, `BAYESIAN3DFIT`, `2DFIT`,
   `ELLPROF`, the maps and `MAKEMASK`): the cube is smoothed to `FACTOR` times its beam before the mask is
   built (−1 is taken as 2).
 - `REDUCE`, with `SMOOTH` or on its own: the integer part of `FACTOR` is the number of pixels (or
-  channels) averaged along each axis, also when `SMOOTH` has a new beam from `BMAJ` and `BMIN`.
+  channels) averaged along each axis, also when `SMOOTH` has a new beam from `BMAJ` and `BMIN`. `REDUCE`
+  on its own needs FACTOR ≥ 1.
 """),
     'SCALEFACTOR': dict(
         group='Options',
         default='computed from the beams',
         doc="""\
 The factor by which `SMOOTH` multiplies the smoothed cube. If not given, BBarolo computes it from the
-old and the new beam (about the ratio of their areas), so that the values stay in Jy per beam; for data
-whose units are not Jy/beam (e.g. K or Jy/pixel) it is 1.
+old and the new beam (about the ratio of their areas), so that the values stay per beam: for data in
+Jy/beam, mJy/beam, uJy/beam, W.U. or in units BBarolo does not know. For data in K or per pixel (Jy,
+mJy) it is 1.
 """),
     'FFT': dict(
         group='Options',
         doc="""\
 Whether `SMOOTH` convolves with Fast Fourier Transforms. In BBarolo 2 the convolution is always
 computed with FFTs: `FFT false` only writes the blank pixels of the input (NaN or 0) as 0 in the
-smoothed cube instead of NaN, as the direct convolution of the C++ code did.
+smoothed cube instead of NaN. (The direct convolution of the C++ code wrote 0 for the blanks that were 0,
+and spread the NaN blanks over the size of the kernel.)
 """),
     'REDUCE': dict(
         group='Options',

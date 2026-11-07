@@ -269,7 +269,9 @@ class MomentMap(Image2D):
         if verb:
             print("Done.")
 
-    def SNMap(self, msk, outfolder=""):
+    def SNMap(self, msk, outfolder="", name="_map_0th"):
+        """Noise and S/N maps of the total map, written in <outfolder><name>_RMS.fits and <name>_SN.fits
+        (outfolder: OUTFOLDER + prefix by default)."""
         c = self.cin
         if self.storedtype != 0:
             self.ZeroMoment(msk, "MOMENT")
@@ -307,8 +309,8 @@ class MomentMap(Image2D):
         s_im.Head().setBunit("NONE")
         if outfolder == "":
             outfolder = c.pars().outFolder + c.pars().outPrefix
-        n_im.fitswrite_2d(outfolder + "_map_0th_RMS.fits")
-        s_im.fitswrite_2d(outfolder + "_map_0th_SN.fits")
+        n_im.fitswrite_2d(outfolder + name + "_RMS.fits")
+        s_im.fitswrite_2d(outfolder + name + "_SN.fits")
 
 
 def getAllMoments(c, usemask=True, mask=None, mtype="MOMENT"):

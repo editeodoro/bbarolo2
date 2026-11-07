@@ -7,6 +7,58 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **SMOOTH did not rescale cubes in mJy/beam, uJy/beam and W.U.** to the new beam (scale factor 1, as for
+  data per pixel): mJy/beam and uJy/beam since they are no longer taken as Jy/beam, W.U. also in C++
+  **(C++)**. They are rescaled as Jy/beam now.
+- **SMOOTH of a cube without a beam in the header (C++).** BMAJ and BMIN, the new beam, also became the
+  beam of the data, so nothing was smoothed, and OBMAJ/OBMIN alone stopped with "No beam information".
+  With SMOOTH the beam of the data now comes from OBMAJ, OBMIN, OBPA (or BEAMFWHM), and it is an error
+  without them. The SMOOTH mask of a run where BMAJ and BMIN are the beam of the data (a header without
+  a beam) smoothed the cube to that same beam: it uses FACTOR times it now.
+- **ITERNOISE ran all the 20 iterations (C++)**: the convergence test added the noise itself to its
+  relative change, |Δσ|/σ + σ < 0.001. It stops at |Δσ|/σ < 0.001 now: on NGC 2403 after 10 iterations
+  (4 with robust statistics), with a noise 4·10⁻⁴ (4·10⁻⁵) smaller in relative terms.
+- **The checks of SEARCHTYPE and of the growth threshold** ran only with SEARCH true, not when the source
+  finder only builds a mask (MASK SEARCH): a misspelt SEARCHTYPE then stopped with "No sources detected",
+  and a growth threshold above the threshold kept the growth on **(C++)**.
+- **The HISTORY card GROWTHTHRESHOLD of the mask** had the threshold, not the growth threshold **(C++)**.
+- **Ring parameters given as lists separated by commas** (`VROT 100,120,130`) passed the checks but
+  became 0 (`RADII 30,60,90` raised a ValueError). With XPOS given per ring (a list or a file column) and
+  YPOS a single value, or the reverse, the single value became 0: it is used now if in pixels, and is
+  an error if a world coordinate.
+- **NORM AZIMUTHAL** passed the checks but 3DFIT and GALMOD used LOCAL **(C++)**: it is AZIM now.
+- **FTYPE and WFUNC were checked only for 3DFIT (C++)**: SPACEPAR alone with FTYPE outside 1–4 gave zero
+  residuals everywhere. SPACEPAR replaces them with 2 and 1 too now.
+- **The long forms of SIDE** (APPROACHING, RECEDING, BOTH, APP, ...) were used only by 3DFIT: 2DFIT,
+  SPACEPAR and ELLPROF used both sides. C++ never used them (it converted them in a variable that was
+  then discarded) **(C++)**.
+- **SPACEPAR replaced the PA and VROT of the rings (C++).** With PA in FREE (the default) and at least 5
+  rings, SPACEPAR refined the initial PA and VROT of the rings with a 2D fit of the velocity field, as
+  3DFIT, also when they were given: it uses the rings as given (or estimated) now. Also, 3DFIT replaced a
+  fixed VROT (PA free, VROT not) with that of the 2D fit; it keeps it now **(C++)**.
+- **SPACEPAR always normalised the models LOCAL (C++)**, while 3DFIT uses NORM (AZIM by default): it uses
+  the normalisation of the first stage of 3DFIT now, so it maps the function that 3DFIT minimises.
+- **RADSEP without NRADII (C++)**: the number of rings was that of the beam-wide rings of the estimate,
+  so the extent of the rings scaled with RADSEP (NGC 2403: 22 rings out to 322″ with RADSEP 15, to
+  2580″ with 120). The rings of RADSEP now cover the estimated extent of the disk.
+- **EXCLWIND (CONTSUB)**: windows separated by commas, and any other item that was not a channel, were
+  ignored without warning, and a channel outside the cube raised an IndexError (C++ wrote outside its
+  array) **(C++)**. Commas are accepted now, and the other cases are errors that name EXCLWIND.
+- **GALWIND (C++).** The cylinders (WTYPE 0) were an inflow for VWIND > 0 (radial velocity −VWIND·sin,
+  vertical velocity towards the plane), while the spherical shells (WTYPE 1) were an outflow: each side
+  of the model had the opposite velocities. VWIND > 0 is an outflow in both now, and the cylinders are
+  centred on the projected axis of the disk also for rotated or mirrored axes. Also: NV 1 was taken as 20
+  for the shells; VWIND, VDISP, DENS, VROT (and OPENANG, RADII for the shells) given as lists used only
+  their first value (one value per cylinder or shell now); OPENANG as a file column with cylinders
+  raised a ValueError (C++: an opening angle of 0), now an error that names it.
+- **CHECKCUBE: the thresholds of the row and column tests were swapped (C++)**: a line was tested against
+  70% of the size of the other axis, so on cubes wider than tall no noisy column of pixels was erased.
+- **ADRIFTPOL1 < 0**: C++ left the dispersion profile of the asymmetric drift uninitialised (garbage in
+  `asymdrift.txt`), and with ADRIFTPOL1 ≤ −2 made arrays of negative size **(C++)**. BBarolo 2 uses the
+  dispersion profile, with no radial derivative (as documented since the port).
+- **REDUCE on its own with FACTOR < 1** raised ZeroDivisionError or a reshape error: it is an error of the
+  checks now.
+
 - **BayesianBBarolo: `load_results` replaced the output folder** given to the object with that of the
   saved fit, so `write_bestmodel` after `load_results` overwrote the outputs of the original fit. The
   folder given is kept now. Also, `rings_final1.txt` had a FITOK column in the header, without values,
@@ -120,6 +172,10 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **FREEANGLE (2DFIT)**: the angle around the minor axis left out of the fit of the velocity field
+  (degrees, default 15). 2DFIT read it from DVDZ, as BBarolo 1.8 did, so the DVDZ of a lagging disk
+  (e.g. 0.5 km/s/arcsec) changed it; DVDZ is no longer read by 2DFIT.
+
 - **Documentation website** (`docs/`, Sphinx, for Read the Docs): getting started, a page of parameters
   for every task, generated from the keyword table at every build, and pages on the algorithms (in
   preparation). Every keyword has a full description (`bbarolo/keywords_doc.py`), shown on the website
@@ -228,6 +284,16 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   SPECRES is not given, as in C++.
 
 ### Changed
+
+- **The position angle of the new beam of SMOOTH** (and of the SMOOTH masks) is that of the old beam when
+  BPA is not given (it was 0°, also with FACTOR alone, which made the kernel of an elliptical beam
+  skewed, or impossible: "unsuitable new beam" with FACTOR 1.2). Any value of BPA and OBPA is an angle:
+  `BPA -1` (the old angle in C++) is −1°, and `OBPA 0` (the BPA of the header in C++) is 0°.
+- **SEARCH with SNMAP** writes the noise and S/N of its total map as `<prefix>_mom0th_RMS.fits` and
+  `<prefix>_mom0th_SN.fits`: they had the names of those of TOTALMAP (`_map_0th_RMS.fits`,
+  `_map_0th_SN.fits`), which overwrote them in the same run **(C++)**.
+- **CHECKCUBE** writes the cleaned cube in OUTFOLDER as `<prefix>_clean.fits`, not next to the input file
+  as `<input>_clean.fits` (which failed in a read-only data folder).
 
 - **BayesianBBarolo uses dynesty's static sampler by default** (`dynamic=False`; the dynamic sampler
   was the default): `run(dynamic=True)` or SAMPLEROPTS `dynamic=true` selects the dynamic one.

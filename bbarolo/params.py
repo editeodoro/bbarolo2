@@ -170,6 +170,7 @@ class GalfitPar(GalmodPar):
     FREE: str = "VROT VDISP INC PA"
     GUESSTYPE: str = "LEGACY"        # initial estimates: LEGACY (as C++), ELLIPSE (corrected) or FIT
     SIDE: str = "B"
+    FREEANGLE: float = 15.0          # 2DFIT: the angle around the minor axis left out of the fit (degrees)
     TWOSTAGE: bool = True
     REGTYPE: str = "auto"
     BWEIGHT: float = 1.0
@@ -294,10 +295,10 @@ class Param:
         self.flagFFT = True
         self.bmaj = -1.0
         self.bmin = -1.0
-        self.bpa = 0.0
+        self.bpa = None               # (not given: 0 for the beam of the data, the old angle for SMOOTH)
         self.obmaj = -1.0
         self.obmin = -1.0
-        self.obpa = 0.0
+        self.obpa = None              # (not given: the BPA of the header)
         self.linear = -1.0
         self.specres = -1.0           # spectral resolution of the models (sigma, channels); -1: LINEAR
         self.factor = 2.0
@@ -507,7 +508,7 @@ class Param:
             out("CHECKCUBE must >=0 and <=5. Setting it to False (=0).")
             self.checkCube = 0
 
-        if se.flagSearch:
+        if se.flagSearch or "SEARCH" in str(self.MaskType).upper():     # (also the masks of the source finder)
             if se.searchType not in ("spatial", "spatialsmooth", "spectral"):
                 out(f'You have requested a search type of "{se.searchType}".\n'
                     'Only "spectral", "spatial" and "spatialsmooth" are accepted. Setting to "spatial".')
@@ -574,27 +575,22 @@ class Param:
                 if n not in ("NONE", "LOCAL", "AZIM", "AZIMUTHAL", "BOTH"):
                     out(f"3DFIT error: Unknown type of normalization: {n}")
                     good = False
+            # (AZIMUTHAL is AZIM: C++ accepted it here, then used LOCAL)
+            gf.NORM = " ".join("AZIM" if n == "AZIMUTHAL" else n for n in gf.NORM.split())
 
             if gf.flagGALFIT:
                 if gf.FREE == "":
                     out("3DFIT error: FREE" + msg); good = False
                 elif free_problem(gf.FREE):
                     out("3DFIT error: " + free_problem(gf.FREE)); good = False
+            if gf.flagGALFIT or self.flagSpace:          # (SPACEPAR computes the residuals of 3DFIT)
                 if gf.FTYPE < 1 or gf.FTYPE > 4:
                     out("3DFIT warning: Not valid argument for FTYPE parameter. Assuming 2 (|mod-obs|).")
                     gf.FTYPE = 2
                 if abs(gf.WFUNC) > 2:
                     out("3DFIT warning: Not valid argument for WFUNC parameter. Assuming 1 (|cos(θ)| weighting function).")
                     gf.WFUNC = 1
-                S = gf.SIDE
-                if S in ("A", "APP", "APPR", "APPROACHING"): S = "A"
-                elif S in ("R", "REC", "RECED", "RECEDING"): S = "R"
-                elif S in ("B", "BOTH"): S = "B"
-                elif S in ("BS", "S", "SINGLE", "BOTH SINGLE"): S = "S"
-                else:
-                    out("3DFIT WARNING: Not valid argument for SIDE parameter. Assuming B (fitting both sides of the galaxy).")
-                    S = "B"
-                gf.SIDE = S
+            if gf.flagGALFIT:
                 # REGTYPE checking
                 polyn = gf.REGTYPE.split()
                 keep = []
@@ -646,6 +642,19 @@ class Param:
                 sys.stderr.write("3DFIT ERROR: ADRIFTPOL2 needs to be >0. Defaulting it to 3.")
                 gf.ADRIFTPOL2 = 3
 
+        if gf.flagGALFIT or gf.flagBAYESIAN or self.flagSpace or self.flagRing or self.flagEllProf:
+            # the long forms of SIDE, for all the tasks that use it (C++ never converted them)
+            S = gf.SIDE
+            if S in ("A", "APP", "APPR", "APPROACHING"): S = "A"
+            elif S in ("R", "REC", "RECED", "RECEDING"): S = "R"
+            elif S in ("B", "BOTH"): S = "B"
+            elif S in ("BS", "S", "SINGLE", "BOTH SINGLE"): S = "S"
+            else:
+                out("3DFIT WARNING: Not valid argument for SIDE parameter. Assuming B (fitting both sides of the "
+                    "galaxy).")
+                S = "B"
+            gf.SIDE = S
+
         if gf.flagGALFIT or gf.flagBAYESIAN or self.flagSpace or gm.flagGALMOD or self.flagRing or self.flagEllProf:
             st = gm if gm.flagGALMOD else gf
             for key in _RING_KEYS:
@@ -654,6 +663,9 @@ class Param:
                     prob = ring_value_problem(key, getattr(st, attr))
                     if prob:
                         out("INPUT error: " + prob); good = False
+
+        if self.flagRing and not 0 <= gf.FREEANGLE < 90:
+            out(f"2DFIT error: FREEANGLE must be between 0 and 90 degrees, not {gf.FREEANGLE:g}."); good = False
 
         if self.flagEllProf:
             msg = " is not an optional parameter. Please specify it in the input file."
@@ -691,6 +703,9 @@ class Param:
         if self.reduce not in ("true", "false", "spatial", "spectral"):
             out("GENERAL PARAM warning: REDUCE parameter can only be TRUE, FALSE, SPECTRAL or SPATIAL. Defaulting to TRUE.")
             self.reduce = "true"
+        if self.getflagReduce() and not (self.flagSmooth or self.flagSmoothSpectral) and self.factor < 1:
+            out(f"REDUCE error: FACTOR (the pixels or channels averaged) must be at least 1, not {self.factor:g}.")
+            good = False
 
         if self.getMaps() and self.ma.maptype not in ("GAUSSIAN", "MOMENT"):
             out("MAP warning: MAPTYPE is either MOMENT or GAUSSIAN. Reverting to MOMENT.")
@@ -1263,7 +1278,7 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
         if defaults and whichtask not in ("SMOOTH", "ALL"):
             R("[BMAJ]", "Beam major axis (arcsec) if not in the header", p.bmaj)
             R("[BMIN]", "Beam minor axis (arcsec) if not in the header", p.bmin)
-            R("[BPA]", "Beam position angle (deg) if not in the header", p.bpa)
+            R("[BPA]", "Beam position angle (deg) if not in the header", 0. if p.bpa is None else p.bpa)
     if p.debug: R("[DEBUG]", "Debugging mode?", stringize(p.debug))
     Str.write("-----------------\n")
 
@@ -1317,17 +1332,17 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
         if (p.obmaj != -1 and p.obmin != -1) or defaults:
             R("[OBMAJ]", "   Old major beam (arcsec)", p.obmaj)
             R("[OBMIN]", "   Old minor beam (arcsec)", p.obmin)
-            R("[OBPA]", "   Old beam position angle (degree)", p.obpa)
+            R("[OBPA]", "   Old beam position angle (degree)", "header" if p.obpa is None else p.obpa)
         if defaults:
             R("[BMAJ]", "   New major beam (arcsec)", p.bmaj)
             R("[BMIN]", "   New minor beam (arcsec)", p.bmin)
-            R("[BPA]", "   New beam position angle (degree)", p.bpa)
+            R("[BPA]", "   New beam position angle (degree)", "old" if p.bpa is None else p.bpa)
             R("[FACTOR]", "   New beam factor (times old beam)", p.factor)
         else:
             if p.bmaj != -1 and p.bmin != -1:
                 R("[BMAJ]", "   New major beam (arcsec)", p.bmaj)
                 R("[BMIN]", "   New minor beam (arcsec)", p.bmin)
-                R("[BPA]", "   New beam position angle (degree)", p.bpa)
+                R("[BPA]", "   New beam position angle (degree)", "old" if p.bpa is None else p.bpa)
             else: R("[FACTOR]", "   New beam factor (times old beam)", p.factor)
         R("[FFT]", "   Using FFT for convolution?", stringize(p.flagFFT))
         R("[REDUCE]", "   Averaging pixels to reduce datacube?", p.reduce)
@@ -1466,6 +1481,7 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
         R("[SIDE]", "   Side of the galaxy to be used", gf.SIDE)
         typ = {0: "uniform", 1: "|cos(θ)|", 2: "cos(θ)^2", -1: "|sin(θ)|", -2: "sin(θ)^2"}.get(gf.WFUNC, "")
         R("[WFUNC]", "   Weighting function", typ)
+        R("[FREEANGLE]", "   Angle around the minor axis left out (deg)", gf.FREEANGLE)
 
     if isAll or p.flagEllProf or (defaults and whichtask == "ELLPROF"):
         R("[ELLPROF]", "Deriving radial intensity profile?", stringize(p.flagEllProf))

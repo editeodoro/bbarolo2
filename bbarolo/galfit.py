@@ -219,7 +219,7 @@ NORMS = ("LOCAL", "AZIM", "NONE")
 def final_norm(norm, task="GALMOD", extra=()):
     """The normalisation of the final model for the NORM parameter: the last of the (one or
     two) values given; LOCAL if not recognised. extra: other accepted values."""
-    v = str(norm).upper().split()
+    v = ["AZIM" if n == "AZIMUTHAL" else n for n in str(norm).upper().split()]
     n = v[1] if len(v) > 1 else (v[0] if v else "")
     if n not in NORMS + tuple(extra):
         sys.stderr.write(f"{task} WARNING: Normalization function not recognized. Using LOCAL.\n")
@@ -337,6 +337,8 @@ def initial_rings(c, par, galmod=False, write=True):
 class Galfit:
     """3D tilted-ring fit of a datacube (3DFIT task)."""
 
+    refine2D = True         # with PA free, the initial PA and VROT of the rings from a 2D fit (not SPACEPAR)
+
     # ------------------------------------------------------------------
     def __init__(self, cube=None, inrings=None, par=None, gfpar=None):
         self._lock = threading.Lock()
@@ -402,8 +404,10 @@ class Galfit:
                                inR.z0[j], inR.inc[j], inR.phi[j])
                 inR = nr
 
-        # A little trick: fit a 2D model first to get better PA variation
-        if "pa" in par.FREE.lower() and inR.nr >= 5 and not isgalmod:
+        # A little trick: fit a 2D model first to get better PA variation (not for SPACEPAR, which keeps
+        # the rings given)
+        free = par.FREE.lower()
+        if self.refine2D and "pa" in free and inR.nr >= 5 and not isgalmod:
             from .ringmodel import Ringmodel
             topix = c.Head().PixScale() * arcsconv(c.Head().Cunit(0))
             radii = inR.radii / topix
@@ -424,7 +428,7 @@ class Galfit:
                 pa_i, vr_i = tr.getPosaf(i), tr.getVrotf(i)
                 if not np.isnan(pa_i) and vr_i > 0:
                     inR.phi[i] = pa_i
-                if not np.isnan(vr_i) and vr_i > 0:
+                if not np.isnan(vr_i) and vr_i > 0 and "vrot" in free:      # (a fixed VROT is kept)
                     inR.vrot[i] = vr_i
             inR.phi[0] = inR.phi[1]
         self.setup(c, inR, par)
@@ -458,7 +462,7 @@ class Galfit:
         self.mask = c.Mask()
         self.mask_T = np.ascontiguousarray(self.mask.transpose(1, 2, 0))
         self.mask2D = self.mask.sum(axis=0).astype(np.int32)
-        norms = par.NORM.split()
+        norms = ["AZIM" if n == "AZIMUTHAL" else n for n in par.NORM.split()]
         if len(norms) == 1:
             norms.append(norms[0])
         for i in range(2):

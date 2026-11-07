@@ -22,8 +22,11 @@ _ATTR = dict(VROT="vrot", VDISP="vdisp", Z0="z0", INC="inc", PA="phi", XPOS="xpo
 
 class Spacepar(Galfit):
 
+    refine2D = False        # (the rings as given, or as estimated)
+
     def __init__(self, c):
         super().__init__(c)
+        self.n_galfit = 1   # (the normalisation of the first stage of 3DFIT, NORM)
         p = c.pars()
         self.p1, self.p2 = p.P1.upper(), p.P2.upper()
         for i, q in enumerate((self.p1, self.p2)):

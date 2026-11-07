@@ -188,11 +188,7 @@ class Ringmodel:
         if "vrad" in f or "vexp" in f: m[VEXP] = True
         if "all" in f: m = [True] * MAXPAR
         hside = 1 if p.SIDE == "R" else (2 if p.SIDE == "A" else 3)
-        try:
-            freeang = 15. if p.DVDZ == "-1" else float(str(p.DVDZ).split()[0])
-        except ValueError:
-            freeang = 15.
-        self.setoption(m, hside, p.WFUNC, freeang)
+        self.setoption(m, hside, p.WFUNC, float(p.FREEANGLE))
         mp = MomentMap()
         mp.input(c)
         if c.Head().NumAx() > 2 and c.DimZ() > 1:

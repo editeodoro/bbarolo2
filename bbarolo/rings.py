@@ -98,10 +98,15 @@ class Rings:
         return {k: getattr(self, k).copy() for k in RING_KEYS}
 
 
+def ringTokens(s):
+    """The items of a ring parameter given as a list: separated by spaces or commas."""
+    return str(s).replace(",", " ").split()
+
+
 def ringList(s):
-    """The values of a ring parameter given as a list of numbers ('120 125 130': one
-    value per ring), or None if s is a single value (or anything else)."""
-    t = str(s).split()
+    """The values of a ring parameter given as a list of numbers ('120 125 130' or '120,125,130':
+    one value per ring), or None if s is a single value (or anything else)."""
+    t = ringTokens(s)
     if len(t) < 2:
         return None
     try:
@@ -183,7 +188,7 @@ def readRings(par, h, return_fromfile=False):
     radii_b = fr["radii"] is not None
 
     if not radii_b and str(par.RADII) != "-1":
-        s = str(par.RADII).split()
+        s = ringTokens(par.RADII)
         if len(s) == 1 and "~" in s[0] and ":" in s[0]:
             f1, f2 = s[0].find("~"), s[0].find(":")
             Rmin, Rmax, step = float(s[0][:f1]), float(s[0][f1 + 1:f2]), float(s[0][f2 + 1:])
@@ -205,7 +210,7 @@ def readRings(par, h, return_fromfile=False):
         if s == "-1" or "file(" in s.lower():
             return dflt
         try:
-            return float(s.split()[0])
+            return float(ringTokens(s)[0])
         except ValueError:
             return dflt
 
@@ -214,13 +219,22 @@ def readRings(par, h, return_fromfile=False):
                     vdisp=pval(par.VDISP, 0), z0=pval(par.Z0, 0), dens=pval(par.DENS, 1),
                     inc=pval(par.INC, 0), phi=pval(par.PHI, 0))
     xpos = ypos = 0.
-    if str(par.XPOS) != "-1" and str(par.YPOS) != "-1" and fr["xpos"] is None and fr["ypos"] is None:
-        xpos, ypos = getCenterCoordinates([par.XPOS, par.YPOS], h)
-    elif str(par.XPOS) != "-1" and str(par.YPOS) != "-1":
-        try:
+    if str(par.XPOS) != "-1" and str(par.YPOS) != "-1":
+        if fr["xpos"] is None and fr["ypos"] is None:
             xpos, ypos = getCenterCoordinates([par.XPOS, par.YPOS], h)
-        except Exception:
-            pass
+        elif fr["xpos"] is None or fr["ypos"] is None:
+            # one coordinate per ring (a list or a file column), the other one a single value: in pixels
+            key, other = ("XPOS", "YPOS") if fr["xpos"] is None else ("YPOS", "XPOS")
+            val = str(getattr(par, key)).strip()
+            try:
+                v = float(val)
+            except ValueError:
+                raise BBaroloError(f"{key} {val}: with {other} given for each ring (a list or a file column), "
+                                   f"{key} must be in pixels") from None
+            if key == "XPOS":
+                xpos = v
+            else:
+                ypos = v
     defaults["xpos"], defaults["ypos"] = xpos, ypos
 
     nr = par.NRADII

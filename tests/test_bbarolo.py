@@ -2101,3 +2101,337 @@ def test_keyword_docs():
     s = io.StringIO()
     K.help("free", stream=s)
     assert "NAME_SINGLE" in s.getvalue() and "Default: " in s.getvalue()
+
+
+def test_smooth_scale_factor_of_prefixed_units(tmp_path):
+    """SMOOTH rescales the data in mJy/beam and uJy/beam by the ratio of the beam areas, as those in Jy/beam
+    (they were not rescaled since mJy were no longer taken as Jy), and also those in W.U. (C++ did not); data
+    per pixel and in K are not rescaled."""
+    factors = {}
+    for bunit in ("JY/BEAM", "mJy/beam", "uJy/beam", "W.U.", "Jy", "K"):
+        hdu = emptyfits([32, 32, 3], [-10. / 3600., 10. / 3600., 10.], beam=30. / 3600., bunit=bunit)
+        fn = str(tmp_path / "unit.fits")
+        hdu.writeto(fn, overwrite=True)
+        p = Param()
+        p.verbose = False
+        p.readParamString(f"FITSFILE {fn}\nSMOOTH true\nFACTOR 2\nOUTFOLDER {tmp_path}\n")
+        sm = Smooth3D()
+        sm.cubesmooth(Cube(fn, par=p))
+        factors[bunit] = sm.scalefac
+    assert abs(factors["JY/BEAM"] - 4) < 0.01
+    assert factors["mJy/beam"] == factors["uJy/beam"] == factors["W.U."] == factors["JY/BEAM"]
+    assert factors["Jy"] == factors["K"] == 1
+
+
+def test_mask_header_growth_threshold(tmp_path):
+    """The HISTORY card GROWTHTHRESHOLD of the mask of the source finder has the growth threshold, not the
+    threshold (C++ wrote THRESHOLD there)."""
+    from astropy.io import fits
+    fn = _mock_cube(tmp_path)
+    p = Param()
+    p.verbose = False
+    p.readParamString(f"FITSFILE {fn}\nMASK SEARCH\nTHRESHOLD 0.02\nGROWTHTHRESHOLD 0.005\nOUTFOLDER {tmp_path}/\n")
+    c = Cube(fn, par=p)
+    c.BlankMask()
+    hist = [str(s) for s in fits.getheader(str(tmp_path / "MOCK_mask.fits"))["HISTORY"]]
+    assert any("GROWTHTHRESHOLD=0.005000" in s for s in hist), hist
+
+
+def test_ring_lists_with_commas_and_mixed_centre():
+    """Lists of ring values can be separated by commas (VROT 100,120,130 became 0, RADII 30,60,90 a
+    ValueError); with XPOS (or YPOS) given per ring and the other one a single value in pixels, that value
+    is used (it became 0), and a single WCS value is an error."""
+    from bbarolo.rings import readRings
+    from bbarolo.header import Header
+    from bbarolo.bbutils import BBaroloError
+    hh = Header()
+    hh.fromAstropy(emptyfits([32, 32, 10], [-10. / 3600., 10. / 3600., 10.], beam=30. / 3600.).header)
+    base = "XPOS 10\nYPOS 12\nVSYS 0\nVROT 100\nVDISP 10\nINC 60\nPA 30\nZ0 0\n"
+
+    def rings(extra):
+        p = Param()
+        p.readParamString(base + extra)
+        return readRings(p.gf, hh)
+    r = rings("RADII 30,60,90\nVROT 100,120, 130\nINC 60, 61, 62\n")
+    assert list(r.radii) == [30, 60, 90] and list(r.vrot) == [100, 120, 130] and list(r.inc) == [60, 61, 62]
+    r = rings("RADII 30 60 90\nXPOS 10 11 12\n")
+    assert list(r.xpos) == [10, 11, 12] and list(r.ypos) == [12, 12, 12]
+    r = rings("RADII 30 60 90\nYPOS 10,11,12\n")
+    assert list(r.xpos) == [10, 10, 10] and list(r.ypos) == [10, 11, 12]
+    with pytest.raises(BBaroloError, match="YPOS"):
+        rings("RADII 30 60 90\nXPOS 10 11 12\nYPOS 12.5d\n")
+
+
+def test_galwind_lists_and_openang(synthetic_cube):
+    """GALWIND takes lists of values, one per cylinder or shell (only the first value was used), and
+    OPENANG as a file column with cylinders is an error that names it."""
+    from bbarolo.galwind import GalWind
+    from bbarolo.bbutils import BBaroloError
+    c = synthetic_cube
+    gw = c.pars().gw
+    for k, v in dict(XPOS="31.5", YPOS="31.5", VSYS="0", VWIND="100", VROT="0", VDISP="10", DENS="10",
+                     INC="60", PHI="30", OPENANG="60", HTOT=400., NTOT=4, SM=False, ISEED=1).items():
+        setattr(gw, k, v)
+
+    def model(**kw):
+        w = GalWind(c)
+        for k, v in kw.items():
+            setattr(w.par, k, v)
+        w.compute()
+        return w.out.array
+    for wtype in (0, 1):
+        one = model(WTYPE=wtype)
+        assert np.array_equal(one, model(WTYPE=wtype, VWIND="100 100 100 100"))
+        assert not np.array_equal(one, model(WTYPE=wtype, VWIND="100, 150, 200, 250"))
+    with pytest.raises(BBaroloError, match="NTOT=4"):
+        model(WTYPE=0, VWIND="100 150")
+    with pytest.raises(BBaroloError, match="OPENANG"):
+        model(WTYPE=0, OPENANG="file(rings.txt,2)")
+
+
+def _smooth_run(tmp_path, fn, pars):
+    """Smooth3D.cubesmooth of the cube fn with the parameters pars (a parameter-file string)."""
+    p = Param()
+    p.verbose = False
+    p.readParamString(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/\n" + pars)
+    sm = Smooth3D()
+    sm.cubesmooth(Cube(fn, par=p))
+    return sm
+
+
+def test_smooth_cube_without_beam(tmp_path):
+    """With no beam in the header, SMOOTH takes the beam of the data from OBMAJ/OBMIN/OBPA (or BEAMFWHM):
+    BMAJ/BMIN, the new beam, became also the old one, so nothing was smoothed, and OBMAJ alone stopped with
+    'No beam'. The SMOOTH mask of a fit with BMAJ as the beam of the data uses FACTOR times it."""
+    from bbarolo.bbutils import BBaroloError
+    from astropy.io import fits
+    hdu = emptyfits([32, 32, 3], [-10. / 3600., 10. / 3600., 10.], bunit="JY/BEAM", obj="NOBEAM")
+    hdu.data[:, 16, 16] = 1.
+    fn = str(tmp_path / "nobeam.fits")
+    hdu.writeto(fn)
+    sm = _smooth_run(tmp_path, fn, "SMOOTH true\nOBMAJ 30\nOBMIN 30\nBMAJ 60\nBMIN 60\n")
+    assert sm.oldbeam[:2] == (30, 30) and sm.newbeam[:2] == (60, 60) and abs(sm.scalefac - 4) < 0.01
+    assert np.nanmax(sm.array) < 0.3
+    sm = _smooth_run(tmp_path, fn, "SMOOTH true\nOBMAJ 30\nOBMIN 30\n")
+    assert sm.oldbeam[:2] == (30, 30) and sm.newbeam[:2] == (60, 60)
+    with pytest.raises(BBaroloError, match="OBMAJ"):
+        _smooth_run(tmp_path, fn, "SMOOTH true\nBMAJ 60\nBMIN 60\n")
+    p = Param()
+    p.verbose = False
+    p.readParamString(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/\nMAKEMASK true\nMASK SMOOTH\nBMAJ 30\nBMIN 30\n")
+    c = Cube(fn, par=p)
+    c.BlankMask()
+    hist = [str(x) for x in fits.getheader(str(tmp_path / "NOBEAM_mask.fits"))["HISTORY"]]
+    assert any("NEWBMAJ=60.0" in x for x in hist), hist
+
+
+def test_smooth_new_beam_angle(tmp_path):
+    """The new beam keeps the angle of the old one when BPA is not given (it was 0, also with FACTOR alone),
+    and OBPA 0 is an angle of 0 degrees (it meant the BPA of the header)."""
+    hdu = emptyfits([32, 32, 3], [-10. / 3600., 10. / 3600., 10.], bunit="JY/BEAM", obj="ELL")
+    hdu.header["BMAJ"], hdu.header["BMIN"], hdu.header["BPA"] = 40. / 3600., 25. / 3600., 60.
+    fn = str(tmp_path / "ell.fits")
+    hdu.writeto(fn)
+    sm = _smooth_run(tmp_path, fn, "SMOOTH true\nFACTOR 1.2\n")
+    assert sm.oldbeam[2] == sm.newbeam[2] == 60 and sm.conbeam is not None
+    sm = _smooth_run(tmp_path, fn, "SMOOTH true\nFACTOR 1.5\nBPA 0\nOBPA 0\n")
+    assert sm.oldbeam[2] == 0 and sm.newbeam[2] == 0
+
+
+def test_iternoise_converges(synthetic_cube):
+    """ITERNOISE stops when the noise changes by less than 0.1% (the test added the noise itself, so it
+    ran all the 20 iterations for noise above 0.001)."""
+    c = synthetic_cube
+    c.array[:] = np.random.default_rng(3).normal(0., 1., c.array.shape)
+    c.pars().se.iternoise = True
+    calls = []
+    calc = c.stats.calculate
+    c.stats.calculate = lambda *a, **k: (calls.append(1), calc(*a, **k))[1]
+    c.setCubeStats()
+    assert len(calls) < 10 and abs(c.stats.getSpread() - 1) < 0.05
+
+
+def test_search_snmap_names(tmp_path):
+    """SEARCH with SNMAP writes its noise and S/N maps as <prefix>_mom0th_RMS.fits and _mom0th_SN.fits: they
+    had the names of those of TOTALMAP, which overwrote them in the same run."""
+    from bbarolo.tasks import BBcore
+    fn = _mock_cube(tmp_path)
+    p = Param()
+    p.verbose = False
+    p.readParamString(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/out/\nSEARCH true\nSNMAP true\nTOTALMAP true\n"
+                      "MASK SEARCH\nPLOTS false\n")
+    assert p.checkPars(quiet=True)
+    BBcore(p)
+    for n in ("mom0th", "mom0th_RMS", "mom0th_SN", "map_0th", "map_0th_RMS", "map_0th_SN"):
+        assert (tmp_path / "out" / f"MOCK_{n}.fits").exists(), n
+
+
+def test_search_checks_for_masks(tmp_path, capsys):
+    """The checks of SEARCHTYPE and of the growth threshold run also when the source finder only builds a
+    mask (MASK SEARCH), not only with SEARCH true."""
+    p = Param()
+    p.readParamString("FITSFILE a.fits\nMAKEMASK true\nMASK SEARCH\nSEARCHTYPE spatail\nSNRCUT 2\n")
+    p.checkPars(quiet=False)
+    assert p.se.searchType == "spatial" and not p.se.flagGrowth
+
+
+def test_norm_free_side_checks():
+    """NORM AZIMUTHAL is AZIM (accepted by the checks, then LOCAL); FTYPE and WFUNC are checked also for
+    SPACEPAR (FTYPE 7 gave zero residuals); the long forms of SIDE work for every task that uses it (only
+    3DFIT converted them)."""
+    from bbarolo.galfit import final_norm
+    assert final_norm("AZIMUTHAL") == "AZIM" and final_norm("LOCAL AZIMUTHAL") == "AZIM"
+    base = ("FITSFILE a.fits\nRADII 30 60\nXPOS 10\nYPOS 10\nVSYS 0\nVROT 100\nVDISP 10\nINC 60\nPA 30\nZ0 1\n"
+            "P1 VROT\nP2 VDISP\n")
+    p = Param()
+    p.readParamString(base + "3DFIT true\nNORM AZIMUTHAL LOCAL\n")
+    p.checkPars(quiet=True)
+    assert p.gf.NORM == "AZIM LOCAL"
+    p = Param()
+    p.readParamString(base + "SPACEPAR true\nFTYPE 7\nWFUNC 5\nSIDE APPROACHING\n")
+    p.checkPars(quiet=True)
+    assert p.gf.FTYPE == 2 and p.gf.WFUNC == 1 and p.gf.SIDE == "A"
+    for task, side, short in (("2DFIT", "RECEDING", "R"), ("ELLPROF", "APP", "A"), ("2DFIT", "BOTH", "B")):
+        p = Param()
+        p.readParamString(base + f"{task} true\nSIDE {side}\n")
+        p.checkPars(quiet=True)
+        assert p.gf.SIDE == short, (task, side)
+
+
+@needs_data
+def test_spacepar_rings_and_norm(tmp_path):
+    """SPACEPAR keeps the PA and VROT of the rings given (with PA in FREE, as by default, it replaced them
+    with a 2D fit) and normalises the models as the first stage of 3DFIT (NORM; it used LOCAL); 3DFIT keeps
+    a fixed VROT when it refines the initial PA with the 2D fit."""
+    from bbarolo.spacepar import Spacepar
+    from bbarolo.galfit import Galfit
+    base = (f"FITSFILE {N2403}\nNRADII 6\nRADSEP 60\nVSYS 132.8\nXPOS 77\nYPOS 77\nVROT 120\nVDISP 8\nINC 60\n"
+            f"PA 123.7\nZ0 10\nP1 VROT\nP2 VDISP\nP1PAR 100 140 20\nP2PAR 5 15 5\nTHREADS 2\nVERBOSE false\n"
+            f"MASK SEARCH\nOUTFOLDER {tmp_path}/\n")
+
+    def make(cls, extra):
+        p = Param()
+        p.readParamString(base + extra)
+        assert p.checkPars(quiet=True)
+        return cls(Cube(N2403, par=p))
+    res = {}
+    for norm in ("AZIM", "LOCAL"):
+        sp = make(Spacepar, f"SPACEPAR true\nNORM {norm}\n")
+        assert np.all(sp.inr.phi == 123.7) and np.all(sp.inr.vrot == 120)
+        res[norm] = sp.getFuncValue(sp._dring(3, 120., 8.))
+    assert res["AZIM"] != res["LOCAL"]
+    gf = make(Galfit, "3DFIT true\nFREE INC PA\n")
+    assert np.all(gf.inr.vrot == 120) and not np.all(gf.inr.phi == 123.7)
+    gf = make(Galfit, "3DFIT true\nFREE VROT INC PA\n")
+    assert not np.all(gf.inr.vrot == 120)
+
+
+@needs_data
+def test_radsep_alone_keeps_extent(tmp_path):
+    """With RADSEP but no NRADII, the rings reach out to the estimated extent of the disk (the number of
+    rings was that of the beam-wide rings, so the extent scaled with RADSEP)."""
+    from bbarolo.galfit import initial_rings
+    last = {}
+    for radsep in ("", "RADSEP 30\n", "RADSEP 120\n"):
+        p = Param()
+        p.readParamString(f"FITSFILE {N2403}\nTHREADS 2\nVERBOSE false\nOUTFOLDER {tmp_path}/\n" + radsep)
+        assert p.checkPars(quiet=True)
+        r = initial_rings(Cube(N2403, par=p), p.gf, write=False).rings
+        last[radsep] = r.radii[-1] + r.radsep / 2
+    assert abs(last["RADSEP 30\n"] - last[""]) < 60 and abs(last["RADSEP 120\n"] - last[""]) < 120, last
+
+
+def test_2dfit_freeangle(synthetic_cube, tmp_path):
+    """2DFIT takes the angle left out around the minor axis from FREEANGLE (it read DVDZ, so the DVDZ of
+    a lagging disk changed it)."""
+    from bbarolo.ringmodel import Ringmodel
+    c = synthetic_cube
+    c.array[:] = 0.
+    c.array[20, 24:40, 24:40] = 1.
+    for extra, angle in (("DVDZ 0.5\n", 15.), ("DVDZ 0.5\nFREEANGLE 20\n", 20.)):
+        c.pars().readParamString(f"2DFIT true\nMASK NONE\nOUTFOLDER {tmp_path}/\n" + extra)
+        tr = Ringmodel()
+        tr.setfromCube(c, _rings(4))
+        assert tr.thetaf == angle
+    c.pars().readParamString("FITSFILE a.fits\nFREEANGLE 95\n")
+    assert not c.pars().checkPars(quiet=True)
+
+
+def test_galwind_outflow_signs_and_nv(synthetic_cube):
+    """With VWIND > 0 the cylinders of GALWIND (WTYPE 0) are an outflow, as the shells (WTYPE 1): they had the
+    opposite line-of-sight velocities on each side of the centre. NV 1 is one sub-cloud for the shells (any
+    NV up to 1 was 20)."""
+    from bbarolo.galwind import GalWind
+    c = synthetic_cube
+    gw = c.pars().gw
+    for k, v in dict(XPOS="31.5", YPOS="31.5", VSYS="0", VWIND="100", VROT="0", VDISP="10", DENS="10",
+                     INC="60", PHI="0", OPENANG="60", HTOT=400., NTOT=4, SM=False, ISEED=1).items():
+        setattr(gw, k, v)
+
+    def model(**kw):
+        w = GalWind(c)
+        for k, v in kw.items():
+            setattr(w.par, k, v)
+        w.compute()
+        return w.out.array.astype(float)
+    h = c.Head()
+    v = h.Crval(2) + (np.arange(c.DimZ()) + 1 - h.Crpix(2)) * h.Cdelt(2)
+    east = {}
+    for wtype in (0, 1):
+        a = model(WTYPE=wtype)[:, :, :31]           # (the east half: x < XPOS)
+        east[wtype] = (a * v[:, None, None]).sum() / a.sum()
+    assert east[0] > 20 and east[1] > 20, east
+    assert not np.array_equal(model(WTYPE=1, NV=1), model(WTYPE=1, NV=20))
+
+
+def test_exclwind_lists_and_errors(synthetic_cube):
+    """EXCLWIND accepts commas between the windows (they were ignored), and a channel outside the cube or an
+    item that is not a channel is an error that names EXCLWIND (IndexError, or ignored)."""
+    from bbarolo.bbutils import BBaroloError
+    c = synthetic_cube
+    z = np.arange(c.DimZ(), dtype=np.float32)
+    line = np.where((z >= 10) & (z <= 15), 5., 0.) + np.where(z == 30, 5., 0.)
+    data = (1. + 0.01 * z + line)[:, None, None] * np.ones(c.array.shape, np.float32)
+    out = {}
+    for ex in ("10:15 30", "10:15,30", "10~15, 30"):
+        c.array = data.copy()
+        c.pars().exclude_windows = ex
+        c.continuumSubtract()
+        out[ex] = c.array.copy()
+        assert abs(out[ex][0, 0, 0]) < 1e-4 and abs(out[ex][12, 0, 0] - 5) < 1e-4
+    for ex in ("10:15 45", "10:15;30", "ten"):
+        c.array = data.copy()
+        c.pars().exclude_windows = ex
+        with pytest.raises(BBaroloError, match="EXCLWIND"):
+            c.continuumSubtract()
+
+
+def test_checkcube_lines_and_output(tmp_path):
+    """CHECKCUBE erases noisy pixel lines also on cubes that are not square (the thresholds of the x and y
+    lines were swapped, so on cubes wider than tall no x line was erased), and writes the cleaned cube in
+    OUTFOLDER as <prefix>_clean.fits (it was written next to the input file)."""
+    hdu = emptyfits([48, 24, 10], [-10. / 3600., 10. / 3600., 10.], beam=30. / 3600., bunit="JY/BEAM", obj="CHK")
+    rng = np.random.default_rng(1)
+    hdu.data[:] = rng.normal(0., 1., hdu.data.shape)
+    hdu.data[:, :, 5] *= 5.
+    hdu.data[:, 7, :] *= 5.
+    os.makedirs(tmp_path / "data")
+    fn = str(tmp_path / "data" / "chk.fits")
+    hdu.writeto(fn)
+    p = Param()
+    p.verbose = False
+    p.readParamString(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/out/\n")
+    os.makedirs(tmp_path / "out")
+    c = Cube(fn, par=p)
+    c.CheckCube(1)
+    assert np.all(c.array[:, :, 5] == 0) and np.all(c.array[:, 7, :] == 0)
+    assert (tmp_path / "out" / "CHK_clean.fits").exists() and not (tmp_path / "data" / "chk_clean.fits").exists()
+
+
+def test_reduce_factor_check():
+    """REDUCE on its own needs FACTOR >= 1 (FACTOR 0 raised ZeroDivisionError)."""
+    p = Param()
+    p.readParamString("FITSFILE a.fits\nREDUCE true\nFACTOR 0\n")
+    assert not p.checkPars(quiet=True)
+    p.readParamString("FACTOR 2\n")
+    assert p.checkPars(quiet=True)
