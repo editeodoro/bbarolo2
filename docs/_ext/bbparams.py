@@ -34,7 +34,7 @@ _TYPES = {"str": "text", "lstr": "text", "ustr": "text", "pos": "text", "flag": 
 def _keywords(task):
     from bbarolo import keywords as K
     if task == "ALL":
-        return [k for k in K.KEYWORDS if k.tasks[0] == "ALL"]
+        return [k for k in K.KEYWORDS if "ALL" in k.tasks]
     return K.keywords_for(task)
 
 
