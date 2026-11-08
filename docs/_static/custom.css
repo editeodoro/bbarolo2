@@ -18,6 +18,63 @@ html[data-theme="dark"] {
   --pst-color-secondary-highlight: #e9b586;
 }
 
+/* Warm page colours: a cream canvas (light) and a warm near-black (dark) instead of the theme's white and
+   blue-grey, with surfaces (code blocks, cards) and borders in the same hue. */
+html[data-theme="light"], html:not([data-theme]) {
+  --pst-color-background: #f2f1ee;               /* light warm grey; firebrick on it 5.9:1 */
+  --pst-color-on-background: #f9f9f7;            /* header, cards */
+  --pst-color-surface: #e7e6e2;                  /* code blocks, table headings */
+  --pst-color-on-surface: #3b2f27;
+  --pst-color-border: #d7d5cf;
+  --pst-color-border-muted: rgba(110, 26, 34, 0.18);
+  --pst-color-inline-code: #a12d55;              /* 6.0:1 on the surface */
+  --pst-color-target: #f5d9a0;
+}
+html[data-theme="dark"] {
+  --pst-color-background: #191513;
+  --pst-color-on-background: #231d1a;
+  --pst-color-surface: #2e2622;
+  --pst-color-border: #4a3d36;
+  --pst-color-inline-code: #f29bbb;
+}
+
+/* The primary sidebar: a wine-red panel the height of the window, cream text, the current page in gold. The
+   colours are redefined inside the panel, so every item of the theme (links, captions, chevrons, the navbar
+   links of the mobile drawer) picks them up. Contrast on #5c1219: text 13:1, muted 10.5:1, gold 9.4:1. */
+.bd-sidebar-primary {
+  --bb-sidebar-bg: linear-gradient(180deg, #5c1219 0%, #420c11 100%);
+  --pst-color-text-base: #f8ecdb;
+  --pst-color-text-muted: #ecd3c3;
+  --pst-color-primary: #f2c14e;
+  --pst-color-link: #f8ecdb;
+  --pst-color-link-hover: #ffd877;
+  --pst-color-border: rgba(248, 236, 219, 0.25);
+  --pst-color-on-background: rgba(255, 255, 255, 0.08);
+  background: var(--bb-sidebar-bg);
+  color: var(--pst-color-text-base);
+  border-right: 0;
+}
+html[data-theme="dark"] .bd-sidebar-primary {
+  --bb-sidebar-bg: linear-gradient(180deg, #45151b 0%, #2e0f13 100%);
+}
+@media (min-width: 960px) {
+  .bd-sidebar-primary { height: calc(100vh - var(--pst-header-height) - 1rem); }
+}
+.bd-sidebar-primary p.caption {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.78rem;
+  color: #f2c14e;
+}
+.bd-sidebar-primary nav.bd-links .current > a { background-color: rgba(255, 255, 255, 0.08); border-radius: 0 4px 4px 0; }
+.bd-sidebar-primary .toctree-toggle { color: var(--pst-color-text-muted); }
+.bd-sidebar-primary ::-webkit-scrollbar-thumb { background: rgba(248, 236, 219, 0.3); }
+
+/* Header: a firebrick-to-gold stripe under the navbar; page titles in the BBarolo colour */
+.bd-header { border-bottom: 3px solid transparent; border-image: linear-gradient(90deg, #B22222, #d9772b 55%, #f2c14e) 1; }
+.bd-article h1 { color: var(--pst-color-primary); }
+.bd-article h2 { border-bottom: 2px solid var(--pst-color-border); padding-bottom: 0.15rem; }
+
 /* Landing page */
 .bb-hero { padding: 2.5rem 0 1.5rem; }
 .bb-hero h1 { font-size: 2.6rem; margin-bottom: 0.3rem; }
