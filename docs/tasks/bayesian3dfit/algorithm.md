@@ -519,7 +519,8 @@ nothing, and `write(outfolder=None, plots=None)` writes these files as the task 
 writes only the best model with its outputs and the rings; `corner_plot` and `plot_profiles` return the
 figures; `print_stats`,
 `ring_errors` and `chi2_reduced` give the statistics; `save_results` writes the samples, and `load_results`
-reads them back: it reads the cube with the saved parameters, repeats the setup with the saved options of the
+reads them back into an object made with the same cube (`BayesianBBarolo(cube)`, since the cube is
+not saved): it takes the saved parameters, repeats the setup with the saved options of the
 likelihood and recomputes the best-fit rings, the density profile and its errors, without sampling again.
 
 ## Validation
