@@ -32,7 +32,8 @@ by all the rings is constrained by the whole disk.
 
 The fit runs in four steps:
 
-1. the initial rings and the priors;
+1. the initial rings (printed, with {ref}`VERBOSE <par-all-verbose>`, as the table of the initial parameters
+   of 3DFIT) and the priors;
 2. the setup of the likelihood: the noise of the cube and its correlation, the voxels and the region of
    the likelihood;
 3. the sampling: for each $\boldsymbol\theta$ proposed by the sampler, the rings are updated, the density
@@ -68,9 +69,12 @@ with $p_1$ in km/s for VROT and VDISP and in the units of {ref}`DENS <par-bayesi
 $p_2$ in arcsec for VROT and DENS and in km/s/arcsec for VDISP. In Python, `f.funcs[name]` can be any
 function $g(R, p_1, \dots, p_k)$ of any ring parameter; $k$ is read from its signature.
 
-The ring parameters that are not free keep their initial values: those given, or those estimated as in
-3DFIT ({ref}`GUESSTYPE <par-bayesian3dfit-guesstype>`: the rings, the centre, VSYS, VROT, INC and PA);
-VDISP is 8 km/s, Z0 one pixel, DENS 1 and VRAD, VVERT, DVDZ, ZCYL 0 when not given. A point
+The ring parameters that are not free keep their initial values. The initial rings are built by the code of
+3DFIT, and are those of 3DFIT for the same parameters: the values given (or read from RINGFILE), the
+estimates of {ref}`GUESSTYPE <par-bayesian3dfit-guesstype>` (the rings, the centre, VSYS, VROT, INC and PA,
+and VDISP from the second moment with GUESSTYPE FIT), and otherwise VDISP 8 km/s, Z0 one pixel, DENS 1 and
+VRAD, VVERT, DVDZ, ZCYL 0. (3DFIT then changes its rings for REVERSE and, with PA free, refines PA and VROT
+with a 2D fit of the velocity field: these are steps of its fit, which BAYESIAN3DFIT does not take.) A point
 $\boldsymbol\theta$ for which a free VROT, VDISP, INC, XPOS, YPOS, Z0 or DENS is negative in some ring, or
 RADMAX is negative, has $\mathcal L = 0$. The parameters of a function of radius may be negative (e.g. the
 slope of VDISP).
@@ -84,17 +88,37 @@ value per ring has the same prior in every ring. Any continuous distribution of 
 with {ref}`PRIORS <par-bayesian3dfit-priors>` (in Python, `f.priors[name]`, or a frozen distribution in
 `f.prior_distr`).
 
-The default priors are uniform and wide (e.g. VROT 0–350 km/s, INC 0–90°, PA 0–360°; XPOS and YPOS
-±5 pixels and VSYS ±20 km/s around the initial values; the full list is under PRIORS). Three of them are
-part of the algorithm:
+The default priors are uniform, and those of the ring parameters follow the initial rings (given or
+estimated) and the beam and channels of the cube. One prior serves all the rings, so "initial ± $w$" spans
+the initial values of all the rings, from the smallest − $w$ to the largest + $w$:
+
+| Parameter | Default prior |
+|---|---|
+| INC | initial ± 10°, within 0–90° |
+| PA | initial ± 15° (one sense of rotation: PA + 180° is excluded) |
+| VROT | 0 to twice the largest initial VROT |
+| VDISP | 0 to twice the largest initial VDISP, at least 0–50 km/s |
+| XPOS, YPOS | initial ± 2 beam FWHM |
+| VSYS | initial ± 5 channels, at least ± 20 km/s |
+| Z0 | 0 to one beam FWHM |
+
+The others (VRAD, VVERT, DVDZ, ZCYL, DENS and the parameters of the functions of radius) are fixed ranges,
+listed under PRIORS. VROT uses the largest initial value, so that the prior of every ring holds the flat part
+of the rotation curve: the value of each ring would give the inner rings of a rising curve a prior narrower
+than their uncertainty. The priors follow the rings when they change (in Python, `update()`), but those given
+are kept. Where the data constrain a parameter poorly (Z0, the INC of a nearly face-on disk), the posterior
+is as wide as the prior; and the prior of INC can miss the true INC when the estimate is 10° off (estimates
+below 45° scatter by 10–12°, see GUESSTYPE): give INC, or a wider prior, for a galaxy seen nearly face-on.
+Three priors are part of the algorithm:
 
 - SIGMA: log-uniform between $0.5\,\sigma_\mathrm n$ and $1000\,\sigma_\mathrm n$, where $\sigma_\mathrm n$
   is the measured noise (below). The prior is scale-invariant, and wide because the misfit of real
   galaxies can be large (65 times the noise for NGC 2403);
 - FRACERR: log-uniform between $10^{-3}$ and 1;
-- RADMAX: uniform within $\pm\Delta/2$ of the last radius $R_{N_\mathrm r}$, where
-  $\Delta = R_{N_\mathrm r} - R_{N_\mathrm r - 1}$ (only $[R_{N_\mathrm r} - \Delta/2, R_{N_\mathrm r}]$ with
-  {ref}`RINGMODE <par-bayesian3dfit-ringmode>` NODES, whose disk ends at the last radius).
+- RADMAX: uniform within ±1 beam FWHM of the last radius $R_{N_\mathrm r}$, within the rings. With `radmax`
+  `edge` or `taper` (below), the edge of the disk, it stops at the outer edge of the last ring (the last
+  radius with {ref}`RINGMODE <par-bayesian3dfit-ringmode>` NODES), beyond which the edge has no effect; with
+  `radmax=ring`, the last ring itself, it stays beyond the middle of the last two radii.
 
 The bounds of the priors also set the region of the likelihood (below): a prior wider than needed makes the
 region, and the computation, larger.
@@ -212,7 +236,8 @@ $$
 s(\mathbf x) = \sigma_\mathrm n\left[n + 2\sum_{l \ge 1}\max(n - l, 0)\,\rho_z(l)\right]^{1/2},
 $$
 
-where $\rho_z(l)$ is the measured spectral autocorrelation of the noise at a lag of $l$ channels (below);
+where $\rho_z(l)$ is the measured spectral autocorrelation of the noise at a lag of $l$ channels (below),
+summed over its positive core, up to the first lag where $\rho_z(l) \le 0$ (conservative, as the likelihood);
 with `noisecorr` other than `measured`, $s = \sigma_\mathrm n\sqrt n$.
 
 ### Voxels of the likelihood
@@ -248,6 +273,12 @@ extreme centres. Here $z_{0,\max}$ is the upper bound of the prior of Z0 (or the
 $\delta_\mathrm c$ the largest shift of the centre allowed by the priors of XPOS and YPOS, and $p$ the
 pixel size. The model is zero outside its own box, where the squared data still count. The likelihood thus
 does not depend on the box of the model, and the data beyond the outermost ring are not part of the fit.
+
+With {ref}`SIDE <par-bayesian3dfit-side>` A or R, the region holds only the pixels of the approaching or of
+the receding half of the galaxy: those on that side of the minor axis of the initial rings, through their
+median centre at their median position angle (the pixels on the axis belong to both halves). The half is
+fixed during the sampling, also when the centre or PA are free, so that the likelihood always compares the
+model with the same voxels; the density profile, computed in the region, uses that half too.
 
 Before sampling, a warning is printed when more than 5% of the flux of the total intensity map lies beyond
 the outermost ring plus half a beam, at the initial geometry: the model cannot reproduce it, and since the
@@ -296,8 +327,8 @@ independent noise value), i.e. the likelihood is $\mathcal L^f$, so that each in
 counts once. `noisecorr` of LIKEOPTS sets $f$:
 
 - `measured` (the default): $f = 1/(A_{xy}L_z)$, the inverse of the correlation volume of the noise measured
-  in the cube (below). If fewer than 2000 voxels without emission are available (e.g. `MASK NONE`), the beam
-  area is used;
+  in the cube, conservative: at least one beam area (below). If fewer than 2000 voxels without emission are
+  available (e.g. `MASK NONE`), the beam area is used;
 - `beam`: $f = 1/\Omega_\mathrm b$, with $\Omega_\mathrm b = \pi F_\mathrm{maj}F_\mathrm{min}/(4\ln 2\,p^2)$
   the beam area in pixels (spatial correlation only);
 - a number $N > 0$: $f = 1/N$ ($N = 1$: independent voxels).
@@ -307,24 +338,38 @@ $\lceil F_\mathrm{pix}\rceil$ pixels and 2 channels, with the median subtracted.
 computed with FFTs, each lag normalised by the number of pairs of noise voxels:
 
 $$
-A_{xy} = \max\left[1,\ \sum_{\lVert\boldsymbol\ell\rVert \le 2.5F_\mathrm{pix}}
-\rho_{xy}(\boldsymbol\ell)\right],
+S_{xy} = \sum_{\lVert\boldsymbol\ell\rVert \le 2.5F_\mathrm{pix}} \rho_{xy}(\boldsymbol\ell),
 \qquad
-L_z = \max\left[1,\ 1 + 2\sum_{l=1}^{K}\rho_z(l)\right],
+S_z = 1 + 2\sum_{l=1}^{K}\rho_z(l),
 $$
 
 where $\rho_{xy}(\boldsymbol\ell)$ is the normalised autocorrelation within the channel maps at a spatial
 lag $\boldsymbol\ell$ (pixels), $\rho_z(l)$ that along the spectra at a lag of $l$ channels, and $K = 6$
-channels (fewer if the runs of channels used are shorter). $A_{xy}$ is in pixels and $L_z$ in channels.
+channels (fewer if the runs of channels used are shorter). The sums are the correlation area and length of
+the noise, but the noise of synthesis images without short spacings has an autocorrelation with a negative
+ring, whose sum can be a fraction of the beam (0.18 beam areas for a WSRT cube), and with it the posteriors
+are too narrow. The measure is therefore conservative:
+
+$$
+A_{xy} = \max\left[S_{xy},\ S^+_{xy},\ \Omega_\mathrm b,\ 1\right],
+\qquad
+L_z = \max\left[S_z,\ S^+_z,\ 1\right],
+$$
+
+where $S^+_{xy}$ and $S^+_z$ are the same sums over the positive core of the autocorrelation, out to the
+first radius (lag) where its azimuthal mean ($\rho_z$) is $\le 0$. $A_{xy}$ is in pixels and $L_z$ in
+channels. A warning says when $S_{xy}$ is below half the beam area: the noise has a negative ring, or the beam
+in the header is wrong.
 The spatial correlation is measured in the emission-free channels (at most 0.1% of their pixels in the mask,
 and at least two channels from those with more than 1%) if they hold at least 20 000 noise voxels, otherwise
 in all the noise voxels; the spectral one along runs of at least three emission-free channels if they give
 enough pairs, otherwise along the spectra of the pixels without emission, otherwise in all the noise voxels.
 Emission below the threshold of the mask adds spurious correlation, hence the preference for empty
-channels. For reference: white noise convolved with a Gaussian beam has $A_{xy} = 2\Omega_\mathrm b$, noise
-correlated as the beam itself (interferometric images) $A_{xy} = \Omega_\mathrm b$, and Hanning smoothing
-$L_z = 8/3$. For NGC 2403, $A_{xy} = 18.0$ pixels ($\Omega_\mathrm b = 15.4$) and $L_z = 2.6$: 46 voxels
-per independent value instead of 15, and errors 1.7 times larger than with `beam`.
+channels. For reference: white noise convolved with a Gaussian beam has $S_{xy} = 2\Omega_\mathrm b$, noise
+correlated as the beam itself $S_{xy} = \Omega_\mathrm b$, and Hanning smoothing $S_z = 8/3$; for these
+$A_{xy} = S_{xy}$ and $L_z = S_z$. For NGC 2403, $S_{xy} = 18.0$ and $S^+_{xy} = 20.3$ pixels
+($\Omega_\mathrm b = 15.4$), so $A_{xy} = 20.3$, and $L_z = 2.6$: 52 voxels per independent value instead
+of 15, and errors 1.8 times larger than with `beam`.
 
 The factor is exact for a signal smoother than the beam; for models with structure on the scale of the beam
 it is conservative (see [Validation](#validation)).
@@ -468,10 +513,13 @@ The task writes in {ref}`OUTFOLDER <par-all-outfolder>`, with the prefix
   posteriors, with the 16th, 50th and 84th percentiles) and `<prefix>_profiles.pdf` (VROT, VDISP, DENS,
   INC, PA, Z0, XPOS, YPOS and VSYS against radius, with their errors).
 
-With `PLOTS -1` no model is written. With {ref}`VERBOSE <par-all-verbose>` the statistics of the posterior
-are printed. In Python, `write_bestmodel`, `corner_plot`, `plot_profiles`, `print_stats`, `ring_errors`
-and `chi2_reduced` give the same outputs; `save_results` writes the samples, and `load_results` reads them
-back: it reads the cube with the saved parameters, repeats the setup with the saved options of the
+With `PLOTS -1` only the rings and the samples are written, no model. With
+{ref}`VERBOSE <par-all-verbose>` the statistics of the posterior are printed. In Python, `run()` writes
+nothing, and `write(outfolder=None, plots=None)` writes these files as the task does. `write_bestmodel`
+writes only the best model with its outputs and the rings; `corner_plot` and `plot_profiles` return the
+figures; `print_stats`,
+`ring_errors` and `chi2_reduced` give the statistics; `save_results` writes the samples, and `load_results`
+reads them back: it reads the cube with the saved parameters, repeats the setup with the saved options of the
 likelihood and recomputes the best-fit rings, the density profile and its errors, without sampling again.
 
 ## Validation
@@ -480,8 +528,9 @@ The defaults were tested on simulated disks (`performance/bayes_coverage.py`, `p
 models (ANALYTIC) with noise convolved with the beam and Hanning-smoothed, flat disks with INC 30–75°, radius
 3, 5 and 8 beams and peak S/N 5–40, plus warped, thick and lagging disks; 12 disks per case (144 fits, one
 failed: at S/N 5 SEARCH found no source), fitted with nautilus, VROT in each ring, VDISP, INC and PA free, the
-centre, VSYS and Z0 fixed at the true values. These numbers come from simulated disks, which the model
-describes exactly; real galaxies add model mismatch.
+centre, VSYS and Z0 fixed at the true values, with uniform priors set by the tests, not the defaults (VROT
+0–400 km/s, VDISP 0–60 km/s, INC ±20° and PA ±30° around the true values). These numbers come from
+simulated disks, which the model describes exactly; real galaxies add model mismatch.
 
 - The medians are more accurate than 3DFIT on the same cubes: at 3 beams and S/N 20 (12 fits), the scatter of
   the errors is 6.5 km/s on VROT (3DFIT: 10.1), 1.2° on INC (2.3°) and 0.7° on PA (1.9°). At 5 and 8 beams the
@@ -489,6 +538,11 @@ describes exactly; real galaxies add model mismatch.
 - The credible intervals are conservative. The true VROT falls within the 68% interval in 92–100% of the
   cases: the intervals are 2–3 times wider than the actual errors. Those of INC and PA are up to twice too
   wide at 3 beams. The factor $f$ is exact only for a signal smoother than the beam.
+- With noise correlated as in synthesis images, whose autocorrelation has a negative ring
+  (`bayes_coverage.py --noise interf`), the plain sum of the autocorrelation gave intervals that were too
+  narrow: only 30–50% of the true values fell within the 68% intervals. With the conservative measure of
+  the correlation (above), 79–92% do (VDISP: 71% at S/N 20 and 42% at S/N 40, from its low bias). With
+  beam-smoothed noise the two measures are the same.
 - VDISP is biased low, by 0.4–1.6 km/s at S/N 20–40 (coverage 0.25–0.75), with the data in the dilated mask
   or in all the voxels, and also with the true density profile, and by 3.7 ± 1.6 km/s at S/N 10 (true VDISP
   10–22 km/s; coverage 0.83; 3DFIT −0.9 ± 3.4 km/s); the cause is not yet known. INC is biased by +2.3° at
@@ -534,9 +588,12 @@ on top of the C++ library. With respect to it:
 - the density profile, when DENS is not free, is deconvolved from the total intensity map (it was the
   average of the observed map in each ring), with errors;
 - RADMAX is the outer edge of the disk (it was the radius of the last ring: `LIKEOPTS radmax=ring`);
-- new: FRACERR, the measured correlation of the noise, the errors in `<prefix>_rings_final1.txt` and in the
-  plots, INDISK, `run_geometry` with the noise of the map in each pixel (it used an rms of 1 and data
-  scaled by 1/10);
+- new: FRACERR, the measured correlation of the noise, SIDE in the likelihood, the errors in
+  `<prefix>_rings_final1.txt` and in the plots, INDISK, `run_geometry` with the noise of the map in each
+  pixel (it used an rms of 1 and data scaled by 1/10);
+- the default priors follow the initial rings (they were fixed wide ranges: INC 0–90°, PA 0–360°, VROT
+  0–350 km/s, Z0 0–10″, XPOS and YPOS ±5 pixels);
+- `write` writes all the outputs of the task (the module had only `write_bestmodel` and `save_results`);
 - dynesty runs its static sampler by default (it was the dynamic one);
 - the smoothness penalties (`lambdas`) are second derivatives on the radii of the rings, with VROT 0 at
   $R = 0$ (they used the separation of the first two rings for all the rings, and put the zero of VROT one

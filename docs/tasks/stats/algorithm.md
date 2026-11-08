@@ -93,4 +93,4 @@ The full list is in {doc}`../../reference/changes`.
 - `bbarolo/stats.py`: `findAllStats`, `madfmToSigma`, `Stats` (`calculate`, `getMiddle`, `getSpread`,
   `setThresholdSNR`, `tofile`).
 - `bbarolo/cube.py`: `Cube.setCubeStats` (the blank voxels and ITERNOISE).
-- `bbarolo/tasks.py`: `_step_stats`, `Stats`.
+- `bbarolo/tasks.py`: `_compute_stats`, `_write_stats`, `Stats`.

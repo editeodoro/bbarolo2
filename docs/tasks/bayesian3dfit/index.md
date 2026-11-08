@@ -18,8 +18,9 @@ This example fits the rotation velocity of four rings of 120 arcsec of
 noise per voxel ({ref}`FREE <par-bayesian3dfit-free>`: 6 parameters). The centre, the systemic velocity, the
 inclination, the position angle and the thickness stay at the given values. The priors of VROT and VDISP are
 uniform, between 50 and 250 km/s and between 0 and 30 km/s ({ref}`PRIORS <par-bayesian3dfit-priors>`; the
-default ones are wider and make the sampling longer). The sampler is dynesty with 100 live points
-({ref}`SAMPLEROPTS <par-bayesian3dfit-sampleropts>`) and stops when the remaining evidence is below
+default ones follow the initial values: VROT from 0 to twice the initial VROT, VDISP from 0 to 50 km/s).
+The sampler is dynesty with 100 live points ({ref}`SAMPLEROPTS <par-bayesian3dfit-sampleropts>`) and
+stops when the remaining evidence is below
 {ref}`RUNOPTS <par-bayesian3dfit-runopts>` `dlogz=1`. SIGMA is free because a tilted-ring model does not
 reproduce NGC 2403 down to the noise: with SIGMA the credible intervals include this misfit, without it they
 would be formal errors of a few 0.01 km/s.
@@ -69,10 +70,9 @@ f.run(freepar="VROT VDISP_SINGLE SIGMA", threads=4, method="dynesty",
       sampler_kwargs=dict(nlive=100, seed=1), run_kwargs=dict(dlogz=1))
 
 f.print_stats()           # the median and the 68% interval of each free parameter
-f.write_bestmodel()       # the best model, its maps and slices, and the rings
 f.corner_plot()           # the figure below
 f.plot_profiles()         # the rings against radius, with their errors
-f.save_results("bayes_results.npy")
+f.write()                 # the files of BAYESIAN3DFIT, in output/ngc2403/
 ```
 :::
 ::::
@@ -82,11 +82,11 @@ number of free parameters. The result of the run shown here:
 
 | Parameter | Median | 68% interval |
 |---|---|---|
-| VROT, ring 1 (120 arcsec) | 88.4 km/s | −1.6, +1.5 |
-| VROT, ring 2 (240 arcsec) | 115.7 km/s | −1.1, +1.1 |
-| VROT, ring 3 (360 arcsec) | 127.5 km/s | −1.0, +1.2 |
-| VROT, ring 4 (480 arcsec) | 125.0 km/s | −0.8, +0.8 |
-| VDISP, all rings | 12.6 km/s | −0.2, +0.2 |
+| VROT, ring 1 (120 arcsec) | 88.4 km/s | −1.7, +1.6 |
+| VROT, ring 2 (240 arcsec) | 115.7 km/s | −1.1, +1.2 |
+| VROT, ring 3 (360 arcsec) | 127.5 km/s | −1.1, +1.3 |
+| VROT, ring 4 (480 arcsec) | 125.0 km/s | −0.9, +0.8 |
+| VDISP, all rings | 12.6 km/s | −0.3, +0.2 |
 | SIGMA | 0.020 Jy/beam | |
 
 SIGMA is about 36 times the noise of the cube (0.00055 Jy/beam): it is the root mean square of the
@@ -108,7 +108,7 @@ Marginal posteriors of the six free parameters (`f.corner_plot()`): the rotation
   one model of the whole disk, fits all the free parameters together, and returns their distribution.
 - The errors come from the posterior, so they include the correlations between parameters (e.g. INC and VROT).
 - Parameters can be shared by all the rings (`NAME_SINGLE`) or described by a function of radius
-  (`NAME_FUNC`), and the priors are set by the user.
+  (`NAME_FUNC`), and any of them can have a prior (by default, uniform around the initial values).
 - There is no second stage and no normalisation of the model by NORM: the density profile is computed from
   the data, or fitted.
 
@@ -120,8 +120,10 @@ conservative (the true value is inside the 68% interval more often than 68% of t
 
 The files are written in the output folder ({ref}`OUTFOLDER <par-all-outfolder>`, by default
 `output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. The class
-{class}`~bbarolo.BayesianBBarolo` does not return a {class}`~bbarolo.Result`: the results are attributes
-and methods of the object, and the files are written by `write_bestmodel()` and `save_results()`.
+{class}`~bbarolo.BayesianBBarolo` does not return a {class}`~bbarolo.Result`: `run()` writes nothing, and
+the results are attributes and methods of the object. `f.write()` writes all the files of the task (with
+{ref}`PLOTS <par-all-plots>`, or `write(plots=...)`), `f.write_bestmodel()` only the best model with its
+outputs, and `f.save_results(file)` only the samples.
 
 | File | Python | Content |
 |---|---|---|
@@ -134,7 +136,7 @@ and methods of the object, and the files are written by `write_bestmodel()` and 
 | `_corner.pdf` | `corner_plot()` | the corner plot (in Python it returns the figure) |
 | `_profiles.pdf` | `plot_profiles()` | the parameters of the rings against radius, with their errors (in Python it returns the figure) |
 | `_maps_none.pdf`, `_parameters.pdf`, `plotscripts/` | `write_bestmodel()` | the plots of 3DFIT: moment maps, parameters, and the scripts that make them |
-| `_params.par` | | all the parameters of the run, defaults included |
+| `_params.par` | | all the parameters of the run, defaults included (parameter files only) |
 
 The rings file has the columns of the 3DFIT rings file (radius in arcsec, VROT and VDISP in km/s, INC and PA
 in degrees, Z0 in arcsec, DENS, XPOS and YPOS in pixels, VSYS and VRAD in km/s), followed by the lower

@@ -1,6 +1,13 @@
 # Examples
 
-:::{note}
-In preparation: a complete 3DFIT of NGC 2403, a Bayesian fit, models from 3D fields with
-GalMod3D, and simulated datacubes.
-:::
+Complete analyses with BBarolo, from the data to the figures. They use the cube of NGC 2403
+({doc}`../getting-started/example-data`) or simulated cubes made by BBarolo itself.
+
+```{toctree}
+:maxdepth: 1
+
+ngc2403-3dfit
+bayesian
+galmod3d
+simulated
+```

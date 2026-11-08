@@ -202,4 +202,4 @@ The same steps smooth the cube for the masks `SMOOTH` and `SMOOTH&SEARCH`
   `gaussian_scalefactor` (the factor $s$), `perBeam` (units per beam), `FFTConvolver` (the FFT
   convolution), `Smooth3D` (`cubesmooth`, `smooth`, `fitswrite`).
 - `bbarolo/cube.py`: `Cube.Reduce` (REDUCE).
-- `bbarolo/tasks.py`: `_step_smooth`.
+- `bbarolo/tasks.py`: `_compute_smooth`, `_write_smooth`.

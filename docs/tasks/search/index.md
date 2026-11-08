@@ -67,8 +67,8 @@ The detection map and the total intensity map of the detection in NGC 2403 (`res
 ## Outputs
 
 The files are written in the output folder ({ref}`OUTFOLDER <par-all-outfolder>`, by default
-`output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. In Python they are also
-attributes of the {class}`~bbarolo.Result`:
+`output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. In Python, `run()` keeps
+them in memory as attributes of the {class}`~bbarolo.Result`, and `res.write()` writes the files:
 
 | File | `Result` | Content |
 |---|---|---|
@@ -77,7 +77,7 @@ attributes of the {class}`~bbarolo.Result`:
 | `_detections_num.fits.gz` | `labels` | the number of the detection of each voxel, 0 elsewhere |
 | `_detectmap.fits.gz` | `detmap` | the number of detected channels in each pixel |
 | `_mom0th.fits`, `_mom1st.fits`, `_mom2nd.fits` | `maps` | the total intensity, velocity and dispersion maps of the detections |
-| `sources/` | `cubelets` | a sub-cube of each detection, with {ref}`CUBELETS <par-search-cubelets>` |
+| `sources/` | | a sub-cube of each detection, with {ref}`CUBELETS <par-search-cubelets>` (in Python, written by `write()` only) |
 | `_params.par` | | all the parameters of the run, defaults included |
 
 With {ref}`SNMAP <par-search-snmap>` the noise and signal-to-noise maps of the total intensity map are

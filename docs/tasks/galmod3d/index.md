@@ -41,7 +41,7 @@ model = m.model()          # an astropy PrimaryHDU, on the grid of ngc2403.fits
 model.writeto("bar_spirals.fits", overwrite=True)
 
 maps = Maps(model, mask="THRESHOLD", threshold=0.005, totalmap=True, velocitymap=True)
-res = maps.run(threads=4, write=False)   # the moment maps of the model: the figure below
+res = maps.run(threads=4)   # the moment maps of the model, in memory: the figure below
 ```
 
 The fields are vectorised functions: they receive arrays of coordinates and return arrays. A field can also

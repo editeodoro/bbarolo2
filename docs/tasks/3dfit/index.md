@@ -52,11 +52,12 @@ from bbarolo import FitMod3D
 
 f = FitMod3D("ngc2403.fits", nradii=41, radsep=30, xpos=77, ypos=77, vsys=132.8, vrot=120,
              vdisp=8, inc=60, pa=123.7, z0=10, free="VROT VDISP PA", mask="SEARCH", norm="LOCAL")
-res = f.run(threads=4)
+res = f.run(threads=4)    # in memory: nothing is written
 
 res.rings                 # the fitted rings: an astropy Table
 res.plot_rings()          # the figure below
 res.plot_pv()
+res.write()               # the files of the command line, in output/ngc2403/
 ```
 :::
 ::::
@@ -87,8 +88,8 @@ Position–velocity slices of the data and of the model along the major and the 
 ## Outputs
 
 The files are written in the output folder ({ref}`OUTFOLDER <par-all-outfolder>`, by default
-`output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. In Python they are also
-attributes of the {class}`~bbarolo.Result`:
+`output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. In Python, `run()` keeps
+them in memory as attributes of the {class}`~bbarolo.Result`, and `res.write()` writes the files:
 
 | File | `Result` | Content |
 |---|---|---|
@@ -101,12 +102,15 @@ attributes of the {class}`~bbarolo.Result`:
 | `maps/` | `maps` | moment maps 0, 1 and 2 of the data and of the model |
 | `pvs/` | `pvs` | position–velocity slices of the data, the model and the mask, major (`_a`) and minor (`_b`) axes |
 | `_2drings.txt`, `_map_1st.fits` | | the 2D fit of the velocity field used to refine the initial position angle |
-| `*.pdf`, `plotscripts/` | `plots` | the plots of the fit: parameters, moment maps, PV diagrams and channel maps, and the scripts that make them |
+| `*.pdf`, `plotscripts/` | | the plots of the fit: parameters, moment maps, PV diagrams and channel maps, and the scripts that make them ({ref}`PLOTS <par-all-plots>`; in Python, `res.write(plots=...)`) |
 | `_asymdrift.txt` | `asymdrift` | the asymmetric drift correction ({ref}`ADRIFT <par-3dfit-adrift>`) |
 | `_params.par` | | all the parameters of the run, defaults included |
 
-The `Result` also has `rotation_curve` (the radius and VROT, with the errors), `data` (the cube that was
-fitted) and `residual` (data minus model, in the mask).
+The `Result` also has `rotation_curve` (the radius and VROT, with the errors, of the rings fitted), `data`
+(the cube that was fitted), `residual` (data minus model, in the mask) and `galfit` (the fitting engine).
+Its ring tables have all the rings, at full precision, with a column `fitok` (False where the fit of the
+ring failed); the files have 3 decimals and leave out the failed rings, unless
+{ref}`BADOUT <par-3dfit-badout>`.
 
 The rings files have one row per ring: the radius (arcsec), VROT, VDISP, INC, PA, Z0 (arcsec), DENS,
 XPOS, YPOS, VSYS and VRAD, and, with {ref}`FLAGERRORS <par-3dfit-flagerrors>`, the lower and upper errors

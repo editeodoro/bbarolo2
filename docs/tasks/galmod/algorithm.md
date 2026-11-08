@@ -398,7 +398,7 @@ writes its outputs or when NORM is not `NONE`.
 **Noise.** With {ref}`NOISERMS <par-galmod-noiserms>` $= \sigma_n \ne 0$, Gaussian noise of rms
 $\sigma_n$ per voxel is added to the final model. With SM the noise is first convolved with the same
 kernel and rescaled to the standard deviation $\sigma_n$, so it is correlated on the scale of the beam,
-as in the data. The noise is different at each run (in Python, `GalMod.model(seed=...)` makes it
+as in the data. The noise is different at each run (in Python, `GalMod(...).run(seed=...)` makes it
 reproducible).
 
 (galmod-outputs)=
@@ -422,9 +422,10 @@ the prefix {ref}`OUTPREFIX <par-all-outprefix>`:
   (`_pv_a`) and the minor axis (`_pv_b`), through the median centre at the median position angle of the
   rings (see {doc}`../pvslice/algorithm`).
 
-In Python, `GalMod(...).run()` returns these outputs, and `GalMod(...).model()` only the model, built in
-memory without writing any file; `bbarolo.DiskModel` gives the model engine itself, to build models of
-any rings on the grid of a cube.
+In Python, `GalMod(...).run()` returns these outputs in memory, without writing any file: the model is
+`model`, and the model with noise `models["noise"]`; `write()` writes the files. The maps, the slices and the
+radial profile are computed only when they are used (or written). `bbarolo.DiskModel` gives the model engine
+itself, to build models of any rings on the grid of a cube.
 
 **GalMod3D.** The Python class `GalMod3D` builds model cubes from 3D fields of the density and velocity
 of the gas, as functions of $(R, z)$, $(R, \theta, z)$ or $(x, y, z)$, instead of rings. It uses the

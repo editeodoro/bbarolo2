@@ -63,8 +63,8 @@ The offset is 0 at the centre (left) or at the mid-point (right) of the slice.
 ## Outputs
 
 The file is written in the output folder ({ref}`OUTFOLDER <par-all-outfolder>`, by default
-`output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. In Python it is also an
-attribute of the {class}`~bbarolo.Result`:
+`output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. In Python, `run()` keeps
+it in memory as an attribute of the {class}`~bbarolo.Result`, and `res.write()` writes the file:
 
 | File | `Result` | Content |
 |---|---|---|

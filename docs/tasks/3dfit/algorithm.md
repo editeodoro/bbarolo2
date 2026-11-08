@@ -95,7 +95,9 @@ parameters, the fixed value for the others. The values come, in order of precede
 
 An estimated value is the same in all the rings. The initial rings are written in
 `<prefix>_rings_initial.txt`, before the beam-wide rings of REVERSE and the refinement of $\phi$ (below); the
-screen summary marks each value as given (i), default (d) or estimated (e). Then, with $\phi$ free, a 2D fit
+screen summary marks each value as given (i), default (d) or estimated (e); NRADII and RADSEP are given
+when RADII gives the rings. BAYESIAN3DFIT builds its initial rings with the same code, and prints the same
+summary. Then, with $\phi$ free, a 2D fit
 may refine $\phi$ and $V_\mathrm{rot}$ ring by ring (see below).
 
 ### Estimates from the data
@@ -593,4 +595,4 @@ The full list is in {doc}`../../reference/changes`.
 - `bbarolo/galmod.py`: `DiskModel` (`box`, `array`; ring conventions in `model_rings`).
 - `bbarolo/galfit_out.py`: `writeModel` (final model and outputs), `radialProfile`, `asymmetricDrift`.
 - `bbarolo/cube.py`: `Cube.BlankMask` (the mask); `bbarolo/ringmodel.py`: `Ringmodel` (2D fits).
-- `bbarolo/tasks.py`: the task (`_step_3dfit`) and the Python class `FitMod3D`.
+- `bbarolo/tasks.py`: the task (`_compute_3dfit`, `_write_3dfit`) and the Python class `FitMod3D`.

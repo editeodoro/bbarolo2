@@ -6,7 +6,8 @@ in the ring (sum, mean, median, scatter), the surface density on the sky and its
 for HI maps in Jy, the HI column density and mass surface density. The algorithm is that of GIPSY's
 ELLINT. The input is a 2D map, or a cube, of which the total intensity map is used, and the rings;
 the outputs are a table, `<prefix>_ellprof.txt`, and the map that was used, `<prefix>_ellprof_map.fits`.
-The task is run by {ref}`ELLPROF <par-ellprof-ellprof>`.
+With a beam, ELLPROF also gives the profile deconvolved from the beam, `<prefix>_ellprof_deconvolved.txt`
+([below](#the-profile-deconvolved-from-the-beam)). The task is run by {ref}`ELLPROF <par-ellprof-ellprof>`.
 
 ## The map
 
@@ -177,6 +178,68 @@ $$
 the number of hydrogen atoms in 1 M☉ pc⁻². Helium is not included. A map in mJy or µJy is converted to Jy.
 Maps in K have no HI columns. The constant is that of {ref}`MASSDENSMAP <par-maps-massdensmap>`.
 
+## The profile deconvolved from the beam
+
+The profile above is that of the observed map, which the beam has smoothed: for a disk a few beams across,
+the inner rings come out too faint and the outer ones too bright. When the header has a beam, ELLPROF also
+computes the face-on surface densities of the rings whose model, convolved with the beam, reproduces the
+map. The method is that of BAYESIAN3DFIT when DENS is not free ({doc}`../bayesian3dfit/algorithm`, *The
+density profile when DENS is not free*), here at the fixed geometry of the rings. The map of the model is
+linear in the densities $\Sigma_j$ of the rings,
+
+$$
+M(\mathbf x) = \sum_{j=1}^{N+1} \Sigma_j\, K_j(\mathbf x),
+$$
+
+where $K_j$ is the map of ring $j$ with unit density and the other rings empty, convolved with the beam.
+The density is interpolated linearly between the radii (RINGMODE CENTRED), so $K_j$ is a "hat" that peaks
+at $R_j$; the rings have the centre, INC and PA given, and the thickness Z0 (thin if not given). Ring
+$N+1$ is an exterior annulus, from the outer edge of the rings to two beams beyond, which takes the emission
+outside the rings; its density is not used. The densities are the non-negative least-squares solution
+weighted by the noise $s(\mathbf x)$ of the map, with the smoothness term of BAYESIAN3DFIT, of weight
+$\alpha = 0.1$ times the mean data weight of a ring:
+
+$$
+\hat{\boldsymbol\Sigma} = \underset{\boldsymbol\Sigma \ge 0}{\arg\min}
+\left[\sum_{\mathbf x}\left(\frac{D(\mathbf x) - M(\mathbf x)}{s(\mathbf x)}\right)^2
++ \alpha\,\frac{\lVert A\rVert^2}{\lVert L\rVert^2}\,\lVert L\boldsymbol\Sigma\rVert^2\right],
+$$
+
+with $A_{\mathbf xj} = K_j(\mathbf x)/s(\mathbf x)$ and $L$ the second differences of the profile on the
+radii. At least $2N$ pixels are needed. The data map $D$, the maps $K_j$ and the noise depend on the input:
+
+- **A cube**: $D(\mathbf x)$ is the sum of the data, not clipped, in the mask dilated by one beam FWHM and
+  by ±3 channels, as the voxels of BAYESIAN3DFIT: the faint emission around the mask, which the model
+  reproduces, is included. $K_j$ is the channel sum of the ANALYTIC model of GALMOD, which does not
+  depend on the kinematics. The noise is $s(\mathbf x) = \sigma_\mathrm n\sqrt{n(\mathbf x)\,L_z}$, with
+  $\sigma_\mathrm n$ the scaled median absolute deviation of the data outside the mask, $n(\mathbf x)$ the
+  number of channels summed and $L_z$ the spectral correlation of the noise (the conservative measure of
+  BAYESIAN3DFIT, at least one channel). The pixels are those with at least one channel summed.
+- **A 2D map** (e.g. a moment-0 map): $D$ is the map itself, without the blank pixels, with uniform
+  weights. $K_j$ is the ring projected on the sky, thin or with the vertical profile
+  {ref}`LTYPE <par-3dfit-ltype>` of scale height Z0, and convolved with the beam (a normalised kernel, so
+  that a map per beam keeps its surface brightness); a uniform face-on disk of unit density gives
+  $1/\cos i$ in each pixel. For the same rings it gives the profile of the cube (within 4% on simulated
+  disks).
+
+With {ref}`SIDE <par-ellprof-side>` A or R only the pixels on that side of the minor axis (through the median
+centre, at the median position angle of the rings) are used.
+
+The errors are those of the noise: the profile is refitted to 200 realisations of the best-fit map plus
+Gaussian noise, and E_LO and E_HI are the distances of the 16th and 84th percentiles from the median. The
+noise is correlated as that of the data: white noise smoothed by a Gaussian of standard deviation
+$\sqrt{A_{xy}/4\pi}$ pixels, with $A_{xy}$ the spatial correlation area measured as in BAYESIAN3DFIT (at
+least one beam area; the beam area for a 2D map). Its rms is $s(\mathbf x)$ for a cube, and for a 2D map the
+rms of the residuals of the fit, which includes the structure that the rings do not describe (spiral arms,
+asymmetries), so that the errors are conservative. The geometry is fixed: the errors do not include the
+uncertainty of the centre, INC and PA.
+
+The densities are converted to face-on surface densities in the units of the observed profile
+($u$/arcsec², as SDENS_FO), and to HI mass surface densities for maps in Jy, as above. On a simulated disk a
+few beams across, the deconvolved profile is within 2% of the true one in the centre, where the observed one
+is 30% too low. Without a beam in the header, or with too few pixels, there is no deconvolved profile (a
+message says so).
+
 ## Outputs
 
 `<prefix>_ellprof.txt` has a header with the unit of the map and the pixel area, and one line per ring:
@@ -191,8 +254,20 @@ Maps in K have no HI columns. The constant is that of {ref}`MASSDENSMAP <par-map
 | 12–13 | SDENSBL, SDENSBL_FO | $\Sigma^{\rm sky, bl}_r$, $\Sigma^{\rm fo, bl}_r$ | $u$/arcsec² |
 | 14–15 | HIDENS_FO, HIMASSDENS | $N_{\rm HI}$, $\Sigma_{\rm HI}$ (maps in Jy only) | $10^{20}$ cm⁻², M☉/pc² |
 
+`<prefix>_ellprof_deconvolved.txt` (with a beam) has a header with the unit of the map and the beam, and
+one line per ring:
+
+| Column | Name | Quantity | Unit |
+|---|---|---|---|
+| 1 | RADIUS | $R_r$ | arcsec |
+| 2–4 | SDENS_FO, E_LO, E_HI | the deconvolved face-on surface density, its lower and upper errors | $u$/arcsec² |
+| 5 | SDENS_FO_OBS | $\Sigma^{\rm fo}_r$, the observed one (SDENS_FO of `<prefix>_ellprof.txt`) | $u$/arcsec² |
+| 6 | DENS | $\hat\Sigma_r$, as DENS of GALMOD (a 2D map: face-on, $u$ per pixel) | |
+| 7–10 | HIMASSDENS, E_LO, E_HI, HIMASSDENS_OBS | the same as HI mass surface densities (maps in Jy only) | M☉/pc² |
+
 `<prefix>_ellprof_map.fits` is the map that was used. In Python, the `Ellprof` class returns the table
-and the map.
+(`profile`), the deconvolved profile (`profile_deconvolved`) and the map (`map`) in memory, and `write()`
+writes the files.
 
 ## Differences from BBarolo 1.8
 
@@ -208,6 +283,7 @@ and the map.
   is converted to Jy (1.8 took it as Jy).
 - **Outputs** are `<prefix>_ellprof.txt` and `<prefix>_ellprof_map.fits` (1.8: `<prefix>_densprof.txt`
   and `<prefix>_densmap.fits`; the name `<prefix>_densprof.txt` is now the density profile of 3DFIT).
+- **The deconvolved profile**, `<prefix>_ellprof_deconvolved.txt`, is new.
 
 The full list is in {doc}`../../reference/changes`.
 
@@ -227,4 +303,6 @@ The full list is in {doc}`../../reference/changes`.
   sides).
 - `bbarolo/moments.py`: `MomentMap.ZeroMoment` (the total map of a cube). `bbarolo/rings.py`:
   `readRings`.
-- `bbarolo/tasks.py`: `_step_ellprof` (the task) and the `Ellprof` class.
+- `bbarolo/tasks.py`: `_compute_ellprof`, `_write_ellprof` (the task) and the `Ellprof` class.
+- `bbarolo/profile.py`: `ellprof_deconvolved` (the deconvolved profile), `MapRingModel` (the rings of a
+  2D map), `profile_system`, `solve_profile` (shared with BAYESIAN3DFIT).

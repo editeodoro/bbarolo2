@@ -77,4 +77,4 @@ any other task subtracts the continuum first.
 ## In the code
 
 - `bbarolo/cube.py`: `Cube.continuumSubtract` (the channels, the fit and the subtraction).
-- `bbarolo/tasks.py`: `_step_contsub` (runs it first and writes the cube).
+- `bbarolo/tasks.py`: `_compute_contsub`, `_write_contsub` (the first task of `STEPS`).

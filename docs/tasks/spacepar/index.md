@@ -76,19 +76,19 @@ The increase of the residual over its minimum (per cent), for two rings of NGC 2
 ## Outputs
 
 The files are written in the output folder ({ref}`OUTFOLDER <par-all-outfolder>`, by default
-`output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. In Python they are also
-attributes of the {class}`~bbarolo.Result`:
+`output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. In Python, `run()` keeps
+them in memory as attributes of the {class}`~bbarolo.Result`, and `res.write()` writes the files:
 
 | File | `Result` | Content |
 |---|---|---|
 | `_spacepar.fits` | `space` | the residuals over the grid, one plane per ring |
-| `_spacepar.pdf`, `plotscripts/spacepar.py` | `plots` | the plot of the maps (one panel per ring) and its script |
+| `_spacepar.pdf`, `plotscripts/spacepar.py` | | the plot of the maps (one panel per ring) and its script ({ref}`PLOTS <par-all-plots>`) |
 | `_mask.fits` | `mask` | the mask |
 | `_rings_initial.txt` | | the rings |
 | `_params.par` | | all the parameters of the run, defaults included |
 
-The `Result` also has `spacepar`, the engine that computed the maps. With `write=False` there are no
-plots.
+The `Result` also has `spacepar`, the engine that computed the maps. The plot is made by `write()`, as the
+other files.
 
 `_spacepar.fits` is a cube with the axes P1, P2 and the ring. Each plane holds
 $|f - f_{\min}| / f_{\min}$ (dimensionless): 0 at the minimum of the ring, 0.05 where the residual is 5% higher.

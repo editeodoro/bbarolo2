@@ -119,4 +119,4 @@ WINDOW_SIZE that is not positive.
 - `bbarolo/bbutils.py`: `window_kernel` (the weights), `Smooth1D` (the convolution along one axis).
 - `bbarolo/smooth.py`: `SpectralSmooth3D` (`smooth`, `fitswrite`).
 - `bbarolo/cube.py`: `Cube.Reduce` (REDUCE).
-- `bbarolo/tasks.py`: `_step_smoothspec`.
+- `bbarolo/tasks.py`: `_compute_smoothspec`, `_write_smoothspec`.

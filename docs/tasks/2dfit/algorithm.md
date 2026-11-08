@@ -184,9 +184,10 @@ threads.
 | `<prefix>_2dtrm.txt` | the rings: radius (pix, arcsec), VSYS, VROT, VEXP (km/s), PA, INC (°), centre (pix) |
 | `<prefix>_2d_mod.fits` | the model velocity field |
 
-The table has no errors. In Python, the result of {class}`bbarolo.FitMod2D` holds the table (`rings`), the
-model (`model`), the velocity field (`velfield`) and the fitting engine (`ringmodel`), whose errors are
-`vsyse`, `vrote`, `vexpe`, `posae`, `incle`, `xpose` and `ypose`.
+The table has no errors. In Python, the result of {class}`bbarolo.FitMod2D` holds the table (`rings`, at full
+precision, with NaN in the rings whose fit failed), the model (`model`), the velocity field (`velfield`) and the
+fitting engine (`ringmodel`), whose errors are `vsyse`, `vrote`, `vexpe`, `posae`, `incle`, `xpose` and
+`ypose`; `write()` writes the files.
 
 **The model velocity field.** For each ring, $V_\mathrm{mod}$ with its fitted values is computed at the pixels
 of its annulus, with the selection above but without the free angle ($\theta_\mathrm{f} = 0$); SIDE still
@@ -237,4 +238,4 @@ is closest to their own radius.
   `printfinal` (table), `writeModel` (model field); the functions `vfunc` (model), `vderv` (derivatives) and
   `lsqfit` (least squares and errors).
 - `bbarolo/moments.py`: `MomentMap` (the velocity field).
-- `bbarolo/tasks.py`: the task (`_step_2dfit`) and the Python class `FitMod2D`.
+- `bbarolo/tasks.py`: the task (`_compute_2dfit`, `_write_2dfit`) and the Python class `FitMod2D`.

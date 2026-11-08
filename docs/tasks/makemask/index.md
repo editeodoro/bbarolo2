@@ -78,8 +78,8 @@ Channel 30 of NGC 2403 and the edge of three masks in it, made with `MakeMask(..
 ## Outputs
 
 The file is written in the output folder ({ref}`OUTFOLDER <par-all-outfolder>`, by default
-`output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. In Python it is also an
-attribute of the {class}`~bbarolo.Result`:
+`output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. In Python, `run()` keeps
+it in memory as an attribute of the {class}`~bbarolo.Result`, and `res.write()` writes the file:
 
 | File | `Result` | Content |
 |---|---|---|

@@ -151,4 +151,4 @@ Flux along the slices of NGC 2403 agrees with 1.8 within 0.4%. The full list is 
   the rings for 3DFIT), `_line_range` (the part of the line inside the field), `pv_sample` (nearest,
   bilinear or spline sampling, the slit), `pv_extract` (both), `PvSlice` (the task: parameters,
   `slice`, `define_header`) and `PositionVelocity`.
-- `bbarolo/tasks.py`: `_step_pvslice` (the task) and the `PVSlice` class.
+- `bbarolo/tasks.py`: `_compute_pvslice`, `_write_pvslice` (the task) and the `PVSlice` class.

@@ -82,4 +82,4 @@ holds the projection at $p - 1$ degrees.
 
 - `bbarolo/rendering3d.py`: `_render` (the projections, a numba kernel parallel over the angles),
   `Rendering3D` (`compute`, `writefits`, which smooths with `Smooth3D` of `bbarolo/smooth.py`).
-- `bbarolo/tasks.py`: `_step_rend3d`.
+- `bbarolo/tasks.py`: `_compute_rend3d`, `_write_rend3d`.

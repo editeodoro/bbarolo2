@@ -52,21 +52,22 @@ from bbarolo import GalMod
 
 g = GalMod("ngc2403.fits", nradii=41, radsep=30, xpos=77, ypos=77, vsys=132.8, vrot=120,
            vdisp=8, inc=60, pa=123.7, z0=10, norm="LOCAL", mask="SMOOTH")
-res = g.run(threads=4)    # writes the files; res.model is the model cube
+res = g.run(threads=4)    # in memory: res.model is the model cube, an astropy PrimaryHDU
 res.plot_pv()             # the figure below
 res.plot_maps()           # moment maps of the data and of the model
+res.write()               # the files of the command line, in output/ngc2403/
 
-cube = g.model(threads=4) # only the model, built in memory: an astropy PrimaryHDU
-cube = g.model(vrot=80, noiserms=0.01, seed=1)   # change parameters, add noise
+res = g.run(vrot=80, noiserms=0.01, seed=1)      # change parameters, add noise
+res.models["noise"]       # the model with noise
 ```
 :::
 ::::
 
-The run takes about 2 seconds. `run()` writes all the outputs and returns them in a
-{class}`~bbarolo.Result`; with `write=False` nothing is written to the disk. `GalMod.model()` is the
-faster way to get only the cube: it writes nothing and computes no maps or slices. Keyword arguments
-change the parameters first, and `noiserms` adds Gaussian noise (the rms is in the units of the cube; `seed`
-makes it reproducible).
+The run takes about 2 seconds. `run()` builds the model in memory and returns it in a
+{class}`~bbarolo.Result`, without writing anything; the moment maps and position–velocity slices are
+computed only when they are used (here by `plot_pv()` and `plot_maps()`), so `g.run().model` is a quick way
+to get only the cube. Keyword arguments of `run()` change the parameters first, and `noiserms` adds Gaussian
+noise (the rms is in the units of the cube; `seed` makes it reproducible). `write()` writes the files.
 
 The model has the same flat rotation curve of 120 km/s everywhere, so it follows the data only roughly.
 The position–velocity diagrams show it best: along the major axis the model rises too fast in the centre
@@ -82,8 +83,8 @@ axis (`res.plot_pv()`).
 ## Outputs
 
 The files are written in the output folder ({ref}`OUTFOLDER <par-all-outfolder>`, by default
-`output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. In Python they are also
-attributes of the {class}`~bbarolo.Result`:
+`output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. In Python, `run()` keeps
+them in memory as attributes of the {class}`~bbarolo.Result`, and `res.write()` writes the files:
 
 | File | `Result` | Content |
 |---|---|---|
@@ -95,8 +96,10 @@ attributes of the {class}`~bbarolo.Result`:
 | `pvs/` | `pvs` | position–velocity slices of the data, the model and the mask, major (`_a`) and minor (`_b`) axes |
 | `_params.par` | | all the parameters of the run, defaults included |
 
-The `Result` also has `data` (the cube that was read), `residual` (data minus model) and `diskmodel`, the
-model engine (a {class}`bbarolo.DiskModel`), which builds models of any other rings on the same grid.
+The `Result` also has `models` (with {ref}`NOISERMS <par-galmod-noiserms>`: the model, and the model with
+noise as `models["noise"]`, written as `_mod_noise.fits`), `norm` (the NORM used), `data` (the cube that was
+read), `residual` (data minus model) and `diskmodel`, the model engine (a {class}`bbarolo.DiskModel`), which
+builds models of any other rings on the same grid. The `rings` table also has VRAD.
 
 The rings file has one row per ring: the radius (arcsec), VROT and VDISP (km/s), INC and PA (degrees),
 Z0 (arcsec), the density, XPOS and YPOS (pixels) and VSYS (km/s). With the default

@@ -61,8 +61,8 @@ Planes 1, 61, 121 and 180 of the rendered cube of NGC 2403 (`res.image`, angles 
 ## Outputs
 
 The files are written in the output folder ({ref}`OUTFOLDER <par-all-outfolder>`, by default
-`output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. In Python they are also
-attributes of the {class}`~bbarolo.Result`:
+`output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. In Python, `run()` keeps
+them in memory as attributes of the {class}`~bbarolo.Result`, and `res.write()` writes the files:
 
 | File | `Result` | Content |
 |---|---|---|

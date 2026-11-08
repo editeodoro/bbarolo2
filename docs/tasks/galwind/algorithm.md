@@ -160,7 +160,7 @@ The outputs, in the output folder:
 The plots are made by the script `pyscript_w.py` in the output folder.
 
 In Python, the result of {class}`bbarolo.GalWind` holds the cube (`model`), the moment maps (`maps`) and the
-slice (`pv`).
+slice (`pv`) in memory; `write()` writes the files and the plots.
 
 ## Differences from BBarolo 1.8
 
@@ -199,4 +199,4 @@ slice (`pv`).
 - `bbarolo/galmod.py`: `GalmodSetup._build` (the GALMOD disks of the cylinders) and the numba kernel
   `_galmod_wind` (the clouds of the shells).
 - `bbarolo/smooth.py`: `Smooth3D` (the convolution).
-- `bbarolo/tasks.py`: the task (`_step_galwind`) and the Python class `GalWind`.
+- `bbarolo/tasks.py`: the task (`_compute_galwind`, `_write_galwind`) and the Python class `GalWind`.

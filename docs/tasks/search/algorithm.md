@@ -328,4 +328,4 @@ The full list is in {doc}`../../reference/changes`.
 - `bbarolo/cube.py`: `Cube.setCubeStats`, `Cube.search` (defaults of THRESHSPATIAL, MINPIX, MINVOXELS,
   MAXANGSIZE), `printDetections`, `writeDetections`, `extractCubelet`, `writeCubelets`.
 - `bbarolo/stats.py`: `Stats`. `bbarolo/bbutils.py`: `Pbcor`, `FluxtoJy`.
-- `bbarolo/tasks.py`: `_step_search`, `Search`.
+- `bbarolo/tasks.py`: `_compute_search`, `_write_search`, `Search`.

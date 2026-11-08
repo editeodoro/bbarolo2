@@ -5,9 +5,12 @@ The PNG files go to docs/figures/ and are committed: Read the Docs does not run 
     python3 docs/scripts/make_figures.py                 # all the figures
     python3 docs/scripts/make_figures.py 3dfit maps      # only some
     python3 docs/scripts/make_figures.py --list
+    python3 docs/scripts/make_figures.py --out /tmp/figs # elsewhere, e.g. to compare with docs/figures/
 
 The cube ngc2403.fits is looked for in --examples, $BBAROLO_EXAMPLES, or the folder examples/ next to
-the repository (as the tests do). The code of each figure is the code shown on the task pages.
+the repository (as the tests do). The code of each figure is the code shown on the task pages. The tasks
+run in memory (run() writes nothing), so only the PNG files are written.
+$BBAROLO_CODE runs another copy of the package (a folder that contains bbarolo/).
 """
 import argparse
 import os
@@ -17,7 +20,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 OUT = os.path.join(REPO, "docs", "figures")
-sys.path.insert(0, REPO)
+sys.path.insert(0, os.environ.get("BBAROLO_CODE", REPO))      # the code to run: this repository by default
 
 import matplotlib                                    # noqa: E402
 matplotlib.use("Agg")
@@ -51,7 +54,7 @@ N2403 = dict(xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8, inc=60, pa=123.7, 
 def fig_3dfit():
     from bbarolo import FitMod3D
     f = FitMod3D(CUBE, nradii=41, radsep=30, **N2403, free="VROT VDISP PA", mask="SEARCH", norm="LOCAL")
-    res = f.run(threads=4, write=False)
+    res = f.run(threads=4)
     save(res.plot_rings(), "3dfit_rings.png")
     save(res.plot_pv(), "3dfit_pv.png")
 
@@ -76,7 +79,7 @@ def _moment_panels(hdus, titles, cmaps, fname, figsize=None):
 def fig_galmod():
     from bbarolo import GalMod
     g = GalMod(CUBE, nradii=41, radsep=30, **N2403, norm="LOCAL", mask="SMOOTH")
-    res = g.run(threads=4, write=False)
+    res = g.run(threads=4)
     save(res.plot_pv(), "galmod_pv.png")
 
 
@@ -98,7 +101,7 @@ def fig_galmod3d():
     m = GalMod3D(CUBE, coords="Rphiz", xpos=77, ypos=77, vsys=132.8, inc=30, pa=123.7, dens=dens, vphi=vphi,
                  vr=vr, vdisp=8, zmax=30, flux="measured", threads=4)
     model = m.model()
-    maps = Maps(model, mask="THRESHOLD", threshold=0.005, totalmap=True, velocitymap=True).run(threads=4, write=False)
+    maps = Maps(model, mask="THRESHOLD", threshold=0.005, totalmap=True, velocitymap=True).run(threads=4)
     _moment_panels([maps.totalmap, maps.velocitymap], ["Total intensity (Jy/beam km/s)", "Velocity (km/s)"],
                    ["viridis", "RdBu_r"], "galmod3d_maps.png", figsize=(7, 3.6))
 
@@ -108,7 +111,7 @@ def fig_galwind():
     from bbarolo import GalWind
     w = GalWind(CUBE, xpos=77, ypos=77, vsys=132.8, inc=60, pa=123.7, vwind=150, openang=60, htot=600,
                 vdisp=30, dens=0.001)
-    res = w.run(threads=4, write=False)
+    res = w.run(threads=4)
     _moment_panels([res.maps["0mom"], res.maps["1mom"], res.maps["2mom"]],
                    ["Total intensity (Jy/beam km/s)", "Velocity (km/s)", "Dispersion (km/s)"],
                    ["viridis", "RdBu_r", "magma"], "galwind_maps.png")
@@ -148,7 +151,7 @@ def fig_2dfit():
     from bbarolo import FitMod2D
     f = FitMod2D(CUBE, nradii=41, radsep=30, xpos=77, ypos=77, vsys=132.8, vrot=120, inc=60, pa=123.7,
                  free="VROT PA INC", mask="SEARCH", side="B", wfunc=2)
-    res = f.run(threads=4, write=False)
+    res = f.run(threads=4)
     save(res.plot_rings(["vrot", "pa", "inc"]), "2dfit_rings.png")
     fig, axs = plt.subplots(1, 2, figsize=(8, 3.8), sharey=True)
     vf, vm = np.asarray(res.velfield.data, float), np.asarray(res.model.data, float)
@@ -168,7 +171,7 @@ def fig_spacepar():
     from bbarolo import SpacePar
     f = SpacePar(CUBE, p1="VROT", p2="INC", p1par="60 160 2", p2par="30 90 2", radii="450 750",
                  xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8, inc=60, pa=123.7, z0=10, mask="SEARCH")
-    res = f.run(threads=4, write=False)
+    res = f.run(threads=4)
     h = res.space.header
     d = 100 * np.asarray(res.space.data, float)
     vrot = h["CRVAL1"] + h["CDELT1"] * np.arange(h["NAXIS1"])
@@ -192,7 +195,7 @@ def fig_spacepar():
 def fig_ellprof():
     from bbarolo import Ellprof
     f = Ellprof(CUBE, nradii=41, radsep=30, xpos=77, ypos=77, inc=60, pa=123.7, mask="SEARCH", side="B")
-    res = f.run(write=False)
+    res = f.run()
     t = res.profile
     r = np.asarray(t["radii"])
     sd = np.asarray(t["himassdens"])
@@ -200,7 +203,11 @@ def fig_ellprof():
     fig, ax = plt.subplots(figsize=(6, 3.6))
     ax.fill_between(r, np.maximum(sd - scatter, 1e-3), sd + scatter, color="C0", alpha=0.25,
                     label="scatter of the pixels in the ring")
-    ax.plot(r, sd, "o-", ms=3, lw=1, color="C0", label="HIMASSDENS")
+    ax.plot(r, sd, "o-", ms=3, lw=1, color="C0", label="HIMASSDENS, observed")
+    d = res.profile_deconvolved                                         # the profile deconvolved from the beam
+    ax.errorbar(np.asarray(d["radii"]), np.asarray(d["himassdens"]),
+                yerr=[np.asarray(d["e_himassdens_lo"]), np.asarray(d["e_himassdens_hi"])],
+                fmt="s-", ms=3, lw=1, capsize=0, color="C3", label="HIMASSDENS, deconvolved")
     ax.set_yscale("log")
     ax.set_xlabel("Radius (arcsec)")
     ax.set_ylabel("HI mass surface density (M$_\\odot$/pc$^2$)")
@@ -211,8 +218,8 @@ def fig_ellprof():
 @figure("pvslice")
 def fig_pvslice():
     from bbarolo import PVSlice
-    a = PVSlice(CUBE, xpos_pv=77, ypos_pv=77, pa_pv=123.7).run(write=False)
-    b = PVSlice(CUBE, p1_pv="30 105", p2_pv="120 45", width_pv=60).run(write=False)
+    a = PVSlice(CUBE, xpos_pv=77, ypos_pv=77, pa_pv=123.7).run()
+    b = PVSlice(CUBE, p1_pv="30 105", p2_pv="120 45", width_pv=60).run()
     fig, axs = plt.subplots(1, 2, figsize=(9, 3.8))
     for ax, res, t in zip(axs, (a, b), ("Major axis (PA_PV = 123.7$^\\circ$)",
                                          "Between two points, 60 arcsec wide")):
@@ -250,8 +257,7 @@ def _offsets(h):
 @figure("search")
 def fig_search():
     from bbarolo import Search
-    res = Search(CUBE, searchtype="spatial", snrcut=10, growthcut=3, minpix=30, minchannels=5).run(
-        threads=4, write=False)
+    res = Search(CUBE, searchtype="spatial", snrcut=10, growthcut=3, minpix=30, minchannels=5).run(threads=4)
     fig, ax = plt.subplots(1, 2, figsize=(9, 4.2))
     for a, hdu, lab, cm in [(ax[0], res.detmap, "detected channels", "viridis"),
                             (ax[1], res.maps["mom0th"], "total intensity (Jy/beam km/s)", "magma")]:
@@ -281,7 +287,7 @@ def fig_makemask():
     for mask, kw, col, lab in [("SEARCH", {}, "tab:blue", "SEARCH"),
                                ("SMOOTH&SEARCH", dict(factor=2), "tab:red", "SMOOTH&SEARCH, FACTOR 2"),
                                ("THRESHOLD", dict(threshold=0.003), "tab:green", "THRESHOLD, 0.003 Jy/beam")]:
-        m = MakeMask(CUBE, mask=mask, **kw).run(threads=4, write=False).mask.data[z]
+        m = MakeMask(CUBE, mask=mask, **kw).run(threads=4).mask.data[z]
         ax.contour(m, levels=[0.5], colors=col, linewidths=1.3, origin="lower", extent=ext)
         ax.plot([], [], color=col, label=lab)
     ax.legend(loc="upper right", fontsize=8)
@@ -298,7 +304,7 @@ def fig_smooth():
     from matplotlib.patches import Ellipse
     h0 = fits.getheader(CUBE)
     d0 = fits.getdata(CUBE)
-    res = Smooth(CUBE, bmaj=150, bmin=150, bpa=0, reduce=True).run(threads=4, write=False)
+    res = Smooth(CUBE, bmaj=150, bmin=150, bpa=0, reduce=True).run(threads=4)
     h1, d1 = res.cube.header, res.cube.data
     z = 30
     fig, ax = plt.subplots(1, 2, figsize=(9.5, 4.3), sharex=True, sharey=True)
@@ -322,7 +328,7 @@ def fig_smoothspec():
     from astropy.io import fits
     h = fits.getheader(CUBE)
     d0 = fits.getdata(CUBE)
-    res = SmoothSpec(CUBE, window_type="HANNING", window_size=11).run(write=False)
+    res = SmoothSpec(CUBE, window_type="HANNING", window_size=11).run()
     v = _vel_axis(h)
     fig, ax = plt.subplots(figsize=(7, 3.8))
     ax.plot(v, d0[:, 77, 77], "o-", color="0.55", ms=3, label="original")
@@ -344,7 +350,7 @@ def fig_contsub():
     z = np.arange(d0.shape[0])
     cont = 0.02 + 0.0004 * z
     hdu = fits.PrimaryHDU((d0 + cont[:, None, None]).astype("float32"), h)
-    res = ContSub(hdu, contorder=1, exclwind="3:56").run(threads=4, write=False)
+    res = ContSub(hdu, contorder=1, exclwind="3:56").run(threads=4)
     v = _vel_axis(h)
     fig, ax = plt.subplots(figsize=(7, 3.8))
     ax.plot(v, hdu.data[:, 77, 77], "o-", color="0.55", ms=3, label="cube with continuum")
@@ -368,7 +374,7 @@ def fig_maps():
     from bbarolo import Maps
     m = Maps(CUBE, mask="THRESHOLD", threshold=0.01, totalmap=True, velocitymap=True,
              dispersionmap=True, globalprofile=True)
-    res = m.run(threads=4, write=False)
+    res = m.run(threads=4)
     fig, axs = plt.subplots(1, 3, figsize=(10, 3.6))
     panels = [(res.totalmap, "Total intensity (Jy/beam km/s)", "viridis"),
               (res.velocitymap, "Velocity (km/s)", "RdBu_r"),
@@ -395,7 +401,7 @@ def fig_maps():
 @figure("rend3d")
 def fig_rend3d():
     from bbarolo import Rend3D
-    res = Rend3D(CUBE, mask="THRESHOLD", threshold=0.01, rendangle=180).run(threads=4, write=False)
+    res = Rend3D(CUBE, mask="THRESHOLD", threshold=0.01, rendangle=180).run(threads=4)
     cube = np.asarray(res.image.data, float)
     fig, axs = plt.subplots(1, 4, figsize=(10, 3))
     for ax, ang in zip(axs, (0, 60, 120, 179)):
@@ -410,6 +416,14 @@ def fig_rend3d():
 # (end of maps and utilities)
 
 
+# ---------------------------------------------------------------- examples: NGC 2403 3DFIT, simulated cubes
+# (end of examples 1)
+
+
+# ---------------------------------------------------------------- examples: Bayesian fit, GalMod3D
+# (end of examples 2)
+
+
 def find_cube(examples):
     cands = [examples, os.environ.get("BBAROLO_EXAMPLES"), os.path.join(os.path.dirname(REPO), "examples")]
     for d in cands:
@@ -419,10 +433,11 @@ def find_cube(examples):
 
 
 def main():
-    global CUBE
+    global CUBE, OUT
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("names", nargs="*", help="the figures to make (default: all)")
     ap.add_argument("--examples", help="the folder of ngc2403.fits")
+    ap.add_argument("--out", help="the folder of the PNG files (default: docs/figures)")
     ap.add_argument("--list", action="store_true", help="list the figures and exit")
     a = ap.parse_args()
     if a.list:
@@ -432,6 +447,8 @@ def main():
     if unknown:
         sys.exit(f"Unknown figures: {', '.join(sorted(unknown))}. Known: {', '.join(FIGURES)}")
     CUBE = find_cube(a.examples)
+    if a.out:
+        OUT = os.path.abspath(a.out)
     os.makedirs(OUT, exist_ok=True)
     for name in a.names or FIGURES:
         t = time.time()

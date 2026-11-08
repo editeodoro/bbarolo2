@@ -103,7 +103,8 @@ As for those errors, $\varepsilon$ is not a statistical confidence level.
 {ref}`PLOTS <par-all-plots>`: one panel per ring, four per row, with $100\,\varepsilon$ (percent) in colour,
 $P_1$ on the horizontal axis and $P_2$ on the vertical one, contours at 2, 5, 10 and 30% (drawn on the map
 smoothed with a Gaussian of one grid cell), and a cross at the minimum. In Python, the result of
-{class}`bbarolo.SpacePar` holds the cube (`space`) and the plots (`plots`).
+{class}`bbarolo.SpacePar` holds the cube (`space`) and the engine (`spacepar`), and `write()` writes the files
+and the plot.
 
 :::{note}
 The map of a ring holds only that ring, with the other parameters fixed: the minimum of SPACEPAR is that of
@@ -141,4 +142,4 @@ of $\phi$ and $V_\mathrm{rot}$, or from its bounds (DELTAVROT, DELTAINC, DELTAPA
   (the cube of $\varepsilon$ and the plot script).
 - `bbarolo/galfit.py`: `Galfit._init_from_cube` and `setup` (rings, mask, normalisation), `getFuncValue` and
   the numba kernel `_norm` (the residual).
-- `bbarolo/tasks.py`: the task (`_step_spacepar`) and the Python class `SpacePar`.
+- `bbarolo/tasks.py`: the task (`_compute_spacepar`, `_write_spacepar`) and the Python class `SpacePar`.

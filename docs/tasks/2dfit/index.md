@@ -85,8 +85,8 @@ masked to the pixels of the data.
 ## Outputs
 
 The files are written in the output folder ({ref}`OUTFOLDER <par-all-outfolder>`, by default
-`output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. In Python they are also
-attributes of the {class}`~bbarolo.Result`:
+`output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. In Python, `run()` keeps
+them in memory as attributes of the {class}`~bbarolo.Result`, and `res.write()` writes the files:
 
 | File | `Result` | Content |
 |---|---|---|
@@ -99,7 +99,8 @@ attributes of the {class}`~bbarolo.Result`:
 The `Result` also has `ringmodel`, the fitting engine, which holds the errors of the parameters.
 
 The rings table has one row per ring: the radius (pixels and arcsec), VSYS, VROT and the radial velocity
-VEXP (km/s), PA and INC (degrees), and the centre XPOS and YPOS (pixels). It has no errors.
+VEXP (km/s), PA and INC (degrees), and the centre XPOS and YPOS (pixels). It has no errors. In the `Result`,
+`rings` has all the rings at full precision, with NaN in those whose fit failed.
 
 ## More
 

@@ -270,4 +270,4 @@ The moment, rms and S/N maps are otherwise equal to those of 1.8 to float precis
   kernels `_rms_iterative` and `_rms_one`, and `getAllMoments` (the maps used by other tasks).
 - `bbarolo/image.py`: `Image2D` (headers and FITS output, `extractGlobalSpectrum`).
 - `bbarolo/bbutils.py`: `AlltoVel`, `DeltaVel` (velocities and channel width), `FluxtoJyBeam`.
-- `bbarolo/tasks.py`: `_step_maps` (the task) and the `Maps` class.
+- `bbarolo/tasks.py`: `_compute_maps`, `_write_maps` (the task) and the `Maps` class.

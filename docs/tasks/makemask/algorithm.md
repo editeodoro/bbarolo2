@@ -140,5 +140,5 @@ The full list is in {doc}`../../reference/changes`.
 - `bbarolo/cube.py`: `Cube.BlankMask` (all the types, `_ENLARGE` and the output), `Cube._maskBeam` (the
   new beam of the smoothed masks), `Cube.search`, `Cube.setCubeStats`.
 - `bbarolo/search.py`: `Search.LargestDetection`. `bbarolo/smooth.py`: `Smooth3D`, `SpectralSmooth3D`.
-- `bbarolo/tasks.py`: `_step_makemask`, `MakeMask`. `bbarolo/params.py`: the check of MASK in
+- `bbarolo/tasks.py`: `_compute_makemask`, `write_step` (writes the mask), `MakeMask`. `bbarolo/params.py`: the check of MASK in
   `checkPars`.
