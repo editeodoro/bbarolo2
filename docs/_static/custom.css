@@ -1,11 +1,21 @@
 /* BBarolo documentation: small additions to pydata-sphinx-theme */
-:root {
-  --pst-color-primary: #8b1a1a;          /* Barolo red */
+/* The BBarolo colour, firebrick #B22222. In dark mode a lighter tint of the same hue, for a contrast of at
+   least 4.5:1 on the dark backgrounds (#B22222 itself is 2.7:1). The highlights (hover of the buttons) and the
+   links in code (a > code) replace the teal and purple of the theme. The selectors are those of the theme
+   (a plain :root is less specific, and the theme's light colours would win). */
+html[data-theme="light"], html:not([data-theme]) {
+  --pst-color-primary: #B22222;                  /* 6.7:1 on white */
+  --pst-color-primary-highlight: #8b1a1a;
+  --pst-color-link-higher-contrast: #8b1a1a;
   --pst-color-secondary: #c0712b;
+  --pst-color-secondary-highlight: #925621;
 }
 html[data-theme="dark"] {
-  --pst-color-primary: #e0706a;
+  --pst-color-primary: #e67f7f;                  /* 6.5:1 on the background, 4.8:1 on the code blocks */
+  --pst-color-primary-highlight: #eb9898;
+  --pst-color-link-higher-contrast: #eb9898;
   --pst-color-secondary: #e3a063;
+  --pst-color-secondary-highlight: #e9b586;
 }
 
 /* Landing page */
