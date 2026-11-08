@@ -110,7 +110,8 @@ with 3DFIT:
 - the models are ANALYTIC by default ({ref}`GALMODTYPE <par-bayesian3dfit-galmodtype>`): the expectation of
   the Monte-Carlo model, without its noise. The likelihood is then smooth in $\boldsymbol\theta$, which the
   sampler needs when $\sigma$ is the noise of the data, and a call is about twice as fast. `GALMODTYPE MC`
-  gives Monte-Carlo models, with the same seed in every evaluation;
+  gives Monte-Carlo models, with the same seed in every evaluation (the clouds outside the box below still
+  draw their random deviates, so the model in the box is a crop of the model of the whole cube);
 - the model is one disk of all the rings, with one set of rings (no second stage) and the engine on one
   thread (the parallelism is in the processes of the sampler);
 - the model is computed in a box around the centre of the last ring that contains the disk out to its outer
@@ -147,10 +148,12 @@ $$
 
 - The pixels are those of the likelihood region with at least one voxel of the likelihood and
   $s(\mathbf x) > 0$; at least $2N_\mathrm r$ are needed.
-- Column $j = N_\mathrm r + 1$ is an exterior annulus, from the outer edge of the rings $R_\mathrm{out}$ to
+- Column $j = N_\mathrm r + 1$ is an exterior annulus, from the outer edge of the disk $R_\mathrm{out}$ to
   two beams beyond it (centred at $R_{N_\mathrm r+1} = R_\mathrm{out} + F$, where $F$ is the beam FWHM in
-  arcsec), with the geometry of the last ring. It takes the emission beyond the last ring that falls in the
-  region, which the last ring would otherwise absorb. Its density is not used.
+  arcsec), with the geometry of the last ring. $R_\mathrm{out}$ is the outer edge of the rings, or RADMAX
+  when it is the edge of the disk (`radmax=edge` or `taper`, below) and lies inside it. The annulus takes the
+  emission beyond the disk that falls in the region, which the last ring would otherwise absorb. Its density
+  is not used.
 - $A_{\mathbf xj} = K_j(\mathbf x)/s(\mathbf x)$ and $\lVert\cdot\rVert$ is the Frobenius norm.
   $L$ is the $(N_\mathrm r - 1)\times(N_\mathrm r + 1)$ matrix of second differences on the radii, with
   $h_i = R_i - R_{i-1}$:
@@ -167,6 +170,10 @@ $$
   data weight of a ring, independent of the units and of the signal-to-noise ratio. Rings narrower than the
   beam are nearly degenerate once convolved, and without this term noise and non-axisymmetric structure make
   the profile oscillate from ring to ring.
+
+The data map sums the voxels of the likelihood, while the maps $K_j$ sum all the channels: the profile
+assumes that the voxels of the likelihood hold the whole line. This holds with the default dilated mask (the
+signal outside it is below 0.1%), not with `dilation` (0, 0) (about 20% outside).
 
 The problem is reduced by a QR factorisation to an $(N_\mathrm r+1)$-square system and solved with the NNLS
 algorithm (Lawson & Hanson 1974). The profile is recomputed at every evaluation when INC, PA, XPOS, YPOS,
@@ -325,15 +332,17 @@ it is conservative (see [Validation](#validation)).
 ### Smoothness penalties (Python only)
 
 In Python, `like_kwargs=dict(lambdas={'vrot': λ, ...})` (or `f.lambdas`) adds a penalty on the second
-derivative of the parameters that are free in each ring:
+derivative, with respect to radius, of the parameters that are free in each ring:
 
 $$
 P(\boldsymbol\theta) = \frac{1}{2}\sum_k \lambda_k \sum_j
-\left(\frac{p_{k,j+1} - 2p_{k,j} + p_{k,j-1}}{\Delta_1^2}\right)^2 ,
+\left[\frac{2}{h_j + h_{j+1}}\left(\frac{p_{k,j+1} - p_{k,j}}{h_{j+1}}
+- \frac{p_{k,j} - p_{k,j-1}}{h_j}\right)\right]^2 ,
 $$
 
-where $p_{k,j}$ is parameter $k$ in ring $j$ and $\Delta_1 = R_2 - R_1$ (arcsec). For VROT a value
-$p_{k,0} = 0$ is added, which pulls the rotation curve towards zero at the centre. $\lambda_k \ge 0$ (default
+where $p_{k,j}$ is parameter $k$ in ring $j$, $h_j = R_j - R_{j-1}$ (arcsec) and $j$ runs over the inner
+rings. For VROT a node $p_{k,0} = 0$ at $R_0 = 0$ is added, which pulls the rotation curve towards zero at the
+centre without penalising a curve that rises linearly from it. $\lambda_k \ge 0$ (default
 0) is in arcsec⁴ per squared unit of the parameter. The penalty is not multiplied by $f$.
 
 ### The residuals of 3DFIT (`bbres`)
@@ -467,22 +476,23 @@ likelihood and recomputes the best-fit rings, the density profile and its errors
 
 ## Validation
 
-The defaults were tested on simulated disks (`performance/bayes_coverage.py`, `performance/radmax.py`):
-GALMOD models (ANALYTIC) with noise convolved with the beam and Hanning-smoothed, flat disks with INC
-30–75°, radius 3, 5 and 8 beams and peak S/N 5–40, plus warped, thick and lagging disks; 12 disks per case
-(22 at 3 beams and S/N 20), fitted with nautilus, VROT in each ring, VDISP, INC and PA free, the centre,
-VSYS and Z0 fixed at the true values. These numbers come from simulated disks, which the model describes
-exactly; real galaxies add model mismatch.
+The defaults were tested on simulated disks (`performance/bayes_coverage.py`, `performance/radmax.py`): GALMOD
+models (ANALYTIC) with noise convolved with the beam and Hanning-smoothed, flat disks with INC 30–75°, radius
+3, 5 and 8 beams and peak S/N 5–40, plus warped, thick and lagging disks; 12 disks per case (144 fits, one
+failed: at S/N 5 SEARCH found no source), fitted with nautilus, VROT in each ring, VDISP, INC and PA free, the
+centre, VSYS and Z0 fixed at the true values. These numbers come from simulated disks, which the model
+describes exactly; real galaxies add model mismatch.
 
-- The medians are more accurate than 3DFIT on the same cubes: at 3 beams and S/N 20, the scatter of the
-  errors is 6.7 km/s on VROT (3DFIT: 10.1), 1.2° on INC (2.3°) and 0.7° on PA (1.9°). At 5 and 8 beams the
+- The medians are more accurate than 3DFIT on the same cubes: at 3 beams and S/N 20 (12 fits), the scatter of
+  the errors is 6.5 km/s on VROT (3DFIT: 10.1), 1.2° on INC (2.3°) and 0.7° on PA (1.9°). At 5 and 8 beams the
   INC of 3DFIT is biased by −1.8° and −3.0°, the posterior median by −0.3° and −0.4°.
 - The credible intervals are conservative. The true VROT falls within the 68% interval in 92–100% of the
   cases: the intervals are 2–3 times wider than the actual errors. Those of INC and PA are up to twice too
   wide at 3 beams. The factor $f$ is exact only for a signal smoother than the beam.
-- VDISP is biased low, by 0.4–1.6 km/s at S/N 20–40 (coverage 0.42–0.75) and 3.7 km/s at S/N 10, with the
-  data in the dilated mask or in all the voxels, and also with the true density profile; the cause is not
-  yet known. At S/N 5, INC is biased by −7.5° (3DFIT: +5.0°).
+- VDISP is biased low, by 0.4–1.6 km/s at S/N 20–40 (coverage 0.25–0.75), with the data in the dilated mask
+  or in all the voxels, and also with the true density profile, and by 3.7 ± 1.6 km/s at S/N 10 (true VDISP
+  10–22 km/s; coverage 0.83; 3DFIT −0.9 ± 3.4 km/s); the cause is not yet known. INC is biased by +2.3° at
+  S/N 10 and by −7.5° at S/N 5 (3DFIT: +5.0°).
 - Monte-Carlo fits, thick and lagging disks and warps (INC and PA free in each ring) behave as flat disks.
 - On the same disks, the likelihood of the original Bayesian module (the data times the mask, the observed
   density profile) gave VDISP 51% too low and INC about 2° too low, with $\chi^2_\mathrm{red} \approx 5$ at
@@ -528,6 +538,11 @@ on top of the C++ library. With respect to it:
   plots, INDISK, `run_geometry` with the noise of the map in each pixel (it used an rms of 1 and data
   scaled by 1/10);
 - dynesty runs its static sampler by default (it was the dynamic one);
+- the smoothness penalties (`lambdas`) are second derivatives on the radii of the rings, with VROT 0 at
+  $R = 0$ (they used the separation of the first two rings for all the rings, and put the zero of VROT one
+  separation inside the first ring);
+- MC models in the box of the likelihood are crops of the model of the whole cube (the clouds outside the
+  box drew no velocity deviates, so the rest of the disk was another realisation);
 - the initial rings no longer change during the sampling (each evaluation wrote its values into them, so a
   second run started from the last sample), and the parameters of a function of radius may be negative.
 

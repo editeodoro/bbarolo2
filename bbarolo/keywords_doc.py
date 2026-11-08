@@ -624,9 +624,9 @@ is centred on a radius, with a width equal to the distance to the next radius, s
 rings. `FREE` selects the free parameters among `VROT`, `INC`, `PA`, `XPOS`, `YPOS`, `VSYS`, `VRAD`
 and `ALL` (the others are ignored); a free centre is fitted in each ring.
 
-The pixels within 15° of the minor axis are not used (`DVDZ`, if given, sets this angle, as in C++),
-and the others are weighted as set by `WFUNC`. `SIDE` `A` or `R` fits one half of the galaxy, with
-`VSYS`, `XPOS` and `YPOS` fixed. The rings are fitted in parallel on `THREADS` threads.
+The pixels within `FREEANGLE` (15° by default) of the minor axis are not used (BBarolo 1.8 read this
+angle from `DVDZ`), and the others are weighted as set by `WFUNC`. `SIDE` `A` or `R` fits one half of
+the galaxy, with `VSYS`, `XPOS` and `YPOS` fixed. The rings are fitted in parallel on `THREADS` threads.
 
 The outputs are the table `<prefix>_2dtrm.txt` (radius in pixels and arcsec, VSYS, VROT, VEXP (the
 radial velocity), PA, INC, XPOS and YPOS of each ring) and the model velocity field

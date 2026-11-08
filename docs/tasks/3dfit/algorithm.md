@@ -94,8 +94,9 @@ parameters, the fixed value for the others. The values come, in order of precede
    = 0$, $\Sigma = 1$, $V_\mathrm{vert} = 0$, DVDZ $= 0$, ZCYL $= 0$.
 
 An estimated value is the same in all the rings. The initial rings are written in
-`<prefix>_rings_initial.txt`; the screen summary marks each value as given (i), default (d) or estimated
-(e). Then, with $\phi$ free, a 2D fit may refine $\phi$ and $V_\mathrm{rot}$ ring by ring (see below).
+`<prefix>_rings_initial.txt`, before the beam-wide rings of REVERSE and the refinement of $\phi$ (below); the
+screen summary marks each value as given (i), default (d) or estimated (e). Then, with $\phi$ free, a 2D fit
+may refine $\phi$ and $V_\mathrm{rot}$ ring by ring (see below).
 
 ### Estimates from the data
 
@@ -137,7 +138,8 @@ intensity map and the velocity field $V(x, y)$, the intensity-weighted mean velo
   applied when $R_\mathrm{max}\cos i - B > B$ and, above 75°, also $R_\mathrm{max} - B > 9B$. The
   inclination becomes 80° if $2R_\mathrm{max}\cos i < B$, and 25° if it is below 10°.
 - Rings: $\Delta R = B$, or $B/2$ if that gives fewer than 20 rings within $R_\mathrm{max}$; $N =
-  \operatorname{round}(R_\mathrm{max}/\Delta R)$, minus one if $N > 4$.
+  \operatorname{round}(R_\mathrm{max}/\Delta R)$, minus one if $N > 4$. With RADSEP given alone, $\Delta R$
+  is RADSEP and $N$ follows from the same rule, so the rings cover the estimated extent of the disk.
 - $V_\mathrm{rot} = W_{50}/2$, divided by $\sin i$ only if $i > 40^\circ$.
 - With more than 3 rings, the estimates are refined with a 2D tilted-ring fit of the velocity field
   (Begeman 1989) on rings one pixel wide, with $V_\mathrm{sys}$, $V_\mathrm{rot}$, $\phi$ and the centre free,
@@ -182,15 +184,17 @@ of 3DFIT, refines the initial $\phi$ and $V_\mathrm{rot}$ of each ring. The velo
 source when the parameters were estimated, otherwise the first moment of the cube within the mask. Only
 $V_\mathrm{rot}$ and $\phi$ are free, with weights $\cos^2\theta$ and the pixels within 15° of the minor axis
 left out. The fitted $\phi$ and $V_\mathrm{rot}$ replace the initial values of rings 2 to $N$ where they are
-finite (and $V_\mathrm{rot} > 0$); ring 1 takes the $\phi$ of ring 2. The fit is written in
+finite (and $V_\mathrm{rot} > 0$); ring 1 takes the $\phi$ of ring 2. $V_\mathrm{rot}$ is replaced only if it
+is free: a fixed rotation velocity is kept. The fit is written in
 `<prefix>_2drings.txt`; `<prefix>_rings_initial.txt` has the values before this step.
 
 ### Reverse-cumulative rings
 
 With {ref}`REVERSE <par-3dfit-reverse>` `true`, or `auto` and a median initial inclination above 75°, the
 rings are fitted from the outside inwards (see below). If the rings are narrower than the beam ($\Delta R <
-B$), they are replaced by $\lceil R_N/B \rceil$ rings of width $B$ at the radii $(k - \tfrac12)B$, each with
-the initial values of the ring with the same index (of the last ring beyond $N$).
+B$), they are replaced by $\lceil R_N/B \rceil$ rings of width $B$ at the radii $(k - \tfrac12)B$, with the
+initial values of the given rings interpolated linearly at the new radii (the values of the first or last ring
+beyond them; $\phi$ is unwrapped first).
 
 ## The mask
 
@@ -219,7 +223,9 @@ At each evaluation of the residuals, the model of ring $k$ alone is built with t
 from $R_k - w_k^-$ to $R_k + w_k^+$ with constant parameters, filled with sub-rings 0.75 pixels wide
 ({doc}`../galmod/algorithm`, with {ref}`GALMODTYPE <par-3dfit-galmodtype>` `MC` or `ANALYTIC`). Monte Carlo
 models use the same seed ({ref}`ISEED <par-3dfit-iseed>`) at every evaluation, so that the residual is a
-deterministic function of the parameters. With {ref}`EMPTY <par-3dfit-empty>` `false`, the model of a ring
+deterministic function of the parameters. The clouds that fall outside the box (below) still draw their
+random velocity deviates, so the Monte Carlo model in the box is the crop of the model of the whole cube with
+the same seed. With {ref}`EMPTY <par-3dfit-empty>` `false`, the model of a ring
 would be a disk filled from the centre: keep it `true` for the fits.
 
 **The neighbouring rings.** The model holds only ring $k$. The emission of the neighbouring rings that the
@@ -245,9 +251,11 @@ below $10^{-12}$ are then set to zero, which decides where the model "has emissi
 {ref}`SM <par-3dfit-sm>` `false` the models are not convolved. In the fits, $\Sigma$ is always a flux per
 unit area (flux units of the cube times km/s per arcsec²).
 
-**The normalisation.** {ref}`NORM <par-3dfit-norm>` takes up to three values: for the first stage, the
-second stage and the final model (one value is used for all; with two, the second is also that of the final
-model). Before the residuals are computed, the model $m_{xyz}$ of the ring is scaled:
+**The normalisation.** {ref}`NORM <par-3dfit-norm>` takes up to three values: for the first stage, the second
+stage and the final model (one value is used for all; with two, the second is also that of the final model).
+`AZIMUTHAL` is the same as `AZIM`. `BOTH` is accepted only as the third value: in the first two it becomes
+`LOCAL`, with a warning, so `NORM BOTH` gives `LOCAL` fits and a `LOCAL` final model. Before the residuals are
+computed, the model $m_{xyz}$ of the ring is scaled:
 
 - `LOCAL`: each spectrum is scaled to the positive flux of the data in the mask in that pixel,
 
@@ -361,7 +369,7 @@ number in $[0, 1)$:
 | Parameter | Interval | Value outside it |
 |---|---|---|
 | VROT | $p^0 \pm$ {ref}`DELTAVROT <par-3dfit-deltavrot>`, $\ge 0$ | the bound $\mp u\,$DELTAVROT |
-| VDISP | {ref}`MINVDISP <par-3dfit-minvdisp>`–{ref}`MAXVDISP <par-3dfit-maxvdisp>` | bound $\mp u\sigma^0$ |
+| VDISP | {ref}`MINVDISP <par-3dfit-minvdisp>`–{ref}`MAXVDISP <par-3dfit-maxvdisp>` | bound $\mp u\,s$ |
 | INC | $p^0 \pm$ {ref}`DELTAINC <par-3dfit-deltainc>`, within 0° to 90° | the bound |
 | PA | $p^0 \pm$ {ref}`DELTAPA <par-3dfit-deltapa>`, within −360° to 360° | the bound |
 | Z0 | 0 to 1000 arcsec | $p^0$ |
@@ -369,6 +377,9 @@ number in $[0, 1)$:
 | VSYS | the velocity range of the cube | $p^0$ |
 | VRAD | −500 to 500 km/s | $p^0$ |
 | DENS | none | |
+
+For VDISP, $s = \min(\sigma^0,\ \mathrm{MAXVDISP} - \mathrm{MINVDISP})$, so the new value stays within the
+interval; MINVDISP must be smaller than MAXVDISP (an error of the checks otherwise).
 
 The random numbers of each ring come from a generator seeded with the stage and the ring, so that the
 results do not depend on the number of threads.
@@ -407,9 +418,11 @@ outside it (see *The model of a ring*).
 ## The second stage
 
 With {ref}`TWOSTAGE <par-3dfit-twostage>` (the default) and at least one of INC, PA, Z0, XPOS, YPOS and VSYS
-free, the geometry of the first stage is regularised: each of these free parameters, $p_k$ in the rings
-$k = 1, \dots, N$ (all the rings, also those not fitted, which keep their initial values), is replaced by a
-smooth function of radius chosen with {ref}`REGTYPE <par-3dfit-regtype>`:
+free, the geometry of the first stage is regularised: each of these free parameters is replaced by a smooth
+function of radius chosen with {ref}`REGTYPE <par-3dfit-regtype>`. The function is fitted to the values $p_k$
+of the rings that were fitted (*ok*) in the first stage, and in this section $N$ is their number and $k$ runs
+over them; the rings skipped, not converged, rejected or inside STARTRAD are left out. The function is then
+evaluated at the radii of all the rings:
 
 - `median`: the median of the $p_k$;
 - an integer $d$: the polynomial $\sum_{j=0}^{d} c_j R^j$ fitted by least squares to $(R_k, p_k)$; the rings
@@ -422,16 +435,18 @@ smooth function of radius chosen with {ref}`REGTYPE <par-3dfit-regtype>`:
   $$
 
   whose value at $t_k = (k-1)/(N-1)$ is assigned to ring $k$ (for evenly spaced radii the curve passes at
-  $R = R_k$ there);
+  $R = R_k$ there); when some rings were not fitted, the points of the curve at the $t_k$ are interpolated
+  linearly in $R$ at the radii of all the rings (the end values beyond the first and last ring fitted);
 - `auto` (the default): for INC and PA, a constant (degree 0) with $N \le 4$; otherwise, with the robust
   scatter $s = \mathrm{MADFM}/0.6745$ of the $p_k$, a straight line ($N < 10$) or a Bézier curve
   ($N \ge 10$) if $s > 3^\circ$, the median if $s \le 3^\circ$. VSYS, XPOS, YPOS and Z0: the median.
 
-These parameters are then fixed at the regularised values, and all the rings are fitted again for the free
-VROT, VDISP and VRAD (and DENS with `FREE ALL`), with the second value of NORM. Each ring starts from its
-first-stage values, which are also the centres of the DELTAVROT intervals. The results, with the
-regularised geometry, are written in `<prefix>_rings_final2.txt`. If a polynomial fit fails, there is no
-second stage.
+These parameters are then fixed at the regularised values, and all the rings (from STARTRAD) are fitted
+again for the free VROT, VDISP and VRAD (and DENS with `FREE ALL`), with the second value of NORM. Each ring
+starts from its first-stage values, which are also the centres of the DELTAVROT intervals. The results, with
+the regularised geometry, are written in `<prefix>_rings_final2.txt`. If a polynomial fit fails, or no ring
+was fitted in the first stage, there is no second stage: the first stage is final, and the rings not fitted
+in it are empty (DENS = 0) in the final model.
 
 ## Errors
 
@@ -452,7 +467,8 @@ after its fit (in both stages), one parameter $p$ at a time, with the others at 
    closest above; with roots on one side only, the interval is symmetric.
 5. An error not found is replaced by the mean of the lower (or upper) errors of the other free parameters of
    the ring, whatever their units. VDISP errors smaller than half the dispersion of a channel,
-   $\Delta v/(4\sqrt{2\ln 2})$, are replaced by that value plus a random number between 0 and 1 km/s.
+   $\Delta v/(4\sqrt{2\ln 2})$, are replaced by that value plus a random number between 0 and 1 km/s. With
+   `FREE ALL` the errors of DENS are not meaningful, since DENS has no interval to sample.
 
 The lower (negative) and upper errors are written in the columns `E_VROT1`, `E_VROT2`, ... of the ring files.
 These intervals are not statistical confidence intervals: they measure how fast the residual grows when
@@ -491,8 +507,8 @@ rescaled to that rms) is also written. The outputs, in the output folder:
 
 ### Asymmetric drift
 
-With {ref}`ADRIFT <par-3dfit-adrift>`, the circular velocity is computed from the final rings, from STARTRAD
-outwards, following Iorio et al. (2017):
+With {ref}`ADRIFT <par-3dfit-adrift>`, the circular velocity is computed from the final rings that were fitted
+(*ok*), from STARTRAD outwards (at least two are needed), following Iorio et al. (2017):
 
 $$
 V_c^2 = V_\mathrm{rot}^2 + V_A^2, \qquad
@@ -537,11 +553,18 @@ These are properties of the algorithm, shared by BBarolo 1.8.
 - **Bugs fixed** that also affect 1.8: with `FREE ALL` and TWOSTAGE, DENS stayed free in the second stage
   without being counted, so the simplex was degenerate (and the error columns misaligned); the refinement of
   the PA read beyond the end of the 2D fit for the last ring; cubes with spatial axes in arcsec or arcmin
-  gave wrong beams and ring widths.
+  gave wrong beams and ring widths. Also: the second stage regularised all the rings, also those not fitted,
+  with their initial or rejected values, and these rings kept their DENS in the final model when the
+  regularisation failed (ADRIFT used them too); VDISP values out of bounds were redrawn as the bound
+  $\mp u\sigma^0$, which could cross the other bound; the beam-wide rings of REVERSE took the initial values
+  of the ring with the same index; Monte Carlo models in a box were not crops of the model of the whole cube
+  when clouds fell outside the box; the PA refinement replaced a fixed VROT; RADSEP alone (without NRADII)
+  kept the number of the estimated rings, so their extent scaled with RADSEP; `NORM AZIMUTHAL` was used as
+  `LOCAL`.
 - **Outputs**: no DISTANCE, so the ring files have no RAD(Kpc) and Z0(pc) columns (VROT is column 2); all the
   file names start with `<prefix>_`; RINGFILE finds the columns by their names (files of 1.8 are read).
-- **Checks**: a VSYS outside the velocity range of the cube and unknown names in FREE are errors; rejected
-  rings say why.
+- **Checks**: a VSYS outside the velocity range of the cube, unknown names in FREE and MINVDISP ≥ MAXVDISP
+  are errors; rejected rings say why.
 
 The full list is in {doc}`../../reference/changes`.
 

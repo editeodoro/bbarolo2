@@ -202,8 +202,9 @@ $(N_c n_v)^{-1/2}$.
 initialised from the seed with splitmix64; the normal deviates from the ziggurat method of Marsaglia &
 Tsang (2000). The generator is started from {ref}`ISEED <par-galmod-iseed>` at every model: the same
 parameters give the same model, and all the models of a fit share the same random numbers, so that the
-residuals change smoothly with the parameters. A cloud that falls outside the cube draws no velocity
-deviates, so the random sequence depends on the box in which the model is built.
+residuals change smoothly with the parameters. A cloud that falls outside the box in which the model is
+built (the cube, or the box of a single ring in the fits) still draws the $n_v$ normal deviates of its
+sub-clouds, so the model in a box is the crop of the model of the whole cube with the same seed.
 
 **Threads.** The final models are built with {ref}`THREADS <par-all-threads>` threads: the sub-rings are
 split into as many consecutive chunks (when there are at least two sub-rings per thread), chunk $k$
@@ -242,8 +243,8 @@ on a stratified grid and each deposits its line profile integrated over the chan
 
 Each sample is projected on its nearest pixel, as a MC cloud, and carries the flux
 $\Sigma_j A_j f_L/(2 n_\theta n_z)$. Its line is a Gaussian of dispersion
-$\sigma = \sqrt{\sigma_{\rm gas}^2 + \sigma_{\rm instr}^2}$ centred on its velocity $v$ (or on
-$v + \Delta v_\ell$ for line $\ell$, below), integrated over each channel:
+$\sigma = \sqrt{\sigma_{\rm gas}^2 + \sigma_{\rm instr}^2}$ centred on its velocity $v$, integrated over each
+channel:
 
 $$
 f_k = \left| \Phi\!\left(\frac{u_{k+1/2} - v}{\sigma}\right)
@@ -251,10 +252,10 @@ f_k = \left| \Phi\!\left(\frac{u_{k+1/2} - v}{\sigma}\right)
 $$
 
 where $\Phi$ is the standard normal cumulative distribution and $u_{k\pm1/2}$ are the velocities of the
-edges of channel $k$ (the spectral coordinate at pixel $k \pm 1/2$ converted to velocity, so the
-channels need not be uniform in velocity). The channel $k$ receives $\Sigma_j A_j f_L/(2 n_\theta n_z)
-\, f_k \, \kappa_k\, I_\ell$. The profile is computed for the channels within
-$K = \lfloor 5\sigma/\Delta v_{\min} \rfloor + 2$ of the central one ($\Delta v_{\min}$: the narrowest
+edges of channel $k$ (the spectral coordinate at pixel $k \pm 1/2$ converted to velocity, in the frame of line
+$\ell$ with several lines, below; so the channels need not be uniform in velocity). The channel $k$ receives
+$\Sigma_j A_j f_L/(2 n_\theta n_z) \, f_k \, \kappa_k\, I_\ell$. The profile is computed for the channels
+within $K = \lfloor 5\sigma/\Delta v_{\min} \rfloor + 2$ of the central one ($\Delta v_{\min}$: the narrowest
 channel); beyond $5\sigma$ the line holds less than $3\times10^{-7}$ of its flux. $\Phi$ is tabulated in
 steps of $1/512$ for $|t| \le 6$ and interpolated linearly (error below $5\times10^{-7}$). A line with
 $\sigma = 0$ falls in one channel. ANALYTIC models do not use CDENS, CMODE, NV or ISEED (3DFIT uses CDENS
@@ -287,12 +288,14 @@ wavelength axis $\nu_0 = c/[\lambda_{\rm rest}(1+z)]$ with $\lambda_{\rm rest}$ 
 {ref}`RESTWAVE <par-galmod-restwave>`, or $\nu_0 = c/\text{CRVAL3}$ without RESTWAVE.
 
 **Several lines.** With several values of RESTWAVE (or RESTFREQ), every cloud emits each line $\ell$
-with the relative intensity $I_\ell$ ({ref}`RELINT <par-galmod-relint>`; $I = 1$ for a single line) at
-the velocity $v + \Delta v_\ell$, where $\Delta v_\ell$ is the velocity of the observed line,
-$\lambda_\ell(1+z)$ or $\nu_\ell/(1+z)$, in the frame of the first line ($\Delta v_1 = 0$). The offsets
-are fixed: the separation of the lines does not scale with the velocity of each cloud, a difference of
-order $\Delta v_\ell\, v/c$. Several lines are not modelled on a velocity axis. In the MC model the
-sub-clouds of a cloud have the same velocity deviate in all the lines.
+with the relative intensity $I_\ell$ ({ref}`RELINT <par-galmod-relint>`; $I = 1$ for a single line).
+Each line has its own reference frequency, $\nu_{0,\ell} = c/[\lambda_\ell(1+z)]$ or
+$\nu_{0,\ell} = \nu_\ell/(1+z)$, and the line $\ell$ of a cloud at velocity $v$ falls at $\nu_\ell(v)$, the
+formula above with $\nu_{0,\ell}$ in place of $\nu_0$: all the lines of a cloud share its Doppler factor,
+and the velocities refer to the first line ($\nu_{0,1} = \nu_0$). In the MC model the sub-clouds of a cloud
+have the same velocity deviate in all the lines; in the ANALYTIC model the channel edges $u_{k\pm1/2}$ of
+line $\ell$ are computed with $\nu_{0,\ell}$. On a velocity axis only one line is modelled, with intensity 1
+and a warning.
 
 **Instrumental broadening.** The line of every cloud is a Gaussian of dispersion
 $\sigma = \sqrt{\sigma_{\rm gas}^2 + \sigma_{\rm instr}^2}$, with
@@ -366,10 +369,10 @@ column density the model is then multiplied by the beam area in pixels (above).
 (galmod-normalisation)=
 ## Normalisation of the final model
 
-The final model is normalised to the data as set by {ref}`NORM <par-galmod-norm>` (default `AZIM`; with
-two values, the second is used). The normalisations use the data within the mask
-({ref}`MASK <par-galmod-mask>`), which GALMOD builds when it writes its outputs or when NORM is not
-`NONE`.
+The final model is normalised to the data as set by {ref}`NORM <par-galmod-norm>` (default `AZIM`; with two
+values, the second is used; `AZIMUTHAL` is the same as `AZIM`, other values become `LOCAL`). The
+normalisations use the data within the mask ({ref}`MASK <par-galmod-mask>`), which GALMOD builds when it
+writes its outputs or when NORM is not `NONE`.
 
 - **NONE**: no normalisation; the flux is set by DENS.
 - **AZIM** (azimuthal): the radial profile of the data in the rings is measured as by
@@ -443,6 +446,12 @@ described on this page: see {doc}`../galmod3d/index`.
   $\nu_\ell(1+z)$ instead of $\nu_\ell/(1+z)$); frequency axes in kHz, MHz, GHz and wavelength axes in
   nm; CUNIT3 = kms (taken as cm/s, an empty model); the channel width of radio velocities on a wavelength
   axis. Other velocity units are an error.
+- **Several lines** were shifted from the first by fixed velocity offsets, exact only for a cloud at velocity
+  0: each line now has its own reference frequency, so the lines of a cloud share its Doppler factor.
+- **MC models in a box**: clouds outside the box drew no velocity deviates, so the model of a box (the
+  single rings of 3DFIT and of BAYESIAN3DFIT) was not a crop of the model of the whole cube. Models of disks
+  inside the field with LTYPE 1–3 do not change.
+- **NORM AZIMUTHAL** was taken as `LOCAL`; it is `AZIM`.
 - **SPECRES** is new; LINEAR still sets the instrumental broadening when SPECRES is not given.
 - **Outputs** are named `<prefix>_<what>` (e.g. `<prefix>_mod_azim.fits`, `<prefix>_rings_model.txt`;
   1.8: `<prefix>mod_azim.fits`, `rings_model.txt`).
