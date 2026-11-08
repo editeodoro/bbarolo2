@@ -106,7 +106,7 @@ def simulate(g, cg, snr, seed, wd, hanning, kind="flat"):
     gm = GalMod(tmpl, radii=R, xpos=xc, ypos=xc, vsys=0., vrot=t["vrot"], vdisp=t["vdisp"], vrad=0., z0=z0,
                 dvdz=dvdz, inc=t["inc"], pa=t["pa"], dens=t["dens"], ltype=1, norm="NONE", mask="NONE",
                 galmodtype="ANALYTIC", threads=1, verbose=False)
-    clean = gm.model().data.astype(np.float64)
+    clean = gm.run().model.data.astype(np.float64)
     rms = clean.max() / snr
     noise = gm.diskmodel.addnoise(np.zeros_like(clean), 1., seed=seed).astype(np.float64)
     if hanning:
@@ -204,7 +204,8 @@ def fit3d(fn, R, xc, g, z0, dvdz, gtype, wd):
     r = FitMod3D(fn, radii=list(R), xpos=xc, ypos=xc, vsys=0., vrot=120., vdisp=15., inc=g["inc"], pa=g["pa"], z0=z0,
                  dvdz=dvdz, ltype=1, free="vrot vdisp inc pa", mask="SEARCH", galmodtype=gtype, twostage=False,
                  outfolder=os.path.join(wd, "fit3d"), verbose=0, plots=0, threads=1).run()
-    return {k: [float(x) for x in r.rings[c]] for k, c in (("radii", "radii"), ("vrot", "vrot"), ("vdisp", "vdisp"),
+    t = r.rings[np.asarray(r.rings["fitok"], bool)]        # (the rings fitted)
+    return {k: [float(x) for x in t[c]] for k, c in (("radii", "radii"), ("vrot", "vrot"), ("vdisp", "vdisp"),
                                                             ("inc", "inc"), ("phi", "pa"))}
 
 

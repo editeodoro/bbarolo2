@@ -12,8 +12,11 @@ likelihood. Read the relevant section of it before changing behaviour.
 ## Layout
 
 - `bbarolo/tasks.py`: the engine shared by the command line and Python. `STEPS` lists the tasks
-  in BBarolo's order; `BBcore`/`run_par` run them; the `Task` classes (`FitMod3D`, `GalMod`, ...)
-  build a `Param`, run `BBcore(par, collect=True)` and fill a `Result` (`_fill`).
+  in BBarolo's order, each a pair `compute(c, par) -> Outputs` (everything in memory, no file) and
+  `write(c, par, out)` (the files); `BBcore`/`run_par`/`run_steps` run them, computing then writing.
+  The `Task` classes (`FitMod3D`, `GalMod`, ...) build a `Param`, read the `Cube` and run
+  `run_steps(write=False)` into a `Result`; `Result.write()` replays the writes. Engines must not
+  write while computing: files made during a computation go to `Cube.add_output` (written by the task).
 - `bbarolo/keywords.py`: the parameter table. Every keyword is defined once in `KEYWORDS`
   (reader, `Param` attributes, tasks, help, aliases). New keywords go there.
   `bbarolo/params.py`: `Param`, `checkPars()` (port of `Param::checkPars`), BAYESIAN3DFIT parsers.

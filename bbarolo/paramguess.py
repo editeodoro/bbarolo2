@@ -380,8 +380,10 @@ class ParamGuess:
         tr.setoption(mpar, 3, 2, 15.)
         tr.ringfit(c.pars().threads if self.mode == "LEGACY" else 1, False, False)
         if self.mode == "LEGACY":
-            with open(c.pars().outFolder + c.pars().outPrefix + "_2drings.txt", "w") as f:
-                tr.printfinal(f, c.Head())
+            import io
+            buf = io.StringIO()
+            tr.printfinal(buf, c.Head())
+            c.add_output("_2drings.txt", buf.getvalue())
 
         def med(a):
             a = np.asarray(a[1:])
@@ -555,8 +557,8 @@ class ParamGuess:
         disp2 = np.median(m2[sel]) ** 2 - chw * chw / 12.
         self.vdisp = float(math.sqrt(max(disp2, 4.)))
 
-    def plotGuess(self, outfile="initial_guesses.pdf"):
-        """Diagnostic plot of the initial guesses (direct matplotlib version)."""
+    def plotGuess(self, suffix="_initialguesses.pdf"):
+        """Diagnostic plot of the initial guesses, kept in the cube for <prefix><suffix> (see Cube.add_output)."""
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
@@ -594,8 +596,8 @@ class ParamGuess:
                 f"R$_\\mathrm{{max}}$ = {axmaj:.2f} pix", f"V$_\\mathrm{{sys}}$ = {self.vsystem:.2f} km/s"]
         for i, s in enumerate(pstr):
             ax2.text(1.1, 0.97 - i * 0.08, s, va="top", transform=ax2.transAxes)
-        fig.savefig(c.pars().outFolder + outfile, bbox_inches="tight")
-        plt.close(fig)
+        plt.close(fig)                          # (the figure stays usable: it is saved by the task)
+        c.add_output(suffix, fig)
         return 0
 
 
@@ -689,7 +691,7 @@ def EstimateInitial(c, p):
     if p.VROT != "-1": ip.vrot = _given(p.VROT)
     else: ip.findRotationVelocity()
     if c.pars().plots >= 3:
-        ip.plotGuess(c.pars().outPrefix + "_initialguesses_0.pdf")
+        ip.plotGuess("_initialguesses_0.pdf")
     given = dict(xcentre=p.XPOS != "-1" and p.YPOS != "-1", inclin=p.INC != "-1", posang=p.PHI != "-1",
                  vsystem=p.VSYS != "-1", vrot=p.VROT != "-1")
     given["ycentre"] = given["xcentre"]
@@ -706,7 +708,7 @@ def EstimateInitial(c, p):
         ip.z0_given = _given(p.Z0) if p.Z0 != "-1" else default_z0(c.Head())
         ip.fitGeometry({k: not v for k, v in given.items()})
     if c.pars().plots >= 2:
-        ip.plotGuess(c.pars().outPrefix + "_initialguesses.pdf")
+        ip.plotGuess("_initialguesses.pdf")
     if verb:
         print("Done.")
     c.pars().verbose = verb

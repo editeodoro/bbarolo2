@@ -132,9 +132,10 @@ def _fit3d(args):
     try:
         with contextlib.redirect_stdout(io.StringIO()):
             t0 = time.perf_counter()
-            res = FitMod3D(row["file"], **kw).run(write=False)
+            res = FitMod3D(row["file"], **kw).run()
             out["time"] = time.perf_counter() - t0
         t = res.rings
+        t = t[np.asarray(t["fitok"], bool)]                # (the rings fitted)
         out.update(radii=list(map(float, t["radii"])), inc=list(map(float, t["inc"])), pa=list(map(float, t["pa"])),
                    vrot=list(map(float, t["vrot"])), vdisp=list(map(float, t["vdisp"])))
         if "rings_initial" in res:

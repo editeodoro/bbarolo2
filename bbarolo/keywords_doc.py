@@ -57,8 +57,8 @@ directory, and `~` is expanded.
 
 If not given, the outputs go to `output/<OBJECT>/` in the current directory, where `<OBJECT>` is the
 OBJECT keyword of the header (`NONE` if it is missing). Every run also writes there
-`<prefix>_params.par`, a parameter file with all the parameters of the run. In Python,
-`run(write=False)` writes into a temporary folder instead, deleted with the result.
+`<prefix>_params.par`, a parameter file with all the parameters of the run. In Python, `run()`
+writes nothing, and `write()` writes the outputs here (or in the folder it is given).
 """),
     'OUTPREFIX': dict(
         group='Outputs',
@@ -118,7 +118,7 @@ Whether plots are made (with matplotlib), and how many:
   `<prefix>_initialguesses.pdf`;
 - `3`: also `<prefix>_initialguesses_0.pdf`, the estimates before their refinement.
 
-In Python, `run(write=False)` makes no plots unless PLOTS is given.
+In Python, the plots are made by `write()` (its `plots` argument changes PLOTS).
 """),
     'BEAMFWHM': dict(
         group='Input',
@@ -1075,7 +1075,8 @@ used.
 The rms (flux units of the cube) of Gaussian noise added to the final model of 3DFIT and GALMOD: if it
 is not 0, the model with noise is also written to `<prefix>_mod_noise.fits`. The noise is convolved with
 the beam when the model is (`SM`), then scaled back to this rms per voxel; it changes at each run. In
-Python, `GalMod.model()` returns the model with noise (its `seed` makes the noise reproducible).
+Python, the model with noise is `models['noise']` of the Result of `GalMod.run()` (its `seed` makes the
+noise reproducible).
 SPACEPAR does not use it.
 """),
     'RINGFILE': dict(

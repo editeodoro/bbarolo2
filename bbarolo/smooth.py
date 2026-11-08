@@ -289,7 +289,9 @@ class Smooth3D:
             self.scalefac = 1                   # (units not per beam: the data are not rescaled)
         return self.smooth(c, OB, NB, bhi=Bhi, blo=Blo)
 
-    def fitswrite(self, outname=None):
+    def result(self):
+        """The smoothed cube (a Cube) as the SMOOTH task gives it: the new beam and the HISTORY cards in the
+        header, cropped to the BOX, and reduced by FACTOR with REDUCE."""
         from .cube import Cube
         c = self.cube
         p = c.pars()
@@ -302,23 +304,30 @@ class Smooth3D:
         h.setBmin(self.newbeam[1] / 3600.)
         h.setBpa(self.newbeam[2])
         h.calcArea()
-        name = p.smo_out if outname is None else outname
-        if name == "NONE":
-            name = p.outFolder + p.outPrefix + f"_s{int(round(self.newbeam[0]))}"
-            if p.getflagReduce():
-                name += "red"
-            name += ".fits"
         nb = f"{self.newbeam[0]:.6f} x {self.newbeam[1]:.6f} arcsec, pa = {self.newbeam[2]:.6f} deg"
         ob = f"{self.oldbeam[0]:.6f} x {self.oldbeam[1]:.6f} arcsec, pa = {self.oldbeam[2]:.6f} deg"
         h.Keys().append("HISTORY BBAROLO SMOOTHING: New beam " + nb)
         h.Keys().append("HISTORY BBAROLO SMOOTHING: Old beam " + ob)
         factor = int(math.floor(p.factor))
         if p.getflagReduce() and factor > 1:
-            red = out.Reduce(factor, "spatial")
-            red.fitswrite_3d(name, True)
-        else:
-            out.Head().setMinMax(np.nanmin(out.array), np.nanmax(out.array))
-            out.fitswrite_3d(name, True)
+            return out.Reduce(factor, "spatial")
+        out.Head().setMinMax(np.nanmin(out.array), np.nanmax(out.array))
+        return out
+
+    def outname(self):
+        """The file of the smoothed cube: SMO_OUT, or <outfolder><prefix>_s<new bmaj>[red].fits."""
+        p = self.cube.pars()
+        name = p.smo_out
+        if name == "NONE":
+            name = p.outFolder + p.outPrefix + f"_s{int(round(self.newbeam[0]))}"
+            if p.getflagReduce():
+                name += "red"
+            name += ".fits"
+        return name
+
+    def fitswrite(self, outname=None):
+        name = self.outname() if outname is None else outname
+        self.result().fitswrite_3d(name, True)
         return name
 
 
@@ -342,23 +351,33 @@ class SpectralSmooth3D:
             print(" Done!")
         return self.array
 
-    def fitswrite(self, templ, outname=""):
+    def result(self, templ):
+        """The smoothed cube (a Cube, with the header of the cube templ that was smoothed) as the SMOOTHSPEC
+        task gives it: a HISTORY card, and reduced spectrally with REDUCE."""
         from .cube import Cube
         p = templ.pars()
         out = Cube.fromArray(self.array, templ.Head(), p)
         out.Head().Keys().append(f"HISTORY BBAROLO SPECTRAL SMOOTHING: {self.windowtype} window of size {int(self.windowsize)} channels")
-        if outname == "":
-            outname = p.outFolder + p.outPrefix + f"_h{int(self.windowsize)}"
-            if p.getflagReduce():
-                outname += "_red"
-            outname += ".fits"
         if p.getflagReduce() and self.windowsize > 1:
             bins = int((self.windowsize + 1) / 2) if self.windowtype == "HANNING" else int(self.windowsize)
-            red = out.Reduce(bins, "spectral")
-            red.fitswrite_3d(outname, True)
-        else:
-            out.Head().setMinMax(np.nanmin(out.array), np.nanmax(out.array))
-            out.fitswrite_3d(outname, True)
+            return out.Reduce(bins, "spectral")
+        out.Head().setMinMax(np.nanmin(out.array), np.nanmax(out.array))
+        return out
+
+    def outname(self, templ):
+        """The file of the smoothed cube: <outfolder><prefix>_h<window size>[_red].fits."""
+        p = templ.pars()
+        outname = p.outFolder + p.outPrefix + f"_h{int(self.windowsize)}"
+        if p.getflagReduce():
+            outname += "_red"
+        return outname + ".fits"
+
+    def fitswrite(self, templ, outname="", result=None):
+        """Write the smoothed cube (result: the Cube of result(templ), if already computed)."""
+        p = templ.pars()
+        if outname == "":
+            outname = self.outname(templ)
+        (result if result is not None else self.result(templ)).fitswrite_3d(outname, True)
         if p.verbose:
             print(f" Spectrally-smoothed datacube written in {shortpath(outname)}")
         return outname

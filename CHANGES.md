@@ -361,6 +361,27 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **The Python tasks compute in memory; writing is a separate step.** `task.run()` (FitMod3D, GalMod,
+  Search, Maps, ...) writes nothing: its Result holds the outputs in memory (HDUs and Tables; the moment maps
+  and PV slices of a model are computed when first used). `res.write(outfolder=None, plots=None)`, or
+  `task.write(...)`, writes exactly the files of the command line, with the plots of PLOTS (an in-memory
+  cube is written as `<OBJECT>_input.fits`, the FITSFILE of `<prefix>_params.par`). The command line runs
+  the same code, each task computing and then writing, and its outputs are unchanged. Removed:
+  `run(write=False)` (and its temporary folder), `Result.open()`, `Result.plot()` (use `write(plots=True)`)
+  and `GalMod.model()` (use `GalMod(...).run().model`; `seed` is now an argument of `GalMod.run`, and the
+  model with noise is `models['noise']`). `bbarolo.run` still writes, as the command line.
+- **Ring tables in memory are at full precision and have all the rings**: `rings`, `rings_stage1` and
+  `rings_initial` of 3DFIT are built from the fit, not read back from the text files (3 decimals, failed
+  rings left out unless BADOUT): every ring is there, with a column `fitok` (False: the fit of the ring
+  failed), and `rotation_curve` and `plot_rings()` use the rings fitted. The 2DFIT table has NaN for the
+  rings not fitted, the GALMOD one also has VRAD. The text files are unchanged.
+- **BayesianBBarolo.run() writes nothing** (it wrote `<prefix>_rings_final1.txt`, and `<OBJECT>_input.fits`
+  for an in-memory cube); the new `BayesianBBarolo.write(outfolder=None, plots=None)` writes what the
+  BAYESIAN3DFIT task writes (best model and its outputs, rings with the posterior errors, samples, plots).
+- **Files written while computing are kept in memory** and written by the task: the mask (`BlankMask` no
+  longer writes `<prefix>_mask.fits`; `Cube.mask_hdu()`, `Cube.writeMask()`), `<prefix>_2drings.txt`,
+  `<prefix>_map_1st.fits` of the 2D fit, `<prefix>_rings_initial.txt`, `<prefix>_rings_final*.txt`, the plots of
+  the initial estimates and the cleaned cube of CHECKCUBE (`Cube.CheckCube` returns it).
 - **The position angle of the new beam of SMOOTH** (and of the SMOOTH masks) is that of the old beam when
   BPA is not given (it was 0°, also with FACTOR alone, which made the kernel of an elliptical beam
   skewed, or impossible: "unsuitable new beam" with FACTOR 1.2). Any value of BPA and OBPA is an angle:

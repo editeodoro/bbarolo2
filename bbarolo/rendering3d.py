@@ -57,7 +57,9 @@ class Rendering3D:
         self.cin = c
         self.out = None
 
-    def compute(self, azangle=360.):
+    def compute(self, azangle=360., smoothfactor=1.2):
+        """The rendered cube (self.out): one plane per line-of-sight angle (azangle degrees in all, one
+        degree apart), smoothed to smoothfactor times the beam (1: not smoothed)."""
         from .cube import Cube
         c = self.cin
         if not c.MaskAll():
@@ -76,13 +78,6 @@ class Rendering3D:
         h.setCunit(2, "DEGREES")
         h.setCtype(2, "L.O.S. ANGLE")
         self.out = Cube.fromArray(out.astype(np.float32), h, c.pars())
-        if verb:
-            print("Done.")
-
-    def writefits(self, fname="", smoothfactor=1.2):
-        c = self.cin
-        if not fname:
-            fname = c.pars().outFolder + c.pars().outPrefix + "_3D.fits"
         if smoothfactor > 1:
             h = c.Head()
             sm = Smooth3D()
@@ -92,4 +87,11 @@ class Rendering3D:
                             oldarray=self.out.array, threads=c.pars().threads)
             if res is not None:
                 self.out.array = np.asarray(res, np.float32)
+        if verb:
+            print("Done.")
+
+    def writefits(self, fname=""):
+        c = self.cin
+        if not fname:
+            fname = c.pars().outFolder + c.pars().outPrefix + "_3D.fits"
         self.out.fitswrite_3d(fname)

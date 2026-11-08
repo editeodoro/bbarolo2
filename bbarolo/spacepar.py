@@ -143,19 +143,26 @@ class Spacepar(Galfit):
         self._pshead = h
         self._Cube = Cube
 
-    def plotAll_Python(self):
-        if self.parspace is None:
-            return
-        p = self.cin.pars()
-        verb = p.verbose
-        outfold, obj = p.outFolder, p.outPrefix
-        fname = outfold + obj + "_spacepar.fits"
+    def space_hdu(self):
+        """The residuals over the grid of the two parameters, relative to their minimum in each ring
+        (|f - fmin| / fmin; axes P1, P2 and the ring radius), as an astropy HDU (<prefix>_spacepar.fits)."""
         ps = self.parspace.astype(np.float64)
         mins = ps.reshape(ps.shape[0], -1).min(axis=1)[:, None, None]
         with np.errstate(invalid="ignore", divide="ignore"):
             rel = np.abs(ps - mins) / mins
-        cube = self._Cube.fromArray(rel.astype(np.float32), self._pshead, p)
-        cube.fitswrite_3d(fname)
+        return self._Cube.fromArray(rel.astype(np.float32), self._pshead, self.cin.pars()).to_hdu()
+
+    def plotAll_Python(self, hdu=None):
+        """Write <prefix>_spacepar.fits (hdu: that of space_hdu(), if already computed) and the plotting script,
+        and make the plots (PLOTS)."""
+        if self.parspace is None:
+            return
+        from .cube import write_hdu
+        p = self.cin.pars()
+        verb = p.verbose
+        outfold, obj = p.outFolder, p.outPrefix
+        fname = outfold + obj + "_spacepar.fits"
+        write_hdu(hdu if hdu is not None else self.space_hdu(), fname)
         mkdirp(outfold + "plotscripts/")
         fout = outfold + obj + "_spacepar.pdf"
         script = outfold + "plotscripts/spacepar.py"

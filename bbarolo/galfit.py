@@ -227,16 +227,52 @@ def final_norm(norm, task="GALMOD", extra=()):
     return n
 
 
-def writeInitialRings(inr, outfile):
-    """Write the initial rings (rings_initial.txt of 3DFIT, rings_model.txt of GALMOD)."""
+def initialRingsText(inr):
+    """The initial rings as written in rings_initial.txt (3DFIT) and rings_model.txt (GALMOD)."""
     m = 11
-    with open(outfile, "w") as f:
-        f.write("#" + "=" * 46 + " Initial parameters " + "=" * 45 + " \n")
-        f.write("".join(f"{s:<{m}}" for s in ("#RAD(arcs)", "VROT(km/s)", "DISP(km/s)", "INC(deg)", "P.A.(deg)",
-                                              "Z0(arcs)", "SIG(E20)", "XPOS(pix)", "YPOS(pix)", "VSYS(km/s)")) + "\n")
-        for i in range(inr.nr):
-            f.write("".join(f"{v:<{m}.3f}" for v in (inr.radii[i], inr.vrot[i], inr.vdisp[i], inr.inc[i], inr.phi[i],
-                                                     inr.z0[i], inr.dens[i], inr.xpos[i], inr.ypos[i], inr.vsys[i])) + "\n")
+    s = "#" + "=" * 46 + " Initial parameters " + "=" * 45 + " \n"
+    s += "".join(f"{s:<{m}}" for s in ("#RAD(arcs)", "VROT(km/s)", "DISP(km/s)", "INC(deg)", "P.A.(deg)",
+                                       "Z0(arcs)", "SIG(E20)", "XPOS(pix)", "YPOS(pix)", "VSYS(km/s)")) + "\n"
+    for i in range(inr.nr):
+        s += "".join(f"{v:<{m}.3f}" for v in (inr.radii[i], inr.vrot[i], inr.vdisp[i], inr.inc[i], inr.phi[i],
+                                              inr.z0[i], inr.dens[i], inr.xpos[i], inr.ypos[i], inr.vsys[i])) + "\n"
+    return s
+
+
+def ring_table(r, mpar=None, errors=None, fitok=None, extra=None):
+    """The rings r (a Rings object) as an astropy Table at full precision, with the columns of the ring files
+    (rings_final1.txt, ...): radii (arcsec), vrot, vdisp (km/s), inc, pa (deg), z0 (arcsec), dens, xpos, ypos
+    (pixels), vsys, vrad (km/s); with errors (array nr x 2 x number of free parameters, the free parameters
+    mpar), the lower (negative) and upper errors e_<name>1, e_<name>2 of the free parameters; with fitok, a
+    column fitok (False for the rings whose fit failed); extra: {name: values} as more columns."""
+    from astropy.table import Table
+    import astropy.units as u
+    kms, arcs = u.km / u.s, u.arcsec
+    n = r.nr
+    cols = [("radii", r.radii, arcs), ("vrot", r.vrot, kms), ("vdisp", r.vdisp, kms), ("inc", r.inc, u.deg),
+            ("pa", r.phi, u.deg), ("z0", r.z0, arcs), ("dens", r.dens, None), ("xpos", r.xpos, u.pix),
+            ("ypos", r.ypos, u.pix), ("vsys", r.vsys, kms), ("vrad", r.vrad, kms)]
+    t = Table()
+    for name, v, unit in cols:
+        t[name] = np.asarray(v, float)[:n]
+        if unit is not None:
+            t[name].unit = unit
+    if errors is not None and mpar is not None:
+        names = [("vrot", kms), ("vdisp", kms), ("dens", None), ("z0", arcs), ("inc", u.deg), ("pa", u.deg),
+                 ("xpos", u.pix), ("ypos", u.pix), ("vsys", kms), ("vrad", kms)]
+        kk = 0
+        for i, (name, unit) in enumerate(names):
+            if i < len(mpar) and mpar[i]:
+                for j in (0, 1):
+                    t[f"e_{name}{j + 1}"] = np.asarray(errors, float)[:n, j, kk]
+                    if unit is not None:
+                        t[f"e_{name}{j + 1}"].unit = unit
+                kk += 1
+    if fitok is not None:
+        t["fitok"] = np.asarray(fitok, bool)[:n]
+    for name, v in (extra or {}).items():
+        t[name] = np.asarray(v)[:n]
+    return t
 
 
 def ringfile_values(par):
@@ -288,7 +324,8 @@ def initial_rings(c, par, galmod=False, write=True):
     Values not given are read from RINGFILE, estimated from the data (centre, systemic and
     rotation velocity, inclination, position angle, number and width of the rings), or set
     to the defaults (VDISP=8, Z0=one pixel, VRAD=0, DENS=1, VVERT=0, DVDZ=0, ZCYL=0). With write=True
-    the rings are written in rings_model.txt (GALMOD) or rings_initial.txt (3DFIT).
+    the rings are kept in the cube for rings_model.txt (GALMOD) or rings_initial.txt (3DFIT), see
+    Cube.add_output.
 
     Returns a namespace with: rings (a Rings object), fromfile (the rings were read from a
     file), estimated (dict: which parameters were not given), toEstimate (bool) and ip (the
@@ -330,7 +367,7 @@ def initial_rings(c, par, galmod=False, write=True):
     if inR.nr == 0:
         raise BBaroloError("\n 3DFIT ERROR: The number of radii must be > 0! ")
     if write:
-        writeInitialRings(inR, p.outFolder + p.outPrefix + ("_rings_model.txt" if galmod else "_rings_initial.txt"))
+        c.add_output("_rings_model.txt" if galmod else "_rings_initial.txt", initialRingsText(inR))
     return types.SimpleNamespace(rings=inR, fromfile=fromfile, estimated=estimated, toEstimate=toEstimate, ip=ip)
 
 
@@ -356,7 +393,6 @@ class Galfit:
             p.checkPars()
             cube.Head().setRedshift(p.getRedshift())
             cube.Head().setWave0(p.getRestwave())
-            mkdirp(p.outFolder)
             self.setup(cube, inrings, gfpar if gfpar is not None else p.gf)
         else:
             self._init_from_cube(cube)
@@ -374,6 +410,8 @@ class Galfit:
         isgalmod = p.gm.flagGALMOD
         ini = initial_rings(c, par, galmod=isgalmod)
         inR, toEstimate, ip = ini.rings, ini.toEstimate, ini.ip
+        self.rings_initial = inR.copy()          # (the rings of rings_initial.txt)
+        self.stages = {}                         # (the outcome of each stage, see galfit())
         self._estimated = ini.estimated
         if not isgalmod and not ini.fromfile and self.verb:
             self.showInitial(inR, sys.stdout, par)
@@ -424,8 +462,9 @@ class Galfit:
                 tr.setfromCube(c, inR)
             tr.setoption([False, True, False, True, False, False, False], 3, 2, 15.)
             tr.ringfit(p.threads, False, False)
-            with open(p.outFolder + p.outPrefix + "_2drings.txt", "w") as fo:
-                tr.printfinal(fo, c.Head())
+            buf = io.StringIO()
+            tr.printfinal(buf, c.Head())
+            c.add_output("_2drings.txt", buf.getvalue())
             # NB: the C++ code loops up to inR->nr, reading beyond the end of the
             # 2D-fit arrays (which have nr-1 elements) for the last ring.
             for i in range(1, min(inR.nr, tr.nrad)):
@@ -880,7 +919,6 @@ class Galfit:
         n = self.n_galfit
         c = self.cin
         p = c.pars()
-        fileo = p.outFolder + p.outPrefix + f"_rings_final{n}.txt"
         if self.verb:
             p.verbose = False
             print("\n" + "=" * 31 + " 3DFIT " + "=" * 31)
@@ -927,12 +965,19 @@ class Galfit:
             self._print_rings(range(start, nr))
         self.fitok = fitok
         self.errors = errors
-        with open(fileo, "w") as fout:
-            writeHeader(fout, self.mpar, self.par.flagERRORS, self.par.flagBADOUT)
-            for ir in range(nr):
-                if fitok[ir] or self.par.flagBADOUT:
-                    writeRing(fout, self.outr, ir, self.nfree, self.par.flagERRORS, errors,
-                              self.par.flagBADOUT, fitok[ir])
+        fout = io.StringIO()
+        writeHeader(fout, self.mpar, self.par.flagERRORS, self.par.flagBADOUT)
+        for ir in range(nr):
+            if fitok[ir] or self.par.flagBADOUT:
+                writeRing(fout, self.outr, ir, self.nfree, self.par.flagERRORS, errors,
+                          self.par.flagBADOUT, fitok[ir])
+        # the outcome of the stage (the rings as fitted, before the failed ones are emptied), and the text of
+        # <prefix>_rings_final<n>.txt, written by the task
+        if not hasattr(self, "stages"):
+            self.stages = {}
+        self.stages[n] = types.SimpleNamespace(rings=self.outr.copy(), errors=errors.copy(), fitok=list(fitok),
+                                               mpar=list(self.mpar), text=fout.getvalue())
+        c.add_output(f"_rings_final{n}.txt", fout.getvalue())
         m = self.mpar
         is2 = m[INC] or m[PA] or m[Z0] or m[XPOS] or m[YPOS] or m[VSYS]
         lastround = n == 2 or (n == 1 and not (self.par.TWOSTAGE and is2))
@@ -1269,8 +1314,21 @@ class Galfit:
                 nc[j] = NCOLS + 2 * free.index(j)
         return nc
 
+    def stage_table(self, n):
+        """The rings fitted in stage n (1 or 2) as an astropy Table at full precision (see ring_table): all the
+        rings, with the errors of the free parameters (FLAGERRORS) and fitok (False: the fit of the ring
+        failed)."""
+        st = self.stages[n]
+        errs = st.errors if self.par.flagERRORS else None
+        return ring_table(st.rings, st.mpar, errs, st.fitok)
+
+    def model_outputs(self, normtype):
+        """The final model of the fit and its outputs in memory (see galfit_out.model_outputs)."""
+        from .galfit_out import model_outputs
+        return model_outputs(self.cin, self.model, self.outr, normtype, self.mask, par=self.par, fit=self)
+
     def writeModel(self, normtype, makeplots=True):
-        """Write the final model of the fit and its outputs (see galfit_out.writeModel)."""
+        """Compute and write the final model of the fit and its outputs (see galfit_out.writeModel)."""
         from .galfit_out import writeModel
         return writeModel(self.cin, self.model, self.outr, normtype, self.mask, par=self.par,
                           makeplots=makeplots, fit=self)

@@ -18,6 +18,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
+import bbarolo                                      # noqa: E402
 from bbarolo.params import Param                    # noqa: E402
 from bbarolo.cube import Cube                       # noqa: E402
 from bbarolo.rings import Rings                     # noqa: E402
@@ -283,7 +284,7 @@ def test_2dfit_matches_cpp(tmp_path):
     from bbarolo import FitMod2D
     rm = FitMod2D(N2403, radii=np.arange(15, 1200, 30), xpos=77, ypos=77, vsys=132.8, vrot=120, inc=60, pa=123.7,
                   wfunc=2, free="VROT PA INC", mask="SEARCH", threads=2, verbose=False)
-    rings = rm.run(write=False).rings
+    rings = rm.run().rings
     # first rings of the C++ run (examples/test/n2403_2dfit.par)
     assert np.allclose(rings['vrot'][:3], [27.58, 49.78, 66.09], atol=0.011)
     assert np.allclose(rings['pa'][:3], [130.22, 125.63, 123.42], atol=0.011)
@@ -311,7 +312,7 @@ def test_3dfit_galmod_keep_parameters(tmp_path):
     fitted with DVDZ=0 (its free angle) set by 3DFIT instead of the default 15 degrees."""
     import copy
     from bbarolo.galfit import Galfit
-    from bbarolo.tasks import _galmod
+    from bbarolo.tasks import _compute_galmod
     p = Param()
     p.readParamString(f"FITSFILE {N2403}\n3DFIT true\nRADII 105 195 285\nXPOS 77\nYPOS 77\nVSYS 132.8\n"
                       f"VROT 120\nINC 60\nPA 123.7\nFREE VROT VDISP\nMASK SEARCH\nTHREADS 2\nVERBOSE false\n"
@@ -321,7 +322,7 @@ def test_3dfit_galmod_keep_parameters(tmp_path):
     before = copy.deepcopy(c.pars().gf)
     Galfit(c)
     assert vars(c.pars().gf) == vars(before)
-    _galmod(c, c.pars(), write=False)
+    _compute_galmod(c, c.pars())
     assert vars(c.pars().gf) == vars(before)
 
 
@@ -334,7 +335,11 @@ def test_python_equals_cli(tmp_path):
                    f"PA 123.7\nMASK SEARCH\nVERBOSE false\n")
     subprocess.run([sys.executable, os.path.join(ROOT, "run_bbarolo.py"), "-p", str(par),
                     f"OUTFOLDER={tmp_path}/cli/"], check=True, stdout=subprocess.DEVNULL)
-    res = Ellprof.from_parfile(str(par), outfolder=str(tmp_path / "py")).run()
+    e = Ellprof.from_parfile(str(par), outfolder=str(tmp_path / "py"))
+    res = e.run()
+    assert not (tmp_path / "py").exists()                 # run() writes nothing
+    files = e.write()                                      # the default folder: OUTFOLDER
+    assert files == res.files and str(tmp_path / "py" / "ngc2403_ellprof.txt") in files
     a = open(tmp_path / "cli" / "ngc2403_ellprof.txt").read()
     b = open(tmp_path / "py" / "ngc2403_ellprof.txt").read()
     assert a == b and len(res.profile) == 10
@@ -359,10 +364,7 @@ def test_simulated_galaxy_cube(tmp_path, monkeypatch):
     g = GalMod(s.f, radii=s.radii, vrot=s.vrot, vrad=s.vrad, vdisp=s.disp, inc=s.inc, pa=s.pa, z0=s.z0,
                dens=s.dens, xpos=s.xpos, ypos=s.ypos, vsys=s.vsys, norm='NONE', mask='NONE', empty=False, linear=0,
                cdens=10, threads=1, verbose=False)
-    assert np.array_equal(g.model().data, s.model_nonoise.data)
-    # the task reads a copy of the template written to disk (header values with <= 20 characters)
-    assert np.allclose(g.run(write=False).model.data, s.model_nonoise.data, rtol=0,
-                       atol=1e-12 * s.model_nonoise.data.max())
+    assert np.array_equal(g.run().model.data, s.model_nonoise.data)
     fn = s.write_model("out/sim.fits", params=True)
     assert np.array_equal(fits.getdata(fn), s.model.data) and os.path.isfile("out/sim_params.txt")
     with pytest.raises(TypeError, match="executable"):
@@ -390,8 +392,8 @@ def test_ring_conventions():
 
 @needs_data
 def test_diskmodel(tmp_path, monkeypatch):
-    """DiskModel = GalMod.model() = GalMod.run().model; model() writes no files; with
-    constant ring values CENTRED and SHIFTED give the same disk; DENSFLUX=false with NORM=NONE."""
+    """DiskModel = GalMod.run().model; run() writes no files; with constant ring values CENTRED and
+    SHIFTED give the same disk; DENSFLUX=false with NORM=NONE."""
     import pickle
     from bbarolo import Cube, DiskModel, Rings, GalMod, Param
     monkeypatch.chdir(tmp_path)
@@ -404,16 +406,16 @@ def test_diskmodel(tmp_path, monkeypatch):
     dm = DiskModel(Cube(N2403, par=p))
     gm = GalMod(N2403, radii=radii, xpos=77, ypos=77, vsys=132.8, vrot=vrot, vdisp=8, z0=10, inc=60, pa=123.7,
                 dens=1, norm="NONE", threads=1, verbose=False)
-    m = gm.model()
+    m = gm.run().model
     assert os.listdir(tmp_path) == []
     h = dm.hdu(r)
-    assert np.array_equal(m.data, h.data) and m.header == h.header
-    assert np.array_equal(m.data, gm.run(write=False).model.data)
-    assert not np.array_equal(m.data, gm.model(ringmode="SHIFTED").data)
+    assert np.array_equal(m.data, h.data) and m.header["OBJECT"] == h.header["OBJECT"]
+    assert all(m.header[k] == h.header[k] for k in ("CRPIX1", "CDELT3", "BMAJ", "BUNIT"))
+    assert not np.array_equal(m.data, gm.run(ringmode="SHIFTED").model.data)
     rc = Rings().setRings(radii=radii, xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8, z0=10, inc=60, phi=123.7)
     assert np.array_equal(dm.array(rc), dm.array(rc, ringmode="SHIFTED"))
     assert np.array_equal(pickle.loads(pickle.dumps(dm)).array(r), dm.array(r))
-    assert gm.model(ringmode="CENTRED", densflux=False).data.sum() < 0.1 * m.data.sum()   # 1E20 atoms/cm2
+    assert gm.run(ringmode="CENTRED", densflux=False).model.data.sum() < 0.1 * m.data.sum()   # 1E20 atoms/cm2
 
 
 @needs_data
@@ -425,9 +427,8 @@ def test_ring_arrays_equal_ring_file(tmp_path):
     np.savetxt(tmp_path / "rings.txt", np.column_stack([radii, vrot]))
     kw = dict(vsys=132.8, xpos=77, ypos=77, vdisp=8, inc=60, pa=123.7, z0=10, dens=1, norm="NONE", mask="NONE",
               threads=1, verbose=False)
-    a = GalMod(N2403, radii=radii, vrot=vrot, **kw).run(write=False)
-    b = GalMod(N2403, radii=f"file({tmp_path}/rings.txt,1)", vrot=f"file({tmp_path}/rings.txt,2)", **kw).run(
-        write=False)
+    a = GalMod(N2403, radii=radii, vrot=vrot, **kw).run()
+    b = GalMod(N2403, radii=f"file({tmp_path}/rings.txt,1)", vrot=f"file({tmp_path}/rings.txt,2)", **kw).run()
     assert np.array_equal(a.model.data, b.model.data)
     assert np.allclose(a.rings["vrot"], vrot, atol=1e-3)
 
@@ -523,8 +524,11 @@ def test_bayesian_quick(tmp_path):
               sampler_kwargs=dict(nlive=30, rstate=np.random.default_rng(1)), run_kwargs=dict(maxiter=150))
     assert f.params.shape == (2,) and np.all(np.isfinite(f.params))
     assert not f._galfit.par.TWOSTAGE                   # the plots then read rings_final1.txt
-    # the posterior errors are written as the 3DFIT error columns (and FREE is restored)
-    # (with the errors of the deconvolved density profile)
+    assert not os.listdir(str(tmp_path))                # run() writes nothing
+    # write(plots=-1): the rings and the samples only; the posterior errors are written as the 3DFIT error
+    # columns (and FREE is restored) (with the errors of the deconvolved density profile)
+    files = f.write(plots=-1, verbose=False)
+    assert sorted(os.path.basename(x) for x in files) == ["ngc2403_dynesty_results.npy", "ngc2403_rings_final1.txt"]
     head = open(os.path.join(str(tmp_path), "ngc2403_rings_final1.txt")).readline().split()
     assert head[11:] == ["E_VROT1", "E_VROT2", "E_DISP1", "E_DISP2", "E_DENS1", "E_DENS2"]
     assert not f._galfit.par.flagERRORS
@@ -1159,7 +1163,7 @@ def test_2dfit_keeps_given_radii(tmp_path):
     from bbarolo import FitMod2D
     rm = FitMod2D(N2403, radii=np.arange(15, 1200, 30), vsys=132.8, vrot=120, free="VROT", mask="SEARCH",
                   threads=2, verbose=False)
-    radii = np.asarray(rm.run(write=False).rings["radii"])
+    radii = np.asarray(rm.run().rings["radii"])
     assert len(radii) >= 38 and np.allclose(radii, np.arange(15, 1200, 30)[:len(radii)])
 
 
@@ -1421,7 +1425,9 @@ def test_relative_paths(tmp_path, monkeypatch):
     assert p.imageFile == str(tmp_path / "Data" / "HI" / "g.fits") and p.outFolder == str(tmp_path / "a" / "b" / "out") + "/"
     res = Ellprof("../../Data/HI/g.fits", nradii=5, radsep=60, xpos=77, ypos=77, inc=60, pa=123.7, verbose=False).run(
         outfolder="out")
-    assert len(res.profile) == 5 and all(os.path.isabs(f) for f in res.files)
+    res.write()
+    assert len(res.profile) == 5 and res.files and all(os.path.isabs(f) for f in res.files)
+    assert all(f.startswith(str(tmp_path / "a" / "b" / "out")) for f in res.files)
 
 
 def test_fft_kernel_cache_is_bounded():
@@ -1467,15 +1473,15 @@ def test_errors_and_exit_codes(tmp_path):
     nob.writeto(fn)
     with pytest.raises(BBaroloError, match="No beam"):
         FitMod3D(fn, radii=[10, 20], xpos=15, ypos=15, vsys=0, vrot=50, vdisp=8, inc=60, pa=30, z0=0,
-                 verbose=False).run(write=False)
+                 verbose=False).run()
     beam = emptyfits([32, 32, 10], [-10. / 3600., 10. / 3600., 10.], beam=30. / 3600., bunit="JY/BEAM", obj="B")
     beam.data[:] = 1.
     fb = str(tmp_path / "beam.fits")
     beam.writeto(fb)
     with pytest.raises(BBaroloError, match="smaller than the old beam"):
-        Smooth(fb, bmaj=10, bmin=10, verbose=False).run(write=False)
+        Smooth(fb, bmaj=10, bmin=10, verbose=False).run()
     with pytest.raises(BBaroloError, match="outside the cube"):
-        PVSlice(fb, xpos_pv=500, ypos_pv=500, pa_pv=30, verbose=False).run(write=False)
+        PVSlice(fb, xpos_pv=500, ypos_pv=500, pa_pv=30, verbose=False).run()
     cli = [sys.executable, os.path.join(ROOT, "run_bbarolo.py")]
     run = lambda *a: subprocess.run(cli + list(a), capture_output=True, text=True, cwd=str(tmp_path))
     r = run("-p", "nofile.par")
@@ -1530,12 +1536,12 @@ def test_input_checks(tmp_path, capsys):
     assert not p.checkPars(quiet=True)
     # VSYS outside the band (given in m/s)
     with pytest.raises(BBaroloError, match="is it in m/s"):
-        FitMod3D(fn, **dict(kw, vsys=50000)).run(write=False)
+        FitMod3D(fn, **dict(kw, vsys=50000)).run()
     # a beam given in degrees instead of arcsec
     del hdu.header["BMAJ"], hdu.header["BMIN"], hdu.header["BPA"]
     hdu.writeto(str(tmp_path / "nob.fits"))
     with pytest.raises(BBaroloError, match="smaller than a quarter of a pixel"):
-        FitMod3D(str(tmp_path / "nob.fits"), bmaj=0.0083, bmin=0.0083, **kw).run(write=False)
+        FitMod3D(str(tmp_path / "nob.fits"), bmaj=0.0083, bmin=0.0083, **kw).run()
     # missing CUNIT3: m/s if the channels are wider than 100
     for cdelt, unit in ((5000., "m/s"), (5., "km/s")):
         h = fits.Header()
@@ -1581,7 +1587,7 @@ def test_result_data_residual_curve_plots(tmp_path):
     from bbarolo import FitMod3D, GalMod
     kw = dict(radii=[150, 250, 350], xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8, inc=60, pa=123.7, z0=10,
               twostage=False, threads=3, plots=False, verbose=0)
-    res = FitMod3D(N2403, free="VROT VDISP", flagerrors=True, **kw).run(write=False)
+    res = FitMod3D(N2403, free="VROT VDISP", flagerrors=True, **kw).run()
     assert "data" in res and "data" in res._lazy                 # not computed yet
     assert res.data.data.shape == res.model.data.shape == res.residual.data.shape
     m = np.asarray(res.mask.data, bool)
@@ -1591,7 +1597,7 @@ def test_result_data_residual_curve_plots(tmp_path):
     assert rc.colnames == ["radii", "vrot", "e_vrot_lo", "e_vrot_hi"] and np.all(rc["e_vrot_lo"] >= 0)
     for f in (res.plot_rings(), res.plot_maps(), res.plot_pv()):
         assert isinstance(f, matplotlib.figure.Figure)
-    g = GalMod(N2403, norm="AZIM", **kw).run(write=False)
+    g = GalMod(N2403, norm="AZIM", **kw).run()
     assert g.residual.data.shape == g.model.data.shape and "rotation_curve" not in g
 
 
@@ -1604,7 +1610,7 @@ def _mock_disk(tmp_path, inc=70., pa=40., snr=20., seed=3):
     gm = GalMod(tmpl, radii=rs, xpos=20, ypos=20, vsys=0., vrot=150 * 2 / np.pi * np.arctan(rs / 40.), vdisp=12.,
                 z0=0., inc=inc, pa=pa, dens=np.exp(-rs / 90.), norm="NONE", mask="NONE", galmodtype="ANALYTIC",
                 threads=1, verbose=False)
-    clean = gm.model()
+    clean = gm.run().model
     noisy = gm.diskmodel.addnoise(clean.data, float(clean.data.max()) / snr, seed=seed)
     from astropy.io import fits
     fn = str(tmp_path / "mockdisk.fits")
@@ -1654,6 +1660,7 @@ def test_spatial_axes_in_arcsec(tmp_path):
         hd = Cube(fn, par=Param()).Head()
         r = bbarolo.FitMod3D(fn, free="vrot inc", mask="SEARCH", galmodtype="ANALYTIC", outfolder=str(tmp_path / name),
                              verbose=0, plots=0, twostage=False, threads=1).run()
+        r.write()
         mh = fits.getheader(str(tmp_path / name / "MOCK_mod_azim.fits"))
         f = BayesianBBarolo(fn, radii=[20, 60, 100, 140], xpos=31.5, ypos=31.5, vsys=0, vrot=120, vdisp=15, z0=0, inc=60,
                             pa=45, mask="SEARCH", outfolder=str(tmp_path / ("b" + name)))
@@ -1917,6 +1924,7 @@ def test_two_stage_table_and_run_parameters(tmp_path, capsys):
               z0=10, free="VROT INC", twostage=True, regtype="median", threads=4, plots=False)
     for i in range(2):
         res = FitMod3D(N2403, **kw).run(outfolder=str(tmp_path / "f"))
+        res.write()
     out = capsys.readouterr().out
     assert "BBAROLO WARNING: the output folder" in out and "NOTE" not in out
     assert "Regularised for the second stage (then fixed): INC median = " in out
@@ -1934,7 +1942,7 @@ def test_two_stage_table_and_run_parameters(tmp_path, capsys):
                       "THRESHOLD 0.01\nREGTYPE bezier\n")
     p.checkPars(quiet=True)
     q = Param()
-    q.readParamString(p.to_parfile([n for n, r, _ in STEPS if r(p, p)] + ["SEARCH"]))
+    q.readParamString(p.to_parfile([n for n, r, _, _ in STEPS if r(p, p)] + ["SEARCH"]))
     q.checkPars(quiet=True)
     assert all(K._getattr(p, t) == K._getattr(q, t) for k in K.KEYWORDS for t in k.targets)
 
@@ -2133,7 +2141,7 @@ def test_mask_header_growth_threshold(tmp_path):
     p.readParamString(f"FITSFILE {fn}\nMASK SEARCH\nTHRESHOLD 0.02\nGROWTHTHRESHOLD 0.005\nOUTFOLDER {tmp_path}/\n")
     c = Cube(fn, par=p)
     c.BlankMask()
-    hist = [str(s) for s in fits.getheader(str(tmp_path / "MOCK_mask.fits"))["HISTORY"]]
+    hist = [str(s) for s in c.mask_hdu().header["HISTORY"]]
     assert any("GROWTHTHRESHOLD=0.005000" in s for s in hist), hist
 
 
@@ -2221,7 +2229,7 @@ def test_smooth_cube_without_beam(tmp_path):
     p.readParamString(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/\nMAKEMASK true\nMASK SMOOTH\nBMAJ 30\nBMIN 30\n")
     c = Cube(fn, par=p)
     c.BlankMask()
-    hist = [str(x) for x in fits.getheader(str(tmp_path / "NOBEAM_mask.fits"))["HISTORY"]]
+    hist = [str(x) for x in c.mask_hdu().header["HISTORY"]]
     assert any("NEWBMAJ=60.0" in x for x in hist), hist
 
 
@@ -2408,8 +2416,8 @@ def test_exclwind_lists_and_errors(synthetic_cube):
 
 def test_checkcube_lines_and_output(tmp_path):
     """CHECKCUBE erases noisy pixel lines also on cubes that are not square (the thresholds of the x and y
-    lines were swapped, so on cubes wider than tall no x line was erased), and writes the cleaned cube in
-    OUTFOLDER as <prefix>_clean.fits (it was written next to the input file)."""
+    lines were swapped, so on cubes wider than tall no x line was erased), and the task writes the cleaned cube
+    in OUTFOLDER as <prefix>_clean.fits (it was written next to the input file)."""
     hdu = emptyfits([48, 24, 10], [-10. / 3600., 10. / 3600., 10.], beam=30. / 3600., bunit="JY/BEAM", obj="CHK")
     rng = np.random.default_rng(1)
     hdu.data[:] = rng.normal(0., 1., hdu.data.shape)
@@ -2423,8 +2431,11 @@ def test_checkcube_lines_and_output(tmp_path):
     p.readParamString(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/out/\n")
     os.makedirs(tmp_path / "out")
     c = Cube(fn, par=p)
-    c.CheckCube(1)
+    clean = c.CheckCube(1)
     assert np.all(c.array[:, :, 5] == 0) and np.all(c.array[:, 7, :] == 0)
+    assert clean is not None and np.isnan(clean.array[:, :, 5]).all()
+    assert not os.listdir(tmp_path / "out")                       # (the cube computes, the task writes)
+    bbarolo.run(fitsfile=fn, checkcube=1, outfolder=f"{tmp_path}/out/", verbose=False)
     assert (tmp_path / "out" / "CHK_clean.fits").exists() and not (tmp_path / "data" / "chk_clean.fits").exists()
 
 
@@ -2878,3 +2889,127 @@ def test_search_spatialsmooth_prints_smoothed_noise(tmp_path, capsys):
     out = capsys.readouterr().out
     spread = float(out.split("spread = ")[1].split(")")[0])
     assert spread < 0.6 * c.stats.getSpread()
+
+
+_RING_KW = dict(radii=[105, 195, 285], xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8, inc=60, pa=123.7, z0=10)
+_TASKS = [
+    ("FitMod3D", dict(_RING_KW, free="VROT VDISP", mask="SEARCH", twostage=False, norm="LOCAL")),
+    ("GalMod", dict(_RING_KW, dens=1, norm="AZIM", mask="SEARCH", noiserms=0.001)),
+    ("GalWind", dict(xpos=77, ypos=77, vsys=132.8, vwind=100, openang=60, htot=400, ntot=4, inc=60, phi=0,
+                     dens=10, vdisp=10, wtype=1)),
+    ("Search", dict(searchtype="spatial", snrcut=10, growthcut=3, minpix=30, minchannels=5, snmap=True)),
+    ("FitMod2D", dict(nradii=6, radsep=30, xpos=77, ypos=77, vsys=132.8, vrot=120, inc=60, pa=123.7,
+                      free="VROT PA", mask="SEARCH")),
+    ("Ellprof", dict(nradii=5, radsep=60, xpos=77, ypos=77, inc=60, pa=123.7, mask="SEARCH")),
+    ("Smooth", dict(factor=2)),
+    ("SmoothSpec", dict(window_type="HANNING", window_size=3)),
+    ("Maps", dict(mask="SEARCH", snmap=True, globalprofile=True, totalmap=True, velocitymap=True)),
+    ("PVSlice", dict(xpos_pv=77, ypos_pv=77, pa_pv=123.7)),
+    ("SpacePar", dict(_RING_KW, p1="VROT", p2="VDISP", p1par="100 130 15", p2par="5 15 5", mask="SEARCH")),
+    ("Rend3D", dict(mask="SEARCH", rendangle=4)),
+    ("ContSub", dict(exclwind="20:40")),
+    ("Stats", dict()),
+    ("MakeMask", dict(mask="SMOOTH")),
+]
+
+
+def _same_outputs(a, b):
+    """The files of two output folders: the same names, data and text (but the parameters of the run)."""
+    from astropy.io import fits
+    import gzip
+    fa = {os.path.relpath(os.path.join(r, f), a) for r, _, fs in os.walk(a) for f in fs}
+    fb = {os.path.relpath(os.path.join(r, f), b) for r, _, fs in os.walk(b) for f in fs}
+    skip = ("_params.par", "mod_noise.fits", "plotscripts/", "_input.fits")
+    fa = {f for f in fa if not any(s in f for s in skip)}
+    fb = {f for f in fb if not any(s in f for s in skip)}
+    assert fa == fb, (sorted(fa - fb), sorted(fb - fa))
+    for f in fa:
+        x, y = os.path.join(a, f), os.path.join(b, f)
+        if f.endswith((".fits", ".fits.gz")):
+            assert np.array_equal(fits.getdata(x), fits.getdata(y), equal_nan=True), f
+        elif not f.endswith((".npy", ".pdf")):
+            op = gzip.open if f.endswith(".gz") else open
+            assert op(x, "rb").read() == op(y, "rb").read(), f
+    return fa
+
+
+@needs_data
+@pytest.mark.parametrize("name,kw", _TASKS, ids=[t[0] for t in _TASKS])
+def test_task_in_memory_then_write(tmp_path, monkeypatch, name, kw):
+    """run() computes in memory and writes nothing (no file in the current folder, no temporary folder);
+    write() then writes exactly the files of the command line (bbarolo.run on the parameter file of the
+    task); the outputs in memory are those of the files."""
+    import tempfile
+    import glob
+    from astropy.io import fits
+    monkeypatch.chdir(tmp_path)
+    tmpdirs = set(glob.glob(os.path.join(tempfile.gettempdir(), "bbarolo_*")))
+    t = getattr(bbarolo, name)(N2403, threads=2, verbose=False, plots=False, **kw)
+    res = t.run()
+    assert os.listdir(tmp_path) == [] and set(glob.glob(os.path.join(tempfile.gettempdir(), "bbarolo_*"))) == tmpdirs
+    assert res.files == [] and res.outfolder is None and "in memory" in repr(res)
+    files = t.write(str(tmp_path / "py"))
+    assert files and res.files == files and res.outfolder == str(tmp_path / "py") + "/"
+    t.to_parfile(str(tmp_path / "task.par"))
+    bbarolo.run(str(tmp_path / "task.par"), outfolder=str(tmp_path / "cli"), verbose=False)
+    written = _same_outputs(str(tmp_path / "cli"), str(tmp_path / "py"))
+
+    def same(hdu, f):
+        return np.array_equal(np.asarray(hdu.data), fits.getdata(str(tmp_path / "py" / f)), equal_nan=True)
+    pre = "ngc2403"
+    if name in ("FitMod3D", "GalMod"):
+        norm = "azim" if name == "GalMod" else "local"
+        assert same(res.model, f"{pre}_mod_{norm}.fits") and same(res.mask, f"{pre}_mask.fits")
+        assert same(res.maps["mod_1mom_" + norm], f"maps/{pre}_mod_1mom_{norm}.fits")
+        assert same(res.pvs["pv_a"], f"pvs/{pre}_pv_a.fits") and len(res.densprof) == 3
+        if name == "GalMod":
+            assert set(res.models) == {"azim", "noise"}
+            assert np.allclose(res.rings["vrot"], 120) and "fitok" not in res.rings.colnames
+    elif name == "Search":
+        assert same(res.labels, f"{pre}_detections_num.fits.gz") and same(res.maps["mom0th_SN"], f"{pre}_mom0th_SN.fits")
+    elif name == "Maps":
+        assert same(res.snmap, f"{pre}_map_0th_SN.fits") and same(res.velocitymap, f"{pre}_map_1st.fits")
+        assert np.allclose(res.spectrum["flux"], np.loadtxt(str(tmp_path / "py" / f"{pre}_spectrum.txt"))[:, 1],
+                           rtol=1e-5)
+    elif name == "FitMod2D":
+        assert same(res.model, f"{pre}_2d_mod.fits") and same(res.velfield, f"{pre}_map_1st.fits")
+        t2 = np.loadtxt(str(tmp_path / "py" / f"{pre}_2dtrm.txt"))
+        assert np.allclose(res.rings["vrot"], t2[:, 3], atol=0.006, equal_nan=True)
+    elif name in ("Smooth", "SmoothSpec", "ContSub"):
+        f = next(x for x in written if x != f"{pre}_mask.fits")
+        assert same(res.cube, f)
+    elif name == "SpacePar":
+        assert same(res.space, f"{pre}_spacepar.fits")
+
+
+@needs_data
+def test_3dfit_ring_tables_full_precision(tmp_path, monkeypatch):
+    """The ring tables of FitMod3D.run() are at full precision, with all the rings (fitok False for those not
+    fitted), equal to rings_final*.txt to their rounding; a two-stage fit keeps the first stage and the
+    initial rings."""
+    from bbarolo import FitMod3D
+    from bbarolo.galfit import Galfit
+    fit_ring = Galfit._fit_ring
+
+    def failing_last(self, ir, errors, fitok, nthreads):          # (the fit of the last ring fails)
+        fit_ring(self, ir, errors, fitok, nthreads)
+        if ir == self.inr.nr - 1:
+            fitok[ir] = False
+    monkeypatch.setattr(Galfit, "_fit_ring", failing_last)
+    kw = dict(radii=[150, 250, 350, 450, 550], xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8, inc=60, pa=123.7,
+              z0=10, free="VROT INC", twostage=True, regtype="median", threads=2, plots=False, verbose=False,
+              flagerrors=False, mask="SEARCH")
+    f = FitMod3D(N2403, **kw)
+    res = f.run()
+    t = res.rings
+    assert len(t) == 5 and t["fitok"].dtype == bool and not t["fitok"][-1] and t["fitok"][:4].all()
+    assert len(res.rings_stage1) == 5 and len(res.rings_initial) == 5
+    assert np.allclose(res.rings_initial["vrot"], 120) and len(res.rotation_curve) == 4
+    res.write(str(tmp_path))
+    for tab, fn in ((res.rings_stage1, "ngc2403_rings_final1.txt"), (res.rings, "ngc2403_rings_final2.txt")):
+        a = np.loadtxt(str(tmp_path / fn), ndmin=2)
+        ok = np.asarray(tab["fitok"], bool)
+        assert len(a) == ok.sum()                              # (the file: the rings fitted only)
+        assert np.allclose(np.asarray(tab["vrot"])[ok], a[:, 1], atol=5e-4)
+        assert np.allclose(np.asarray(tab["inc"])[ok], a[:, 3], atol=5e-4)
+        assert not np.array_equal(np.asarray(tab["vrot"])[ok], a[:, 1])     # (more digits in memory)

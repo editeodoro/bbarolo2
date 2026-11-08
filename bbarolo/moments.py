@@ -289,6 +289,16 @@ class MomentMap(Image2D):
         """Noise and S/N maps of the total map, written in <outfolder><name>_RMS.fits and <name>_SN.fits
         (outfolder: OUTFOLDER + prefix by default)."""
         c = self.cin
+        n_im, s_im = self.SNMaps(msk)
+        if outfolder == "":
+            outfolder = c.pars().outFolder + c.pars().outPrefix
+        n_im.fitswrite_2d(outfolder + name + "_RMS.fits")
+        s_im.fitswrite_2d(outfolder + name + "_SN.fits")
+
+    def SNMaps(self, msk):
+        """The noise and S/N maps of the total map (two Image2D): the noise expected in each pixel from the
+        noise of the cube, the number of channels summed and the taper (MAPS parameters)."""
+        c = self.cin
         if self.storedtype != 0:
             self.ZeroMoment(msk, "MOMENT")
         m = self._getmask(msk)
@@ -323,10 +333,7 @@ class MomentMap(Image2D):
         s_im = Image2D.fromArray(snmap.astype(np.float32), c.Head())
         s_im.Head().setBtype("S/N")
         s_im.Head().setBunit("NONE")
-        if outfolder == "":
-            outfolder = c.pars().outFolder + c.pars().outPrefix
-        n_im.fitswrite_2d(outfolder + name + "_RMS.fits")
-        s_im.fitswrite_2d(outfolder + name + "_SN.fits")
+        return n_im, s_im
 
 
 def getAllMoments(c, usemask=True, mask=None, mtype="MOMENT"):

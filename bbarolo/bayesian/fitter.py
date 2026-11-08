@@ -37,8 +37,9 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
     -------
     update(**params):        change BBarolo parameters (and the rings).
     run(freepar, method, threads, log_like, like_kwargs, sampler_kwargs, run_kwargs, verbose,
-        dynamic, **params):  sample the posterior ('dynesty' or 'nautilus').
+        dynamic, **params):  sample the posterior ('dynesty' or 'nautilus'); nothing is written.
     run_geometry(freepar, **kwargs): fit only the geometry on the total intensity map.
+    write(outfolder, plots): write all the outputs, as the BAYESIAN3DFIT task.
     write_bestmodel(plots, norm, **kwargs): write the best model, maps, PVs and plots.
     corner_plot(...), plot_profiles(...), print_stats(...), print_priors(), chi2_reduced()
     ring_errors(param):      1-sigma errors of a ring parameter in each ring of the best fit.
@@ -181,7 +182,8 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         """ The Param of the model engine (verbose off, one thread: the samples are computed
         in parallel by processes). """
         of = self._outfolder()
-        prm = self._all_params(outfolder=of, fitsfile=self._input_file(of))
+        hdu = self._input_hdu()
+        prm = self._all_params(outfolder=of, fitsfile=self._cube if hdu is None else "in-memory cube")
         prm.pop(self.TASK, None)                 # the engine is that of 3DFIT...
         prm.pop("FREE", None)                    # ...whose FREE is not that of BAYESIAN3DFIT
         prm["3DFIT"] = True
@@ -198,7 +200,9 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         p = c.pars()
         if p.outFolder == "":
             p.setOutfolder(self._outfolder())
-        if not c.readCube(p.imageFile, printInfo=False):
+        hdu = self._input_hdu()
+        ok = c.readCube(p.imageFile, printInfo=False) if hdu is None else c.readHDU(hdu, name=p.imageFile)
+        if not ok:
             raise IOError(f"Cannot read {p.imageFile}")
         self._cube_obj, self._par = c, p
         return c
@@ -610,8 +614,6 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             dp = self.dens_profile
             print(f"Deconvolved density profile: errors from {dp['nsamples']} posterior samples (geometry) and "
                   f"{dp['nmc']} noise realisations (see f.dens_profile, print_stats)")
-        with self._errors_in_outputs():
-            pass
         return self
 
     def _check_likelihood(self, like_kwargs, custom, verbose=True):

@@ -108,12 +108,16 @@ class Stats:
          self.max_val, self.min_val) = findAllStats(array, mask)
         self.defined = True
 
+    def totext(self):
+        """The statistics as written in <prefix>_stats.txt (a header line and a line of values)."""
+        m = 13
+        vals = [self.mean, self.median, self.stddev, self.madfm, madfmToSigma(self.madfm), self.max_val, self.min_val]
+        return (f"{'# MEAN':<{m}}{'MEDIAN':<{m}}{'STDDEV':<{m}}{'MADFM':<{m}}{'MADasSTDDEV':<{m}}{'MAX':<{m}}{'MIN':<{m}}\n"
+                + "".join(f"{v:<{m}.4e}" for v in vals) + "\n")
+
     def tofile(self, filename):
         with open(filename, "w") as f:
-            m = 13
-            f.write(f"{'# MEAN':<{m}}{'MEDIAN':<{m}}{'STDDEV':<{m}}{'MADFM':<{m}}{'MADasSTDDEV':<{m}}{'MAX':<{m}}{'MIN':<{m}}\n")
-            vals = [self.mean, self.median, self.stddev, self.madfm, madfmToSigma(self.madfm), self.max_val, self.min_val]
-            f.write("".join(f"{v:<{m}.4e}" for v in vals) + "\n")
+            f.write(self.totext())
 
     def __str__(self):
         return (f" Min    = {self.min_val:12.5e}\t Max      = {self.max_val:12.5e}\n"

@@ -75,7 +75,7 @@ def simulate(g, cg, seed, wd, galmodtype="ANALYTIC", z0=rs.Z0):
     gm = GalMod(tmpl, radii=R, xpos=xc, ypos=xc, vsys=0., vrot=t["vrot"], vdisp=t["vdisp"], vrad=0., z0=z0,
                 inc=t["inc"], pa=t["pa"], dens=t["dens"], ltype=1, norm="NONE", mask="NONE",
                 galmodtype=galmodtype, threads=1, verbose=False)
-    clean = gm.model()
+    clean = gm.run().model
     rms = float(clean.data.max()) / SNR
     fn = os.path.join(wd, "cube.fits")
     fits.PrimaryHDU(data=gm.diskmodel.addnoise(clean.data, rms, seed=seed), header=tmpl.header).writeto(fn)
@@ -101,6 +101,7 @@ def run_fit(args):
         kw.update(ch)
         res = FitMod3D(fn, threads=1, verbose=False, plots=-1, outfolder=os.path.join(wd, "out"), **kw).run()
         r = res["rings"]
+        r = r[np.asarray(r["fitok"], bool)]            # (the rings fitted)
     return dict(test=name, gid=g["id"], inc=g["inc"], dinc=float(np.median(np.array(r["inc"]) - g["inc"])),
                 ds=float(np.median(np.array(r["vdisp"]) / g["sigma"] - 1)))
 

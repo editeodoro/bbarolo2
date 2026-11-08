@@ -297,26 +297,41 @@ class GalWind:
         fn = fname or p.outFolder + p.outPrefix + "_wind.fits"
         return self.out.fitswrite_3d(fn, fullHead)
 
-    def writeMomentMaps(self):
-        if self.out is None:
-            return False
-        p = self.cin.pars()
-        fn = p.outFolder + p.outPrefix + "_wind"
+    def momentMaps(self):
+        """The total, velocity and dispersion maps of the model (three astropy HDUs, no mask)."""
         m = MomentMap()
         m.input(self.out)
-        for i, f in enumerate((m.ZeroMoment, m.FirstMoment, m.SecondMoment)):
+        out = []
+        for f in (m.ZeroMoment, m.FirstMoment, m.SecondMoment):
             f(False)
-            m.fitswrite_2d(fn + f"_{i}mom.fits")
-        return True
+            out.append(m.to_hdu())
+        return out
 
-    def writePV(self, fname=""):
+    def pv(self):
+        """The position-velocity slice of the model through the centre, along PHI - 90 (an Image2D)."""
+        x0, y0 = self._center()
+        return PositionVelocity(self.out, x0, y0, float(self.par.PHI) - 90)
+
+    def writeMomentMaps(self, maps=None):
+        """Write <prefix>_wind_<i>mom.fits (maps: the HDUs of momentMaps(), if already computed)."""
         if self.out is None:
             return False
+        from .cube import write_hdu
+        p = self.cin.pars()
+        fn = p.outFolder + p.outPrefix + "_wind"
+        for i, hdu in enumerate(maps if maps is not None else self.momentMaps()):
+            write_hdu(hdu, fn + f"_{i}mom.fits")
+        return True
+
+    def writePV(self, fname="", pv=None):
+        """Write <prefix>_wind_pv.fits (pv: the HDU of the slice, if already computed)."""
+        if self.out is None:
+            return False
+        from .cube import write_hdu
         p = self.cin.pars()
         fn = fname or p.outFolder + p.outPrefix + "_wind_pv.fits"
-        x0, y0 = self._center()
-        pv = PositionVelocity(self.out, x0, y0, float(self.par.PHI) - 90)
-        return pv.fitswrite_2d(fn)
+        write_hdu(pv if pv is not None else self.pv().to_hdu(), fn)
+        return True
 
     def makePlots(self):
         if self.out is None:

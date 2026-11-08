@@ -20,6 +20,37 @@ from .bbutils import (BBaroloError, arcsconv, DeltaVel, FluxtoJy, FluxtoJyBeam, 
                       ProgressBar, mkdirp, randomAdjective, shortpath)
 
 
+
+def write_outputs(c, outputs):
+    """Write the outputs {suffix: text, Figure or HDU} (see Cube.add_output) in the output folder of the cube c.
+    Returns the files written."""
+    p = c.pars()
+    files = []
+    for suffix, v in outputs.items():
+        fn = p.outFolder + p.outPrefix + suffix
+        if isinstance(v, str):
+            mkdirp(os.path.dirname(fn) or ".")
+            with open(fn, "w") as f:
+                f.write(v)
+        elif hasattr(v, "savefig"):
+            mkdirp(os.path.dirname(fn) or ".")
+            v.savefig(fn, bbox_inches="tight")
+        else:
+            write_hdu(v, fn)
+        files.append(fn)
+    return files
+
+
+def write_hdu(hdu, outfile):
+    """Write an HDU to a FITS file (overwriting it, creating its folder), as BBarolo writes its outputs."""
+    dname = os.path.dirname(outfile)
+    if dname:
+        os.makedirs(dname, exist_ok=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        hdu.writeto(outfile, overwrite=True, output_verify="silentfix")
+
+
 class Cube:
 
     def __init__(self, fname=None, par=None, printInfo=False, array=None, head=None):
@@ -28,6 +59,9 @@ class Cube:
         self.headDefined = head is not None
         self.array = None
         self.mask = None
+        self.mask_header = None              # (the header of the mask built by BlankMask)
+        self.mask_written = False
+        self.extra_outputs = {}              # (outputs made while computing, written by the task: see add_output)
         self.stats = Stats(self.par.flagRobustStats)
         self.statsDefined = False
         self.sources = None
@@ -53,6 +87,7 @@ class Cube:
         c.headDefined = self.headDefined
         c.array = None if self.array is None else self.array.copy()
         c.mask = None if self.mask is None else self.mask.copy()
+        c.mask_header, c.mask_written = self.mask_header, self.mask_written
         c.stats = self.stats.copy()
         c.statsDefined = self.statsDefined
         c.sources, c.isSearched = self.sources, self.isSearched
@@ -245,8 +280,13 @@ class Cube:
                 print(f"Beam area is {h.BeamArea():.6f} pixels.\n")
         return True
 
-    def fitswrite_3d(self, outfile, fullHead=False, dtype=None):
+    def to_hdu(self, fullHead=False, dtype=None, copy=False):
+        """The cube as an astropy PrimaryHDU: the data and header that fitswrite_3d writes (fullHead: all the
+        keywords of the original header; dtype: the data type, default that of the array; copy: a copy of the
+        data, not a view of the array of the cube)."""
         arr = self.array if dtype is None else self.array.astype(dtype)
+        if copy and arr is self.array:
+            arr = arr.copy()
         if arr.dtype == np.bool_:
             arr = arr.astype(np.int16)
         if arr.ndim == 2:
@@ -256,12 +296,13 @@ class Cube:
             nd = 2 if self.head.NumAx() == 2 else 3
             hdr = self.head.toAstropy(nd, fullHead)
         hdu = fits.PrimaryHDU(data=arr, header=hdr)
-        dname = os.path.dirname(outfile)
-        if dname:
-            os.makedirs(dname, exist_ok=True)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            hdu.writeto(outfile, overwrite=True, output_verify="silentfix")
+            hdu.verify("silentfix")
+        return hdu
+
+    def fitswrite_3d(self, outfile, fullHead=False, dtype=None):
+        write_hdu(self.to_hdu(fullHead, dtype), outfile)
         return True
 
     # ------------------------------------------------------------------ stats
@@ -380,32 +421,45 @@ class Cube:
             m[o.z, o.y, o.x] = True
         return m
 
-    def writeDetections(self):
+    def detectionProducts(self):
+        """The products of the source finder as HDUs, {file suffix: HDU} in the order they are written: the
+        cube of the detections (_detections.fits.gz), the cube of their numbers (_detections_num.fits.gz),
+        the number of channels detected in each pixel (_detectmap.fits.gz), the moment maps of the detections
+        (_mom0th.fits, _mom1st.fits, _mom2nd.fits) and, with SNMAP, the noise and S/N maps of the total map
+        (_mom0th_RMS.fits, _mom0th_SN.fits). Empty without detections."""
         from .moments import getAllMoments
         from .image import Image2D
         if self.getNumObj() == 0:
-            return
+            return {}
         p, h = self.par, self.head
+        out = {}
         isObj = self.detectionMask()
         det = Cube.fromArray(np.where(isObj, self.array, 0).astype(self.array.dtype), h, p)
         det.Head().setMinMax(0, 0)
-        det.fitswrite_3d(p.outFolder + p.outPrefix + "_detections.fits.gz")
+        out["_detections.fits.gz"] = det.to_hdu()
         num = np.zeros(self.array.shape, np.int32)
         for i, o in enumerate(self.sources.objectList):
             num[o.z, o.y, o.x] = i + 1
         dn = Cube.fromArray(num, h, p)
         dn.Head().setMinMax(0, 0)
-        dn.fitswrite_3d(p.outFolder + p.outPrefix + "_detections_num.fits.gz")
+        out["_detections_num.fits.gz"] = dn.to_hdu()
         dm = Image2D.fromArray(isObj.sum(axis=0).astype(np.int32), h)
         dm.Head().setMinMax(0, 0)
         dm.Head().setBtype("detected_chan")
-        dm.fitswrite_2d(p.outFolder + p.outPrefix + "_detectmap.fits.gz")
+        out["_detectmap.fits.gz"] = dm.to_hdu()
         maps = getAllMoments(self, True, isObj, "MOMENT")
-        maps[0].fitswrite_2d(p.outFolder + p.outPrefix + "_mom0th.fits")
-        maps[1].fitswrite_2d(p.outFolder + p.outPrefix + "_mom1st.fits")
-        maps[2].fitswrite_2d(p.outFolder + p.outPrefix + "_mom2nd.fits")
+        for i, s in enumerate(("_mom0th.fits", "_mom1st.fits", "_mom2nd.fits")):
+            out[s] = maps[i].to_hdu()
         if p.ma.SNmap:
-            maps[0].SNMap(True, name="_mom0th")         # (TOTALMAP writes _map_0th_RMS.fits, _map_0th_SN.fits)
+            n_im, s_im = maps[0].SNMaps(True)         # (TOTALMAP writes _map_0th_RMS.fits, _map_0th_SN.fits)
+            out["_mom0th_RMS.fits"], out["_mom0th_SN.fits"] = n_im.to_hdu(), s_im.to_hdu()
+        return out
+
+    def writeDetections(self, products=None):
+        """Write the products of the source finder (products: those of detectionProducts(), if computed)."""
+        p = self.par
+        for suffix, hdu in (products if products is not None else self.detectionProducts()).items():
+            write_hdu(hdu, p.outFolder + p.outPrefix + suffix)
 
     def extractCubelet(self, obj, edges):
         dims = self.AxisDim()
@@ -654,14 +708,42 @@ class Cube:
         if MASK == "THRESHOLD":
             s.append(sh + f"THRESHOLD={p.se.threshold:.6f}")
         mh.keys = s
-        if p.plots >= 0:
-            mc = Cube(par=p, head=mh)
-            mc.array = mask.astype(np.int16)
-            mc.fitswrite_3d(p.outFolder + p.outPrefix + "_mask.fits", True)
         if verb:
             print(" Done.")
         self.mask = mask
+        self.mask_header = mh
+        self.mask_written = False
         return mask
+
+    def add_output(self, suffix, value):
+        """Keep an output made while computing (e.g. the table of the 2D fit of the initial estimates), to be
+        written by the task as <outfolder><prefix><suffix>: a string (text file), a matplotlib Figure (saved)
+        or an astropy HDU."""
+        self.extra_outputs[suffix] = value
+
+    def pop_outputs(self):
+        """The outputs kept by add_output since the last call ({suffix: value})."""
+        out, self.extra_outputs = self.extra_outputs, {}
+        return out
+
+    def mask_hdu(self):
+        """The mask built by BlankMask as an HDU (int16, 1 inside), with the header of <prefix>_mask.fits;
+        None if there is no mask."""
+        if self.mask is None or getattr(self, "mask_header", None) is None:
+            return None
+        mc = Cube(par=self.par, head=self.mask_header)
+        mc.array = self.mask.astype(np.int16)
+        return mc.to_hdu(True)
+
+    def writeMask(self, force=False):
+        """Write <prefix>_mask.fits in the output folder (once for each mask built, unless force)."""
+        if getattr(self, "mask_header", None) is None or (self.mask_written and not force):
+            return None
+        p = self.par
+        fn = p.outFolder + p.outPrefix + "_mask.fits"
+        write_hdu(self.mask_hdu(), fn)
+        self.mask_written = True
+        return fn
 
     # ------------------------------------------------------------------ misc
     def Reduce(self, fac, rtype="spatial"):
@@ -708,6 +790,9 @@ class Cube:
         return r
 
     def CheckCube(self, type=1):
+        """Erase (set to 0) the noisy channels (type 1, 2), pixel columns (1, 3, 4) and rows (1, 3, 5) of the
+        cube, in place. Returns the cleaned cube cropped of the erased edges, with the blanks NaN (written as
+        <prefix>_clean.fits by the CHECKCUBE task), or None if nothing was erased."""
         if type < 1 or type > 5:
             raise ValueError("CheckCube() ERROR: acceptable 'type' values are 1-5")
         if not self.statsDefined:
@@ -753,7 +838,7 @@ class Cube:
             print(" All pixel rows are good.\n" if not bad_x else
                   " Following pixel rows have been erased: " + " ".join(str(x + 1) for x in bad_x) + "\n")
         if not (bad_x or bad_y or bad_z):
-            return
+            return None
 
         def edges(bad, dim):
             start = 0
@@ -772,7 +857,6 @@ class Cube:
         p.verbose = oldv
         if oldv:
             print("\n" + str(self.stats))
-        name = p.outFolder + p.outPrefix + "_clean.fits"       # (C++ wrote <input>_clean.fits next to the input)
         sub = a[cz0:nz - cz1, cy0:ny - cy1, cx0:nx - cx1].copy()
         sub[(sub == 0)] = np.nan
         out = Cube.fromArray(sub, self.head, p)
@@ -781,7 +865,7 @@ class Cube:
         h.setCrpix(0, self.head.Crpix(0) - cx0)
         h.setCrpix(1, self.head.Crpix(1) - cy0)
         h.setCrpix(2, self.head.Crpix(2) - cz0)
-        out.fitswrite_3d(name, True)
+        return out
 
     def continuumSubtract(self):
         """Fit and subtract a polynomial continuum from each spectrum (vectorised)."""

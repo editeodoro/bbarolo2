@@ -196,7 +196,8 @@ class Ringmodel:
         else:
             mp.array = c.array[0].copy()
             mp.setHead(1)
-        mp.fitswrite_2d(c.pars().outFolder + c.pars().outPrefix + "_map_1st.fits")
+        self.velmap = mp.to_hdu()                 # (the velocity field fitted, as <prefix>_map_1st.fits)
+        c.add_output("_map_1st.fits", self.velmap)
         self.setfield(mp.array, mp.DimX(), mp.DimY())
 
     def setoption(self, maskpar, hside, wfunc, freeangle):
@@ -369,7 +370,28 @@ class Ringmodel:
                     self.posaf[i], self.inclf[i], self.xposf[i], self.yposf[i])
             stream.write("".join(f"{v:>{m}.2f}" for v in vals) + "\n")
 
-    def writeModel(self, fname, h):
+    def ring_table(self, h):
+        """The fitted rings as an astropy Table at full precision (the columns of <prefix>_2dtrm.txt: rad_pix,
+        radii (arcsec), vsys, vrot, vrad (km/s), pa, inc (deg), xpos, ypos (pixels)); rings whose fit failed
+        have NaN values."""
+        from astropy.table import Table
+        import astropy.units as u
+        n = self.nrad
+        conv = h.PixScale() * arcsconv(h.Cunit(0))
+        rads = np.asarray(self.rads[:n], float)
+        cols = [("rad_pix", rads, u.pix), ("radii", rads * conv, u.arcsec), ("vsys", self.vsysf, u.km / u.s),
+                ("vrot", self.vrotf, u.km / u.s), ("vrad", self.vexpf, u.km / u.s), ("pa", self.posaf, u.deg),
+                ("inc", self.inclf, u.deg), ("xpos", self.xposf, u.pix), ("ypos", self.yposf, u.pix)]
+        t = Table()
+        for name, v, unit in cols:
+            t[name] = np.asarray(v, float)[:n]
+            t[name].unit = unit
+        return t
+
+    def model_field(self, h):
+        """The model velocity field of the fitted rings (an Image2D on the grid of the header h): each pixel of
+        a ring has the velocity of the ring (the mean where rings overlap), the pixels between the rings that of
+        the nearest ring, out to the outermost ring fitted; NaN elsewhere."""
         from .image import Image2D
         nx, ny = h.DimAx(0), h.DimAx(1)
         model = np.full((ny, nx), np.nan)
@@ -409,5 +431,9 @@ class Ringmodel:
         img = Image2D()
         img.array = model.astype(np.float32)
         img.saveHead(h)
-        img.fitswrite_2d(fname)
         self.thetaf = ot
+        return img
+
+    def writeModel(self, fname, h):
+        """Write the model velocity field (model_field) in the FITS file fname."""
+        self.model_field(h).fitswrite_2d(fname)

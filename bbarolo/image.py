@@ -81,17 +81,22 @@ class Image2D:
         self.array = d.reshape(-1)[:nx * ny].reshape(ny, nx).astype(np.float32)
         return True
 
-    def fitswrite_2d(self, outname, fullHead=False):
-        arr = self.array
+    def to_hdu(self, fullHead=False, copy=True):
+        """The image as an astropy PrimaryHDU: the data and header that fitswrite_2d writes (copy: a copy of
+        the data, not a view of the array of the image)."""
+        arr = self.array.copy() if copy else self.array
         if arr.dtype == np.bool_:
             arr = arr.astype(np.int16)
         hdr = self.head.toAstropy(2, fullHead) if self.headDefined else fits.Header()
-        d = os.path.dirname(outname)
-        if d:
-            os.makedirs(d, exist_ok=True)
+        hdu = fits.PrimaryHDU(data=arr, header=hdr)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            fits.PrimaryHDU(data=arr, header=hdr).writeto(outname, overwrite=True, output_verify="silentfix")
+            hdu.verify("silentfix")
+        return hdu
+
+    def fitswrite_2d(self, outname, fullHead=False):
+        from .cube import write_hdu
+        write_hdu(self.to_hdu(fullHead), outname)
         return True
 
     def setImageStats(self):

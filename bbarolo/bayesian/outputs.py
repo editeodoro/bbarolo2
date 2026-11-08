@@ -27,6 +27,72 @@ class OutputsMixin(object):
             factor = np.where(modSum != 0, obsSum / modSum, 0.)
         return model * factor[None]
 
+    def write(self, outfolder=None, plots=None, verbose=True):
+        """ Write the outputs of the fit in outfolder (default: OUTFOLDER, or ./output/<OBJECT>/), as the
+        BAYESIAN3DFIT task does: with plots >= 0 (default PLOTS) the best model and its outputs
+        (write_bestmodel: model, maps, PV diagrams, <prefix>_rings_final1.txt with the errors,
+        <prefix>_densprof.txt, ...; plots > 0: the plots of 3DFIT), otherwise only the rings; the samples
+        (<prefix>_<sampler>_results.npy, see load_results); with plots > 0 also the corner plot
+        (<prefix>_corner.pdf) and the radial profiles (<prefix>_profiles.pdf). Returns the files written. """
+        from ..cube import write_outputs
+        from ..tasks import _snapshot, _written, _input_copy
+        from ..bbutils import shortpath
+        if not self.modCalculated:
+            raise RuntimeError("BayesianBBarolo.write: no results to write (run() first).")
+        c = self._cube_obj
+        p = c.pars()
+        if outfolder is not None:
+            p.setOutfolder(os.path.abspath(os.path.expanduser(str(outfolder))) + "/")
+        of, pre = p.outFolder, p.outPrefix
+        plots = p.plots if plots is None else int(plots)
+        os.makedirs(of, exist_ok=True)
+        before = _snapshot(of)
+        old_image = p.imageFile
+        try:
+            if plots > 0:
+                p.imageFile = _input_copy(self, c, of)          # (the plots read the data from a file)
+            write_outputs(c, c.extra_outputs)                   # (e.g. the 2D fit of the initial estimates)
+            if plots >= 0:                                      # (as 3DFIT: PLOTS=-1 writes no model)
+                c.writeMask(force=True)
+                self.write_bestmodel(plots=plots > 0, verbose=verbose)
+            else:
+                with self._errors_in_outputs():
+                    pass
+            fn = os.path.join(of, f"{pre}_{self._method}_results.npy")
+            self.save_results(fn)
+            vprint(verbose, f"Posterior samples written in {shortpath(fn)} (see BayesianBBarolo.load_results)")
+            if plots > 0:
+                self._save_plots(of, pre, verbose)
+        finally:
+            p.imageFile = old_image
+        return _written(of, before)
+
+    def _save_plots(self, of, pre, verbose):
+        """ The corner plot and the radial profiles, as PDF files. """
+        import logging
+        import warnings
+        import matplotlib.pyplot as plt
+        from ..bbutils import shortpath
+        for name, make in (("corner", lambda: self.corner_plot(plot_dynesty=(self._method == 'dynesty'))),
+                           ("profiles", self.plot_profiles)):
+            out = os.path.join(of, f"{pre}_{name}.pdf")
+            root = logging.getLogger()
+            level = root.level
+            try:
+                # (no warnings of the plotting packages, e.g. for a posterior on very few samples)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    root.setLevel(logging.ERROR)
+                    fig = make()
+                    fig.savefig(out, bbox_inches='tight')
+                plt.close(fig)
+                vprint(verbose, f"Plot written in {shortpath(out)}")
+            except Exception as e:
+                plt.close('all')
+                print(f"BAYESIAN3DFIT WARNING: no {name} plot ({e})")
+            finally:
+                root.setLevel(level)
+
     def write_bestmodel(self, plots=True, norm='AZIM', **kwargs):
         """ Write the best model, its moment maps, PV diagrams and plots in the output folder.
 
@@ -42,6 +108,7 @@ class OutputsMixin(object):
             print("Sampler has not been run yet. Please run run() before running this function.")
             return
         verbose = kwargs.get('verbose', True)
+        os.makedirs(self._cube_obj.pars().outFolder, exist_ok=True)
         vprint(verbose, "\nWriting the best model to output directory ...", end=' ', flush=True)
         if self.useBBres:
             with self._errors_in_outputs():

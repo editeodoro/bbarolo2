@@ -177,7 +177,7 @@ def run_api(template, gal, iseed, args):
                 mask="NONE", sm=not args.no_smooth, galmodtype=args.galmodtype, ringmode=args.ringmode,
                 threads=args.threads, plots=False, showbar=False, verbose=False)
     t0 = time.perf_counter()
-    out = gm.run(write=False).model
+    out = gm.run().model
     return np.array(out.data, dtype=np.float64), time.perf_counter() - t0
 
 

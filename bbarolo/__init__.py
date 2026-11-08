@@ -5,7 +5,8 @@ A complete port of the C++ BBarolo code (3D tilted-ring fitting of emission-line
 datacubes and related tools) to Python, accelerated with numpy/scipy/numba.
 
 One class per task; each takes a datacube and any BBarolo parameter (the keywords of a
-parameter file, case-insensitive) and runs the same code as the command line:
+parameter file, case-insensitive) and runs the same code as the command line. run()
+computes in memory and writes nothing; write() writes the files of the command line:
 
     >>> from bbarolo import FitMod3D
     >>> f = FitMod3D("ngc2403.fits", radii=np.arange(15, 1200, 30), xpos=77, ypos=77,
@@ -13,6 +14,7 @@ parameter file, case-insensitive) and runs the same code as the command line:
     ...              free="VROT VDISP", mask="SEARCH", threads=4)
     >>> res = f.run()
     >>> res.rings, res.model
+    >>> res.write("output/")                      # or f.write()
 
 Tasks: FitMod3D (3DFIT), GalMod (GALMOD), GalWind (GALWIND), Search (SEARCH),
 FitMod2D (2DFIT), Ellprof (ELLPROF), Smooth (SMOOTH), SmoothSpec (SMOOTHSPEC),
@@ -20,7 +22,7 @@ Maps (TOTALMAP, VELOCITYMAP, ...), PVSlice (PVSLICE), SpacePar (SPACEPAR),
 Rend3D (REND3D), ContSub (CONTSUB), Stats (STATS), MakeMask (MAKEMASK),
 BayesianBBarolo (BAYESIAN3DFIT: 3D fit with nested sampling; needs dynesty or nautilus).
 
-    >>> bbarolo.run("ngc2403.par", threads=8)     # a parameter file, as the command line
+    >>> bbarolo.run("ngc2403.par", threads=8)     # a parameter file, as the command line (writes)
     >>> bbarolo.help("free")                      # one parameter; help("3DFIT"): a task
 
 Command line: ``BBarolo -p param.par`` (after pip install), ``python -m bbarolo -p

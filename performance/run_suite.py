@@ -153,7 +153,7 @@ def simulate(g, cg, snr, seed, workdir):
     gm = GalMod(tmpl, radii=rs, xpos=xc, ypos=xc, vsys=0., vrot=t["vrot"], vdisp=t["vdisp"], vrad=0., z0=Z0,
                 inc=t["inc"], pa=t["pa"], dens=t["dens"], ltype=1, norm="NONE", mask="NONE",
                 galmodtype="ANALYTIC", threads=1, verbose=False)
-    clean = gm.model()
+    clean = gm.run().model
     peak = float(clean.data.max())
     rms = peak / snr
     noisy = gm.diskmodel.addnoise(clean.data, rms, seed=seed)
@@ -207,6 +207,8 @@ def tables(res):
     for name in ("rings", "rings_stage1", "rings_initial"):
         if name in res:
             t = res[name]
+            if "fitok" in t.colnames:                  # (the rings fitted, as in the ring files)
+                t = t[np.asarray(t["fitok"], bool)]
             out[name] = {c: [float(v) for v in t[c]] for c in ("radii", "vrot", "vdisp", "inc", "pa") if c in t.colnames}
     return out
 

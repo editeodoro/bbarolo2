@@ -20,7 +20,7 @@ Parameter files (``BBarolo -p``, ``bbarolo.run``): the task BAYESIAN3DFIT, with 
 parameters in FREE (required; e.g. VROT VDISP PA_SINGLE INC_SINGLE RADMAX), the priors in PRIORS (e.g.
 VROT=(uniform,loc=0,scale=250) INC=(norm,60,5)), and SAMPLER, SAMPLEROPTS, RUNOPTS and
 THREADS; it samples, writes the outputs and the samples, prints the statistics (VERBOSE)
-and makes the plots (PLOTS): see run_task. These keywords are accepted by BayesianBBarolo
+and makes the plots (PLOTS): see run_task and BayesianBBarolo.write. These keywords are accepted by BayesianBBarolo
 too (defaults of run()), and BayesianBBarolo.from_parfile reads a parameter file.
 
 Free parameters are given as names: 'vrot' (one value per ring), 'vrot_single' (one value
@@ -100,6 +100,6 @@ statistics, save and load), noise.py (the correlation of the noise), rings.py, t
 
 from .fitter import BayesianBBarolo
 from .noise import noise_correlation, dilate_mask
-from .task import run_task
+from .task import run_task, write_task
 
-__all__ = ["BayesianBBarolo", "noise_correlation", "dilate_mask", "run_task"]
+__all__ = ["BayesianBBarolo", "noise_correlation", "dilate_mask", "run_task", "write_task"]

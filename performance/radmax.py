@@ -85,7 +85,7 @@ def simulate(g, spatial, snr, wd):
     gm = GalMod(tmpl, radii=R, xpos=xc, ypos=xc, vsys=0., vrot=vtrue(g, R), vdisp=g["sigma"], vrad=0., z0=rs.Z0,
                 inc=g["inc"], pa=g["pa"], dens=np.exp(-R / (g["h"] * RMAX)), ltype=1, norm="NONE", mask="NONE",
                 galmodtype="ANALYTIC", ringmode="NODES", threads=1, verbose=False)
-    clean = gm.model().data.astype(np.float64)
+    clean = gm.run().model.data.astype(np.float64)
     rms = clean.max() / snr
     noise = gm.diskmodel.addnoise(np.zeros_like(clean), 1., seed=g["seed"]).astype(np.float64)
     noise *= rms / noise.std()

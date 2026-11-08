@@ -8,17 +8,17 @@ keywords as in a parameter file, case-insensitive; see :func:`bbarolo.help`):
     >>> f = FitMod3D("ngc2403.fits", radii=np.arange(15, 1200, 30), xpos=77, ypos=77,
     ...              vsys=132.8, vrot=120, vdisp=8, z0=10, inc=60, pa=123.7,
     ...              free="VROT VDISP", mask="SEARCH", threads=4)
-    >>> res = f.run()
+    >>> res = f.run()                  # in memory: nothing is written
     >>> res.rings, res.model, res.maps
+    >>> res.write("out/")              # or f.write(): the files of the command line
 
-The tasks run exactly the same code as the command line ``BBarolo -p file.par``: a
-class with some parameters gives the same results as a parameter file with the same
-parameters (and the task flag). The outputs are written in OUTFOLDER as usual and are
-also returned in a :class:`Result`. With ``run(write=False)`` they go to a temporary
-folder that is deleted with the Result (and the plots are off unless PLOTS is set).
+The tasks run exactly the same code as the command line ``BBarolo -p file.par``: each
+task computes its outputs in memory, then the command line writes them. ``run()`` returns
+them in a :class:`Result`, and ``write()`` writes the same files as a parameter file with
+the same parameters (and the task flag), with the plots (PLOTS).
 
 :func:`run` runs a parameter file (or parameters) with all its tasks, like the
-command line, in the same Python process.
+command line (writing the outputs), in the same Python process.
 """
 
 import os
@@ -35,6 +35,7 @@ from astropy.io import fits
 from .params import Param, value_to_string
 from . import keywords as _kw
 from .bbutils import mkdirp, BBaroloError, shortpath
+from .cube import write_hdu, write_outputs
 
 __all__ = ['FitMod3D', 'GalMod', 'GalWind', 'Search', 'FitMod2D', 'Ellprof', 'Smooth', 'SmoothSpec', 'Maps',
            'PVSlice', 'SpacePar', 'Rend3D', 'ContSub', 'Stats', 'MakeMask', 'run', 'Result', 'Task',
@@ -44,271 +45,486 @@ __all__ = ['FitMod3D', 'GalMod', 'GalWind', 'Search', 'FitMod2D', 'Ellprof', 'Sm
 # ==========================================================================
 # The engine: the steps of BBarolo, used by both the command line and the classes
 # ==========================================================================
-def _step_contsub(c, par):
+# Each task is a pair of functions: compute(c, par) -> Outputs, which computes everything in memory and
+# writes no file, and write(c, par, out), which writes the files of the task in the output folder of the
+# cube (c.pars().outFolder, prefix c.pars().outPrefix) from its outputs. The command line runs each
+# compute followed by its write; the classes run the computes, and Result.write runs the writes later.
+class Lazy:
+    """An output computed when it is first used: fn() gives it; what describes it (for Result's repr)."""
+    __slots__ = ("fn", "what")
+
+    def __init__(self, fn, what=""):
+        self.fn, self.what = fn, what
+
+
+class Outputs(dict):
+    """The outputs of a task in memory. Keys that do not start with '_' become attributes of the Result
+    (astropy HDUs, Tables, engine objects); the others are for the write function only. Lazy values are
+    computed when first got."""
+
+    def __getitem__(self, k):
+        v = dict.__getitem__(self, k)
+        if isinstance(v, Lazy):
+            v = v.fn()
+            dict.__setitem__(self, k, v)
+        return v
+
+    def get(self, k, default=None):
+        return self[k] if k in self else default
+
+    def raw(self, k):
+        """The value of k without computing it (a Lazy if not computed yet)."""
+        return dict.__getitem__(self, k)
+
+
+def _fn(c, suffix):
+    """The output file <outfolder><prefix><suffix> of the cube c."""
     p = c.pars()
+    return p.outFolder + p.outPrefix + suffix
+
+
+def _nothing(c, par, out):
+    pass
+
+
+def _compute_contsub(c, par):
     c.continuumSubtract()
-    c.fitswrite_3d(p.outFolder + p.outPrefix + "_contsub.fits", True)
-    return {}
+    return Outputs(cube=c.to_hdu(True, copy=True))      # (a copy: CHECKCUBE erases pixels of the cube in place)
 
 
-def _step_checkcube(c, par):
-    c.CheckCube(par.checkCube)
-    return {}
+def _write_contsub(c, par, out):
+    write_hdu(out["cube"], _fn(c, "_contsub.fits"))
 
 
-def _step_stats(c, par):
-    p = c.pars()
+def _compute_checkcube(c, par):
+    clean = c.CheckCube(par.checkCube)
+    return Outputs(cube=clean.to_hdu(True) if clean is not None else None)
+
+
+def _write_checkcube(c, par, out):
+    if out.get("cube") is not None:
+        write_hdu(out["cube"], _fn(c, "_clean.fits"))
+
+
+def _compute_stats(c, par):
     c.setCubeStats()
-    c.stat().tofile(p.outFolder + p.outPrefix + "_stats.txt")
-    return {"stats": c.stat()}
+    return Outputs(stats=c.stat().copy(), text=c.stat().totext())
 
 
-def _step_makemask(c, par):
+def _write_stats(c, par, out):
+    with open(_fn(c, "_stats.txt"), "w") as f:
+        f.write(out["text"])
+
+
+def _compute_makemask(c, par):
     c.BlankMask(None, "LARGEST" in par.MaskType)
-    return {}
+    return Outputs(mask=c.mask_hdu())
 
 
-def _step_smooth(c, par):
+def _compute_smooth(c, par):
     from .smooth import Smooth3D
     sm = Smooth3D()
     sm.cubesmooth(c)
-    sm.fitswrite()
-    return {}
+    return Outputs(cube=sm.result().to_hdu(True), _smooth=sm)
 
 
-def _step_smoothspec(c, par):
+def _write_smooth(c, par, out):
+    write_hdu(out["cube"], out["_smooth"].outname())
+
+
+def _compute_smoothspec(c, par):
     from .smooth import SpectralSmooth3D
     sm = SpectralSmooth3D(par.window_type, par.window_size)
     sm.smooth(c)
-    sm.fitswrite(c)
-    return {}
+    r = sm.result(c)
+    return Outputs(cube=r.to_hdu(True), _smooth=sm, _result=r)
 
 
-def _step_search(c, par):
-    p = c.pars()
+def _write_smoothspec(c, par, out):
+    out["_smooth"].fitswrite(c, result=out["_result"])
+
+
+def _compute_search(c, par):
     c.search()
-    with open(p.outFolder + p.outPrefix + "_detections.txt", "w") as f:
-        c.printDetections(f)
-    c.writeDetections()
-    if p.se.cubelets:
+    buf = io.StringIO()
+    c.printDetections(buf)
+    prod = c.detectionProducts()
+    names = {"_detections.fits.gz": "cube", "_detections_num.fits.gz": "labels", "_detectmap.fits.gz": "detmap"}
+    out = Outputs(detections=list(c.sources.objectList), table=_detections_table(c), _text=buf.getvalue(),
+                  _products=prod)
+    for suffix, hdu in prod.items():
+        if suffix in names:
+            out[names[suffix]] = hdu
+    maps = {s[1:-5]: hdu for s, hdu in prod.items() if s.startswith("_mom")}
+    out["maps"] = maps or None
+    return out
+
+
+def _write_search(c, par, out):
+    with open(_fn(c, "_detections.txt"), "w") as f:
+        f.write(out["_text"])
+    c.writeDetections(out["_products"])
+    if c.pars().se.cubelets:
         c.writeCubelets()
         c.plotDetections()
-    return {"detections": list(c.sources.objectList), "table": _detections_table(c)}
 
 
-def _step_3dfit(c, par):
-    from .galfit import Galfit
+def _model_results(out, mo, want):
+    """Put the outputs of a final model (a galfit_out.ModelOutputs) in out: model (the model normalised as want,
+    lower case), models (all, if more than one), densprof, asymdrift, maps and pvs (computed when used)."""
+    models = mo.model_hdus()
+    if want not in models:
+        nonoise = [k for k in models if k != "noise"]
+        want = nonoise[-1] if nonoise else list(models)[-1]
+    out["model"] = models[want]
+    if len(models) > 1:
+        out["models"] = models
+    out["densprof"] = Lazy(mo.densprof, "Table")
+    if mo.adrift:
+        out["asymdrift"] = mo.asymdrift()
+    out["maps"] = Lazy(mo.maps, "dict of HDUs")
+    out["pvs"] = Lazy(mo.pvs, "dict of HDUs")
+    out["_model_outputs"] = mo
+
+
+def _write_model_outputs(c, par, out, fit=None):
+    mo = out.get("_model_outputs")
+    if mo is None:
+        return
+    runner = None
+    makeplots = bool(par.plots) and fit is not None
+    if makeplots:
+        from .plotscripts import PlotRunner      # (loads the plotting libraries while the files are written)
+        runner = PlotRunner()
+    mo.write(makeplots, fit, runner)
+    if c.pars().verbose:
+        print(" All done!")
+
+
+def _rotation_curve(t):
+    """The rotation curve of a ring table: radius (arcsec; also kpc for the files of C++ BBarolo), VROT and its
+    errors (lower and upper, as positive numbers: the table has e_vrot1 < 0 and e_vrot2 > 0); only the rings
+    fitted, if the table says (fitok)."""
+    from astropy.table import Table
+    if "fitok" in t.colnames:
+        t = t[np.asarray(t["fitok"], bool)]
+    rc = Table()
+    for k in ("radii", "rad_kpc", "vrot"):
+        if k in t.colnames:
+            rc[k] = t[k]
+    if "e_vrot1" in t.colnames:
+        rc["e_vrot_lo"] = -t["e_vrot1"]
+        rc["e_vrot_hi"] = t["e_vrot2"]
+    return rc
+
+
+def _compute_3dfit(c, par):
+    from .galfit import Galfit, ring_table
     fit = Galfit(c)
     fit.galfit()
     if fit.par.TWOSTAGE:
         fit.SecondStage()
-    if par.plots >= 0:
-        fit.writeModel("BOTH" if par.debug else fit.Norms(2), par.plots)
-    return {"galfit": fit}
+    out = Outputs()
+    last = max(fit.stages)
+    out["rings"] = fit.stage_table(last)
+    if not np.any(out["rings"]["fitok"]):
+        import warnings
+        warnings.warn("3DFIT: no ring could be fitted (see the warnings of the fit): all the rings have "
+                      "fitok=False in Result.rings.")
+    if last == 2:
+        out["rings_stage1"] = fit.stage_table(1)
+    out["rings_initial"] = ring_table(fit.rings_initial)
+    out["rotation_curve"] = _rotation_curve(out["rings"])
+    if par.plots >= 0:                           # (PLOTS=-1: no final model)
+        _model_results(out, fit.model_outputs("BOTH" if par.debug else fit.Norms(2)), fit.Norms(2).lower())
+    out["galfit"] = fit
+    return out
 
 
-def _step_bayesian(c, par):
+def _write_3dfit(c, par, out):
+    _write_model_outputs(c, par, out, out["galfit"])
+
+
+def _compute_bayesian(c, par):
     from .bayesian import run_task
+    from .galfit import ring_table
     f = run_task(c, par)
-    return {"bayes": f, "galfit": f._galfit}
+    mpar, errors = f._posterior_errors()
+    extra = None if f.disk_edge is None else {"indisk": np.asarray(f.in_disk, bool)}
+    return Outputs(rings=ring_table(f.outri.object, mpar, errors, extra=extra), bayes=f, galfit=f._galfit)
 
 
-def _galmod(c, par, write=True, seed=None):
-    """The GALMOD task on the cube c: the rings from the parameters (initial_rings), the model
-    engine (DiskModel, ring convention RINGMODE) and the final model, normalised as NORM. write=True: all the outputs (model, maps, PV
-    slices, densprof.txt, ...); write=False: no files, and the mask only if it is needed.
-    Returns (model Cube, DiskModel, rings, NORM)."""
+def _write_bayesian(c, par, out):
+    from .bayesian.task import write_task
+    write_task(out["bayes"], c)
+
+
+def _compute_galmod(c, par, seed=None):
+    """The GALMOD task on the cube c: the rings from the parameters (initial_rings), the model engine
+    (DiskModel, ring convention RINGMODE) and the final model, normalised as NORM (with DEBUG, both AZIM and
+    LOCAL), with its outputs; the mask is built only if needed (NORM=NONE: when the maps, PV slices or
+    radial profile are asked for, or written). seed: the seed of the noise of the noisy model (NOISERMS)."""
     from .galmod import DiskModel
-    from .galfit import initial_rings, final_norm
+    from .galfit import initial_rings, final_norm, check_vsys, ring_table
     from . import galfit_out
     p = c.pars()
+    if seed is None:
+        seed = getattr(c, "noise_seed", None)
     gf = copy.deepcopy(p.gf)          # initial_rings fills it in; the next tasks see the parameters as given
     norm_par = final_norm(gf.NORM, "GALMOD", extra=("BOTH",))
-    norm = "BOTH" if (write and par.debug) else norm_par
+    norm = "BOTH" if par.debug else norm_par
     c.checkBeam()
-    if (write or norm != "NONE") and not c.MaskAll():
+    if norm != "NONE" and not c.MaskAll():
         c.BlankMask()
-    rings = initial_rings(c, gf, galmod=True, write=write).rings
-    from .galfit import check_vsys
+    rings = initial_rings(c, gf, galmod=True).rings
     check_vsys(c, rings, fatal=False)
+    out = Outputs(rings=ring_table(rings))            # (the rings as given: NORM=AZIM changes their DENS)
     # DENS is a flux (DENSFLUX=false: a column density, used with NORM=NONE only, since the
     # normalisations to the data work with fluxes)
     dm = DiskModel(c, par=gf, densflux=gf.DENSFLUX if norm == "NONE" else True)
-    if write:
-        mod = galfit_out.writeModel(c, dm, rings, norm, c.Mask(), par=gf)
-    else:
-        mod = galfit_out.finalModel(c, dm, rings, norm, c.Mask(), par=gf, seed=seed)
-    return mod, dm, rings, norm_par
+    mo = galfit_out.model_outputs(c, dm, rings, norm, c.Mask() if c.MaskAll() else None, par=gf, seed=seed)
+    _model_results(out, mo, norm_par.lower())
+    out["diskmodel"] = dm
+    out["norm"] = norm_par
+    return out
 
 
-def _step_galmod(c, par):
-    _, dm, rings, norm = _galmod(c, par, write=True)
-    return {"diskmodel": dm, "rings": rings, "norm": norm}
+def _write_galmod(c, par, out):
+    _write_model_outputs(c, par, out)
 
 
-def _step_spacepar(c, par):
+def _compute_spacepar(c, par):
     from .spacepar import Spacepar
     sp = Spacepar(c)
     sp.calculate()
-    sp.plotAll_Python()
-    return {"spacepar": sp}
+    return Outputs(space=sp.space_hdu(), spacepar=sp)
 
 
-def _step_galwind(c, par):
+def _write_spacepar(c, par, out):
+    out["spacepar"].plotAll_Python(out["space"])
+
+
+def _compute_galwind(c, par):
     from .galwind import GalWind as _GalWind
-    p = c.pars()
     w = _GalWind(c)
     w.compute()
-    if p.gf.SM:
+    if c.pars().gf.SM:
         w.smooth()
-    w.writeFITS()
-    w.writeMomentMaps()
-    w.writePV()
+    m0, m1, m2 = w.momentMaps()
+    return Outputs(model=w.out.to_hdu(copy=True), maps={"0mom": m0, "1mom": m1, "2mom": m2}, pv=w.pv().to_hdu(),
+                   galwind=w)
+
+
+def _write_galwind(c, par, out):
+    w = out["galwind"]
+    write_hdu(out["model"], _fn(c, "_wind.fits"))
+    w.writeMomentMaps([out["maps"][k] for k in ("0mom", "1mom", "2mom")])
+    w.writePV(pv=out["pv"])
     if par.plots:
         w.makePlots()
-    return {"galwind": w}
 
 
-def _step_2dfit(c, par):
+def _compute_2dfit(c, par):
     from .ringmodel import Ringmodel
     p = c.pars()
-    of, pre = p.outFolder, p.outPrefix
     tr = Ringmodel(c)
     tr.ringfit(p.threads, p.verbose, p.showbar)
-    with open(of + pre + "_2dtrm.txt", "w") as f:
-        tr.printfinal(f, c.Head())
+    buf = io.StringIO()
+    tr.printfinal(buf, c.Head())
     if p.verbose:
-        tr.printfinal(sys.stdout, c.Head())
-    tr.writeModel(of + pre + "_2d_mod.fits", c.Head())
-    return {"ringmodel": tr}
+        sys.stdout.write(buf.getvalue())
+    return Outputs(rings=tr.ring_table(c.Head()), model=tr.model_field(c.Head()).to_hdu(),
+                   velfield=getattr(tr, "velmap", None), ringmodel=tr, _text=buf.getvalue())
 
 
-def _step_maps(c, par):
+def _write_2dfit(c, par, out):
+    with open(_fn(c, "_2dtrm.txt"), "w") as f:
+        f.write(out["_text"])
+    write_hdu(out["model"], _fn(c, "_2d_mod.fits"))
+
+
+# MAPS: (Result attribute, file suffix) of each map, in the order in which they are computed
+_MAPFILES = {"totalmap": "_map_0th.fits", "totalmap_rms": "_map_0th_RMS.fits", "snmap": "_map_0th_SN.fits",
+             "velocitymap": "_map_1st.fits", "dispersionmap": "_map_2nd.fits", "massdensmap": "_map_massdens.fits",
+             "rmsmap": "_map_RMS.fits"}
+
+
+def _compute_maps(c, par):
     from .moments import MomentMap
     from .image import Image2D
+    from astropy.table import Table
     p = c.pars()
-    of, pre = p.outFolder, p.outPrefix
-    s = of + pre
     masking = par.MaskType != "NONE"
     ma = p.ma
     m = MomentMap()
     m.input(c)
+    maps = {}
     if ma.totalmap:
         m.ZeroMoment(masking, ma.maptype)
-        m.fitswrite_2d(s + "_map_0th.fits")
+        maps["totalmap"] = m.to_hdu()
         if ma.SNmap:
-            m.SNMap(masking)
+            n_im, s_im = m.SNMaps(masking)
+            maps["totalmap_rms"], maps["snmap"] = n_im.to_hdu(), s_im.to_hdu()
     if ma.velocitymap:
         m.FirstMoment(masking, ma.maptype)
-        m.fitswrite_2d(s + "_map_1st.fits")
+        maps["velocitymap"] = m.to_hdu()
     if ma.dispersionmap:
         m.SecondMoment(masking, ma.maptype)
-        m.fitswrite_2d(s + "_map_2nd.fits")
+        maps["dispersionmap"] = m.to_hdu()
     if ma.massdensmap:
         m.HIMassDensityMap(masking)
-        m.fitswrite_2d(s + "_map_massdens.fits")
+        maps["massdensmap"] = m.to_hdu()
     if ma.rmsmap:
         m.RMSMap(masking)
-        m.fitswrite_2d(s + "_map_RMS.fits")
+        maps["rmsmap"] = m.to_hdu()
+    out = Outputs(maps=maps or None, **maps)
     if ma.globprof:
         spec = Image2D().extractGlobalSpectrum(c)
         zphys = np.array([c.getZphys(i) for i in range(c.DimZ())])
-        with open(s + "_spectrum.txt", "w") as f:
-            for z, v in zip(zphys, spec):
+        out["spectrum"] = Table([zphys, spec.astype(np.float64)], names=("spectral", "flux"))
+    return out
+
+
+def _write_maps(c, par, out):
+    for k, hdu in (out.get("maps") or {}).items():
+        write_hdu(hdu, _fn(c, _MAPFILES[k]))
+    if "spectrum" in out:
+        sp = out["spectrum"]
+        with open(_fn(c, "_spectrum.txt"), "w") as f:
+            for z, v in zip(np.asarray(sp["spectral"]), np.asarray(sp["flux"], np.float32)):
                 f.write(f"{z:g} {v:g}\n")
-    return {}
 
 
-def _step_pvslice(c, par):
+def _compute_pvslice(c, par):
     from .pvslice import PvSlice
-    p = c.pars()
     pv = PvSlice(c)
     pv.slice()
-    pv.fitswrite_2d(p.outFolder + p.outPrefix + f"_pv_{par.PA_PV:.0f}.fits", True)
-    return {}
+    return Outputs(pv=pv.to_hdu(True))
 
 
-def _step_reduce(c, par):
-    p = c.pars()
+def _write_pvslice(c, par, out):
+    write_hdu(out["pv"], _fn(c, f"_pv_{par.PA_PV:.0f}.fits"))
+
+
+def _compute_reduce(c, par):
     red = c.Reduce(int(np.floor(par.factor)), "spectral" if par.reduce == "spectral" else "spatial")
-    red.fitswrite_3d(p.outFolder + p.outPrefix + "_red.fits", True)
-    return {}
+    return Outputs(cube=red.to_hdu(True))
 
 
-def _step_slitfit(c, par):
+def _write_reduce(c, par, out):
+    write_hdu(out["cube"], _fn(c, "_red.fits"))
+
+
+def _compute_slitfit(c, par):
     print(" SLITFIT task is not available in the Python version (it was broken in C++ BBarolo too).")
-    return {}
+    return Outputs()
 
 
-def _step_ellprof(c, par):
+def _compute_ellprof(c, par):
     from .ellprof import Ellprof as _Ellprof
     p = c.pars()
-    of, pre = p.outFolder, p.outPrefix
     ell = _Ellprof(c)
     ell.RadialProfile()
-    with open(of + pre + "_ellprof.txt", "w") as f:
-        ell.printProfile(f, ell.getNseg() - 1)
+    buf = io.StringIO()
+    ell.printProfile(buf, ell.getNseg() - 1)
+    text = buf.getvalue()
     if p.verbose:
-        ell.printProfile(sys.stdout, ell.getNseg() - 1)
-    ell.writeMap(of + pre + "_ellprof_map.fits")
-    return {"ellprof": ell}
+        sys.stdout.write(text)
+    return Outputs(profile=read_table(io.StringIO(text)), map=ell.im.to_hdu(), ellprof=ell, _text=text)
 
 
-def _step_rend3d(c, par):
+def _write_ellprof(c, par, out):
+    with open(_fn(c, "_ellprof.txt"), "w") as f:
+        f.write(out["_text"])
+    write_hdu(out["map"], _fn(c, "_ellprof_map.fits"))
+
+
+def _compute_rend3d(c, par):
     from .rendering3d import Rendering3D
     r3d = Rendering3D(c)
     r3d.compute(par.rendangle)
-    r3d.writefits()
-    return {}
+    return Outputs(image=r3d.out.to_hdu())
 
 
-# (name, is it requested?, function), in the order in which BBarolo runs them.
+def _write_rend3d(c, par, out):
+    write_hdu(out["image"], _fn(c, "_3D.fits"))
+
+
+# (name, is it requested?, compute, write), in the order in which BBarolo runs them.
 # p is the Param of the cube (a copy of par, with the output folder and prefix).
 STEPS = [
-    ("CONTSUB", lambda par, p: par.contsub, _step_contsub),
-    ("CHECKCUBE", lambda par, p: par.checkCube, _step_checkcube),
-    ("STATS", lambda par, p: par.flagStats, _step_stats),
-    ("MAKEMASK", lambda par, p: par.makeMask, _step_makemask),
-    ("SMOOTH", lambda par, p: par.flagSmooth, _step_smooth),
-    ("SMOOTHSPEC", lambda par, p: par.flagSmoothSpectral, _step_smoothspec),
-    ("SEARCH", lambda par, p: p.se.flagSearch, _step_search),
-    ("3DFIT", lambda par, p: p.gf.flagGALFIT, _step_3dfit),
-    ("BAYESIAN3DFIT", lambda par, p: p.gf.flagBAYESIAN, _step_bayesian),
-    ("GALMOD", lambda par, p: p.gm.flagGALMOD, _step_galmod),
-    ("SPACEPAR", lambda par, p: par.flagSpace, _step_spacepar),
-    ("GALWIND", lambda par, p: p.gw.flagGALWIND, _step_galwind),
-    ("2DFIT", lambda par, p: par.flagRing, _step_2dfit),
-    ("MAPS", lambda par, p: p.getMaps(), _step_maps),
-    ("PVSLICE", lambda par, p: par.flagPV, _step_pvslice),
-    ("REDUCE", lambda par, p: par.getflagReduce() and not (par.flagSmooth or par.flagSmoothSpectral), _step_reduce),
-    ("SLITFIT", lambda par, p: par.flagSlitfit, _step_slitfit),
-    ("ELLPROF", lambda par, p: par.flagEllProf, _step_ellprof),
-    ("REND3D", lambda par, p: par.flagRend3D, _step_rend3d),
+    ("CONTSUB", lambda par, p: par.contsub, _compute_contsub, _write_contsub),
+    ("CHECKCUBE", lambda par, p: par.checkCube, _compute_checkcube, _write_checkcube),
+    ("STATS", lambda par, p: par.flagStats, _compute_stats, _write_stats),
+    ("MAKEMASK", lambda par, p: par.makeMask, _compute_makemask, _nothing),
+    ("SMOOTH", lambda par, p: par.flagSmooth, _compute_smooth, _write_smooth),
+    ("SMOOTHSPEC", lambda par, p: par.flagSmoothSpectral, _compute_smoothspec, _write_smoothspec),
+    ("SEARCH", lambda par, p: p.se.flagSearch, _compute_search, _write_search),
+    ("3DFIT", lambda par, p: p.gf.flagGALFIT, _compute_3dfit, _write_3dfit),
+    ("BAYESIAN3DFIT", lambda par, p: p.gf.flagBAYESIAN, _compute_bayesian, _write_bayesian),
+    ("GALMOD", lambda par, p: p.gm.flagGALMOD, _compute_galmod, _write_galmod),
+    ("SPACEPAR", lambda par, p: par.flagSpace, _compute_spacepar, _write_spacepar),
+    ("GALWIND", lambda par, p: p.gw.flagGALWIND, _compute_galwind, _write_galwind),
+    ("2DFIT", lambda par, p: par.flagRing, _compute_2dfit, _write_2dfit),
+    ("MAPS", lambda par, p: p.getMaps(), _compute_maps, _write_maps),
+    ("PVSLICE", lambda par, p: par.flagPV, _compute_pvslice, _write_pvslice),
+    ("REDUCE", lambda par, p: par.getflagReduce() and not (par.flagSmooth or par.flagSmoothSpectral),
+     _compute_reduce, _write_reduce),
+    ("SLITFIT", lambda par, p: par.flagSlitfit, _compute_slitfit, _nothing),
+    ("ELLPROF", lambda par, p: par.flagEllProf, _compute_ellprof, _write_ellprof),
+    ("REND3D", lambda par, p: par.flagRend3D, _compute_rend3d, _write_rend3d),
 ]
 
 
-def run_steps(c, par, collect=False):
-    """Run all the requested tasks on the cube c (port of the task part of BBcore).
-    With collect=True, return {step name: (outputs in memory, files written)}."""
+def _run_tasks(par, p):
+    """The tasks run with the parameters par (p: the Param of the cube): those requested, and SEARCH and
+    MAKEMASK when the mask needs them."""
+    tasks = [name for name, requested, _, _ in STEPS if requested(par, p)]
+    if any(t in tasks for t in ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "MAPS", "ELLPROF")):
+        mask = str(p.MaskType).upper()
+        tasks += [t for t, k in (("SEARCH", "SEARCH"), ("MAKEMASK", "SMOOTH")) if k in mask and t not in tasks]
+    return tasks
+
+
+def compute_step(c, par, name):
+    """The outputs of the task name on the cube c (an Outputs), with the outputs made while computing (e.g. the
+    tables and plots of the estimate of the initial parameters, see Cube.add_output) in '_extra'."""
+    compute = next(f for n, _, f, _ in STEPS if n == name)
+    out = compute(c, par)
+    out["_extra"] = c.pop_outputs()
+    return out
+
+
+def write_step(c, par, name, out):
+    """Write the outputs out of the task name in the output folder of the cube c, and the mask if it has been
+    built (or built again) and PLOTS >= 0."""
+    write = next(w for n, _, _, w in STEPS if n == name)
+    write_outputs(c, out.get("_extra", {}))
+    if c.pars().plots >= 0:
+        c.writeMask()                            # (before the outputs: the plots read it)
+    write(c, par, out)
+
+
+def run_steps(c, par, collect=False, write=True):
+    """Run all the requested tasks on the cube c (port of the task part of BBcore): each task computes its
+    outputs, then (write=True) writes them. With collect=True, return {step name: (Outputs, files written)}."""
     p = c.pars()
     if par.AUTO and not p.gf.flagBAYESIAN:          # (BBarolo -f cube.fits BAYESIAN3DFIT=true: no 3DFIT)
         p.gf.flagGALFIT = True
     # all the parameters of the run, in a parameter file in the output folder
-    tasks = [name for name, requested, _ in STEPS if requested(par, p)]
-    if any(t in tasks for t in ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "MAPS", "ELLPROF")):
-        mask = str(p.MaskType).upper()
-        tasks += [t for t, k in (("SEARCH", "SEARCH"), ("MAKEMASK", "SMOOTH")) if k in mask and t not in tasks]
-    if p.outFolder:
+    if write and p.outFolder:
         mkdirp(p.outFolder)
-        p.write_parameterfile(p.outFolder + p.outPrefix + "_params.par", tasks)
+        p.write_parameterfile(p.outFolder + p.outPrefix + "_params.par", _run_tasks(par, p))
     out = {}
-    for name, requested, step in STEPS:
+    for name, requested, _, _ in STEPS:
         if not requested(par, p):
             continue
-        before = _snapshot(p.outFolder) if collect else None
-        res = step(c, par)
+        before = _snapshot(p.outFolder) if (collect and write) else None
+        res = compute_step(c, par, name)
+        if write:
+            write_step(c, par, name, res)
         if collect:
-            out[name] = (res, _written(p.outFolder, before))
+            out[name] = (res, _written(p.outFolder, before) if write else [])
     return out
 
 
@@ -441,12 +657,12 @@ _UNITS = {"km/s": "km/s", "kms": "km/s", "deg": "deg", "arcs": "arcsec", "arcsec
 
 
 def read_table(fname):
-    """A BBarolo text table (rings, profiles, 2D fit) as an astropy Table. Column names
+    """A BBarolo text table (rings, profiles, 2D fit; a file name or a text stream) as an astropy Table. Column names
     are lower case (e.g. radii, vrot, vdisp, inc, pa, xpos, ypos, vsys, e_vrot1, ...)."""
     from astropy.table import Table
     import astropy.units as u
     comments, rows = [], []
-    with open(fname) as f:
+    with (contextlib.nullcontext(fname) if hasattr(fname, "read") else open(fname)) as f:
         for line in f:
             s = line.strip()
             if not s:
@@ -525,22 +741,39 @@ def _detections_table(c):
 
 
 class Result:
-    """The outputs of a BBarolo task.
+    """The outputs of a BBarolo task, in memory.
 
     The attributes depend on the task (``keys()`` lists them): astropy HDUs for cubes and
-    maps (dictionaries of HDUs for several maps), astropy Tables for text tables, plus
-    ``files`` (the files written, full paths) and ``outfolder``. ``open(name)`` loads any
-    written FITS file whose name contains ``name``. With ``run(write=False)`` the files
-    are in a temporary folder that is deleted with the Result.
+    maps (dictionaries of HDUs for several maps), astropy Tables for tables (at full
+    precision), and the engine objects. Some (e.g. the moment maps and PV slices of a model)
+    are computed when first used. ``write(outfolder)`` writes the files of the command line
+    (then ``files`` lists them and ``outfolder`` is the folder).
     """
 
-    def __init__(self, task, outfolder, files=(), tmpdir=None):
+    def __init__(self, task, cube=None, par=None, source=None):
         self.task = task
-        self.outfolder = outfolder
-        self.files = list(files)
-        self._tmpdir = tmpdir
+        self.outfolder = None
+        self.files = []
+        self._cube = cube                 # (the Cube analysed, for write)
+        self._par = par
+        self._source = source             # (the Task, whose cube may be in memory)
+        self._steps = []                  # (name, Outputs) of the tasks run, in order
         self._keys = []
         self._lazy = {}
+
+    def _add(self, name, out):
+        """Add the outputs of the task name (an Outputs): the keys that do not start with '_' become
+        attributes (Lazy values: computed when used)."""
+        self._steps.append((name, out))
+        for k in out:
+            if k.startswith("_"):
+                continue
+            v = out.raw(k)
+            key = "contsub" if (k == "cube" and name == "CONTSUB" and self.task != "CONTSUB") else k
+            if isinstance(v, Lazy):
+                self._set_lazy(key, (lambda k=k: out[k]), v.what)
+            else:
+                self._set(key, v)
 
     def _set(self, name, value):
         if value is None:
@@ -574,26 +807,41 @@ class Result:
     def __contains__(self, name):
         return name in self._keys
 
-    def open(self, name):
-        """Load the written FITS file whose name contains ``name`` (e.g. 'pv_a', 'mod_local')."""
-        cand = [f for f in self.files if name in os.path.basename(f) and f.endswith((".fits", ".fits.gz"))]
-        if not cand:
-            raise FileNotFoundError(f"No FITS output with '{name}' in its name. Files: "
-                                    + ", ".join(os.path.basename(f) for f in self.files))
-        cand.sort(key=lambda f: (os.path.basename(f) != name, len(f)))
-        return load_fits(cand[0])
-
-    def plot(self):
-        """Make (again) the plots of a 3DFIT result; returns the PDF files."""
-        fit = getattr(self, "galfit", None)
-        if fit is None:
-            raise ValueError(f"No plots available for the {self.task} task.")
-        before = _snapshot(self.outfolder)
-        fit.cin.pars().plots = 1
-        fit.plotAll_Python()
-        new = _written(self.outfolder, before)
+    def write(self, outfolder=None, plots=None):
+        """Write the outputs in outfolder (default: OUTFOLDER, or ./output/<OBJECT>/), exactly as the command
+        line writes them, with the plots of PLOTS (plots: True/False, or a PLOTS value, to change it). An
+        in-memory cube (or one with a new beam) is written as <OBJECT>_input.fits, which the parameter file
+        of the run (<prefix>_params.par) refers to. Returns the files written (also in self.files)."""
+        if self._cube is None:
+            raise ValueError(f"This Result of {self.task} has nothing to write.")
+        c, par = self._cube, self._par
+        p = c.pars()
+        of = os.path.expanduser(str(outfolder)) if outfolder not in (None, "") else p.outFolder
+        of = os.path.abspath(of) + "/"
+        old = (p.outFolder, p.plots, par.plots, p.imageFile, par.outFolder)
+        try:
+            p.setOutfolder(of)
+            par.setOutfolder(of)
+            if plots is not None:
+                p.plots = par.plots = int(plots)
+            if p.verbose and os.path.isdir(of) and os.listdir(of):
+                print(f" BBAROLO WARNING: the output folder {shortpath(of)} already exists: its files will be "
+                      "overwritten.")
+            mkdirp(of)
+            before = _snapshot(of)
+            if self._source is not None:
+                p.imageFile = _input_copy(self._source, c, of)
+            names = [n for n, _ in self._steps]
+            p.write_parameterfile(of + p.outPrefix + "_params.par", names)
+            c.mask_written = False
+            for name, out in self._steps:
+                write_step(c, par, name, out)
+            new = _written(of, before)
+        finally:
+            p.outFolder, p.plots, par.plots, p.imageFile, par.outFolder = old
+        self.outfolder = of
         self.files = sorted(set(self.files) | set(new))
-        return [f for f in self.files if f.endswith(".pdf")]
+        return new
 
     @staticmethod
     def _describe(v):
@@ -609,7 +857,8 @@ class Result:
         return type(v).__name__
 
     def __repr__(self):
-        lines = [f"<Result of {self.task}: {len(self.files)} files in {self.outfolder}"]
+        where = f"{len(self.files)} files in {self.outfolder}" if self.outfolder else "in memory, not written"
+        lines = [f"<Result of {self.task}: {where}"]
         w = max([14] + [len(k) for k in self._keys])
         for k in self._keys:
             d = self._lazy[k][1] + " (computed when used)" if k in self._lazy else self._describe(getattr(self, k))
@@ -628,6 +877,8 @@ class Result:
         import matplotlib.pyplot as plt
         self._need("rings")
         t = self.rings
+        if "fitok" in t.colnames:
+            t = t[np.asarray(t["fitok"], bool)]
         if params is None:
             params = ["vrot", "vdisp"] + [k for k in ("inc", "pa", "z0", "vsys", "xpos", "ypos", "vrad", "dens")
                                           if f"e_{k}1" in t.colnames or (k in t.colnames and len(t) > 1
@@ -712,31 +963,6 @@ class Result:
         return fig
 
 
-def _base(f, prefix):
-    """File name without folder, prefix and extension."""
-    b = os.path.basename(f)
-    for ext in (".fits.gz", ".fits", ".txt"):
-        if b.endswith(ext):
-            b = b[:-len(ext)]
-    if prefix and b.startswith(prefix):
-        b = b[len(prefix):]
-    return b.lstrip("_") or b
-
-
-def _rotation_curve(t):
-    """The rotation curve of a ring table: radius (arcsec; also kpc for the files of C++ BBarolo), VROT and
-    its errors (lower and upper, as positive numbers: the table has e_vrot1 < 0 and e_vrot2 > 0)."""
-    from astropy.table import Table
-    rc = Table()
-    for k in ("radii", "rad_kpc", "vrot"):
-        if k in t.colnames:
-            rc[k] = t[k]
-    if "e_vrot1" in t.colnames:
-        rc["e_vrot_lo"] = -t["e_vrot1"]
-        rc["e_vrot_hi"] = t["e_vrot2"]
-    return rc
-
-
 def _add_data(res, c):
     """res.data (the cube that was analysed, after CONTSUB if any) and res.residual (data - model,
     NaN outside the mask), computed when first used."""
@@ -758,162 +984,32 @@ def _add_data(res, c):
         res._set_lazy("residual", residual, f"HDU {shape}")
 
 
-def _fill(res, step, mem, files, prefix, cube=None):
-    """Fill a Result with the outputs of one step (files written + objects in memory). cube: the Cube
-    that was analysed (for Result.data and Result.residual)."""
-    fitsf = [f for f in files if f.endswith((".fits", ".fits.gz"))]
-    base = lambda f: os.path.basename(f)
-    find = lambda pred: [f for f in fitsf if pred(base(f))]
-
-    def name(f):
-        """The name of an output without the prefix: <prefix>_rings_final1.txt -> rings_final1.txt."""
-        b = base(f)
-        return b[len(prefix) + 1:] if prefix and b.startswith(prefix + "_") else b
-    if "mask.fits" in [name(f) for f in files] and step != "SEARCH":
-        res._set("mask", load_fits([f for f in files if name(f) == "mask.fits"][0]))
-
-    def folder_maps(sub):
-        return {_base(f, prefix): load_fits(f) for f in fitsf if os.path.basename(os.path.dirname(f)) == sub}
-
-    if step in ("3DFIT", "GALMOD", "BAYESIAN3DFIT"):
-        txt = {name(f): f for f in files if f.endswith(".txt")}
-        if step == "3DFIT":
-            last = txt.get("rings_final2.txt") or txt.get("rings_final1.txt")
-            res._set("rings", read_table(last) if last else None)
-            if last and not len(res.rings):
-                import warnings
-                warnings.warn("3DFIT: no ring could be fitted (see the warnings of the fit): Result.rings is "
-                              "empty.")
-            if "rings_final2.txt" in txt and "rings_final1.txt" in txt:
-                res._set("rings_stage1", read_table(txt["rings_final1.txt"]))
-            if "rings_initial.txt" in txt:
-                res._set("rings_initial", read_table(txt["rings_initial.txt"]))
-        elif step == "BAYESIAN3DFIT":
-            if "rings_final1.txt" in txt:
-                res._set("rings", read_table(txt["rings_final1.txt"]))
-            if "densprof_deconvolved.txt" in txt:
-                res._set("densprof_deconvolved", read_table(txt["densprof_deconvolved.txt"]))
-            res._set("bayes", mem.get("bayes"))
-            res._set("samples", next((f for f in files if f.endswith("_results.npy")), None))
-        else:
-            if "rings_model.txt" in txt:
-                res._set("rings", read_table(txt["rings_model.txt"]))
-        top = res.outfolder.rstrip("/")
-        models = {_base(f, prefix).replace("mod_", "", 1): load_fits(f) for f in fitsf
-                  if base(f).startswith(prefix + "_mod_") and os.path.dirname(f).rstrip("/") == top}
-        if models:
-            fit = mem.get("galfit")
-            if step == "3DFIT":
-                want = fit.Norms(2).lower() if fit is not None else None
-            else:
-                want = str(mem.get("norm", "")).lower() or None
-            if want not in models:
-                nonoise = [k for k in models if k != "noise"]
-                want = nonoise[-1] if nonoise else list(models)[-1]
-            res._set("model", models[want])
-            if len(models) > 1:
-                res._set("models", models)
-        if "densprof.txt" in txt:
-            res._set("densprof", read_table(txt["densprof.txt"]))
-        if "asymdrift.txt" in txt:
-            res._set("asymdrift", read_table(txt["asymdrift.txt"]))
-        res._set("maps", folder_maps("maps") or None)
-        res._set("pvs", folder_maps("pvs") or None)
-        res._set("galfit", mem.get("galfit"))
-        res._set("diskmodel", mem.get("diskmodel"))
-        if "rings" in res and "vrot" in res.rings.colnames and step != "GALMOD":
-            res._set("rotation_curve", _rotation_curve(res.rings))
-        _add_data(res, cube)
-        pdfs = [f for f in files if f.endswith(".pdf")]
-        res._set("plots", pdfs or None)
-    elif step == "GALWIND":
-        for f in fitsf:
-            b = _base(f, prefix)
-            if b == "wind":
-                res._set("model", load_fits(f))
-            elif b == "wind_pv":
-                res._set("pv", load_fits(f))
-        res._set("maps", {_base(f, prefix).replace("wind_", ""): load_fits(f)
-                          for f in find(lambda b: "_wind_" in b and "mom" in b)} or None)
-        res._set("galwind", mem.get("galwind"))
-    elif step == "SEARCH":
-        res._set("detections", mem.get("detections"))
-        res._set("table", mem.get("table"))
-        for f in fitsf:
-            b = base(f)
-            if name(f).startswith("detections.fits"):
-                res._set("cube", load_fits(f))
-            elif name(f).startswith("detections_num"):
-                res._set("labels", load_fits(f))
-            elif name(f).startswith("detectmap"):
-                res._set("detmap", load_fits(f))
-        top = res.outfolder.rstrip("/")
-        res._set("maps", {_base(f, prefix): load_fits(f) for f in fitsf if base(f).startswith(prefix + "_mom")
-                          and os.path.dirname(f).rstrip("/") == top} or None)
-        res._set("cubelets", sorted({os.path.dirname(f) for f in fitsf if "/sources/" in f}) or None)
-    elif step == "2DFIT":
-        for f in files:
-            b = base(f)
-            if b.endswith("_2dtrm.txt"):
-                res._set("rings", read_table(f))
-            elif b.endswith("_2d_mod.fits"):
-                res._set("model", load_fits(f))
-            elif b.endswith("map_1st.fits"):
-                res._set("velfield", load_fits(f))
-        res._set("ringmodel", mem.get("ringmodel"))
-    elif step == "ELLPROF":
-        for f in files:
-            b = base(f)
-            if b.endswith("_ellprof.txt"):
-                res._set("profile", read_table(f))
-            elif b.endswith("_ellprof_map.fits"):
-                res._set("map", load_fits(f))
-        res._set("ellprof", mem.get("ellprof"))
-    elif step == "MAPS":
-        names = {"map_0th": "totalmap", "map_1st": "velocitymap", "map_2nd": "dispersionmap",
-                 "map_massdens": "massdensmap", "map_RMS": "rmsmap", "map_0th_SN": "snmap",
-                 "map_0th_RMS": "totalmap_rms"}
-        maps = {}
-        for f in fitsf:
-            b = _base(f, prefix)
-            if b in names:
-                maps[names[b]] = load_fits(f)
-        res._set("maps", maps or None)
-        for k, v in maps.items():
-            res._set(k, v)
-        sp = [f for f in files if name(f) == "spectrum.txt"]
-        if sp:
-            from astropy.table import Table
-            a = np.loadtxt(sp[0], ndmin=2)
-            res._set("spectrum", Table(a, names=("spectral", "flux")))
-    elif step in ("SMOOTH", "SMOOTHSPEC", "CONTSUB", "REDUCE"):
-        cubes = [f for f in fitsf if name(f) != "mask.fits"]
-        if cubes:
-            # CONTSUB before another task: the subtracted cube is 'contsub'
-            name = "contsub" if step == "CONTSUB" and res.task != "CONTSUB" else "cube"
-            res._set(name, load_fits(cubes[-1]))
-    elif step == "PVSLICE":
-        pv = find(lambda b: b.startswith(prefix + "_pv_"))
-        if pv:
-            res._set("pv", load_fits(pv[-1]))
-    elif step == "SPACEPAR":
-        sp = find(lambda b: b.endswith("_spacepar.fits"))
-        if sp:
-            res._set("space", load_fits(sp[-1]))
-        res._set("spacepar", mem.get("spacepar"))
-        pdfs = [f for f in files if f.endswith(".pdf")]
-        res._set("plots", pdfs or None)
-    elif step == "REND3D":
-        im = find(lambda b: b.endswith("_3D.fits"))
-        if im:
-            res._set("image", load_fits(im[-1]))
-    elif step == "STATS":
-        res._set("stats", mem.get("stats"))
-        st = [f for f in files if f.endswith("_stats.txt")]
-        if st:
-            with open(st[0]) as fh:
-                res._set("text", fh.read())
+def _result(task, steps, c, par, source=None):
+    """A Result of the task (name) from the outputs of the tasks run on the cube c: steps, {name: Outputs}."""
+    res = Result(task, cube=c, par=par, source=source)
+    for name, out in steps.items():
+        res._add(name, out)
+    if "mask" not in res and c.mask is not None and c.mask_header is not None and \
+            any(n in steps for n in _MASKED):
+        res._set("mask", c.mask_hdu())
+    if any(n in steps for n in ("3DFIT", "GALMOD", "BAYESIAN3DFIT")):
+        _add_data(res, c)
     return res
+
+
+_MASKED = ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "MAPS", "ELLPROF", "REND3D")
+
+
+def _input_copy(task, c, outfolder):
+    """The FITS file of the data of a task (for the plots, which read it): the user's file, or a copy written
+    in outfolder as <OBJECT>_input.fits (an in-memory cube, or a new beam)."""
+    hdu = task._input_hdu() if task is not None else None
+    if hdu is None:
+        return task._cube if task is not None else c.pars().imageFile
+    name = str(hdu.header.get("OBJECT", "cube")).strip() or "cube"
+    fn = os.path.join(outfolder, name.replace("/", "_") + "_input.fits")
+    write_hdu(hdu, fn)
+    return fn
 
 
 # ==========================================================================
@@ -1001,8 +1097,10 @@ class Task:
                 single values or one value per ring.
         beam:   (bmaj, bmin, bpa) in arcsec and degrees: replaces the beam of the cube.
 
-    Methods: run(**params) -> Result; update(**params) -> self; get(name);
-    from_parfile(file, **params); to_parfile(file=None); help().
+    Methods: run(**params) -> Result (in memory, nothing written); write(outfolder=None,
+    plots=None) -> files (the outputs of the last run, as the command line writes them);
+    update(**params) -> self; get(name); from_parfile(file, **params); to_parfile(file=None);
+    help().
     """
     TASK = None                 # task flag set by the class
     FLAGS = ()                  # task flags accepted (besides CONTSUB)
@@ -1137,7 +1235,7 @@ class Task:
         if isinstance(self._cube, str):
             lines.append(f"{'FITSFILE':14s}{self._cube}")
         else:
-            lines.append("// FITSFILE: an in-memory cube (written in the output folder by run())")
+            lines.append("// FITSFILE: an in-memory cube (written in the output folder by write())")
         for k, v in self._all_params().items():
             lines.append(f"{k:14s}{_to_str(_kw.lookup(k), v)}")
         s = "\n".join(lines) + "\n"
@@ -1198,18 +1296,6 @@ class Task:
             hdu.header["BPA"] = self.beam[2]
         return hdu
 
-    def _input_file(self, outfolder):
-        """The FITS file to read: the user's file, or a copy (in-memory cube, or new beam)
-        written in the output folder."""
-        hdu = self._input_hdu()
-        if hdu is None:
-            return self._cube
-        name = str(hdu.header.get("OBJECT", "cube")).strip() or "cube"
-        mkdirp(outfolder)
-        fn = os.path.join(outfolder, name.replace("/", "_") + "_input.fits")
-        hdu.writeto(fn, overwrite=True)
-        return fn
-
     def _default_outfolder(self):
         from .header import Header
         if isinstance(self._cube, str):
@@ -1218,40 +1304,46 @@ class Task:
             name = str(self._cube.header.get("OBJECT", "NONE")).strip() or "NONE"
         return os.getcwd() + "/output/" + name + "/"
 
+    def _read_cube(self, par):
+        """The Cube of the task (read from the file, or from the HDU in memory), with the parameters par."""
+        from .cube import Cube
+        c = Cube(par=par)
+        hdu = self._input_hdu()
+        try:
+            ok = c.readCube(self._cube) if hdu is None else c.readHDU(hdu, name=par.imageFile)
+        except BBaroloError:
+            raise
+        except Exception as e:
+            print(e)
+            ok = False
+        if not ok:
+            raise IOError(f"{par.imageFile} is not a readable FITS file!")
+        return c
+
     # ------------------------------------------------------------------ running
-    def run(self, write=True, **params):
-        """Run the task. params: parameters to change first (as update()). write=False:
-        outputs in a temporary folder deleted with the Result (plots off unless PLOTS is
-        set). Returns a Result (also in self.result)."""
+    def run(self, **params):
+        """Run the task in memory: nothing is written (see write()). params: parameters to change first (as
+        update()). Returns a Result (also in self.result)."""
+        seed = params.pop("seed", None) if type(self).__name__ == "GalMod" else None
         if params:
             self.update(**params)
-        tmp = None
-        if write:
-            of = self._params.get("OUTFOLDER")
-            of = os.path.expanduser(str(of).strip()) if of not in (None, "") else self._default_outfolder()
-        else:
-            tmp = tempfile.TemporaryDirectory(prefix="bbarolo_")
-            of = tmp.name
-        of = os.path.abspath(of) + "/"
-        prm = self._all_params(outfolder=of, fitsfile=self._input_file(of))
-        if not write and "PLOTS" not in self._params:
-            prm["PLOTS"] = False
+        of = self._params.get("OUTFOLDER")
+        of = os.path.expanduser(str(of).strip()) if of not in (None, "") else self._default_outfolder()
+        hdu = self._input_hdu()
+        prm = self._all_params(outfolder=os.path.abspath(of) + "/",
+                               fitsfile=self._cube if hdu is None else "in-memory cube")
         par = _checked(build_param(prm))
-        r = BBcore(par, collect=True)
-        if not r:
-            raise IOError(f"{par.imageFile} is not a readable FITS file!")
-        outs, c = r
-        res = Result(self.TASK or "MAPS", of, tmpdir=tmp)
-        if prm["FITSFILE"] != self._cube:            # the copy of an in-memory cube (or with a new beam)
-            res.files.append(prm["FITSFILE"])
-        prefix = c.pars().outPrefix
-        if os.path.isfile(of + prefix + "_params.par"):     # (the parameters of the run, see run_steps)
-            res.files.append(of + prefix + "_params.par")
-        for name, (mem, files) in outs.items():
-            res.files = sorted(set(res.files) | set(files))
-            _fill(res, name, mem, files, prefix, cube=c)
-        self.result = res
-        return res
+        c = self._read_cube(par)
+        c.noise_seed = seed
+        outs = run_steps(c, par, collect=True, write=False)
+        self.result = _result(self.TASK or "MAPS", {n: o for n, (o, _) in outs.items()}, c, par, source=self)
+        return self.result
+
+    def write(self, outfolder=None, plots=None):
+        """Write the outputs of the last run() (see Result.write). Returns the files written."""
+        if self.result is None:
+            raise RuntimeError(f"{type(self).__name__}: nothing to write, run() first.")
+        return self.result.write(outfolder, plots)
 
 
 def _truthy(v):
@@ -1277,30 +1369,14 @@ class FitMod3D(Task):
 class GalMod(Task):
     TASK = "GALMOD"
 
-    def model(self, seed=None, **params):
-        """The model cube, built in memory without writing any file: an astropy PrimaryHDU
-        with the data and header of run().model. Only what the model needs is computed: no
-        statistics, maps or PV slices, and the mask only for NORM=LOCAL or AZIM. With
-        NOISERMS, the model with noise (seed: seed of the noise). params: parameters to
-        change first (as update()).
-
-        The model engine is kept in self.diskmodel (a bbarolo.galmod.DiskModel), to build
-        other models on the same grid: self.diskmodel.hdu(rings)."""
-        from .cube import Cube
-        from .galmod import model_hdu
-        if params:
-            self.update(**params)
-        hdu = self._input_hdu()
-        with tempfile.TemporaryDirectory(prefix="bbarolo_") as tmp:
-            prm = self._all_params(outfolder=tmp + "/", fitsfile=self._cube if hdu is None else "in-memory cube")
-            prm["PLOTS"] = -1                       # no mask.fits
-            par = _checked(build_param(prm))
-            c = Cube(par=par)
-            ok = c.readCube(self._cube, printInfo=False) if hdu is None else c.readHDU(hdu, name=prm["FITSFILE"])
-            if not ok:
-                raise IOError(f"{prm['FITSFILE']} is not a readable FITS file!")
-            mod, self.diskmodel, _, _ = _galmod(c, par, write=False, seed=seed)
-        return model_hdu(mod, mod.Head().Name())
+    def run(self, seed=None, **params):
+        """Build the model in memory (nothing is written; see write()). seed: the seed of the noise of the noisy
+        model (NOISERMS; default random). params: parameters to change first (as update()). Returns a Result
+        (also in self.result): model, rings, diskmodel (the model engine: diskmodel.hdu(rings) gives other
+        models on the same grid), ..."""
+        res = Task.run(self, seed=seed, **params)
+        self.diskmodel = res.diskmodel
+        return res
 
 
 class GalWind(Task):
@@ -1359,25 +1435,27 @@ class MakeMask(Task):
 
 _doc(FitMod3D, """Fit a 3D tilted-ring model to a datacube (3DFIT).
 
-    Result:
-      rings          Table of the final rings: radii (arcsec), vrot, vdisp, vrad, vsys (km/s),
-                     inc, pa (deg), z0 (arcsec), dens, xpos, ypos (pixels); with
-                     FLAGERRORS, the errors e_<name>1 (lower, negative) and e_<name>2 (upper) of
-                     the free parameters
-      rotation_curve radii, vrot and its errors e_vrot_lo, e_vrot_hi (positive)
+    Result (of run(), in memory):
+      rings          Table of the final rings at full precision, all of them: radii (arcsec),
+                     vrot, vdisp, vrad, vsys (km/s), inc, pa (deg), z0 (arcsec), dens, xpos, ypos
+                     (pixels), fitok (False: the fit of the ring failed); with FLAGERRORS, the
+                     errors e_<name>1 (lower, negative) and e_<name>2 (upper) of the free parameters
+      rotation_curve radii, vrot and its errors e_vrot_lo, e_vrot_hi (positive), rings fitted only
       rings_stage1, rings_initial   the rings of the first stage and the initial rings
-      model          HDU of the model (NORM of the last stage); models: all the models written
-      data, residual HDUs of the data analysed and of data - model (NaN outside the mask),
-                     computed when first used
+      model          HDU of the model (NORM of the last stage); models: all the models
+      data, residual HDUs of the data analysed and of data - model (NaN outside the mask)
       maps, pvs      dicts of HDUs: moment maps and PV slices of the data and of the model
-      densprof, mask, galfit (the fitting engine), plots (PDF files)
-    Methods: plot_rings(), plot_maps(), plot_pv() (matplotlib Figures), plot() (the PDF plots
-    again). Geometric parameters that are not given are estimated, as in BBarolo.
+                     (computed when first used, as data and residual)
+      densprof, asymdrift (ADRIFT), mask, galfit (the fitting engine)
+    Methods: plot_rings(), plot_maps(), plot_pv() (matplotlib Figures); write(outfolder) writes the
+    files and the PDF plots of the command line. Geometric parameters that are not given are
+    estimated, as in BBarolo.
 
     >>> f = FitMod3D("ngc2403.fits", radii=np.arange(15, 1200, 30), xpos=77, ypos=77,
     ...              vsys=132.8, vrot=120, vdisp=8, z0=10, inc=60, pa=123.7,
     ...              free="VROT VDISP", mask="SEARCH")
-    >>> res = f.run(threads=4)""")
+    >>> res = f.run(threads=4)          # nothing written
+    >>> res.write("out/")               # the files of BBarolo -p""")
 _doc(GalMod, """Make a 3D model of a disk galaxy on the grid of a datacube (GALMOD).
 
     The rings (single values or one value per ring): RADII (or NRADII and RADSEP), XPOS,
@@ -1386,12 +1464,15 @@ _doc(GalMod, """Make a 3D model of a disk galaxy on the grid of a datacube (GALM
     bbarolo.help('RINGMODE')). The model is normalized as set by NORM (default AZIM, i.e. to
     the azimuthal profile of the data): use norm='NONE' for the model with the given DENS.
 
-    run() -> Result: model (HDU), rings, maps, pvs, densprof, mask, diskmodel (the model
-    engine). model() -> the model only (HDU), in memory: no files, maps or statistics.
+    run(seed=None) -> Result, in memory: model (HDU), models (with NOISERMS: 'noise', the model
+    with noise; seed: its seed), rings (Table), diskmodel (the model engine), densprof, mask,
+    maps and pvs (computed when first used). The mask, the maps and the radial profile are not
+    computed unless used (NORM=NONE). write(outfolder) writes the files of the command line.
 
     >>> gm = GalMod("ngc2403.fits", radii=np.arange(15, 1200, 30), xpos=77, ypos=77, vsys=132.8,
     ...             vrot=120, vdisp=8, z0=10, inc=60, pa=123.7, dens=1, norm="NONE")
-    >>> hdu = gm.model()""")
+    >>> hdu = gm.run().model
+    >>> gm.write("out/")""")
 _doc(GalWind, """Make a 3D model of a bi-conical outflow (GALWIND).
 
     Result: model (HDU), maps (0mom, 1mom, 2mom), pv (HDU).""")
@@ -1399,11 +1480,12 @@ _doc(Search, """Search for sources in a datacube (SEARCH).
 
     Result: detections (list of the detected objects), table (Table of the detections),
     cube (data of the detections), labels (cube with the number of each detection),
-    detmap (number of detected channels per pixel), maps (moment maps).""")
+    detmap (number of detected channels per pixel), maps (moment maps). The cubelets of
+    CUBELETS are written by write() only.""")
 _doc(FitMod2D, """Fit a 2D tilted-ring model to a velocity field (2DFIT).
 
-    Result: rings (Table), model (HDU of the model velocity field), velfield (HDU of the
-    velocity field that was fitted), mask.""")
+    Result: rings (Table at full precision: NaN for the rings whose fit failed), model (HDU of
+    the model velocity field), velfield (HDU of the velocity field that was fitted), mask.""")
 _doc(Ellprof, """Radial profiles in elliptical rings (ELLPROF).
 
     Result: profile (Table), map (HDU of the map used), mask.""")
@@ -1426,7 +1508,7 @@ _doc(PVSlice, """Extract a position-velocity slice (PVSLICE): XPOS_PV, YPOS_PV, 
 _doc(SpacePar, """Explore the residuals of a 3D model over a grid of two parameters (SPACEPAR):
     P1, P1PAR, P2, P2PAR, plus the ring parameters.
 
-    Result: space (HDU of the residuals), plots.""")
+    Result: space (HDU of the residuals, relative to their minimum in each ring).""")
 _doc(Rend3D, """3D rendering of a datacube (REND3D).
 
     Result: image (HDU).""")
@@ -1474,7 +1556,13 @@ def run(parfile=None, exe=None, stdout=None, **params):
         p = c.pars()
         d = {}
         for name, (mem, files) in out.items():
-            d[name] = _fill(Result(name, p.outFolder, files), name, mem, files, p.outPrefix, cube=c)
+            d[name] = _result(name, {name: mem}, c, par)
+            d[name].files, d[name].outfolder = list(files), p.outFolder
+            if name == "BAYESIAN3DFIT":          # (the files of the samples and of the deconvolved profile)
+                d[name]._set("samples", next((f for f in files if f.endswith("_results.npy")), None))
+                dp = [f for f in files if f.endswith("_densprof_deconvolved.txt")]
+                if dp:
+                    d[name]._set("densprof_deconvolved", read_table(dp[0]))
         results.append(d)
     if not ok and not results:
         raise RuntimeError("BBarolo could not run (see the messages above).")

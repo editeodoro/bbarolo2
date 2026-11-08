@@ -31,8 +31,9 @@ f3d = FitMod3D(fitsname, radii=np.arange(15, 450, 30), xpos=77, ypos=77, vsys=13
                vrad=0, z0=10, inc=60, pa=123.7, mask="SEARCH", free="VROT VDISP", wfunc=2,
                ltype=2, outfolder=out + "3dfit", beam=(60, 60, -80), threads=4)
 print(f3d)                      # the parameters that are set
-res = f3d.run()                 # writes the usual outputs (and plots) in outfolder
+res = f3d.run()                 # computes everything in memory: nothing is written
 print(res)                      # what the Result contains
+f3d.write()                     # the usual outputs (and plots) in outfolder, as the command line
 print(res.rings["radii", "vrot", "vdisp"])
 res.model.writeto("ngc2403_model.fits", overwrite=True)
 
@@ -41,9 +42,9 @@ res.model.writeto("ngc2403_model.fits", overwrite=True)
 # Each ring is an annulus centred on its radius (RINGMODE=CENTRED, as the rings of 3DFIT).
 gm = GalMod(fitsname, radii=np.arange(15, 1200, 30), xpos=74, ypos=74, vsys=132.8, vrot=120, vdisp=8, z0=10,
             inc=60, pa=123.7, dens=1, ltype=1, iseed=-2, norm="NONE", verbose=False, threads=4)
-mymodel = gm.model()          # the model only, in memory, smoothed to the beam of the data (SM=true)
+mymodel = gm.run().model      # the model, in memory, smoothed to the beam of the data (SM=true)
 mymodel.writeto("awesome_model.fits", overwrite=True)
-# gm.run() would also write the maps, PV slices, ... in the output folder
+# gm.write() would write the model, maps, PV slices, ... in the output folder
 
 ### ELLPROF ####################################################################
 el = Ellprof(fitsname, radii=np.arange(15, 1200, 30), xpos=74, ypos=74, inc=60, pa=123.7, mask="SEARCH",
@@ -65,7 +66,7 @@ print(r.table)
 ### GALWIND ####################################################################
 gw = GalWind(fitsname, xpos=74, ypos=74, pa=123.7, inc=60, vdisp=20, dens=1.25, vsys=132.8, vwind=100,
              openang=100, htot=500, threads=4, verbose=False)
-wmodel = gw.run(write=False).model
+wmodel = gw.run().model
 wmodel.writeto("wind_model.fits", overwrite=True)
 wmodel.data = wmodel.data + mymodel.data
 wmodel.writeto("wind+galaxy.fits", overwrite=True)

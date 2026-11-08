@@ -4,7 +4,8 @@ writeOutputs, writeKinematicMaps, writePVs). Plotting scripts are in plotscripts
 
 The functions take the data cube, the model engine (galmod.DiskModel), the rings and
 the mask, so that 3DFIT (through its Galfit object) and GALMOD (without any fit) share
-them. finalModel() gives the final model of writeModel in memory, without writing files.
+them. model_outputs() computes the final model and its outputs in memory (a ModelOutputs),
+ModelOutputs.write() writes them; finalModel() gives the final model only.
 """
 
 import sys
@@ -22,47 +23,45 @@ from .bbutils import mkdirp, randomAdjective, polyfit_lsq
 FLT_MAX = float(np.finfo(np.float32).max)
 
 
-def writeKinematicMaps(c, mod, suffix=""):
-    """Moment maps of the data (masked) and of the model in the maps/ folder."""
+def kinematic_maps(c, mod, mask=None, suffix=""):
+    """The moment maps of the data (within the mask: mask, or that of the cube) and of the model mod, as HDUs:
+    {'0mom', '1mom', '2mom', 'mod_0mom<suffix>', ...} (the files of the maps/ folder without the prefix)."""
     p = c.pars()
-    outfold, prefix = p.outFolder, p.outPrefix
-    mkdirp(outfold + "maps/")
     v = p.verbose
     p.verbose = False
-    allmaps = getAllMoments(c, True, None, "MOMENT")
-    for i, s in enumerate(("_0mom", "_1mom", "_2mom")):
-        allmaps[i].fitswrite_2d(outfold + "maps/" + prefix + s + ".fits")
-    mod.pars().verbose = False
-    modmaps = getAllMoments(mod, False, None, "MOMENT")
-    for i, s in enumerate(("_mod_0mom", "_mod_1mom", "_mod_2mom")):
-        modmaps[i].fitswrite_2d(outfold + "maps/" + prefix + s + suffix + ".fits")
-    p.verbose = v
+    try:
+        allmaps = getAllMoments(c, True, mask, "MOMENT")
+        out = {s: allmaps[i].to_hdu() for i, s in enumerate(("0mom", "1mom", "2mom"))}
+        mod.pars().verbose = False
+        modmaps = getAllMoments(mod, False, None, "MOMENT")
+        out.update({s + suffix: modmaps[i].to_hdu() for i, s in enumerate(("mod_0mom", "mod_1mom", "mod_2mom"))})
+    finally:
+        p.verbose = v
+    return out
 
 
-def writePVs(c, mod, rings, mask, suffix=""):
-    """PV slices of the data, of the model and of the mask along the major and minor axis
-    (median position angle and centre of the rings) in the pvs/ folder."""
+def pv_slices(c, mod, rings, mask, suffix=""):
+    """PV slices of the data, of the model and of the mask along the major and minor axis (median position
+    angle and centre of the rings), as HDUs: {'pv_a', 'pv_b', 'mod_pv_a<suffix>', 'mod_pv_b<suffix>',
+    'mask_pv_a', 'mask_pv_b'} (the files of the pvs/ folder without the prefix)."""
     from .cube import Cube
     p = c.pars()
-    outfold, prefix = p.outFolder + "pvs/", p.outPrefix
-    mkdirp(outfold)
     o = rings
     meanPA = float(np.float32(findMedian(o.phi)))
     meanX = float(np.float32(findMedian(o.xpos)))
     meanY = float(np.float32(findMedian(o.ypos)))
     meanPAp90 = meanPA + 90 if meanPA + 90 < 360 else meanPA - 90
-    PositionVelocity(c, meanX, meanY, meanPA).fitswrite_2d(outfold + prefix + "_pv_a.fits")
-    PositionVelocity(c, meanX, meanY, meanPAp90).fitswrite_2d(outfold + prefix + "_pv_b.fits")
-    PositionVelocity(mod, meanX, meanY, meanPA).fitswrite_2d(outfold + prefix + "_mod_pv_a" + suffix + ".fits")
-    PositionVelocity(mod, meanX, meanY, meanPAp90).fitswrite_2d(outfold + prefix + "_mod_pv_b" + suffix + ".fits")
+    out = {"pv_a": PositionVelocity(c, meanX, meanY, meanPA).to_hdu(),
+           "pv_b": PositionVelocity(c, meanX, meanY, meanPAp90).to_hdu(),
+           "mod_pv_a" + suffix: PositionVelocity(mod, meanX, meanY, meanPA).to_hdu(),
+           "mod_pv_b" + suffix: PositionVelocity(mod, meanX, meanY, meanPAp90).to_hdu()}
     m = Cube.fromArray(mask.astype(np.int16), c.Head(), p)
     m.Head().setMinMax(0., 0)
-    pa = PositionVelocity(m, meanX, meanY, meanPA, order=0)        # nearest pixel for the mask
-    pa.array = pa.array.astype(np.int16)
-    pa.fitswrite_2d(outfold + prefix + "_mask_pv_a.fits")
-    pb = PositionVelocity(m, meanX, meanY, meanPAp90, order=0)
-    pb.array = pb.array.astype(np.int16)
-    pb.fitswrite_2d(outfold + prefix + "_mask_pv_b.fits")
+    for k, pa in (("mask_pv_a", meanPA), ("mask_pv_b", meanPAp90)):
+        pv = PositionVelocity(m, meanX, meanY, pa, order=0)        # nearest pixel for the mask
+        pv.array = pv.array.astype(np.int16)
+        out[k] = pv.to_hdu()
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -148,83 +147,176 @@ def finalModel(c, model, rings, normtype, mask=None, par=None, seed=None):
     return mod
 
 
-def writeModel(c, model, rings, normtype, mask, par=None, makeplots=False, fit=None):
-    """Write the final model and the outputs of 3DFIT and GALMOD in the output folder.
+class ModelOutputs:
+    """The outputs of the final model of 3DFIT, GALMOD and BAYESIAN3DFIT, in memory.
 
-    c: the data cube; model: the model engine (DiskModel); rings: the final rings (AZIM
-    changes their DENS in place); normtype: AZIM, LOCAL, NONE or BOTH (AZIM and LOCAL);
-    mask: the mask (bool array); par: the GALMOD/3DFIT parameters (NOISERMS, ADRIFT, ...;
-    default c.pars().gf); fit: the Galfit object of a 3DFIT, for the plots (makeplots).
+    mask: the mask (bool array); ell: the radial profile of the data (an Ellprof; densprof() as a Table);
+    both can be None, and are then computed when needed (the mask of the cube, built if needed, and the
+    radial profile in the rings); models: {norm: model Cube} (azim, local or none, in the order they are
+    written); noise: the noisy model (a Cube, NOISERMS) or None; adrift: the text of <prefix>_asymdrift.txt
+    (ADRIFT) or None. The moment maps (maps()) and the PV slices (pvs()) of the data, the models and the
+    mask are computed when first asked for. write() writes them all, as the command line does."""
 
-    Written: <prefix>_densprof.txt, <prefix>_mod_<norm>.fits, the moment maps and PV slices of the
-    model, the data and the mask, the noisy model (NOISERMS), <prefix>_asymdrift.txt (ADRIFT) and
-    the plots. Returns the (last) model Cube."""
+    def __init__(self, c, rings, mask, ell, models, noise=None, adrift=None, fluxconv=False):
+        self.c = c
+        self.rings = rings.copy()
+        self._mask = mask
+        self._ell = ell
+        self.models = models
+        self.noise = noise
+        self.adrift = adrift
+        self._fluxconv = fluxconv                          # (maps with the fluxes converted, as FLUXCONVERT)
+        self._maps = self._pvs = None
+
+    @property
+    def mask(self):
+        if self._mask is None:
+            c = self.c
+            if not c.MaskAll():
+                with _outputs_mode(c.pars()):
+                    c.BlankMask()
+            self._mask = c.Mask()
+        return self._mask
+
+    @property
+    def cmask(self):
+        """The mask of the data maps: that of the cube."""
+        return self.mask
+
+    @property
+    def ell(self):
+        if self._ell is None:
+            self.mask
+            with _outputs_mode(self.c.pars()):
+                self._ell = radialProfile(self.c, self.rings.copy(), "NONE")[0]
+        return self._ell
+
+    def densprof_text(self):
+        import io
+        buf = io.StringIO()
+        self.ell.printProfile(buf, self.ell.getNseg() - 1)
+        return buf.getvalue()
+
+    def densprof(self):
+        """The radial profile of the data in the rings (<prefix>_densprof.txt) as an astropy Table."""
+        import io
+        from .tasks import read_table
+        return read_table(io.StringIO(self.densprof_text()))
+
+    def asymdrift(self):
+        """The asymmetric drift correction (<prefix>_asymdrift.txt) as an astropy Table, or None."""
+        import io
+        from .tasks import read_table
+        return read_table(io.StringIO(self.adrift)) if self.adrift else None
+
+    def model_hdus(self):
+        """{norm: HDU} of the models, with 'noise' for the noisy model."""
+        out = {k: m.to_hdu() for k, m in self.models.items()}
+        if self.noise is not None:
+            out["noise"] = self.noise.to_hdu()
+        return out
+
+    def _context(self):
+        return contextlib.nullcontext() if self._fluxconv else _outputs_mode(self.c.pars())
+
+    def maps(self):
+        """The moment maps of the data and of each model: {'0mom', ..., 'mod_0mom_<norm>', ...} of HDUs."""
+        if self._maps is None:
+            with self._context():
+                self._maps = {}
+                for k, mod in self.models.items():
+                    self._maps.update(kinematic_maps(self.c, mod, self.cmask, "_" + k))
+        return self._maps
+
+    def pvs(self):
+        """The PV slices of the data, of each model and of the mask: {'pv_a', ..., 'mod_pv_a_<norm>', ...,
+        'mask_pv_a', ...} of HDUs."""
+        if self._pvs is None:
+            with self._context():
+                self._pvs = {}
+                for k, mod in self.models.items():
+                    self._pvs.update(pv_slices(self.c, mod, self.rings, self.mask, "_" + k))
+        return self._pvs
+
+    def write(self, makeplots=False, fit=None, runner=None):
+        """Write the outputs in the output folder of the data cube: <prefix>_densprof.txt, the models
+        (<prefix>_mod_<norm>.fits), their PV slices (pvs/) and moment maps (maps/), the noisy model, the
+        asymmetric drift and, with makeplots, the plots of the fit (fit: its Galfit object)."""
+        from .cube import write_hdu
+        p = self.c.pars()
+        of, pre = p.outFolder, p.outPrefix
+        verb = p.verbose
+        mkdirp(of)
+        self.mask
+        if p.plots >= 0:
+            self.c.writeMask()                # (the plots read it; the mask may have been built only now)
+        with open(of + pre + "_densprof.txt", "w") as f:
+            f.write(self.densprof_text())
+        if verb:
+            print(f"    Writing {randomAdjective(1)} models, kinematic maps and PV slices...", end="", flush=True)
+        maps, pvs = self.maps(), self.pvs()
+        for k, mod in self.models.items():
+            write_hdu(mod.to_hdu(), of + pre + f"_mod_{k}.fits")
+            for name in ("pv_a", "pv_b", f"mod_pv_a_{k}", f"mod_pv_b_{k}", "mask_pv_a", "mask_pv_b"):
+                write_hdu(pvs[name], of + "pvs/" + pre + "_" + name + ".fits")
+            for name in ("0mom", "1mom", "2mom", f"mod_0mom_{k}", f"mod_1mom_{k}", f"mod_2mom_{k}"):
+                write_hdu(maps[name], of + "maps/" + pre + "_" + name + ".fits")
+        if self.noise is not None:
+            write_hdu(self.noise.to_hdu(), of + pre + "_mod_noise.fits")
+        if self.adrift:
+            with open(of + pre + "_asymdrift.txt", "w") as f:
+                f.write(self.adrift)
+        if verb:
+            print(" Done.")
+        if makeplots and fit is not None:
+            if verb:
+                print(f"    Producing {randomAdjective(1)} plots...", end="", flush=True)
+            ret = fit.plotAll_Python(runner)
+            if verb:
+                print(" Done." if ret == 0 else " Something went wrong! Check plotting scripts in the output folder.")
+
+
+def model_outputs(c, model, rings, normtype, mask, par=None, fit=None, seed=None):
+    """The final model and the outputs of 3DFIT and GALMOD, in memory (a ModelOutputs; nothing is written).
+
+    c: the data cube; model: the model engine (DiskModel); rings: the final rings (AZIM changes their DENS in
+    place); normtype: AZIM, LOCAL, NONE or BOTH (AZIM and LOCAL); mask: the mask (bool array; None: built
+    when needed, NONE only); par: the
+    GALMOD/3DFIT parameters (NOISERMS, ADRIFT, ...; default c.pars().gf); fit: the Galfit object of a 3DFIT
+    (its rings fitted, for the asymmetric drift); seed: the seed of the noise of the noisy model (NOISERMS)."""
     p = c.pars()
     par = p.gf if par is None else par
-    outfold, prefix = p.outFolder, p.outPrefix
-    # Start loading the plotting libraries in a helper process while the outputs are written
-    runner = None
-    if makeplots and fit is not None and p.plots:
-        from .plotscripts import PlotRunner
-        runner = PlotRunner()
     with _outputs_mode(p) as verb:
         if verb:
             print(" Preparing a bunch of cool outputs...")
-            print(f"    Deriving {randomAdjective(1)} radial profile...", end="", flush=True)
-        ell, scaling_factor = radialProfile(c, rings, normtype)
-        with open(outfold + prefix + "_densprof.txt", "w") as f:
-            ell.printProfile(f, ell.getNseg() - 1)
+        ell, scaling_factor = None, 1.
+        if normtype != "NONE" or mask is not None or par.flagADRIFT:
+            if verb:
+                print(f"    Deriving {randomAdjective(1)} radial profile...", end="", flush=True)
+            ell, scaling_factor = radialProfile(c, rings, normtype)
+            if verb:
+                print(" Done.")
         if verb:
-            print(" Done.")
             print("    Calculating the very last model...", end="", flush=True)
         mod, out = _model(c, model, rings)
+        models = {}
         if normtype in ("AZIM", "BOTH"):
             mod.array = (out / scaling_factor).astype(np.float32)
-            if verb:
-                print(" Done.")
-                print(f"    Writing {randomAdjective(1)} azimuthally-normalized model...", end="", flush=True)
-            mod.fitswrite_3d(outfold + prefix + "_mod_azim.fits")
-            writePVs(c, mod, rings, mask, "_azim")
-            if verb:
-                print(" Done.")
-                print(f"    Writing {randomAdjective(2)} kinematic maps...", end="", flush=True)
-            writeKinematicMaps(c, mod, "_azim")
-            if verb:
-                print(" Done.")
+            models["azim"] = mod
         if normtype in ("LOCAL", "BOTH"):
-            mod.array = _local(out, c, mask)
-            if verb and normtype != "BOTH":
-                print(" Done.")
-            if verb:
-                print(f"    Writing {randomAdjective(1)} locally-normalized model...", end="", flush=True)
-            mod.fitswrite_3d(outfold + prefix + "_mod_local.fits")
-            writePVs(c, mod, rings, mask, "_local")
-            if verb:
-                print(" Done.")
-                s = "    Writing " + ("even more " if normtype == "BOTH" else "")
-                print(s + f"{randomAdjective(2)} kinematic maps...", end="", flush=True)
-            writeKinematicMaps(c, mod, "_local")
-            if verb:
-                print(" Done.")
+            m = mod.copy() if models else mod
+            m.array = _local(out, c, mask)
+            models["local"] = m
         if normtype == "NONE":
-            if verb:
-                print(" Done.")
-                print("    Writing model...", end="", flush=True)
-            mod.fitswrite_3d(outfold + prefix + "_mod_none.fits")
-            writePVs(c, mod, rings, mask, "_none")
-            if verb:
-                print(" Done.")
-                print(f"    Writing {randomAdjective(1)} kinematic maps...", end="", flush=True)
-            writeKinematicMaps(c, mod, "_none")
-            if verb:
-                print(" Done.")
+            models["none"] = mod
+        noise = None
         if par.NOISERMS != 0:
-            if verb:
-                print(f"    Writing {randomAdjective(1)} noisy model...", end="", flush=True)
-            mod.array = model.addnoise(mod.array, par.NOISERMS)
-            mod.fitswrite_3d(outfold + prefix + "_mod_noise.fits")
-            if verb:
-                print(" Done.")
+            last = list(models.values())[-1]
+            noise = last.copy()
+            noise.array = model.addnoise(last.array, par.NOISERMS, seed=seed)
+        if verb:
+            print(" Done.")
+        adrift = None
         if par.flagADRIFT:
             if verb:
                 print("    Computing asymmetric drift correction...", end="", flush=True)
@@ -234,37 +326,40 @@ def writeModel(c, model, rings, normtype, mask, par=None, makeplots=False, fit=N
             sel = np.arange(rings.nr) >= strad
             if getattr(fit, "fitok", None) is not None:
                 sel &= np.asarray(fit.fitok, bool)
-            ok = sel.sum() >= 2 and asymmetricDrift(c, par, rings.radii[sel], dens_m[sel], rings.vdisp[sel],
-                                                    rings.vrot[sel], rings.inc[sel])
+            if sel.sum() >= 2:
+                adrift = asymmetricDrift(c, par, rings.radii[sel], dens_m[sel], rings.vdisp[sel], rings.vrot[sel],
+                                         rings.inc[sel])
             if verb:
-                print(" Done." if ok else " Failed.")
-    if makeplots and fit is not None:
-        if verb:
-            print(f"    Producing {randomAdjective(1)} plots...", end="", flush=True)
-        ret = fit.plotAll_Python(runner)
-        if verb:
-            print(" Done." if ret == 0 else " Something went wrong! Check plotting scripts in the output folder.")
-    if verb:
+                print(" Done." if adrift else " Failed.")
+    return ModelOutputs(c, rings, mask, ell, models, noise, adrift or None)
+
+
+def writeModel(c, model, rings, normtype, mask, par=None, makeplots=False, fit=None):
+    """Compute (model_outputs) and write (ModelOutputs.write) the final model and the outputs of 3DFIT and
+    GALMOD in the output folder. Returns the ModelOutputs."""
+    p = c.pars()
+    # Start loading the plotting libraries in a helper process while the outputs are computed
+    runner = None
+    if makeplots and fit is not None and p.plots:
+        from .plotscripts import PlotRunner
+        runner = PlotRunner()
+    mo = model_outputs(c, model, rings, normtype, mask, par=par, fit=fit)
+    mo.write(makeplots, fit, runner)
+    if p.verbose:
         print(" All done!")
-    return mod
+    return mo
 
 
 def writeOutputs(c, mod, ell, rings, mask, makeplots=True, fit=None):
     """Write a model computed elsewhere (a Cube, e.g. the best model of BayesianBBarolo)
     with its outputs: densprof.txt (from the Ellprof ell), the model, its moment maps and
-    PV slices, and the plots of the fit."""
+    PV slices, and the plots of the fit. Returns the ModelOutputs."""
     p = c.pars()
-    suffix = "_none"
-    outfold, prefix = p.outFolder, p.outPrefix
-    with open(outfold + prefix + "_densprof.txt", "w") as f:
-        ell.printProfile(f, ell.getNseg() - 1)
     mod.Head().setMinMax(0., 0.)
-    mod.Head().setName(prefix + "mod")
-    mod.fitswrite_3d(outfold + prefix + "_mod" + suffix + ".fits")
-    writePVs(c, mod, rings, mask, suffix)
-    writeKinematicMaps(c, mod, suffix)
-    if makeplots and fit is not None:
-        fit.plotAll_Python()
+    mod.Head().setName(p.outPrefix + "mod")
+    mo = ModelOutputs(c, rings, mask, ell, {"none": mod}, fluxconv=True)
+    mo.write(makeplots, fit)
+    return mo
 
 
 # --------------------------------------------------------------------------
@@ -272,7 +367,7 @@ def writeOutputs(c, mod, ell, rings, mask, makeplots=True, fit=None):
 # --------------------------------------------------------------------------
 def asymmetricDrift(c, par, rad, densprof, dispprof, rotcur, inc):
     """Asymmetric drift correction from the density and dispersion profiles (regularised
-    with polynomials of degree ADRIFTPOL1 and ADRIFTPOL2), written in asymdrift.txt.
+    with polynomials of degree ADRIFTPOL1 and ADRIFTPOL2): the text of <prefix>_asymdrift.txt.
     Returns False (and sets par.flagADRIFT = False) if a polynomial fit fails."""
     p = c.pars()
     nn = len(rad)
@@ -299,7 +394,8 @@ def asymmetricDrift(c, par, rad, densprof, dispprof, rotcur, inc):
         return False
     P = np.polynomial.polynomial
     m = 20
-    with open(p.outFolder + p.outPrefix + "_asymdrift.txt", "w") as f:
+    import io
+    with io.StringIO() as f:
         f.write("#" + f"{'RAD(arcs)':>{m - 1}}" + "".join(f"{s:>{m}}" for s in
                 ("VCIRC(km/s)", "ASYMDRIFT_SQ(km/s)2", "DISP2(km/s)2", "DISP2_REG(km/s)2", "DENSPROF", "DENSPROF_REG")) + "\n")
         for i in range(nn):
@@ -310,4 +406,4 @@ def asymmetricDrift(c, par, rad, densprof, dispprof, rotcur, inc):
             ad2 = -rad[i] * d2r * (d2d / d2r + Sd / Sr)
             vc = math.sqrt(rotcur[i] ** 2 + ad2) if rotcur[i] ** 2 + ad2 >= 0 else float("nan")
             f.write("".join(f"{v:>{m}.4f}" for v in (rad[i], vc, ad2, disp2[i], d2r, SigmaFO[i], Sr)) + "\n")
-    return True
+        return f.getvalue()

@@ -475,7 +475,7 @@ class SimulatedGalaxyCube(object):
     def run(self,noise=None,smooth=True,threads=None,seed=None,verbose=False,stdout=None,**kwargs):
         """ Build the model datacube of the galaxy defined with define_galaxy().
         
-            The model is the one of the GALMOD task with NORM=NONE (bbarolo.GalMod.model(),
+            The model is the one of the GALMOD task with NORM=NONE (bbarolo.GalMod(...).run().model,
             in memory) and is stored in self.model, an astropy PrimaryHDU with the header of
             the template cube (self.model_nonoise: the same without noise). Nothing is
             written to disk: use write_model() for that.
@@ -531,7 +531,7 @@ class SimulatedGalaxyCube(object):
         
         with _stdout_to(stdout if stdout is not None or verbose else 'null'):
             gm = GalMod(self.f, **prm)
-            clean = gm.model()
+            clean = gm.run().model
             noisy = gm.diskmodel.addnoise(clean.data, noiserms, rng=np.random.default_rng(seed))
         
         self.noiserms = noiserms
