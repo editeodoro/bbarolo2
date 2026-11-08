@@ -376,7 +376,7 @@ KEYWORDS = [
       "Initial estimates of the parameters that are not given: FIT (a beam-convolved disk fitted to the "
       "total map and a 2D tilted-ring fit of the velocity field), ELLIPSE (the C++ algorithm, corrected) or "
       "LEGACY (the C++ algorithm)"),
-    K("SIDE", "ustr", ["gf.SIDE"], ("3DFIT", "SPACEPAR", "2DFIT", "ELLPROF"),
+    K("SIDE", "ustr", ["gf.SIDE"], ("3DFIT", "BAYESIAN3DFIT", "SPACEPAR", "2DFIT", "ELLPROF"),
       "Side of the galaxy to be used (A=approaching, R=receding, B=both)"),
     K("FREEANGLE", "float", ["gf.FREEANGLE"], ("2DFIT",),
       "Angle around the minor axis left out of the fit of the velocity field (degrees)"),

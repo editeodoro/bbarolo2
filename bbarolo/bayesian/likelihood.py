@@ -111,7 +111,7 @@ class LikelihoodMixin(object):
         self.map_rms = self._map_noise(self._nvox_map)
         _, ys, xs = self.data.shape
         self._likebox = ([0, 0], [xs, ys])
-        self._region = np.ones((ys, xs), bool)
+        self._region = self._side_region(np.ones((ys, xs), bool))
         self._set_region_sums()
 
     def _setup_likemask(self, force=False):
@@ -310,7 +310,30 @@ class LikelihoodMixin(object):
         self._region[blo[1]:bhi[1], blo[0]:bhi[0]] = True
         if not (z0free and 'z0' not in self.freepar_idx):
             self._region[blo[1]:bhi[1], blo[0]:bhi[0]] = self._disk_region(blo, bhi, upper, lower)
+        self._region = self._side_region(self._region)
         self._set_region_sums()
+
+    def _side(self):
+        """ The half of the galaxy of the likelihood (SIDE): 'A' (approaching), 'R' (receding) or None (both). """
+        c = self._cube_obj
+        side = str(c.pars().gf.SIDE).strip().upper()[:1] if c is not None else "B"
+        return side if side in ("A", "R") else None
+
+    def _side_region(self, region):
+        """ region (a map of the pixels of the likelihood) restricted to the half of the galaxy of SIDE: the
+        pixels on the approaching (A) or receding (R) side of the minor axis of the initial rings (their median
+        centre and position angle; the pixels on the axis are in both halves). The half is fixed during the
+        sampling, so that the likelihood always compares the model with the same voxels. """
+        side = self._side()
+        if side is None or self._inri is None:
+            return region
+        r = self._inri.r
+        xc, yc = float(np.median(r['xpos'])), float(np.median(r['ypos']))
+        pa = np.radians(float(np.median(r['phi'])))
+        ys, xs = region.shape
+        yy, xx = np.mgrid[0:ys, 0:xs]
+        xr = -(xx - xc) * np.sin(pa) + (yy - yc) * np.cos(pa)       # along the major axis: > 0 receding
+        return region & (xr >= 0 if side == "R" else xr <= 0)
 
     def _disk_region(self, blo, bhi, upper, lower):
         """ Pixels of the box [blo,bhi) within the projected outer disk, widened (see _setup_likebox). """

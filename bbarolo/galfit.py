@@ -335,10 +335,7 @@ def initial_rings(c, par, galmod=False, write=True):
     ringfile_values(par)
     toEstimate = ((par.RADII == "-1" and (par.NRADII == -1 or par.RADSEP == -1)) or par.XPOS == "-1"
                   or par.YPOS == "-1" or par.VSYS == "-1" or par.VROT == "-1" or par.PHI == "-1" or par.INC == "-1")
-    estimated = dict(NRADII=par.NRADII == -1, RADSEP=par.RADSEP == -1, XPOS=par.XPOS == "-1",
-                     YPOS=par.YPOS == "-1", VSYS=par.VSYS == "-1", VROT=par.VROT == "-1",
-                     INC=par.INC == "-1", PHI=par.PHI == "-1", Z0=par.Z0 == "-1",
-                     VDISP=par.VDISP == "-1", VRAD=par.VRAD == "-1")
+    estimated = estimatedParameters(par)
     ip = None
     if toEstimate:
         if "FILE(" in p.MaskType and not c.MaskAll():      # the estimates use a mask from a file
@@ -369,6 +366,37 @@ def initial_rings(c, par, galmod=False, write=True):
     if write:
         c.add_output("_rings_model.txt" if galmod else "_rings_initial.txt", initialRingsText(inR))
     return types.SimpleNamespace(rings=inR, fromfile=fromfile, estimated=estimated, toEstimate=toEstimate, ip=ip)
+
+
+def estimatedParameters(par):
+    """Which ring parameters of par (a GalfitPar, before the values not given are filled in) are not given:
+    {NRADII, RADSEP, XPOS, ...: True if estimated or default}."""
+    noradii = par.RADII == "-1"
+    return dict(NRADII=noradii and par.NRADII == -1, RADSEP=noradii and par.RADSEP == -1, XPOS=par.XPOS == "-1",
+                YPOS=par.YPOS == "-1", VSYS=par.VSYS == "-1", VROT=par.VROT == "-1", INC=par.INC == "-1",
+                PHI=par.PHI == "-1", Z0=par.Z0 == "-1", VDISP=par.VDISP == "-1", VRAD=par.VRAD == "-1")
+
+
+def initialParametersText(inr, est):
+    """The table of the initial parameters of the rings inr shown by 3DFIT and BAYESIAN3DFIT: each value marked
+    (i) given, (e) estimated or (d) default, as in est (see estimatedParameters)."""
+    def tag(k, d="(e)"): return d if est.get(k, False) else "(i)"
+    def tagd(k): return "(d)" if est.get(k, False) else "(i)"
+    m, n = 9, 12
+    s = io.StringIO()
+    s.write("\n" + "=" * 24 + " Initial parameters " + "=" * 25 + "\n")
+    s.write("    (i) input by the user    (d) default    (e) estimated by me\n\n")
+    s.write(f"   Fitting #{inr.nr}{tag('NRADII')} rings of width {inr.radsep:.2f}{tag('RADSEP')} arcsec\n\n")
+    s.write(f"{'    Xpos ' + tag('XPOS'):<{n}}{'= ':>3}{inr.xpos[0]:>{m}.2f}{'  pix':<{m}}")
+    s.write(f"{'        Ypos ' + tag('YPOS'):<{n + 4}}{'= ':>3}{inr.ypos[0]:>{m - 1}.2f}{'  pix':<{m}}\n")
+    s.write(f"{'    Vsys ' + tag('VSYS'):<{n}}{'= ':>3}{inr.vsys[0]:>{m}.2f}{'  km/s':<{m}}")
+    s.write(f"{'        Vrot ' + tag('VROT'):<{n + 4}}{'= ':>3}{inr.vrot[0]:>{m - 1}.2f}{'  km/s':<{m}}\n")
+    s.write(f"{'    Inc ' + tag('INC'):<{n}}{'= ':>3}{inr.inc[0]:>{m}.2f}{'  deg':<{m}}")
+    s.write(f"{'        PA ' + tag('PHI'):<{n + 4}}{'= ':>3}{inr.phi[0]:>{m - 1}.2f}{'  deg':<{m}}\n")
+    s.write(f"{'    Z0 ' + tagd('Z0'):<{n}}{'= ':>3}{inr.z0[0]:>{m}.2f}{'  arcs':<{m}}")
+    s.write(f"{'        Disp ' + tagd('VDISP'):<{n + 4}}{'= ':>3}{inr.vdisp[0]:>{m - 1}.2f}{'  km/s':<{m}}\n")
+    s.write(f"{'    Vrad ' + tagd('VRAD'):<{n}}{'= ':>3}{inr.vrad[0]:>{m}.2f}{'  km/s':<{m}}\n\n\n")
+    return s.getvalue()
 
 
 class Galfit:
@@ -1286,25 +1314,8 @@ class Galfit:
                           extra=[v[i] for v in extra.values()])
 
     def showInitial(self, inr, stream, pp=None):
-        pp = self.cin.pars().gf if pp is None else pp
-        est = getattr(self, "_estimated", {})
-        def tag(k, d="(e)"): return d if est.get(k, False) else "(i)"
-        def tagd(k): return "(d)" if est.get(k, False) else "(i)"
-        m, n = 9, 12
-        s = io.StringIO()
-        s.write("\n" + "=" * 24 + " Initial parameters " + "=" * 25 + "\n")
-        s.write("    (i) input by the user    (d) default    (e) estimated by me\n\n")
-        s.write(f"   Fitting #{inr.nr}{tag('NRADII')} rings of width {inr.radsep:.2f}{tag('RADSEP')} arcsec\n\n")
-        s.write(f"{'    Xpos ' + tag('XPOS'):<{n}}{'= ':>3}{inr.xpos[0]:>{m}.2f}{'  pix':<{m}}")
-        s.write(f"{'        Ypos ' + tag('YPOS'):<{n + 4}}{'= ':>3}{inr.ypos[0]:>{m - 1}.2f}{'  pix':<{m}}\n")
-        s.write(f"{'    Vsys ' + tag('VSYS'):<{n}}{'= ':>3}{inr.vsys[0]:>{m}.2f}{'  km/s':<{m}}")
-        s.write(f"{'        Vrot ' + tag('VROT'):<{n + 4}}{'= ':>3}{inr.vrot[0]:>{m - 1}.2f}{'  km/s':<{m}}\n")
-        s.write(f"{'    Inc ' + tag('INC'):<{n}}{'= ':>3}{inr.inc[0]:>{m}.2f}{'  deg':<{m}}")
-        s.write(f"{'        PA ' + tag('PHI'):<{n + 4}}{'= ':>3}{inr.phi[0]:>{m - 1}.2f}{'  deg':<{m}}\n")
-        s.write(f"{'    Z0 ' + tagd('Z0'):<{n}}{'= ':>3}{inr.z0[0]:>{m}.2f}{'  arcs':<{m}}")
-        s.write(f"{'        Disp ' + tagd('VDISP'):<{n + 4}}{'= ':>3}{inr.vdisp[0]:>{m - 1}.2f}{'  km/s':<{m}}\n")
-        s.write(f"{'    Vrad ' + tagd('VRAD'):<{n}}{'= ':>3}{inr.vrad[0]:>{m}.2f}{'  km/s':<{m}}\n\n\n")
-        stream.write(s.getvalue())
+        stream.write(initialParametersText(inr, getattr(self, "_estimated", {})))
+
 
     def getErrorColumns(self):
         free = [j for j in range(MAXPAR) if self.mpar[j]]

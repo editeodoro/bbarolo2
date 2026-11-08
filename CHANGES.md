@@ -7,6 +7,12 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **PLOTMASK: the mask in the channel maps of 3DFIT** was drawn on the unpadded channel, while the data and
+  the model are padded to a square: it was shifted by the padding when the region plotted is not square
+  **(C++)**.
+- **The table of the initial parameters** marked the number and width of the rings as estimated `(e)` when
+  they were given with RADII; they are `(i)` now **(C++)**.
+
 - **ELLPROF: SIDE A and R were swapped** when the mean PA of the rings is at most 180°, i.e. for most
   galaxies: `A` gave the receding half (`R` the approaching one). They are right at any PA now; this also
   changes the `_densprof.txt` of 3DFIT and GALMOD with SIDE A or R **(C++)**.
@@ -246,6 +252,12 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   an error; they are unreadable values, as in C++.
 
 ### Added
+
+- **SIDE in BAYESIAN3DFIT** (`A`/`APPROACHING`, `R`/`RECEDING`): the likelihood uses only the pixels of that
+  half of the galaxy, divided by the minor axis of the initial rings (median centre and position angle) and
+  fixed during the sampling; before, SIDE was used only with `LIKEOPTS bbres=true`.
+- **BAYESIAN3DFIT shows the table of the initial parameters** (given, estimated or default), as 3DFIT, with
+  VERBOSE.
 
 - **FREEANGLE (2DFIT)**: the angle around the minor axis left out of the fit of the velocity field
   (degrees, default 15). 2DFIT read it from DVDZ, as BBarolo 1.8 did, so the DVDZ of a lagging disk

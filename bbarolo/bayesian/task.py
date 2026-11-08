@@ -23,7 +23,7 @@ def _task_fitter(c, par):
     cb = f._load_cube()
     if cb.array.shape == c.array.shape and not np.array_equal(cb.array, c.array, equal_nan=True):
         cb.array[...] = c.array                   # changed by the tasks run before (CONTSUB, CHECKCUBE)
-    f._init_rings()
+    f._init_rings(show_initial=bool(p.verbose))
     return f
 
 

@@ -1231,8 +1231,11 @@ The half of the galaxy that is used, divided by the minor axis: `A` the approach
 receding side, `B` both (the default). 3DFIT and SPACEPAR use only the pixels of that side in the
 residuals, 2DFIT in the fit of the velocity field (with one side it keeps the centre and `VSYS` fixed),
 ELLPROF in the radial profile. All these tasks also accept `APPROACHING`, `RECEDING`, `BOTH` and their
-abbreviations (`APP`, `REC`, ...); other values are taken as `B`, with a warning. BAYESIAN3DFIT uses it
-only with `LIKEOPTS` `bbres=true`.
+abbreviations (`APP`, `REC`, ...); other values are taken as `B`, with a warning. BAYESIAN3DFIT uses
+only the pixels of that side in the likelihood: the half of the galaxy on that side of the minor axis of
+the initial rings (their median centre and position angle), fixed during the sampling so that the
+likelihood always uses the same voxels (with `LIKEOPTS` `bbres=true`, the residuals of 3DFIT, ring by
+ring).
 """),
     'FREEANGLE': dict(
         group='Free parameters and fit',

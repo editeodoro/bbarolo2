@@ -933,6 +933,8 @@ def test_bayesian_task(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "Fitting 2 parameters: ['vrot', 'vdisp']" in out and "Best-fit parameters" in out
     assert "Deconvolved density profile" in out
+    # the cube and the initial parameters, as 3DFIT shows them (rings given: NRADII and RADSEP (i))
+    assert "Beam size is" in out and "Initial parameters" in out and "Fitting #4(i) rings of width 40.00(i)" in out
     cli = tmp_path / "cli"
     for name in ("MOCK_rings_final1.txt", "MOCK_densprof.txt", "MOCK_densprof_deconvolved.txt", "MOCK_mod_none.fits",
                  "MOCK_dynesty_results.npy", "MOCK_corner.pdf", "MOCK_profiles.pdf", "MOCK_parameters.pdf"):
@@ -3013,3 +3015,41 @@ def test_3dfit_ring_tables_full_precision(tmp_path, monkeypatch):
         assert np.allclose(np.asarray(tab["vrot"])[ok], a[:, 1], atol=5e-4)
         assert np.allclose(np.asarray(tab["inc"])[ok], a[:, 3], atol=5e-4)
         assert not np.array_equal(np.asarray(tab["vrot"])[ok], a[:, 1])     # (more digits in memory)
+
+
+def test_bayesian_side(tmp_path, capsys):
+    """SIDE A or R: the likelihood of BAYESIAN3DFIT uses only the approaching or receding half of the galaxy
+    (it was ignored unless bbres=true): the two halves of the minor axis of the initial rings, which split the
+    region of both sides, with the data on the receding half at velocities above VSYS."""
+    from bbarolo.bbutils import AlltoVel
+    regions, vmean = {}, {}
+    for side in ("B", "APPROACHING", "R"):
+        f = _bayes_mock(tmp_path, side=side)
+        f._setup(['vrot_single'])
+        regions[side[0]], nvox = f._region.copy(), f.nvox
+        c = f._cube_obj
+        v = AlltoVel(c.getZphys(np.arange(c.DimZ())), c.Head())
+        d = np.where(f._likemask & f._region[None] & np.isfinite(f.data), np.clip(f.data, 0, None), 0.)
+        vmean[side[0]] = float((d * v[:, None, None]).sum() / d.sum())
+        assert np.isfinite(f._log_likelihood(np.array([120.])))
+    a, r, b = regions["A"], regions["R"], regions["B"]
+    assert not (a & ~b).any() and not (r & ~b).any() and ((a | r) == b).all()
+    assert 0.4 < a.sum() / b.sum() < 0.6 and (a & r).sum() < 0.05 * b.sum()
+    assert vmean["R"] > 20 and vmean["A"] < -20 and abs(vmean["B"]) < 10
+    f = _bayes_mock(tmp_path, side="R")
+    f.run(freepar=['vrot_single'], threads=1, verbose=True, dynamic=False, sampler_kwargs=dict(nlive=15, seed=1),
+          run_kwargs=dict(maxiter=40, print_progress=False))
+    assert "the receding half of the galaxy only (SIDE)" in capsys.readouterr().out
+
+
+def test_chanmaps_mask_padded_as_data(tmp_path):
+    """PLOTMASK: in the channel maps of 3DFIT the mask is padded to a square as the data and the model (it was
+    drawn unpadded, shifted by the padding when the region plotted is not square) (C++)."""
+    import glob
+    from bbarolo.plotscripts import writeScripts_Python
+    f = _bayes_mock(tmp_path, plotmask=True)
+    f._setup(['vrot_single'])
+    writeScripts_Python(f._galfit)
+    txt = "".join(open(fn).read() for fn in glob.glob(str(tmp_path / "bbb" / "plotscripts" / "*.py")))
+    assert "z = np.pad(data[chan,:,:],(pad_y, pad_x)" in txt
+    assert "z_mas = np.pad(data_mas[chan],(pad_y, pad_x)" in txt and "contour(data_mas[chan]" not in txt

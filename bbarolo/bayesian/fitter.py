@@ -207,15 +207,17 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         self._cube_obj, self._par = c, p
         return c
 
-    def _init_rings(self):
+    def _init_rings(self, show_initial=False):
         """ The initial rings from the parameters (estimating the missing geometry as in
-        3DFIT), and the default priors. """
+        3DFIT), and the default priors. show_initial: print the table of the initial parameters
+        of 3DFIT (given, estimated or default); otherwise, the estimated values only. """
         from ..rings import readRings
         from ..paramguess import EstimateInitial
-        from ..galfit import ringfile_values, default_z0
+        from ..galfit import ringfile_values, default_z0, estimatedParameters, initialParametersText
         c = self._cube_obj if self._cube_obj is not None else self._load_cube()
         par = copy.deepcopy(c.pars().gf)
         ringfile_values(par)                     # RINGFILE: the values not given
+        estimated = estimatedParameters(par)
         toEstimate = ((par.RADII == "-1" and (par.NRADII == -1 or par.RADSEP == -1)) or par.XPOS == "-1"
                       or par.YPOS == "-1" or par.VSYS == "-1" or par.VROT == "-1" or par.PHI == "-1"
                       or par.INC == "-1")
@@ -240,7 +242,9 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         inR = readRings(par, c.Head())
         if inR.nr == 0:
             raise ValueError("BAYESIAN3DFIT ERROR: the number of radii must be > 0.")
-        if toEstimate:
+        if show_initial:
+            print(initialParametersText(inR, estimated), end="")
+        elif toEstimate:
             print(f"\n{self.taskname}: initial rings ({inR.nr} rings every {inR.radsep:.2f} arcsec) with "
                   "estimated parameters:")
             for k, n in (("xpos", "XPOS"), ("ypos", "YPOS"), ("vsys", "VSYS"), ("vrot", "VROT"), ("inc", "INC"),
@@ -558,6 +562,9 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                 else:
                     print(f"\nLikelihood: noise per voxel sigma = {sg}{fe}; log-likelihood x {fc}; "
                           f"{self.nvox} voxels ({self._likemask_note})")
+                if self._side() is not None:
+                    print(f"           the {'approaching' if self._side() == 'A' else 'receding'} half of the "
+                          "galaxy only (SIDE), divided by the minor axis of the initial rings")
             if self.useNorm and not useBBres:
                 print(f"Density profile: deconvolved (fit of the total intensity map with the beam-convolved "
                       f"rings, smoothness {self.like_kwargs['densprof_smooth']:g})")
