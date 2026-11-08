@@ -372,7 +372,8 @@ class GalMod3D:
         galmodtype: "ANALYTIC" (default: every point of the grid with its line integrated over the
                     channels, no noise) or "MC" (nclouds random clouds drawn from the density, each
                     with a random velocity from its line, as the MC models of GALMOD; seed: their seed).
-        noise:      rms of a Gaussian noise added to the model, smoothed to the beam (seed: its seed).
+        noise:      rms of a Gaussian noise added to the model, smoothed to the beam with the model
+                    (smooth=True), white otherwise (seed: its seed).
         smooth:     convolve the model with the beam (default True)."""
         typ = str(galmodtype).strip().upper()
         if typ not in ("ANALYTIC", "MC"):
@@ -411,7 +412,10 @@ class GalMod3D:
         m = np.ascontiguousarray(m)
         m *= self._flux_scale(m)
         if noise:
-            m = dm.addnoise(m, float(noise), rng=rng)
+            if smooth:
+                m = dm.addnoise(m, float(noise), rng=rng)
+            else:                   # (white noise: the engine smooths it whenever the cube has a beam)
+                m = (m + rng.normal(0., float(noise), m.shape)).astype(np.float32)
         from .cube import Cube
         mod = Cube.fromArray(m.astype(np.float32), c.Head().copy(), c.pars())
         return model_hdu(mod, c.Head().Name() + "mod")
@@ -466,4 +470,8 @@ class GalMod3D:
         if not isFluxUnitKnown(h):
             raise BBaroloError(f"GalMod3D: cannot convert a flux in Jy km/s to BUNIT={h.Bunit()!r}: give "
                                "flux='measured' or None")
-        return float(self.flux) / float(FluxtoJy(model_sum, h))
+        jy = float(FluxtoJy(model_sum, h))
+        if h.Bunit().lower().replace(" ", "") in ("k", "k(tmb)") and h.Freq0() > 0:
+            # K: the Rayleigh-Jeans conversion at the rest frequency of the cube (FluxtoJy assumes the HI line)
+            jy *= (21.106 * h.Freq0() / 2.99792458e10) ** 2
+        return float(self.flux) / jy

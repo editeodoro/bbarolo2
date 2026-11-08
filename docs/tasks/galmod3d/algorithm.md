@@ -219,8 +219,8 @@ is that of the header of the cube, or `beam=(bmaj, bmin, bpa)` (arcsec, arcsec, 
 convolution, values below $10^{-12}$ of the peak are set to 0.
 
 With `model(noise=σn)`, Gaussian noise of rms $\sigma_n$ per voxel (in the units of the final model)
-is added after the flux scaling. As in GALMOD it is first convolved with the beam and rescaled to the
-standard deviation $\sigma_n$; this happens whenever the cube has a beam, also with `smooth=False`.
+is added after the flux scaling. With `smooth=True`, as in GALMOD, it is first convolved with the beam and
+rescaled to the standard deviation $\sigma_n$; with `smooth=False` it is white noise.
 
 ## Flux scaling
 
@@ -238,7 +238,8 @@ The argument `flux` sets the total flux of the final (convolved) model $M$:
   conversion from the units of the cube (BUNIT) × km/s to Jy km/s: for Jy/beam (also mJy/beam,
   µJy/beam) a division by the area of the beam in pixels, $\Omega_b/\bar p^{\,2}$, with
   $\Omega_b = \pi b_{\rm maj} b_{\rm min}/(4\ln 2)$ and $\bar p = (|\Delta x| + |\Delta y|)/2$; for Jy
-  (per pixel) none; for K the Rayleigh-Jeans conversion at the wavelength of the HI line, 21.106 cm;
+  (per pixel) none; for K the Rayleigh-Jeans conversion at the rest frequency of the cube (that of the
+  header, or `RESTFREQ`);
   for W.U. a factor $5\times10^{-3}$ Jy/beam per W.U. Other units are an error.
 - **`"measured"`**: the model is scaled to the flux of the data $D$ of the cube within its mask $\mu$
   (1 inside, 0 outside), built as set by {ref}`MASK <par-galmod-mask>` (default `SEARCH`):

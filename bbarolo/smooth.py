@@ -202,15 +202,15 @@ class Smooth3D:
 
     def defineBeam_Gaussian(self, oldbeam, newbeam):
         ob, nb = list(oldbeam), list(newbeam)
-        if ob[0] < ob[1]:
-            print("Major axis < minor axis. Inverting...", end="")
-            ob[0], ob[1] = ob[1], ob[0]
+        # a beam given with BMAJ < BMIN: the axes are swapped, and the major axis is at PA + 90 (C++ kept the
+        # PA, and compared the new beam with the old one before swapping its axes)
+        for b in (ob, nb):
+            if b[0] < b[1]:
+                print("Major axis < minor axis. Inverting...", end="")
+                b[0], b[1], b[2] = b[1], b[0], b[2] + 90.
         if not (nb[0] >= ob[0] and nb[1] >= ob[1]):
             raise BBaroloError(f"SMOOTH: the new beam ({nb[0]:g} x {nb[1]:g} arcsec) is smaller than the old beam "
                                f"({ob[0]:g} x {ob[1]:g} arcsec).")
-        if nb[0] < nb[1]:
-            print("Major axis < minor axis. Inverting...", end="")
-            nb[0], nb[1] = nb[1], nb[0]
         self.oldbeam, self.newbeam = tuple(ob), tuple(nb)
         cb = convpars(ob, nb)
         if cb is None:

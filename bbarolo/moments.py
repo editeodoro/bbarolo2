@@ -41,9 +41,12 @@ def compute_moments(c, mask=None):
     return m0, m1, m2
 
 
-def gaussian_moments(c, mask=None, niter=50):
-    """Gaussian fit of all spectra (vectorised Levenberg-Marquardt).
-    Returns integrated intensity, central velocity, dispersion."""
+def gaussian_moments(c, mask=None, niter=50, maxiter=1000, tol=1e-3):
+    """Gaussian fit of all spectra (vectorised Levenberg-Marquardt): niter iterations for all the spectra,
+    then up to maxiter for those not converged (as C++ Lsqfit: the chi^2 decreased by less than tol in
+    relative terms, or the damping exceeded 1E10). Returns integrated intensity, central velocity,
+    dispersion: NaN where the fit did not converge, where a column of the Jacobian is 0, with 3 channels or
+    fewer, and for empty spectra (C++ flagged these failures as well)."""
     a = c.array.astype(np.float64)
     if mask is not None:
         a = a * mask
@@ -62,26 +65,38 @@ def gaussian_moments(c, mask=None, niter=50):
     def chi2(p):
         return np.sum((S - model(p)) ** 2, axis=1)
     chi = chi2(p)
-    ok = smax != 0
-    for _ in range(niter):
-        arg = (v[None] - p[:, 1:2]) / p[:, 2:3]
+    ok = (smax != 0) & (nz > 3)
+    conv = np.zeros(S.shape[0], bool)
+    fail = np.zeros(S.shape[0], bool)
+    act = np.arange(S.shape[0])                 # (all the spectra for niter iterations, as before)
+    for it in range(maxiter):
+        if it == niter:
+            act = np.flatnonzero(ok & ~conv & ~fail)
+        if act.size == 0:
+            break
+        pa, Sa, la, ca = p[act], S[act], lam[act], chi[act]
+        arg = (v[None] - pa[:, 1:2]) / pa[:, 2:3]
         ex = np.exp(-arg * arg / 2.)
-        J = np.stack([ex, p[:, 0:1] * ex * arg / p[:, 2:3], p[:, 0:1] * ex * arg * arg / p[:, 2:3]], 2)
-        r = S - p[:, 0:1] * ex
+        J = np.stack([ex, pa[:, 0:1] * ex * arg / pa[:, 2:3], pa[:, 0:1] * ex * arg * arg / pa[:, 2:3]], 2)
+        r = Sa - pa[:, 0:1] * ex
         JTJ = np.einsum("nki,nkj->nij", J, J)
         JTr = np.einsum("nki,nk->ni", J, r)
-        A = JTJ + lam[:, None, None] * JTJ * np.eye(3)[None]
+        fail[act] |= ~np.all(np.diagonal(JTJ, axis1=1, axis2=2) > 0, 1)
+        A = JTJ + la[:, None, None] * JTJ * np.eye(3)[None]
         A += 1e-30 * np.eye(3)[None]
         try:
             dp = np.linalg.solve(A, JTr[..., None])[..., 0]
         except np.linalg.LinAlgError:
             break
-        pn = p + dp
-        cn = chi2(pn)
-        better = (cn < chi) & np.all(np.isfinite(pn), 1)
-        p = np.where(better[:, None], pn, p)
-        chi = np.where(better, cn, chi)
-        lam = np.where(better, lam / 10, lam * 10)
+        pn = pa + dp
+        arg = (v[None] - pn[:, 1:2]) / pn[:, 2:3]
+        cn = np.sum((Sa - pn[:, 0:1] * np.exp(-arg * arg / 2.)) ** 2, axis=1)
+        better = (cn < ca) & np.all(np.isfinite(pn), 1)
+        p[act] = np.where(better[:, None], pn, pa)
+        chi[act] = np.where(better, cn, ca)
+        lam[act] = np.where(better, la / 10, la * 10)
+        conv[act] |= (better & (ca - cn <= tol * ca)) | (lam[act] > 1e10)
+    ok &= conv & ~fail & np.all(np.isfinite(p), 1)
     integ = np.sqrt(2 * np.pi) * np.abs(p[:, 2]) * p[:, 0]
     if c.pars().fluxConvert:
         integ = np.sqrt(2 * np.pi) * np.abs(p[:, 2]) * FluxtoJyBeam(p[:, 0], c.Head())
@@ -95,6 +110,7 @@ def gaussian_moments(c, mask=None, niter=50):
 def _rms_one(row, rob, sncut, level):
     sp = row.copy()
     orms = 1E10
+    rms = 1E10
     count = 0
     while True:
         if sp.size == 0:
@@ -110,7 +126,8 @@ def _rms_one(row, rob, sncut, level):
         count += 1
         orms = rms
         sp = sp[~(sp > sncut * rms)]
-    return orms
+    # (with fewer than 5 channels the loop stops at once: the rms of all of them; C++ returned 1E10)
+    return rms if count == 0 else orms
 
 
 @nb.njit(parallel=True, cache=True)
@@ -213,8 +230,7 @@ class MomentMap(Image2D):
         isJY, isK = "/b" in bunit, bunit in ("k", "kelvin")
         if not (isJY or isK):
             raise ValueError("MOMENT MAPS ERROR: Input datacube must be in JY/BEAM or K.")
-        if msk and not c.MaskAll():
-            c.BlankMask()
+        self._getmask(msk)          # (the mask of the other maps: it depended on what ran before)
         v = c.pars().verbose
         c.pars().verbose = False
         if v:
@@ -232,7 +248,8 @@ class MomentMap(Image2D):
             val = FluxtoJyBeam(val, c.Head())      # (the sum map is in the units of the cube, e.g. mJy/beam)
         if isK:
             val = val / (1360 * 21.106114 * 21.106114 / (bmaj * bmin))
-        self.array = (8794 * val * dvel / (bmaj * bmin)).astype(np.float32)
+        # 8846 Msun/pc2 per Jy/beam km/s for a 1x1 arcsec beam (= 2.356E5 D^2 S, as ELLPROF; C++ used 8794)
+        self.array = (8846 * val * dvel / (bmaj * bmin)).astype(np.float32)
         self.head.setBunit("Msun/pc2")
         self.head.setBtype("Mass_surfdens")
         self.storedtype = 3
@@ -241,8 +258,7 @@ class MomentMap(Image2D):
         c = self.cin
         self.setHead(3)
         rob = c.pars().flagRobustStats
-        if msk and not c.MaskAll():
-            c.BlankMask()
+        mask = self._getmask(msk)   # (the mask of the other maps: it depended on what ran before)
         a = c.array
         nz, ny, nx = a.shape
         out = np.zeros((ny, nx), np.float32)
@@ -250,7 +266,7 @@ class MomentMap(Image2D):
         if verb:
             print(" Computing RMS map... ", end="", flush=True)
         if msk:
-            good = ~np.isnan(a) & ~c.Mask()
+            good = ~np.isnan(a) & ~mask
             arr = np.where(good, a, np.nan).astype(np.float64)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)

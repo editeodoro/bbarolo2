@@ -376,9 +376,12 @@ class Ringmodel:
         F = math.pi / 180.
         ot = self.thetaf
         self.thetaf = 0
-        for ir in range(self.nrad):
-            p = np.array([self.vsysf[ir], self.vrotf[ir], self.vexpf[ir], self.posaf[ir], self.inclf[ir],
-                          self.xposf[ir], self.yposf[ir]])
+        fitted = np.array([self.vsysf, self.vrotf, self.vexpf, self.posaf, self.inclf, self.xposf, self.yposf],
+                          float)[:, :self.nrad]
+        # the rings whose fit failed (NaN parameters) are left out of the model (they raised a ValueError)
+        good = np.flatnonzero(np.isfinite(fitted).all(axis=0))
+        for ir in good:
+            p = fitted[:, ir].copy()
             ri = max(self.rads[ir] - 0.5 * self.wids[ir], 0.0)
             ro = self.rads[ir] + 0.5 * self.wids[ir]
             n, X, y, w, q = self.getdat(p, ri, ro, 0)
@@ -388,20 +391,21 @@ class Ringmodel:
             for (xx, yy), v in zip(X.astype(int), vv):
                 if xx < nx and yy < ny:
                     model[yy, xx] = v if np.isnan(model[yy, xx]) else (model[yy, xx] + v) / 2.
-        il = self.nrad - 1
-        p = np.array([self.vsysf[il], self.vrotf[il], self.vexpf[il], self.posaf[il], self.inclf[il],
-                      self.xposf[il], self.yposf[il]])
-        rl = self.rads[il] + 0.5 * self.wids[il]
-        n, X, y, w, q = self.getdat(p, 0, rl, 0)
+        # the pixels between the rings: the value of the nearest ring fitted, within the outermost one
+        il = good[-1] if good.size else None
+        pl = fitted[:, il].copy() if il is not None else None
+        rl = self.rads[il] + 0.5 * self.wids[il] if il is not None else 0.
+        X = self.getdat(pl, 0, rl, 0)[1] if il is not None else np.zeros((0, 2))
         for (xx, yy) in X.astype(int):
             if xx < nx and yy < ny and np.isnan(model[yy, xx]):
-                xr = -(xx - p[X0]) * math.sin(F * p[PA]) + (yy - p[Y0]) * math.cos(F * p[PA])
-                yr = (-(xx - p[X0]) * math.cos(F * p[PA]) - (yy - p[Y0]) * math.sin(F * p[PA])) / math.cos(F * p[INC])
+                # the radius in the geometry of the outermost ring (C++ used that of the ring of the previous
+                # pixel filled), the velocity of the nearest ring
+                xr = -(xx - pl[X0]) * math.sin(F * pl[PA]) + (yy - pl[Y0]) * math.cos(F * pl[PA])
+                yr = (-(xx - pl[X0]) * math.cos(F * pl[PA]) - (yy - pl[Y0]) * math.sin(F * pl[PA])) \
+                    / math.cos(F * pl[INC])
                 R = math.hypot(xr, yr)
-                ind = int(np.argmin(np.abs(R - self.rads)))
-                p = np.array([self.vsysf[ind], self.vrotf[ind], self.vexpf[ind], self.posaf[ind], self.inclf[ind],
-                              self.xposf[ind], self.yposf[ind]])
-                model[yy, xx] = vfunc(np.array([[xx, yy]], float), p)[0]
+                ind = int(good[np.argmin(np.abs(R - self.rads[good]))])
+                model[yy, xx] = vfunc(np.array([[xx, yy]], float), fitted[:, ind])[0]
         img = Image2D()
         img.array = model.astype(np.float32)
         img.saveHead(h)

@@ -186,19 +186,43 @@ def fitscopy(argv):
             for ax, (s, rev) in enumerate(sls):
                 if rev:
                     data = np.flip(data, axis=ax)
-            # update the reference pixel / increment of each FITS axis
-            for i, (s, rev) in enumerate(sls[::-1]):
-                k = i + 1
-                if f"CRPIX{k}" in h and s.start is not None:
-                    if rev:
-                        n = data.shape[::-1][i]
-                        h[f"CRPIX{k}"] = s.start + n - h[f"CRPIX{k}"] + 1
-                        if f"CDELT{k}" in h:
-                            h[f"CDELT{k}"] = -h[f"CDELT{k}"]
-                    else:
-                        h[f"CRPIX{k}"] = h[f"CRPIX{k}"] - s.start
-        fits.PrimaryHDU(data, h if isinstance(hdu, fits.PrimaryHDU) else None).writeto(out, overwrite=True)
+            # update the reference pixel and the direction of each FITS axis, also of the alternate WCS
+            _section_wcs(h, sls, data.shape)
+        # the header of the source (also of an extension: C++ copied it through CFITSIO, the port wrote a
+        # header with no WCS)
+        for key in ("XTENSION", "PCOUNT", "GCOUNT"):
+            h.remove(key, ignore_missing=True)
+        fits.PrimaryHDU(data, h).writeto(out, overwrite=True)
     return 0
+
+
+def _section_wcs(h, sls, shape):
+    """Update the WCS of the header h (in place) for an image section: the slices sls (numpy order, with
+    their 'reversed' flags) of an array that now has the shape shape. CRPIX, and for a reversed axis k the
+    sign of column k of the CD matrix (or of a non-diagonal PC matrix), otherwise of CDELTk; for the primary
+    and the alternate (A-Z) WCS."""
+    naxis = len(shape)
+    for i, (s, rev) in enumerate(sls[::-1]):
+        k = i + 1
+        for a in [""] + [chr(c) for c in range(ord("A"), ord("Z") + 1)]:
+            cp = f"CRPIX{k}{a}"
+            if cp not in h or s.start is None:
+                continue
+            if not rev:
+                h[cp] = h[cp] - s.start
+                continue
+            h[cp] = s.start + shape[::-1][i] - h[cp] + 1
+            cd = [f"CD{j}_{k}{a}" for j in range(1, naxis + 1)]
+            pc = [f"PC{j}_{k}{a}" for j in range(1, naxis + 1)]
+            if any(c in h for c in cd):
+                for c in cd:
+                    if c in h:
+                        h[c] = -h[c]
+            elif any(h.get(c, 0) != 0 for j, c in enumerate(pc, 1) if j != k):
+                for j, c in enumerate(pc, 1):
+                    h[c] = -h.get(c, 1. if j == k else 0.)
+            elif f"CDELT{k}{a}" in h:
+                h[f"CDELT{k}{a}"] = -h[f"CDELT{k}{a}"]
 
 
 def fitsarith(argv):
@@ -274,7 +298,11 @@ def ConvertFluxUnits(argv, whichtype):
               f"   BBarolo --{taskname.lower()} in.fits              \n"
               f"   BBarolo --{taskname.lower()} in.fits out.fits     \n")
         return 0
-    bunit = fits.getheader(argv[0]).get("BUNIT")
+    fname, ext, _ = _parse_name(argv[0])
+    if ext is not None and len(argv) == 1:
+        sys.stderr.write(f" {taskname} ERROR: give an output file to convert an extension ({argv[0]}).\n")
+        return 1
+    bunit = fits.getheader(fname, ext if ext is not None else 0).get("BUNIT")
     if bunit is None:
         bunit = "JY/BEAM" if whichtype == "j2k" else "K"
         sys.stderr.write(f"BUNIT Keyword does not exist. Assuming {bunit}\n")
@@ -285,11 +313,17 @@ def ConvertFluxUnits(argv, whichtype):
     if whichtype == "k2j" and ("jy/b" in b or "j/b" in b):
         print(f" {taskname}: flux units are already in JY/BEAM. Doing nothing!!")
         return 0
-    if whichtype == "j2k" and "k " in bunit.lower():
+    if whichtype == "j2k" and "jy/b" not in b and "j/b" not in b:
+        # (C++ looked for "k " and converted a cube in K again)
         print(f" {taskname}: flux units are already in KELVIN. Doing nothing!!")
         return 0
     c = Cube()
-    if not c.readCube(argv[0]):
+    if ext is None:
+        ok = c.readCube(fname)
+    else:
+        with fits.open(fname) as hdul:
+            ok = c.readHDU(hdul[ext], name=argv[0])
+    if not ok:
         sys.stderr.write(f"{argv[0]} is not a readable FITS file!\n")
         return 1
     h = c.Head()

@@ -581,10 +581,11 @@ class Param:
             if gf.flagGALFIT:
                 if gf.FREE == "":
                     out("3DFIT error: FREE" + msg); good = False
-                if gf.MINVDISP >= gf.MAXVDISP:
-                    out(f"3DFIT error: MINVDISP ({gf.MINVDISP:g}) must be smaller than MAXVDISP ({gf.MAXVDISP:g})."); good = False
                 elif free_problem(gf.FREE):
                     out("3DFIT error: " + free_problem(gf.FREE)); good = False
+                if gf.MINVDISP >= gf.MAXVDISP:
+                    out(f"3DFIT error: MINVDISP ({gf.MINVDISP:g}) must be smaller than MAXVDISP ({gf.MAXVDISP:g}).")
+                    good = False
             if gf.flagGALFIT or self.flagSpace:          # (SPACEPAR computes the residuals of 3DFIT)
                 if gf.FTYPE < 1 or gf.FTYPE > 4:
                     out("3DFIT warning: Not valid argument for FTYPE parameter. Assuming 2 (|mod-obs|).")
@@ -696,6 +697,9 @@ class Param:
             s = self.window_type
             if int(self.window_size) % 2 == 0 and s != "GAUSSIAN":
                 out("SMOOTHSPEC error: smoothing window must be an odd number")
+                good = False
+            if self.window_size <= 0:
+                out(f"SMOOTHSPEC error: WINDOW_SIZE must be positive, not {self.window_size:g}")
                 good = False
             if s not in ("HANNING", "HANNING2", "BOXCAR", "TOPHAT", "FLATTOP", "BARTLETT",
                          "WELCH", "BLACKMAN", "GAUSSIAN"):

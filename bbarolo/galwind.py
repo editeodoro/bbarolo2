@@ -16,6 +16,9 @@ Differences with the C++ code (all bugs in the original):
   * cylindrical model: VWIND > 0 is an outflow, as in the spherical model (C++ gave the
     cylinders the opposite velocities, an inflow), and the cylinders are centred on the
     projected axis of the disk also for rotated or mirrored axes;
+  * cylindrical model: the layers are boxes (LTYPE 5 of the wind; C++ used the Gaussian layer of
+    GALMOD), and the smoothed model is not multiplied by the beam area (its DENS is a flux per
+    unit area, as in GALMOD; C++ made it about 10 times too bright for a 3-pixel beam);
   * spherical model: NV 1 is one sub-cloud (C++ took any NV up to 1 as 20);
   * VWIND, VDISP, DENS, VROT, OPENANG and RADII also as lists, one value per cylinder or
     shell (C++ used the first value).
@@ -113,10 +116,13 @@ class GalWind:
 
     # ------------------------------------------------------------------
     def _gmpar(self):
-        """GALMOD parameters for the cylinders: those of the cube with CDENS/NV of the wind."""
+        """GALMOD parameters for the cylinders: those of the cube with CDENS/NV of the wind, and the vertical
+        layer of the wind, LTYPE 5 (a box: the cylinders of height 2 z0 stack exactly; C++ used the layer of
+        GALMOD, Gaussian by default, so neighbouring cylinders overlapped)."""
         gm = copy.deepcopy(self.cin.pars().gm)
         gm.CDENS, gm.NV = self.par.CDENS, self.par.NV
         gm.ISEED = self.par.ISEED
+        gm.LTYPE = self.par.LTYPE
         return gm
 
     def _cylindrical(self, out):
@@ -142,6 +148,8 @@ class GalWind:
         Dens, Vrot = column("DENS", par.DENS), column("VROT", par.VROT)
 
         setup = GalmodSetup(c, gmpar=self._gmpar())
+        # the cylinders are a flux per unit area (DENSFLUX true, as GALMOD): no beam-area factor when smoothed
+        self._usescale = not setup.densIsFlux
         gtype = getattr(c.pars(), "galmodtype", "MC")
         # pixel offset of the point at height z = 1 arcsec on the axis of the disk, projected as the clouds
         # of GALMOD are (sky y = -z sin(inc)): the cylinder k of each cone is centred at z = ±(2k-1)·z0
@@ -239,6 +247,7 @@ class GalWind:
         gm = self._gmpar()
         gm.CMODE, gm.DENSFLUX = 1, False
         setup = GalmodSetup(c, gmpar=gm, densflux=False)
+        self._usescale = True          # (a column density: a flux per pixel, scaled to a flux per beam)
         sr, nv, sep = self._shells(setup)
         # rows of the kernel: radius, vrot, vsph, vdisp, dens, inc, pa, openang, xpos, ypos, vsys
         sr = np.ascontiguousarray(sr[[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
@@ -271,7 +280,8 @@ class GalWind:
         h = self.cin.Head()
         arcconv = arcsconv(h.Cunit(0))
         sm = Smooth3D()
-        sm.setUseScalefac(scalefac)
+        # (C++ scaled the cylinders too, about 10 times too bright with a beam of 3 pixels)
+        sm.setUseScalefac(scalefac and getattr(self, "_usescale", True))
         sm.setUseBlanks(False)
         res = sm.smooth(self.out, (0., 0., 0.), (h.Bmaj() * arcconv, h.Bmin() * arcconv, h.Bpa()),
                         oldarray=self.out.array, threads=self.cin.pars().threads)

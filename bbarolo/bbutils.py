@@ -571,6 +571,8 @@ def window_kernel(windowType, windowSize):
     if windowType == "GAUSSIAN":
         sigma = windowSize / (2.0 * np.sqrt(2.0 * np.log(2.0)))
         k = 2 * int(5 * sigma) + 1
+    if k == 1:
+        return np.ones(1)               # (a window of one channel: no smoothing; C++ divided by N = 0)
     half = k // 2
     j = np.arange(k, dtype=float)
     x = j - half

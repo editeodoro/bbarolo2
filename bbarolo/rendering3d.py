@@ -70,7 +70,7 @@ class Rendering3D:
         data = np.where(np.isnan(c.array), 0, c.array).astype(np.float32)
         out = _render(data, np.ascontiguousarray(c.Mask()), nang)
         h = c.Head().copy()
-        h.setCrpix(2, 0)
+        h.setCrpix(2, 1)                 # (plane 1 is the angle 0; C++ wrote CRPIX3 = 0)
         h.setCrval(2, 0)
         h.setCdelt(2, 1)
         h.setCunit(2, "DEGREES")

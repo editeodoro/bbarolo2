@@ -63,18 +63,15 @@ whatever the units, and no pixel is blanked. Empty images ($N_i = 0$) are 0 afte
 
 The images are written as the planes of the cube `<prefix>_3D.fits` in
 {ref}`OUTFOLDER <par-all-outfolder>`, with the spatial header of the input. The third axis is the angle:
-CTYPE3 `L.O.S. ANGLE`, CUNIT3 `DEGREES`, CDELT3 1, CRVAL3 0 and CRPIX3 0.
-
-:::{note}
-With CRPIX3 = 0 the FITS convention gives an angle of $p$ degrees to the plane $p$ (counted from 1),
-while plane $p$ holds the projection at $p - 1$ degrees: the angle in the header is one degree too large.
-:::
+CTYPE3 `L.O.S. ANGLE`, CUNIT3 `DEGREES`, CDELT3 1, CRVAL3 0 and CRPIX3 1: the plane $p$ (counted from 1)
+holds the projection at $p - 1$ degrees.
 
 ## Differences from BBarolo 1.8
 
 - The projections are the same as in BBarolo 1.8 (equal to floating-point precision), with the angles
   computed in parallel.
 - An image with no masked voxel is empty (0 in the output); C++ divided by zero.
+- CRPIX3 is 1: with the CRPIX3 = 0 of C++ the header gave each plane an angle one degree too large.
 
 ## References
 

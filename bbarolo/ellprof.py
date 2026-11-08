@@ -10,7 +10,7 @@ import numpy as np
 from .moments import MomentMap
 from .rings import readRings
 from .stats import findMADFM
-from .bbutils import arcsconv
+from .bbutils import arcsconv, _jy_prefix
 
 FLT_MAX = float(np.finfo(np.float32).max)
 
@@ -55,18 +55,21 @@ class Ellprof:
         nseg = 1
         segments = [0, 360., 0., 0]
         side = c.pars().gf.SIDE
+        # the azimuth of the rings is 0 on the receding half of the major axis, at any PA (C++ took the
+        # opposite halves, and swapped them for a mean PA above 180 degrees: right only then)
         if side == "A":
-            nseg = 2; segments[2], segments[3] = -90, 90
-        elif side == "R":
             nseg = 2; segments[2], segments[3] = 90, -90
-        if meanPA > 180:
-            segments[2], segments[3] = segments[3], segments[2]
+        elif side == "R":
+            nseg = 2; segments[2], segments[3] = -90, 90
         im = MomentMap()
         im.input(c)
         if c.Head().NumAx() > 2 and c.DimZ() > 1:
             im.ZeroMoment(mask)
         else:
             im.array = c.array[0].copy()
+            blank = getattr(c, "blanks2d", None)        # (the blank pixels of a 2D map, read as 0)
+            if blank is not None and blank.shape == im.array.shape:
+                im.array[blank] = np.nan
             im.setHead(0)
             im.Head().setBunit(c.Head().Bunit())
         self.im = im
@@ -272,7 +275,9 @@ class Ellprof:
                     + e(self.Blankarea[i, seg]) + " " + e(self.Surfdens_Bl[i, seg]) + " "
                     + f"{self.getSurfDensFaceOn_Bl(i, seg):>{m + 1}.3e} ")
             if isJy:
-                mds = 2.36E-07 * self.getSurfDensFaceOn(i, seg) / (arctorad * arctorad)
+                # (2.356E5 D^2 S Msun, the constant of MASSDENSMAP; C++ used 2.36E5, and Jy for mJy and uJy)
+                mds = 2.356E-07 * self.getSurfDensFaceOn(i, seg) / (arctorad * arctorad)
+                mds *= _jy_prefix(unit.lower())
                 if "/b" in unit.lower() and h.BeamArea() != 0:
                     mds /= h.BeamArea()
                 nd = mds / (8.41185687E-02 * 3.0857 * 3.0857)

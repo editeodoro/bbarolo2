@@ -18,8 +18,8 @@ DOCS = {
         doc="""\
 The input FITS file: a datacube, or a 2D image for the tasks that accept one (e.g. `SEARCH`,
 `2DFIT`, `ELLPROF`). BBarolo reads the data and the header of the primary HDU. Blank values (NaN)
-are set to 0, and of a 4D cube only the first plane of the fourth axis (e.g. the first Stokes
-plane) is used.
+are set to 0 (ELLPROF keeps those of a 2D map blank), and of a 4D cube only the first plane of the
+fourth axis (e.g. the first Stokes plane) is used.
 
 Required by all the tasks, unless `FITSLIST` is given. A relative path is relative to the current
 directory, and `~` is expanded. In Python the cube is the first argument of the task classes (a
@@ -242,8 +242,8 @@ BAYESIAN3DFIT, GALMOD, SPACEPAR) compare model and data within it; the maps (not
 - `FILE(mask.fits)`: a FITS file with as many voxels as the cube, non-zero in the mask (the path is
   relative to the current directory and keeps its case).
 
-With the source finder, the fits, the models, `MASSDENSMAP` and `RMSMAP` use the largest detection,
-while `MAKEMASK`, `TOTALMAP`, `VELOCITYMAP`, `DISPERSIONMAP`, 2DFIT and ELLPROF use all of them,
+With the source finder, the fits and the models use the largest detection, while `MAKEMASK`, the
+maps, 2DFIT and ELLPROF use all of them,
 unless the type ends in `LARGEST` (`SEARCHLARGEST`, `SMOOTH&SEARCHLARGEST`,
 `SMOOTHSPEC&SEARCHLARGEST`: only the largest). A mask built by a task is used by the next tasks of
 the run. If nothing is detected, BBarolo stops with an error.
@@ -524,7 +524,7 @@ dispersion maps when no map is requested) gives `Result.totalmap`.
     'MASSDENSMAP': dict(
         group='Task',
         doc="""\
-Writes the HI mass surface density map in `<prefix>_map_massdens.fits`, in Msun/pc2: 8794 times the
+Writes the HI mass surface density map in `<prefix>_map_massdens.fits`, in Msun/pc2: 8846 times the
 sum over the channels within the mask (`MASK`) of the flux in Jy/beam times the channel width in
 km/s, divided by the product of the axes of the beam in arcsec. Helium is not included. `true` runs
 it.
@@ -553,9 +553,9 @@ in km/s. It is not corrected for the channel width or the instrumental broadenin
         doc="""\
 Writes the noise of each spectrum in `<prefix>_map_RMS.fits`, in the units of the cube. With a mask
 (`MASK` other than `NONE`), it is computed from the channels outside the mask; with `MASK NONE`,
-iteratively, discarding the values above 1.5 times the noise until it changes by less than 10%. The
-noise is the MADFM/0.6745 around the median, or the standard deviation (`FLAGROBUSTSTATS`). `true`
-runs it.
+iteratively, discarding the values above 1.5 times the noise until it changes by less than 10% (with
+fewer than 5 channels, the noise of all of them). The noise is the MADFM/0.6745 around the median, or the
+standard deviation (`FLAGROBUSTSTATS`). `true` runs it.
 """),
     'MAPTYPE': dict(
         group='Maps',
@@ -563,7 +563,8 @@ runs it.
 How the maps are derived: `MOMENT` (default), the moments of the spectra, or `GAUSSIAN`, a Gaussian
 fitted to each spectrum within the mask, starting from its peak and a dispersion of 10 km/s. With
 `GAUSSIAN` the total map is the integral of the Gaussian, the velocity map its centre and the
-dispersion map its dispersion; spectra without emission give meaningless values, so use a mask.
+dispersion map its dispersion; the pixels where the fit does not converge, or cannot be done (3
+channels or fewer), are blank. Spectra without emission give meaningless values, so use a mask.
 Case-insensitive; another value is replaced by `MOMENT`, with a warning.
 
 Only for `TOTALMAP`, `VELOCITYMAP` and `DISPERSIONMAP`.
@@ -647,7 +648,8 @@ radius (to the previous one for the last ring), and the pixels are sampled on 2�
 
 The outputs are `<prefix>_ellprof.txt` and the map, `<prefix>_ellprof_map.fits`. For each ring the
 table has the radius (arcsec); the sum, mean, median, standard deviation and median absolute deviation
-of the map; the number of pixels; the surface density (per arcsec²), its error and its face-on value
+of the map; the number of pixels; the surface density (per arcsec²), the scatter of the surface density
+of single pixels and its face-on value
 (times cos `INC`); the number of blank pixels and the surface densities including them; for maps in
 Jy, also the face-on HI column density (1E20 atoms/cm2) and mass surface density (Msun/pc2). In
 BBarolo 1.8 the files were `<prefix>_densprof.txt` and `<prefix>_densmap.fits`.
@@ -1012,7 +1014,8 @@ also took 1 as 20).
 Whether the models are convolved with the beam of the cube (that of the header, or `BMAJ`, `BMIN`,
 `BPA`, `BEAMFWHM`), to the spatial resolution of the data. With `false`, no model is smoothed: also the
 models of single rings in the fits of 3DFIT and SPACEPAR. If no convolution kernel can be built from the
-beam, the models are not smoothed, with a warning. GALWIND convolves its final cube.
+beam, the models are not smoothed, with a warning. GALWIND convolves its final cube (the shells, in Jy
+per pixel, are then scaled to Jy/beam; the cylinders keep their flux, as the models of GALMOD).
 """),
     'LTYPE': dict(
         group='Model',
@@ -1020,7 +1023,7 @@ beam, the models are not smoothed, with a warning. GALWIND convolves its final c
 The vertical distribution of the gas: the density as a function of the height z from the plane, with
 the scale height `Z0`. 1: Gaussian, exp(−z²/(2·Z0²)) (the default); 2: sech²(z/Z0); 3: exponential,
 exp(−|z|/Z0); 4: Lorentzian, 1/(1 + (z/Z0)²); 5: box, uniform within ±Z0. Other values are replaced by
-1, with a warning.
+1, with a warning. The cylinders of GALWIND are always boxes.
 """),
     'REDSHIFT': dict(
         group='Spectral lines',
@@ -1105,7 +1108,8 @@ EMPTY applies to all the models, also to those of single rings in the fits of 3D
 Whether `DENS` is an integrated flux per unit area, in the flux units of the cube times km/s per arcsec²
 (`true`, the default), or a column density in 1E20 atoms/cm² converted to flux as in GIPSY's GALMOD
 (`false`). GALMOD uses `false` only with `NORM` `NONE`, since the normalisations `AZIM` and `LOCAL` work
-with fluxes; 3DFIT always takes `DENS` as a flux. BBarolo 1.8 ignored `DENSFLUX false` in GALMOD.
+with fluxes; 3DFIT always takes `DENS` as a flux. BBarolo 1.8 ignored `DENSFLUX false` in GALMOD. The
+cylinders of GALWIND follow it as GALMOD does.
 """),
     'DELTAINC': dict(
         group='Free parameters and fit',
@@ -1549,9 +1553,9 @@ cylinder, to `OPENANG`/2 from it, at the edge. The spherical model does not use 
         group='Wind',
         doc="""\
 The geometry of the outflow of GALWIND: 0 (the default), a stack of `NTOT` cylinders in each cone, each a
-disk model as in GALMOD with scale height `HTOT`/(2·`NTOT`) and the vertical and radial velocities of the
-wind; 1, `NTOT` spherical shells, with clouds within `OPENANG`/2 of the axis moving radially. Any value
-other than 0 gives shells.
+disk model as in GALMOD, a box `HTOT`/`NTOT` high, with the vertical and radial velocities of the wind;
+1, `NTOT` spherical shells, with clouds within `OPENANG`/2 of the axis moving radially. Any value other
+than 0 gives shells.
 
 In the spherical model `DENS` is a column density (1E20 atoms/cm²), `NV` defaults to 20, `DENSTYPE` is
 not used and the models are always Monte Carlo (`GALMODTYPE` is ignored).
@@ -1776,9 +1780,9 @@ the mask `MASK SMOOTHSPEC&SEARCH`.
         group='Window',
         doc="""\
 The size of the window of `SMOOTHSPEC`, in channels: an odd integer for all the windows but `GAUSSIAN`
-(an even size is an error, and a fractional part is ignored), and the FWHM in channels for `GAUSSIAN`.
-It also sets the number of channels averaged by `REDUCE` with `SMOOTHSPEC`, and the window of the mask
-`MASK SMOOTHSPEC&SEARCH`.
+(an even size is an error, and a fractional part is ignored; 1 leaves the cube unchanged), and the FWHM
+in channels for `GAUSSIAN`. It must be positive. It also sets the number of channels averaged by
+`REDUCE` with `SMOOTHSPEC`, and the window of the mask `MASK SMOOTHSPEC&SEARCH`.
 """),
     'SLITFIT': dict(
         group='Task',

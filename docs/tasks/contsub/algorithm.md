@@ -43,7 +43,7 @@ S'(x, y, z) = S(x, y, z) - \sum_{m=0}^{d} c_m(x, y)\, z^m , \qquad z = 0, \dots,
 $$
 
 Blank voxels (NaN in the FITS file) are read as 0 by BBarolo, so they enter the fit as zeros and are 0
-minus the continuum in the output. The polynomial is in the channel number, not in frequency or velocity:
+minus the continuum in the output; NaN in a cube given in memory (in Python) are taken as 0 as well. The polynomial is in the channel number, not in frequency or velocity:
 on a linear spectral axis the two are equivalent. The excluded channels are interpolated (or, at the ends
 of the spectrum, extrapolated) by the polynomial; a high degree with a wide excluded window can make this
 interpolation unstable.

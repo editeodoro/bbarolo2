@@ -87,6 +87,13 @@ dimensionless, 0 at the minimum. It is written to `<prefix>_spacepar.fits`, a cu
 (`CTYPE3 = RING_RAD`, in arcsec), with `BTYPE = FMIN_<FTYPE>`. The cube has one plane per ring; the planes of
 the rings inside STARTRAD are NaN.
 
+:::{note}
+The third axis has, as in BBarolo 1.8, `CRVAL3` equal to the radius of the ring STARTRAD and `CDELT3` equal
+to the mean separation of the rings, while its first plane is the first ring: with STARTRAD > 0, or with
+unevenly spaced radii, the radii given by the header (and the titles of the plot) are not those of the
+planes. BUNIT is that of the cube, although $\varepsilon$ is dimensionless.
+:::
+
 $\varepsilon$ connects to the errors of 3DFIT ({ref}`FLAGERRORS <par-3dfit-flagerrors>`), which are the
 changes of one parameter that raise the residual by 5%: the contour $\varepsilon = 0.05$ is the
 two-parameter version of that criterion, with the other parameters fixed instead of at their best values.

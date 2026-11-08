@@ -44,8 +44,9 @@ The smoothed copies are used only to find the voxels: the mask is applied to the
 **All the detections or the largest.** The mask holds either all the detections or only the largest
 one, the detection with most voxels:
 
-- MAKEMASK, `TOTALMAP`, `VELOCITYMAP`, `DISPERSIONMAP`, 2DFIT and ELLPROF use all the detections;
-- 3DFIT, BAYESIAN3DFIT, GALMOD, SPACEPAR, REND3D, `MASSDENSMAP` and `RMSMAP` use the largest.
+- MAKEMASK, the maps (`TOTALMAP`, `VELOCITYMAP`, `DISPERSIONMAP`, `MASSDENSMAP`, `RMSMAP`), 2DFIT and
+  ELLPROF use all the detections;
+- 3DFIT, BAYESIAN3DFIT, GALMOD, SPACEPAR and REND3D use the largest.
 
 The types ending in `LARGEST` (`SEARCHLARGEST`, `SMOOTH&SEARCHLARGEST`, `SMOOTHSPEC&SEARCHLARGEST`) keep
 only the largest detection in every case. If nothing is detected, BBarolo stops with an error.

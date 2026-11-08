@@ -56,8 +56,8 @@ $z_k = \pm(2k - 1)\,z_0$, one cylinder in each cone. Each cylinder is a GALMOD d
 
 - its centre moved to the projection of the point $(0, 0, z_k)$ of the axis, i.e. by $z_k\sin i$ along the
   minor axis; the inclination and position angle are those of the disk;
-- the scale height $z_0$, with the vertical profile of GALMOD's {ref}`LTYPE <par-galmod-ltype>` (a Gaussian by
-  default): the layers of neighbouring cylinders therefore overlap;
+- the half-height $z_0$, with a box vertical profile (uniform within $\pm z_0$ of its mid-plane, LTYPE 5): the
+  cylinders of each cone stack exactly, from the plane to $H$;
 - rings at the radii $R_j = R_\mathrm{in} + j\,(R_{\mathrm{out},k} - R_\mathrm{in})/n$, $j = 0, \dots, n$,
   with the values set by {ref}`DENSTYPE <par-galwind-denstype>`:
 
@@ -87,8 +87,9 @@ $z_k = \pm(2k - 1)\,z_0$, one cylinder in each cone. Each cylinder is a GALMOD d
 
 $V_\mathrm{w}$, $\sigma$, $\Sigma$ and $V_\mathrm{rot}$ can be one value or one value per cylinder (a list or
 a file column with exactly $N$ values); $\theta_\mathrm{o}$ is one value. $\Sigma$ is a flux per unit area, as
-in GALMOD with {ref}`DENSFLUX <par-galmod-densflux>` true: flux units of the cube times km/s per arcsec² of
-the face-on cylinder. The clouds of each cylinder are those of GALMOD: Monte Carlo (sub-rings 0.75 pixels
+in GALMOD with {ref}`DENSFLUX <par-galmod-densflux>` true (the default): flux units of the cube times km/s
+per arcsec² of the face-on cylinder; with DENSFLUX false it is a column density in $10^{20}$ cm⁻², as in
+GALMOD. The clouds of each cylinder are those of GALMOD: Monte Carlo (sub-rings 0.75 pixels
 wide, {ref}`CDENS <par-galwind-cdens>` clouds per pixel, at least 10, each split into
 {ref}`NV <par-galwind-nv>` sub-clouds), or analytic with {ref}`GALMODTYPE <par-galwind-galmodtype>`
 `ANALYTIC`. The $2N$ cylinders are built independently and summed; the cylinder $k$ of each cone has its own
@@ -140,17 +141,12 @@ the model depends on the number of threads.
 ## Convolution and outputs
 
 With {ref}`SM <par-galwind-sm>` (the default), every channel of the model is convolved with the beam of the
-cube (BMAJ, BMIN, BPA), a 2D Gaussian normalised to a unit sum, and then multiplied by the area of the beam in
-pixels,
+cube (BMAJ, BMIN, BPA), a 2D Gaussian normalised to a unit sum. The shells, and the cylinders with DENSFLUX
+false, are a flux in Jy per pixel: they are then multiplied by the area of the beam in pixels,
 $\Omega_\mathrm{b}/(\Delta x\,\Delta y) \approx 1.1331\,b_\mathrm{maj} b_\mathrm{min}/|\Delta x\,\Delta y|$
 (exactly, the inverse of the peak of the normalised kernel), which turns a flux per pixel into a flux per
-beam. Values below $10^{-12}$ are set to zero.
-
-:::{note}
-The factor $\Omega_\mathrm{b}/(\Delta x\,\Delta y)$ is applied to both geometries. For the cylinders, whose
-$\Sigma$ is a flux per unit area in the units of the cube, the convolved model therefore has
-$\Omega_\mathrm{b}/(\Delta x\,\Delta y)$ times the total flux of the unconvolved one.
-:::
+beam. The cylinders with DENSFLUX true are already in the units of the cube, and keep their total flux, as
+the models of GALMOD. Values below $10^{-12}$ are set to zero.
 
 The outputs, in the output folder:
 
@@ -183,6 +179,12 @@ slice (`pv`).
   are used.
 - **Several lines** were shifted from the first by fixed velocity offsets, exact only at velocity 0; the
   lines of a cloud now share its Doppler factor (see {doc}`../galmod/algorithm`).
+- **Flux of the convolved cylinders**: BBarolo 1.8 multiplied them by the area of the beam in pixels, as the
+  shells, although their $\Sigma$ is a flux per unit area in the units of the cube: they were about 10 times
+  too bright for a beam of 3 pixels.
+- **Layers of the cylinders**: BBarolo 1.8 used the vertical profile of GALMOD's LTYPE (a Gaussian by
+  default; GALWIND's own LTYPE 5 was never used), so about a third of the flux of each cylinder fell outside
+  it, into its neighbours, beyond $H$ and into the other cone. They are boxes now.
 - **ANALYTIC** cylinders (GALMODTYPE) are new.
 
 ## References

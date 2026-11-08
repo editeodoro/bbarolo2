@@ -171,7 +171,8 @@ by about the square root of the number of pixels per beam. Errors above 999.99 a
 
 A ring is not fitted when there are no free parameters, when it has no more pixels than free parameters, when
 the iterations do not converge, or when the matrix $\mathsf{J}^\mathsf{T}\mathsf{W}\mathsf{J}$ is singular or
-has a non-positive diagonal; a message gives the reason. Its values are then NaN. The rings are independent:
+has a non-positive diagonal; a message gives the reason. Its values are then NaN, and the ring is left out
+of the model velocity field. The rings are independent:
 each starts from its own initial values, and they are fitted in parallel on {ref}`THREADS <par-all-threads>`
 threads.
 
@@ -192,9 +193,8 @@ of its annulus, with the selection above but without the free angle ($\theta_\ma
 applies, and only pixels where the velocity field is defined are filled. A pixel that belongs to two
 rings (the fitted geometries can make the annuli overlap) takes the mean of the two values (for more rings,
 each new value is averaged with the current one). Then the empty pixels within the outer edge of the last
-ring, with its geometry, take the model of the ring whose radius is closest to their own radius. In this
-step, as in BBarolo 1.8, the radius of each pixel is computed with the geometry of the ring used for the
-previous pixel, not always with that of the last ring.
+ring fitted, with its geometry, take the model of the ring whose radius, computed with that same geometry,
+is closest to their own radius.
 
 ## Differences from BBarolo 1.8
 
@@ -209,6 +209,11 @@ previous pixel, not always with that of the last ring.
 - **Parameters seen by 2DFIT after 3DFIT** in the same run: 3DFIT no longer writes its estimated and default
   values into the parameters, so 2DFIT sees the parameters as given.
 - **Output names** start with `<prefix>_` (e.g. `<prefix>_map_1st.fits`).
+- **The model velocity field**: the radius of the pixels between the rings is computed with the geometry of
+  the last ring; BBarolo 1.8 used that of the ring of the previous pixel filled, so with fitted PA, INC or
+  centre some pixels took the velocity of another ring (302 of 6964 pixels of NGC 2403, by up to 9 km/s).
+  A ring that was not fitted is left out (the port stopped with an error; 1.8 left it out too, and did not
+  fill the empty pixels when the last ring was not fitted).
 
 ## References
 

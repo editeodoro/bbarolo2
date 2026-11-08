@@ -339,10 +339,7 @@ class Search:
         arr = self.array
         nz, ny, nx = arr.shape
         st = self.stats
-        if st.useFDR:
-            det = st.getPValue(arr) < st.pThreshold
-        else:
-            det = arr > st.getThreshold()
+        det = arr > st.getThreshold()
         det &= ~np.isnan(arr)
         labels = np.zeros(arr.shape, np.int32)
         stype = self.par.searchType
@@ -527,10 +524,14 @@ class Search:
         seed = labels > 0
         allowed = (arr > gst.getThreshold()) & ~np.isnan(arr)
         allowed |= seed
-        # connected components of the allowed region under the merging criterion:
-        # 26-connectivity labelling followed by the merging of components that are
-        # closer than the velocity/spatial thresholds
-        lab0, n0 = ndimage.label(allowed, structure=np.ones((3, 3, 3), bool))
+        # connected components of the allowed region under the merging criterion: labelling with the
+        # neighbours within the velocity/spatial thresholds (26-connectivity unless THRESHVELOCITY or the
+        # spatial threshold is 0: then not across channels or pixels, as the growth box of C++), followed by
+        # the merging of components that are closer than the thresholds
+        dz, ds = min(thV, 1), min(g, 1)
+        st = np.zeros((3, 3, 3), bool)
+        st[1 - dz:2 + dz, 1 - ds:2 + ds, 1 - ds:2 + ds] = True
+        lab0, n0 = ndimage.label(allowed, structure=st)
         lab_cc, ncc = self._merge_labels(lab0.astype(np.int32), n0, footprint=(thV, g, sp))
         # components containing detections, ordered by their first (lowest) original label
         first = np.full(ncc + 1, np.iinfo(np.int64).max, np.int64)

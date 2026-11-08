@@ -202,7 +202,10 @@ class Cube:
         n = dims[0] * dims[1] * dims[2]
         data = data.reshape(-1)[:n].reshape(dims[2], dims[1], dims[0])
         data = data.astype(np.float32 if data.dtype.itemsize <= 4 else np.float64, copy=True)
-        data[np.isnan(data)] = 0
+        nan = np.isnan(data)
+        # (the blank pixels of a 2D map, for ELLPROF; the data are 0 there, as the blanks of cubes)
+        self.blanks2d = nan[0].copy() if dims[2] == 1 and nan.any() else None
+        data[nan] = 0
         self.array = np.ascontiguousarray(data)
         if p.verbose:
             print("Done. \n")
@@ -293,11 +296,20 @@ class Cube:
         p = par.se
         if not self.statsDefined:
             self.setCubeStats()
+        if p.searchType == "spatialsmooth":
+            # the cube smoothed with the parameters of SMOOTH, and its statistics (C++ printed the threshold
+            # of the original cube)
+            arr = Smooth3D().cubesmooth(self)
+            stats = Stats(par.flagRobustStats)
+            stats.calculate(arr, ~((arr == 0) | np.isnan(arr)))
+            stats.setThresholdSNR(p.snrCut)
+        else:
+            arr, stats = self.array, self.stats
         if par.verbose:
-            thresh = p.threshold if p.UserThreshold else self.stats.getThreshold()
+            thresh = p.threshold if p.UserThreshold else stats.getThreshold()
             f = (lambda v: f"{v:.5e}") if thresh < 1E-04 else (lambda v: f"{v:.5f}")
             print(f"Using flux threshold of: {f(thresh)} {h.Bunit()}")
-            print(f"{'':25s}(middle = {f(self.stats.getMiddle())}, spread = {f(self.stats.getSpread())})")
+            print(f"{'':25s}(middle = {f(stats.getMiddle())}, spread = {f(stats.getSpread())})")
         if p.minPix == -1:
             self.checkBeam()
         import copy
@@ -308,12 +320,7 @@ class Cube:
         sp.minVoxels = p.minVoxels if p.minVoxels != -1 else p.minChannels * sp.minPix
         sp.maxAngSize = p.maxAngSize / (h.PixScale() * arcsconv(h.Cunit(1)) / 60.)
         self.sources = Search(sp)
-        if p.searchType == "spatialsmooth":
-            sm = Smooth3D()
-            arr = sm.cubesmooth(self)
-            self.sources.search(arr, None, par.flagRobustStats, par.threads, par.verbose, par.showbar)
-        else:
-            self.sources.search(self.array, self.stats, par.flagRobustStats, par.threads, par.verbose, par.showbar)
+        self.sources.search(arr, stats, par.flagRobustStats, par.threads, par.verbose, par.showbar)
         self.isSearched = True
         for o in self.sources.objectList:
             o.calcAllParams(self.array, h, p.pbcorr, par.fluxConvert)
@@ -799,7 +806,7 @@ class Cube:
         ncoeff = p.cont_order + 1
         V = np.vander(z, ncoeff, increasing=True)
         A = V[~toex]
-        a = self.array.astype(np.float64)
+        a = np.nan_to_num(self.array.astype(np.float64))    # (blanks are 0, as in the cubes read from FITS)
         Y = a[~toex].reshape(A.shape[0], -1)
         coeff, *_ = np.linalg.lstsq(A, Y, rcond=None)
         cont = (V @ coeff).reshape(a.shape)

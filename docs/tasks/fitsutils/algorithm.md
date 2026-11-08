@@ -53,8 +53,10 @@ $$
 \text{CRPIX}_j' = x_1 + n - \text{CRPIX}_j ,\ \ \text{CDELT}_j' = -\text{CDELT}_j \ \ \text{(reversed axis)} .
 $$
 
-Only CRPIX and CDELT are changed (not a CD or PC matrix). The header is copied only when the source is
-the primary array: an HDU taken from an extension is written with a minimal header.
+For a reversed axis $k$ the direction is flipped in the matrix that the header uses: column $k$ of a CD
+matrix, or of a PC matrix that is not diagonal, otherwise CDELT$_k$ as above. The same is done for the
+alternate world coordinates (CRPIX$_k$A ... CRPIX$_k$Z). The header of the HDU is copied, also from an
+extension (without its XTENSION, PCOUNT and GCOUNT cards).
 
 ## Arithmetic
 
@@ -89,9 +91,8 @@ The factor is printed and recorded in a HISTORY card; the data are written in si
 
 The input unit is checked first: without BUNIT the unit is assumed to be the one to convert from; a
 BUNIT that is neither Jy/beam nor K is an error; `--k2jybeam` on a cube in Jy/beam does nothing.
-`--jybeam2k` recognises a cube already in K only if BUNIT contains `K` followed by a space: a cube with
-BUNIT = `K` is converted again (as in BBarolo 1.8). These two utilities take a plain file name (the
-primary array), not the extended syntax.
+`--jybeam2k` on a cube that is not in Jy/beam (e.g. already in K) does nothing. An extension can be given
+as `in.fits[ext]`; the output file is then required.
 
 ## Differences from BBarolo 1.8
 
@@ -100,6 +101,8 @@ primary array), not the extended syntax.
   `--fitscopy` writes only the selected HDU, as the primary array (1.8 copied all the HDUs, with the
   selected one cut and its header kept).
 - `--jybeam2k` takes mJy/beam and µJy/beam into account (1.8 treated them as Jy/beam).
+- `--jybeam2k` on a cube in K does nothing: 1.8 recognised K only when followed by a space in BUNIT, so it
+  converted a cube with BUNIT = `K` again.
 
 ## In the code
 

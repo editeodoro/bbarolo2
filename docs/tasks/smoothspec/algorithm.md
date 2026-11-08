@@ -55,8 +55,10 @@ the normalised weights:
 - `BARTLETT`, $k=5$: 0, 1/4, 1/2, 1/4, 0.
 
 :::{note}
-With WINDOW_SIZE 1, `HANNING`, `BOXCAR` and `GAUSSIAN` leave the cube unchanged, while `HANNING2`,
-`BARTLETT`, `WELCH`, `BLACKMAN` and `FLATTOP` have $N = 0$ in the formulae above and give a cube of NaN.
+With WINDOW_SIZE 1 all the windows but `GAUSSIAN` leave the cube unchanged (a single weight of 1; in
+BBarolo 1.8 `HANNING2`, `BARTLETT`, `WELCH`, `BLACKMAN` and `FLATTOP` had $N = 0$ in the formulae above and
+gave a cube of NaN). `GAUSSIAN` with WINDOW_SIZE 1 is a Gaussian with a FWHM of one channel, over 5
+channels (weights of about 0.06, 0.89, 0.06). WINDOW_SIZE must be positive.
 :::
 
 ## The convolution
@@ -99,9 +101,11 @@ naming the window. The same window smooths the cube for the mask `SMOOTHSPEC&SEA
 
 ## Differences from BBarolo 1.8
 
-None in the algorithm: the windows, the convolution and REDUCE are those of BBarolo 1.8 and give the same
-cubes to floating-point precision. As in 1.8, an even WINDOW_SIZE (except for `GAUSSIAN`) and an unknown
-WINDOW_TYPE stop the run in the check of the parameters.
+The windows, the convolution and REDUCE are those of BBarolo 1.8 and give the same cubes to floating-point
+precision, with one exception: a window of one channel leaves the cube unchanged (`HANNING2`, `BARTLETT`,
+`WELCH`, `BLACKMAN` and `FLATTOP` gave a cube of NaN). As in 1.8, an even WINDOW_SIZE (except for
+`GAUSSIAN`) and an unknown WINDOW_TYPE stop the run in the check of the parameters, and so does a
+WINDOW_SIZE that is not positive.
 
 ## References
 

@@ -4,7 +4,6 @@ Robust statistics (port of Arrays/stats.hh, stats.cpp and Utilities/statistics.c
 
 import sys
 import numpy as np
-from scipy.special import erfc
 
 correctionFactor = 0.6744888
 
@@ -51,12 +50,10 @@ class Stats:
 
     def __init__(self, robust=True):
         self.useRobust = robust
-        self.useFDR = False
         self.defined = False
         self.mean = self.stddev = self.median = self.madfm = 0.
         self.max_val = self.min_val = 0.
         self.threshold = 0.
-        self.pThreshold = 0.
 
     def copy(self):
         s = Stats(self.useRobust)
@@ -105,15 +102,6 @@ class Stats:
         self.madfm *= scale
         self.stddev *= scale
         self.threshold = self.getMiddle() + snr * self.getSpread()
-
-    def getPValue(self, value):
-        z = (value - self.getMiddle()) / self.getSpread()
-        return 0.5 * erfc(z / np.sqrt(2))
-
-    def isDetection(self, value):
-        if self.useFDR:
-            return self.getPValue(value) < self.pThreshold
-        return value > self.threshold
 
     def calculate(self, array, mask=None):
         (self.mean, self.stddev, self.median, self.madfm,

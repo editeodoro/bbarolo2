@@ -17,8 +17,7 @@ The task is run by {ref}`ELLPROF <par-ellprof-ellprof>`.
   {ref}`FACTOR <par-ellprof-factor>`), with all the detections of the source finder unless the type ends
   in `LARGEST`; a mask built by an earlier task of the run is reused. Pixels with no emission in the
   mask are blank (NaN).
-- **A 2D map**: the map itself, in its own unit (BUNIT). Blank pixels of the file are set to 0 when it
-  is read, and count as valid pixels.
+- **A 2D map**: the map itself, in its own unit (BUNIT). Blank pixels of the file (NaN) are blank.
 
 Below, $u$ is the unit of the map, $\Delta x$, $\Delta y$ (arcsec) the absolute pixel sizes and
 $a_{\rm pix} = \Delta x\, \Delta y$ (arcsec²) the area of a pixel.
@@ -88,15 +87,8 @@ $$
 
 which is 0 along $X > 0$ and increases in the same sense as PA. The two halves are
 $\theta \in [270°, 360°) \cup [0°, 90°)$, the half with $X > 0$, and $\theta \in [90°, 270°)$, the
-half with $X < 0$. SIDE `A` selects the first one when the mean PA of the rings is at most 180°, and
-the second one when it is larger; `R` the opposite.
-
-:::{note}
-The halves of SIDE `A` and `R` follow the code as it is, which comes from BBarolo 1.8: with the mean PA
-at most 180°, `A` gives the half that contains the position angle PA, which is the receding one when PA
-is that of the receding half; with the mean PA above 180°, it gives the approaching one. Check the
-half selected on the map before using one-sided profiles.
-:::
+half with $X < 0$. The first contains the position angle PA of the rings, i.e. the receding half: SIDE
+`R` selects it and SIDE `A` the second one, at any PA.
 
 ## Statistics in each ring
 
@@ -157,12 +149,12 @@ $\Sigma^{\rm sky, bl}_r$ the mean over the whole ring.
 
 When the unit of the map contains `Jy`, the table also gives the face-on HI mass surface density and
 column density, assuming the map is the HI line integrated in velocity (Jy/beam km/s or Jy km/s). With
-the relation $M_{\rm HI} = 2.36 \times 10^5\, D^2 \int S\, {\rm d}v$ (M☉, $D$ in Mpc, $S$ in Jy,
+the relation $M_{\rm HI} = 2.356 \times 10^5\, D^2 \int S\, {\rm d}v$ (M☉, $D$ in Mpc, $S$ in Jy,
 $v$ in km/s), the mass surface density is
 
 $$
-\Sigma_{\rm HI} = \frac{2.36 \times 10^{-7}}{\alpha^2} \; \frac{\Sigma^{\rm fo}_r}{\Omega_{\rm b}}
-= 1.004 \times 10^4 \; \frac{\Sigma^{\rm fo}_r}{\Omega_{\rm b}}
+\Sigma_{\rm HI} = \frac{2.356 \times 10^{-7}}{\alpha^2} \; \frac{\Sigma^{\rm fo}_r}{\Omega_{\rm b}}
+= 1.002 \times 10^4 \; \frac{\Sigma^{\rm fo}_r}{\Omega_{\rm b}}
 \quad ({\rm M_\odot\,pc^{-2}}),
 $$
 
@@ -182,8 +174,8 @@ N_{\rm HI} = \frac{\Sigma_{\rm HI}}{0.0841186 \times 3.0857^2} = 1.2485\; \Sigma
 \quad (10^{20}\ {\rm cm^{-2}}),
 $$
 
-the number of hydrogen atoms in 1 M☉ pc⁻². Helium is not included. The unit prefix is not
-converted: a map in mJy/beam km/s gives values $10^3$ times too large. Maps in K have no HI columns.
+the number of hydrogen atoms in 1 M☉ pc⁻². Helium is not included. A map in mJy or µJy is converted to Jy.
+Maps in K have no HI columns. The constant is that of {ref}`MASSDENSMAP <par-maps-massdensmap>`.
 
 ## Outputs
 
@@ -208,7 +200,12 @@ and the map.
   the pixels shared by several rings, so the sums of overlapping rings counted those pixels more than
   once. With equally spaced radii the rings do not overlap and the profile is identical to that of 1.8.
 - **SIDE** accepts the long forms (APPROACHING, RECEDING, BOTH, APP, REC, ...); 1.8 used both sides
-  with them.
+  with them. `A` is the approaching half and `R` the receding one at any PA: 1.8 swapped them when the mean
+  PA was at most 180°.
+- **Blank pixels of a 2D map** are blank; 1.8 read them as 0, so NPIXBL was 0 and they lowered the mean.
+- **HI columns**: the constant is $2.356 \times 10^5$ (1.8: $2.36 \times 10^5$, 0.8% from the
+  $8794/(\theta_{\rm maj}\theta_{\rm min})$ of MASSDENSMAP; both are now $8846$), and a map in mJy or µJy
+  is converted to Jy (1.8 took it as Jy).
 - **Outputs** are `<prefix>_ellprof.txt` and `<prefix>_ellprof_map.fits` (1.8: `<prefix>_densprof.txt`
   and `<prefix>_densmap.fits`; the name `<prefix>_densprof.txt` is now the density profile of 3DFIT).
 

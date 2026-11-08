@@ -27,7 +27,8 @@ and $\rm k$ denote the old beam, the new beam and the convolution kernel.
   $f$ times the old one, with $f$ = {ref}`FACTOR <par-smooth-factor>` (default 2); BMIN not given with
   BMAJ given is equal to BMAJ; $\theta_{\rm n} = \theta_{\rm o}$ when BPA is not given.
 
-If $a < b$ for either beam, the two axes are swapped. The new beam must be at least as large as the old
+If $a < b$ for either beam, the two axes are swapped and the position angle is increased by 90°: the
+angle given is that of the axis given as BMAJ. Then the new beam must be at least as large as the old
 one along both axes, $a_{\rm n} \ge a_{\rm o}$ and $b_{\rm n} \ge b_{\rm o}$, otherwise the task stops
 with an error.
 
@@ -93,6 +94,15 @@ $$
 with $r_a$, $r_b$ from $a_{\rm k}$, $b_{\rm k}$. Values below the cut are set to 0, and the sampled
 kernel is normalised to a unit sum, $\sum_{ij} K_{ij} = 1$. A kernel of more than $512 \times 512$
 elements is an error.
+
+```{note}
+When $b_{\rm k} = 0$, e.g. when an elliptical beam is made circular with the size of its major axis, the
+term $y'^2/b_{\rm k}^2$ is left out, as in BBarolo 1.8: the kernel is constant across its minor axis
+within the box. Along an axis of the grid ($\varphi$ = 0° or 90°) the box is one pixel wide and the
+kernel is a line, as it should be; at another angle it is a band as wide as the box, and the resulting
+beam is wider than the new beam of the header (smoothing 30″ × 20″ at PA 45° to 30″ × 30″ gives a beam
+of about 62″ × 28″).
+```
 
 ## The flux scale factor
 
@@ -172,6 +182,9 @@ The same steps smooth the cube for the masks `SMOOTH` and `SMOOTH&SEARCH`
 - With a header without a beam, the beam of the data comes from OBMAJ, OBMIN, OBPA or BEAMFWHM, and it is
   an error without them (C++ took BMAJ and BMIN, the new beam, so nothing was smoothed).
 - A new beam smaller than the old one is an error.
+- A beam given with BMAJ < BMIN has its major axis at BPA + 90° (C++ kept the angle, so the beam was
+  rotated by 90°), and the axes of the new beam are put in order before it is compared with the old one
+  (C++ compared first, so BMAJ 15 BMIN 25 against an old beam of 20″ × 10″ was an error).
 - LINEAR (a resolution in kpc) no longer sets the new beam.
 - REDUCE: the reference pixel of the reduced cube is exact, $\tfrac12 + ({\rm CRPIX} - \tfrac12)/N$; C++
   rounded it to an integer.

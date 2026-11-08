@@ -35,11 +35,8 @@ and {ref}`FACTOR <par-maps-factor>` for the SMOOTH masks; see {doc}`../makemask/
 `MASK NONE` no mask is used and every channel of every spectrum enters the sums. Otherwise:
 
 - A mask built by an earlier task of the same run is used as it is.
-- If there is none, the total, velocity and dispersion maps build it with all the detections of the
-  source finder (only the largest one for the types that end in `LARGEST`), the mass surface density
-  and rms maps with the largest detection.
-- The mask is built once and is then shared by the following maps: when TOTALMAP, VELOCITYMAP or
-  DISPERSIONMAP runs, MASSDENSMAP and RMSMAP use its mask, with all the detections.
+- If there is none, the maps build it with all the detections of the source finder (only the largest
+  one for the types that end in `LARGEST`), and share it.
 
 GLOBALPROFILE never uses the mask.
 
@@ -113,14 +110,18 @@ constrains the shape of the line.
   at once. The damped normal equations are
   $(J^{\rm T}J + \lambda\, {\rm diag}\, J^{\rm T}J)\,\delta p = J^{\rm T} r$, with $J$ the Jacobian and
   $r$ the residuals. A step is accepted if it lowers $\chi^2$ (and $\lambda$ is divided by 10),
-  otherwise $\lambda$ is multiplied by 10. $\lambda$ starts at $10^{-3}$, and the fit runs for 50
-  iterations. There is no convergence test: the parameters are those of the last accepted step.
+  otherwise $\lambda$ is multiplied by 10. $\lambda$ starts at $10^{-3}$. The fit has converged when an
+  accepted step lowers $\chi^2$ by less than $10^{-3}$ of its value, or when $\lambda$ exceeds $10^{10}$
+  (as in BBarolo 1.8). All the spectra are iterated 50 times, then those not yet converged up to 1000
+  times.
 - **Maps:** the total intensity is the integral of the Gaussian, $M_0 = \sqrt{2\pi}\,|\sigma|\, f A$
   (units as for the moment maps); the velocity map is $v_0$; the dispersion map is $\sigma$, as
   fitted: $G$ depends only on $\sigma^2$, so a fit can end with $\sigma < 0$, which the map keeps.
 
-Spectra whose maximum is 0 (e.g. no voxel in the mask) are blank. Every other spectrum gets a fit,
-even without emission, and its values are then meaningless: use a mask.
+Spectra whose maximum is 0 (e.g. no voxel in the mask) are blank, as are those whose fit does not
+converge, or has a parameter with no effect on $\chi^2$ (a zero diagonal of $J^{\rm T}J$), and all the
+spectra of a cube with 3 channels or fewer. Every other spectrum gets a fit, even without emission, and
+its values are then meaningless: use a mask.
 
 ## Noise and S/N of the total map
 
@@ -164,18 +165,21 @@ MASSDENSMAP converts the masked sum of each spectrum into the surface density of
 line only. The beam is required. For a cube in Jy/beam (also mJy/beam and μJy/beam, converted to Jy/beam),
 
 $$
-\Sigma_{\rm HI}(x, y) = 8794\; \frac{\Delta v \sum_k m_k S_k}{\theta_{\rm maj}\, \theta_{\rm min}}
+\Sigma_{\rm HI}(x, y) = 8846\; \frac{\Delta v \sum_k m_k S_k}{\theta_{\rm maj}\, \theta_{\rm min}}
 \quad {\rm M_\odot\,pc^{-2}},
 $$
 
 with $S_k$ the flux density in Jy/beam, $\Delta v$ in km/s and the FWHM of the beam axes
-$\theta_{\rm maj}$, $\theta_{\rm min}$ in arcsec. For a cube in K, the brightness temperature $T_k$ is
+$\theta_{\rm maj}$, $\theta_{\rm min}$ in arcsec. The constant follows from
+$N_{\rm HI} = 1.8224 \times 10^{18} \int T\, {\rm d}v$ and the Rayleigh–Jeans relation below; it is the
+$M_{\rm HI} = 2.356 \times 10^5\, D^2 \int S\, {\rm d}v$ of {doc}`ELLPROF <../ellprof/algorithm>`. For a
+cube in K, the brightness temperature $T_k$ is
 first converted to Jy/beam with the Rayleigh–Jeans relation at $\lambda = 21.106114$ cm,
 
 $$
 S_k = \frac{T_k\, \theta_{\rm maj}\, \theta_{\rm min}}{1360\, \lambda^2},
 \qquad\text{so that}\qquad
-\Sigma_{\rm HI} = 0.01452\; \Delta v \sum_k m_k T_k ,
+\Sigma_{\rm HI} = 0.01460\; \Delta v \sum_k m_k T_k ,
 $$
 
 with $T_k$ in K and $\lambda$ in cm. Other flux units are an error. The map is the projected (observed)
@@ -197,7 +201,7 @@ $$
   the whole spectrum, and $\sigma_{j}$ that of the values left after removing all the values above
   $1.5\,\sigma_{j-1}$. The iteration stops at the first $j$ for which
   $(\sigma_{j-1} - \sigma_j)/\sigma_{j-1} < 0.1$, or when fewer than 5 values are left, or after
-  100 iterations; the map gets $\sigma_{j-1}$. The cut is one-sided: only positive values (emission)
+  100 iterations; the map gets $\sigma_{j-1}$ (with fewer than 5 channels, $\sigma_0$). The cut is one-sided: only positive values (emission)
   are removed.
 
 ## Global profile
@@ -236,12 +240,16 @@ Python, the `Maps` class makes the total, velocity and dispersion maps when no m
   maps; they are now converted correctly.
 - **Gaussian maps** use another minimiser (Levenberg–Marquardt on all the spectra at once). The
   derivative of the Gaussian with respect to its parameters was wrong in 1.8 ($e^{-x^2}$ instead of
-  $e^{-x^2/2}$). A fit that fails is no longer blank: the map gets the parameters of the last accepted
-  step.
+  $e^{-x^2/2}$). As in 1.8, a fit that does not converge, or cannot be done, is blank.
 - **Spatial axes in arcsec or arcmin** are converted to degrees when the cube is read, so the beam area
   and the conversions from Jy and K are right for such cubes.
 - **Outputs** are named `<prefix>_map_0th.fits`, ..., `<prefix>_spectrum.txt` (1.8: `<prefix>map_0th.fits`,
   `spectrum.txt`). The S/N maps of SEARCH have their own names and no longer overwrite those of TOTALMAP.
+- **MASSDENSMAP and RMSMAP** use the mask of the other maps, with all the detections; in 1.8 they used the
+  largest detection when they built the mask, so the maps depended on which map ran first.
+- **The HI constant** of MASSDENSMAP is 8846 (1.8: 8794, 0.6% low, and 0.8% from the $2.36 \times 10^5$
+  of ELLPROF).
+- **RMSMAP** of spectra with fewer than 5 channels is their noise (1.8: $10^{10}$).
 
 The moment, rms and S/N maps are otherwise equal to those of 1.8 to float precision. The full list is in
 {doc}`../../reference/changes`.

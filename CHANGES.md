@@ -7,6 +7,51 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **ELLPROF: SIDE A and R were swapped** when the mean PA of the rings is at most 180°, i.e. for most
+  galaxies: `A` gave the receding half (`R` the approaching one). They are right at any PA now; this also
+  changes the `_densprof.txt` of 3DFIT and GALMOD with SIDE A or R **(C++)**.
+- **ELLPROF: the blank pixels of a 2D map** were read as 0 and counted as valid (NPIXBL was always 0, and
+  blanks lowered the mean); they are blank now **(C++)**. The HI columns took a map in mJy or µJy as Jy
+  **(C++)**.
+- **The HI mass constant**: MASSDENSMAP used 8794 Msun/pc² per Jy/beam km/s for a 1″ beam and ELLPROF
+  2.36E5 D² ∫S dv, 0.8% apart; both use the exact 8846 (2.356E5) now: MASSDENSMAP +0.6%, the HI columns
+  of ELLPROF −0.17% **(C++)**.
+- **MASSDENSMAP and RMSMAP** built the mask with the largest detection, the other maps with all of them,
+  so with MASK SEARCH they depended on which map ran first; they use the mask of the other maps now
+  **(C++)**.
+- **MAPTYPE GAUSSIAN**: a fit that did not converge kept the values of its last step (C++ left the pixel
+  blank). The spectra not converged after 50 iterations are iterated up to 1000 times, as in C++, and
+  the pixels whose fit does not converge, has a parameter with no effect, or has 3 channels or fewer are
+  blank.
+- **RMSMAP** of spectra with fewer than 5 channels was 1E10; it is their noise **(C++)**.
+- **GALWIND cylinders (WTYPE 0)**: the smoothed model was multiplied by the area of the beam in pixels, as
+  the shells, although the cylinders are a flux per unit area: about 10 times too bright for a beam of 3
+  pixels. Their layers used the Gaussian profile of GALMOD (LTYPE of the wind, 5, was never used), so a third
+  of the flux of each cylinder fell into its neighbours and beyond HTOT; they are boxes now **(C++)**.
+- **2DFIT: the model velocity field** stopped with a ValueError when a ring was not fitted (after writing
+  the table: the later tasks did not run); the ring is left out now. The pixels between the rings had
+  their radius computed with the geometry of the ring of the previous pixel; it is that of the last ring
+  now (NGC 2403: 302 of 6964 model pixels change, by up to 9 km/s) **(C++)**.
+- **SMOOTH: a beam given with BMAJ < BMIN** had its axes swapped but kept its angle, so it was rotated by
+  90°; the major axis is at BPA + 90° now. A new beam given so was compared with the old one before its
+  axes were swapped, so a valid beam could be "smaller" **(C++)**.
+- **SMOOTHSPEC with WINDOW_SIZE 1** and HANNING2, BARTLETT, WELCH, BLACKMAN or FLATTOP made the whole cube
+  NaN; a window of one channel leaves the cube unchanged, and WINDOW_SIZE must be positive **(C++)**.
+- **REND3D**: CRPIX3 = 0 gave each plane an angle one degree too large; it is 1 now **(C++)**.
+- **SEARCH**: with THRESHVELOCITY 0 (or a spatial threshold 0) the growth joined objects across channels
+  (pixels); it does not now, as in C++. In spatialsmooth mode the threshold and noise printed were those
+  of the original cube, not of the smoothed one that is searched **(C++)**. The unused FDR code is removed.
+- **FITS utilities**: `--fitscopy` of an extension wrote a header with no WCS; for a reversed axis it
+  flipped only CDELT, not a CD (or non-diagonal PC) matrix, nor the alternate WCS. `--jybeam2k` and
+  `--k2jybeam` take `file[ext]` (a FileNotFoundError), and `--jybeam2k` converted a cube already in K
+  again **(C++)**.
+- **GalMod3D**: the noise was smoothed to the beam also with `smooth=False`, and a model in K was scaled
+  with the HI wavelength for any line (now the rest frequency of the cube).
+- **CONTSUB** of a cube in memory with NaN raised LinAlgError; NaN are taken as 0, as in the cubes read
+  from FITS.
+- **checkPars** (BBarolo 2 only): the check MINVDISP < MAXVDISP, added between the two branches of the
+  check of FREE, skipped that check when MINVDISP ≥ MAXVDISP.
+
 - **3DFIT: the rings that failed in the first stage (C++).** The regularisation of the second stage used
   all the rings, also those skipped, not converged, rejected (VROT out of the band) or inside STARTRAD,
   with their initial or rejected values; it uses only the rings fitted now, evaluated at all the radii.

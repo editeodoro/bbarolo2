@@ -2573,3 +2573,308 @@ def test_bayesian_smoothness_penalty_spacing(tmp_path):
     assert np.isclose(f._log_likelihood(th, sigma=1., lambdas=dict(f.lambdas, vrot=1.)), L0, rtol=0, atol=1e-9)
     th2 = np.array([30., 60., 90., 150., 10.])
     assert f._log_likelihood(th2, sigma=1., lambdas=dict(f.lambdas, vrot=1.)) < f._log_likelihood(th2, sigma=1.)
+
+
+def test_checkpars_free_and_vdisp_limits(capsys):
+    """The check of FREE runs whatever MINVDISP and MAXVDISP are (the check of MINVDISP < MAXVDISP, added
+    between the two branches of the check of FREE, skipped it when MINVDISP >= MAXVDISP), and an empty FREE
+    is reported once."""
+    p = Param()
+    p.readParamString("FITSFILE a.fits\n3DFIT true\nFREE SPEED\nMINVDISP 10\nMAXVDISP 5\n")
+    assert not p.checkPars()
+    out = capsys.readouterr().out
+    assert "SPEED" in out and "MINVDISP" in out
+    p = Param()
+    p.readParamString("FITSFILE a.fits\n3DFIT true\nFREE \n")
+    p.checkPars()
+    assert capsys.readouterr().out.count("3DFIT error") == 1
+
+
+def test_2dfit_model_with_failed_ring(synthetic_cube, tmp_path):
+    """The model velocity field of 2DFIT leaves out a ring whose fit failed (its NaN centre raised a
+    ValueError, and the task stopped after writing the table)."""
+    import math
+    from astropy.io import fits
+    from bbarolo.ringmodel import Ringmodel, vfunc
+    nx = ny = 64
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    pp = np.array([0., 150., 0., 45., 60., 31.5, 31.5])
+    vf = vfunc(np.stack([xx.ravel(), yy.ravel()], 1).astype(float), pp).reshape(ny, nx)
+    s, c = math.sin(math.radians(45)), math.cos(math.radians(45))
+    r = np.hypot(-(xx - 31.5) * s + (yy - 31.5) * c, (-(xx - 31.5) * c - (yy - 31.5) * s) / math.cos(math.radians(60)))
+    vf[(r > 10) & (r < 14)] = np.nan                  # (no data in ring 3)
+    tr = Ringmodel()
+    tr.set(4, [4, 8, 12, 16], 4, 0, 150, 0, 45, 60, 31.5, 31.5)
+    tr.setoption([False, True, False, True, True, False, False], 3, 2, 15.)
+    tr.setfield(vf, nx, ny)
+    tr.ringfit(1, False, False)
+    assert np.isnan(tr.vrotf[2]) and np.isfinite(tr.vrotf[3])
+    tr.writeModel(str(tmp_path / "m.fits"), synthetic_cube.Head())
+    m = fits.getdata(str(tmp_path / "m.fits"))
+    assert np.isfinite(m).sum() > 100 and np.nanmax(np.abs(m - vf)) < 1.
+
+
+def test_fits_utilities_headers_and_units(tmp_path, capsys):
+    """--fitscopy of an extension keeps its header (it wrote one with no WCS) and, for a reversed axis, flips
+    column k of the CD matrix (only CDELT was flipped); --jybeam2k takes file[ext] (a FileNotFoundError) and
+    leaves a cube already in K as it is (it converted it again)."""
+    from astropy.io import fits
+    from bbarolo.fitsutils import fitscopy, ConvertFluxUnits
+    hdu = emptyfits([16, 12, 4], [-10. / 3600., 10. / 3600., 10.], beam=30. / 3600., bunit="JY/BEAM", obj="U")
+    h = hdu.header
+    for k in ("CDELT1", "CDELT2"):
+        del h[k]
+    h["CD1_1"], h["CD1_2"], h["CD2_1"], h["CD2_2"] = -10. / 3600., 0., 0., 10. / 3600.
+    h["RESTFRQ"] = 1.420405751786e9
+    fn = str(tmp_path / "u.fits")
+    fits.HDUList([fits.PrimaryHDU(), fits.ImageHDU(hdu.data + 1., h)]).writeto(fn)
+    assert fitscopy([fn + "[1][-*,*,*]", str(tmp_path / "c.fits")]) == 0
+    hc = fits.getheader(str(tmp_path / "c.fits"))
+    assert hc["CTYPE1"] == h["CTYPE1"] and np.isclose(hc["CD1_1"], -h["CD1_1"]) and np.isclose(hc["CD2_2"], h["CD2_2"])
+    assert hc["CRPIX1"] == 16 - h["CRPIX1"] + 1
+    assert ConvertFluxUnits([fn + "[1]", str(tmp_path / "k.fits")], "j2k") == 0
+    k = fits.getdata(str(tmp_path / "k.fits"))
+    assert fits.getheader(str(tmp_path / "k.fits"))["BUNIT"].strip() == "K" and k.max() > 1.
+    assert ConvertFluxUnits([str(tmp_path / "k.fits"), str(tmp_path / "k2.fits")], "j2k") == 0
+    assert "already in KELVIN" in capsys.readouterr().out and not (tmp_path / "k2.fits").exists()
+
+
+def test_smooth_beam_axes_swapped(tmp_path):
+    """A beam given with BMAJ < BMIN has its axes swapped and its major axis at PA + 90 (the PA was kept), also
+    the new beam, before it is compared with the old one (BMAJ 15 BMIN 25 against 20 x 10 was 'smaller')."""
+    hdu = emptyfits([32, 32, 3], [-5. / 3600., 5. / 3600., 10.], bunit="JY/BEAM", obj="ELL")
+    hdu.header["BMAJ"], hdu.header["BMIN"], hdu.header["BPA"] = 20. / 3600., 10. / 3600., 30.
+    fn = str(tmp_path / "ell.fits")
+    hdu.writeto(fn)
+    sm = _smooth_run(tmp_path, fn, "SMOOTH true\nBMAJ 15\nBMIN 25\nBPA -60\n")
+    assert sm.newbeam == (25., 15., 30.) and sm.oldbeam == (20., 10., 30.)
+    sm = _smooth_run(tmp_path, fn, "SMOOTH true\nOBMAJ 10\nOBMIN 20\nOBPA 30\nFACTOR 2\n")
+    assert sm.oldbeam == (20., 10., 120.) and sm.newbeam == (40., 20., 120.)
+
+
+def test_smoothspec_rend3d_contsub_edges(synthetic_cube, tmp_path):
+    """SMOOTHSPEC with WINDOW_SIZE 1 leaves the cube as it is (HANNING2, BARTLETT, WELCH, BLACKMAN and FLATTOP
+    divided by zero: a cube of NaN), and WINDOW_SIZE must be positive; the REND3D cube has CRPIX3 = 1 (plane 1
+    holds the angle 0, CRPIX3 was 0); CONTSUB takes NaN in a cube in memory as 0 (LinAlgError)."""
+    from bbarolo.smooth import SpectralSmooth3D
+    from bbarolo.rendering3d import Rendering3D
+    c = synthetic_cube
+    c.array[:] = np.random.default_rng(2).normal(0., 1., c.array.shape)
+    for w in ("HANNING", "HANNING2", "BARTLETT", "WELCH", "BLACKMAN", "FLATTOP", "BOXCAR"):
+        assert np.allclose(SpectralSmooth3D(w, 1).smooth(c, verbose=False), c.array), w
+    p = Param()
+    p.readParamString("FITSFILE a.fits\nSMOOTHSPEC true\nWINDOW_TYPE GAUSSIAN\nWINDOW_SIZE 0\n")
+    assert not p.checkPars(quiet=True)
+    c.pars().MaskType = "NONE"
+    c.pars().outFolder = str(tmp_path) + "/"
+    r = Rendering3D(c)
+    r.compute(4.)
+    assert r.out.Head().Crpix(2) == 1 and r.out.Head().Crval(2) == 0
+    c.array[5, 10, 10] = np.nan
+    c.pars().cont_order = 1
+    c.continuumSubtract()
+    assert np.isfinite(c.array).all()
+
+
+def test_galmod3d_noise_and_kelvin():
+    """GalMod3D: with smooth=False the noise is white (it was smoothed to the beam); the flux of a model in K
+    uses the Rayleigh-Jeans conversion at the rest frequency of the cube (that of the HI line for any line)."""
+    from bbarolo import GalMod3D
+    kw = dict(coords="Rz", xpos=31.5, ypos=31.5, inc=60, pa=45, rmax=250, zmax=30, vdisp=10.,
+              dens=lambda R, z: np.exp(-R / 80.) * np.exp(-z * z / 128.), vphi=lambda R, z: 150 * np.tanh(R / 40.))
+    hdu = _g3d_cube()
+    n = GalMod3D(hdu, **{**kw, "dens": lambda R, z: 0 * R + 1e-30}).model(smooth=False, noise=1., seed=3).data
+    n = n.astype(float)
+    assert abs(np.corrcoef(n[:, :, :-1].ravel(), n[:, :, 1:].ravel())[0, 1]) < 0.05
+    peaks = {}
+    for f in (1.420405751786e9, 115.2712e9):
+        h = _g3d_cube()
+        h.header["BUNIT"], h.header["RESTFRQ"] = "K", f
+        peaks[f] = GalMod3D(h, flux=100., **kw).model().data.max()
+    assert np.isclose(peaks[115.2712e9] / peaks[1.420405751786e9], (1.420405751786e9 / 115.2712e9) ** 2, rtol=1e-4)
+
+
+def _map2d(path, data, bunit):
+    from astropy.io import fits
+    h = fits.Header()
+    for k, v in dict(NAXIS=2, NAXIS1=data.shape[1], NAXIS2=data.shape[0], CTYPE1="RA---SIN", CTYPE2="DEC--SIN",
+                     CRPIX1=32.5, CRPIX2=32.5, CRVAL1=150., CRVAL2=30., CDELT1=-10 / 3600., CDELT2=10 / 3600.,
+                     CUNIT1="deg", CUNIT2="deg", BMAJ=30 / 3600., BMIN=30 / 3600., BPA=0., BUNIT=bunit,
+                     OBJECT="MAP").items():
+        h[k] = v
+    fits.writeto(path, data.astype(np.float32), h, overwrite=True)
+    return path
+
+
+def test_ellprof_side_blanks_and_hi_units(tmp_path):
+    """ELLPROF: SIDE A is the approaching half and R the receding one at any PA (they were swapped for a mean
+    PA up to 180 degrees); the blank pixels of a 2D map are blanks (they were read as 0: NPIXBL was 0); the HI
+    columns convert mJy to Jy (they took mJy as Jy)."""
+    import io
+    from bbarolo.ellprof import Ellprof
+    from bbarolo.ringmodel import vfunc
+    yy, xx = np.mgrid[0:64, 0:64]
+    pts = np.stack([xx.ravel(), yy.ravel()], 1).astype(float)
+
+    def run(data, bunit, side, pa):
+        p = Param()
+        p.verbose = False
+        p.readParamString(f"RADII 60 120 180\nXPOS 31.5\nYPOS 31.5\nINC 60\nPA {pa}\nSIDE {side}\n")
+        fn = _map2d(str(tmp_path / "map.fits"), data, bunit)
+        ell = Ellprof(Cube(fn, par=p))
+        ell.RadialProfile()
+        return ell
+    for pa in (45., 225.):
+        vf = vfunc(pts, np.array([0., 100., 0., pa, 60., 31.5, 31.5])).reshape(64, 64)
+        means = {s: run(vf, "KM/S", s, pa).getMean(1, 1) for s in ("A", "R")}
+        assert means["A"] < -30 < 30 < means["R"], (pa, means)
+    flux = np.ones((64, 64))
+    flux[30:34, :] = np.nan
+    ell = run(flux, "JY/BEAM*KM/S", "B", 45.)
+    assert ell.Numblanks[1, 0] > 0 and np.isclose(ell.getMean(1, 0), 1.)
+    cols = {}
+    for scale, unit in ((1., "JY/BEAM*KM/S"), (1000., "MJY/BEAM*KM/S")):
+        s = io.StringIO()
+        run(scale * np.ones((64, 64)), unit, "B", 45.).printProfile(s)
+        rows = [ln.split() for ln in s.getvalue().splitlines() if ln.strip() and not ln.startswith("#")]
+        cols[unit] = [float(r[-1]) for r in rows]
+    assert np.allclose(cols["JY/BEAM*KM/S"], cols["MJY/BEAM*KM/S"])
+
+
+def test_maps_gaussian_rms_and_massdens(synthetic_cube):
+    """MAPS: MAPTYPE GAUSSIAN gives NaN where the fit cannot be done (here, 3 channels: the fit was kept as
+    it was after 50 iterations); the RMS of fewer than 5 channels is their rms (1E10); MASSDENSMAP uses
+    8846 Msun/pc2 per Jy/beam km/s for a 1" beam (8794: 0.6% from 2.356E5 D^2 S of ELLPROF)."""
+    from bbarolo.moments import gaussian_moments, _rms_one, MomentMap
+    from bbarolo.bbutils import DeltaVel
+    c = synthetic_cube
+    c3 = Cube.fromArray(np.ones((3, 8, 8), np.float32) * np.array([1., 2., 1.])[:, None, None], c.Head(), c.pars())
+    assert np.all(np.isnan(gaussian_moments(c3)[2]))
+    h = c.Head()
+    vel = h.Crval(2) + (np.arange(c.DimZ()) + 1 - h.Crpix(2)) * h.Cdelt(2)
+    c.array[:] = np.exp(-0.5 * ((vel - 30.) / 25.) ** 2)[:, None, None]
+    g = gaussian_moments(c)
+    assert np.allclose(g[1], 30., atol=1e-3) and np.allclose(np.abs(g[2]), 25., atol=1e-3)
+    assert np.isclose(_rms_one(np.array([1., 2., 3., 4.]), False, 1.5, 0.1), np.std([1., 2., 3., 4.]))
+    c.array[:] = 0.
+    c.array[:, 30:34, 30:34] = 1.
+    m = MomentMap()
+    m.input(c)
+    m.HIMassDensityMap(False)
+    bm = c.Head().Bmaj() * 3600.
+    assert np.isclose(np.nanmax(m.array), 8846. * c.DimZ() * abs(DeltaVel(c.Head())) / bm ** 2, rtol=1e-5)
+
+
+@needs_data
+def test_massdens_rms_maps_same_mask(tmp_path):
+    """MASSDENSMAP and RMSMAP use the mask of the other maps (all the detections of MASK SEARCH): when they
+    built it, it had only the largest, so they changed when TOTALMAP ran before them."""
+    from bbarolo.moments import MomentMap
+    out = []
+    for first in (False, True):
+        p = Param()
+        p.readParamString(f"FITSFILE {N2403}\nMASK SEARCH\nVERBOSE false\nOUTFOLDER {tmp_path}/\nTHREADS 2\n")
+        c = Cube(N2403, par=p)
+        m = MomentMap()
+        m.input(c)
+        if first:
+            m.ZeroMoment(True)
+        m.HIMassDensityMap(True)
+        out.append(m.array.copy())
+    assert np.array_equal(out[0], out[1], equal_nan=True)
+
+
+def test_search_growth_threshvelocity_zero():
+    """With THRESHVELOCITY 0 the growth of the detections does not join objects across channels (it labelled
+    the grown region with 26-connectivity, so three objects in consecutive channels became one)."""
+    from bbarolo.search import Search
+    arr = np.zeros((10, 20, 20), np.float32)
+    arr[3:6, 8:12, 8:12] = 1.
+    res = {}
+    for thv in (0, 1):
+        p = Param()
+        p.readParamString(f"THRESHOLD 0.5\nGROWTHTHRESHOLD 0.2\nTHRESHVELOCITY {thv}\nMINCHANNELS 1\nMINPIX 1\n"
+                          "MINVOXELS 1\n")
+        s = Search(p.se)
+        s.search(arr, None, False, 1, False, False)
+        res[thv] = len(s.objectList)
+    assert res == {0: 3, 1: 1}
+
+
+def test_galwind_cylinders_flux_and_layers(synthetic_cube):
+    """GALWIND cylinders: smoothing keeps their flux (they were multiplied by the beam area in pixels, right
+    only for the shells, in Jy per pixel); their layers are those of the wind (LTYPE 5, boxes), not the
+    Gaussian layer of GALMOD."""
+    from bbarolo.galwind import GalWind
+    c = synthetic_cube
+    gw = c.pars().gw
+    for k, v in dict(XPOS="31.5", YPOS="31.5", VSYS="0", VWIND="100", VROT="0", VDISP="10", DENS="10",
+                     INC="60", PHI="30", OPENANG="60", HTOT=400., NTOT=4, SM=True, ISEED=1).items():
+        setattr(gw, k, v)
+    ratio = {}
+    for wtype in (0, 1):
+        w = GalWind(c)
+        w.par.WTYPE = wtype
+        w.compute()
+        before = float(w.out.array.sum())
+        w.smooth()
+        ratio[wtype] = float(w.out.array.sum()) / before
+    beam_pix = 1.1331 * 30. * 30. / (10. * 10.)
+    assert abs(ratio[0] - 1) < 0.05 and abs(ratio[1] / beam_pix - 1) < 0.05, ratio
+    models = []
+    for lt in (5, 1):
+        w = GalWind(c)
+        w.par.WTYPE, w.par.LTYPE, w.par.SM = 0, lt, False
+        w.compute()
+        models.append(w.out.array)
+    assert not np.array_equal(models[0], models[1])
+    c.pars().gm.LTYPE = 2
+    w = GalWind(c)
+    w.par.WTYPE, w.par.SM = 0, False
+    w.compute()
+    assert np.array_equal(w.out.array, models[0])
+
+
+def test_2dfit_model_gaps_geometry(synthetic_cube, tmp_path):
+    """The pixels of the 2DFIT model between the rings take the velocity of the nearest ring, at the radius
+    computed with the geometry of the outermost ring (it was that of the ring of the previous pixel)."""
+    import math
+    from astropy.io import fits
+    from bbarolo.ringmodel import Ringmodel, vfunc, X0, Y0, PA, INC
+    tr = Ringmodel()
+    radii = np.array([4., 8., 12., 16., 20.])
+    tr.set(5, radii, 4, 0, 150, 0, 45, 60, 31.5, 31.5)
+    tr.setfield(np.zeros((64, 64)), 64, 64)
+    pars = dict(vsysf=np.zeros(5), vrotf=np.full(5, 150.), vexpf=np.zeros(5), posaf=np.array([20., 45., 70., 95., 120.]),
+                inclf=np.array([40., 50., 60., 70., 75.]), xposf=np.full(5, 31.5), yposf=np.full(5, 31.5))
+    for k, v in pars.items():
+        setattr(tr, k, v)
+    tr.writeModel(str(tmp_path / "m.fits"), synthetic_cube.Head())
+    m = fits.getdata(str(tmp_path / "m.fits")).astype(float)
+    fitted = np.array([pars[k] for k in ("vsysf", "vrotf", "vexpf", "posaf", "inclf", "xposf", "yposf")])
+    tr.thetaf = 0
+    covered = np.zeros(m.shape, bool)
+    for ir in range(5):
+        X = tr.getdat(fitted[:, ir], max(radii[ir] - 2, 0), radii[ir] + 2, 0)[1].astype(int)
+        covered[X[:, 1], X[:, 0]] = True
+    pl, F = fitted[:, -1], math.pi / 180.
+    gaps = np.argwhere(~covered & np.isfinite(m))
+    assert len(gaps) > 20
+    for yy, xx in gaps:
+        xr = -(xx - pl[X0]) * math.sin(F * pl[PA]) + (yy - pl[Y0]) * math.cos(F * pl[PA])
+        yr = (-(xx - pl[X0]) * math.cos(F * pl[PA]) - (yy - pl[Y0]) * math.sin(F * pl[PA])) / math.cos(F * pl[INC])
+        ind = int(np.argmin(np.abs(math.hypot(xr, yr) - radii)))
+        assert np.isclose(m[yy, xx], vfunc(np.array([[xx, yy]], float), fitted[:, ind])[0], atol=1e-3)
+
+
+def test_search_spatialsmooth_prints_smoothed_noise(tmp_path, capsys):
+    """SEARCHTYPE spatialsmooth prints the threshold and the noise of the smoothed cube, which it searches (it
+    printed those of the original cube)."""
+    fn = _mock_cube(tmp_path)
+    p = Param()
+    p.readParamString(f"FITSFILE {fn}\nSEARCHTYPE spatialsmooth\nFACTOR 2\nOUTFOLDER {tmp_path}/\nMINPIX 1\n")
+    c = Cube(fn, par=p)
+    c.search()
+    out = capsys.readouterr().out
+    spread = float(out.split("spread = ")[1].split(")")[0])
+    assert spread < 0.6 * c.stats.getSpread()
