@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>pyBBarolo.wrapper &#8212; BBarolo 1.8 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../../_static/classic.css?v=d6bdc565" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css" />
+    
+    <script src="../../_static/documentation_options.js?v=b81e6271"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    
+    <script src="../../_static/sidebar.js"></script>
+    
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+  </head><body>
+<div style="background:#fff3cd;color:#5c3c00;border-bottom:1px solid #e0c97a;padding:8px 14px;font-family:sans-serif;font-size:14px;">
+<strong>BBarolo 1.8 (C++), archived.</strong> This is the documentation of the last C++ version, kept for reference.
+The current version is BBarolo 2, in pure Python: <a href="https://bbarolo.readthedocs.io/" style="color:#8b1a1a;">bbarolo.readthedocs.io</a>.
+</div>
+
+
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">BBarolo 1.8 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">pyBBarolo.wrapper</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for pyBBarolo.wrapper</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">This module defines a few classes to call BBarolo C++ executable </span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="c1">########################################################################</span>
+<span class="c1"># Copyright (C) 2021 Enrico Di Teodoro</span>
+<span class="c1"># This program is free software: you can redistribute it and/or modify</span>
+<span class="c1"># it under the terms of the GNU General Public License as published by</span>
+<span class="c1"># the Free Software Foundation, either version 3 of the License, or</span>
+<span class="c1"># (at your option) any later version.</span>
+<span class="c1">#</span>
+<span class="c1"># This program is distributed in the hope that it will be useful,</span>
+<span class="c1"># but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
+<span class="c1"># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</span>
+<span class="c1"># GNU General Public License for more details.</span>
+<span class="c1">#</span>
+<span class="c1"># You should have received a copy of the GNU General Public License</span>
+<span class="c1"># along with this program.  If not, see &lt;http://www.gnu.org/licenses/&gt;.</span>
+<span class="c1">########################################################################</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span><span class="o">,</span><span class="w"> </span><span class="nn">io</span><span class="o">,</span><span class="w"> </span><span class="nn">stat</span><span class="o">,</span><span class="w"> </span><span class="nn">subprocess</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">warn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">distutils.spawn</span><span class="w"> </span><span class="kn">import</span> <span class="n">find_executable</span>
+
+<span class="c1"># Global variable pointing to BBarolo executable</span>
+<span class="n">BBexe</span> <span class="o">=</span> <span class="kc">None</span>
+
+<span class="c1"># BBarolo should be in module directory. We make sure it is executable</span>
+<span class="n">moddir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">realpath</span><span class="p">(</span><span class="vm">__file__</span><span class="p">))</span>
+<span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">moddir</span><span class="o">+</span><span class="s1">&#39;/BBarolo&#39;</span><span class="p">):</span> 
+    <span class="n">BBexe</span> <span class="o">=</span> <span class="n">moddir</span><span class="o">+</span><span class="s1">&#39;/BBarolo&#39;</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">chmod</span><span class="p">(</span><span class="n">BBexe</span><span class="p">,</span>  <span class="n">stat</span><span class="o">.</span><span class="n">S_IXUSR</span> <span class="o">|</span> <span class="n">stat</span><span class="o">.</span><span class="n">S_IXGRP</span> <span class="o">|</span> <span class="n">stat</span><span class="o">.</span><span class="n">S_IXOTH</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="BBaroloWrapper">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.BBaroloWrapper">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">BBaroloWrapper</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; </span>
+<span class="sd">    A class to directly call BBarolo given some parameters</span>
+<span class="sd">    </span>
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    opts: (dict)</span>
+<span class="sd">      A dictionary {param : value} with stored BBarolo&#39;s parameters.</span>
+<span class="sd">    </span>
+<span class="sd">    </span>
+<span class="sd">    Methods</span>
+<span class="sd">    -------</span>
+<span class="sd">    add_options(**kwargs):</span>
+<span class="sd">      Add new options to the opts attribute</span>
+<span class="sd">    </span>
+<span class="sd">    remove_option(toremove):</span>
+<span class="sd">      Remove a previously added option from opts list</span>
+<span class="sd">    </span>
+<span class="sd">    run(exe=None,stdout=None):</span>
+<span class="sd">      Run BBarolo after checking that the executable exists and stdout</span>
+<span class="sd">    </span>
+<span class="sd">    run_nochecks(exe=&#39;BBarolo&#39;,stdout=subprocess.DEVNULL):</span>
+<span class="sd">      Run BBarolo without any checks</span>
+<span class="sd">    </span>
+<span class="sd">    write_parameterfile(fileout=&#39;param.par&#39;):</span>
+<span class="sd">      Write a parameter file with the parameters stored in the class</span>
+<span class="sd">    </span>
+<span class="sd">    reset():</span>
+<span class="sd">      Reset BBarolo&#39;s options to an empty list</span>
+<span class="sd">    </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">params</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Initialize a BBaroloWrapper instance.</span>
+<span class="sd">            BBarolo&#39;s parameters can be given in three different ways:</span>
+<span class="sd">            </span>
+<span class="sd">            1) A list of strings (param=value) through the params variable</span>
+<span class="sd">            2) A dictionary of (param,value) through the params variable</span>
+<span class="sd">            3) Parameter=value set through the **kwargs</span>
+<span class="sd">            </span>
+<span class="sd">            Examples:</span>
+<span class="sd">            1) BBaroloWrapper([&quot;FITSFILE=mycube&quot;,&quot;FIT3D=true&quot;])</span>
+<span class="sd">            2) BBaroloWrapper(dict=(fitsfile=&#39;mycube&#39;,fit3d=True))</span>
+<span class="sd">            3) BBaroloWrapper(fitsfile=&#39;mycube&#39;,fit3d=True)</span>
+<span class="sd">            </span>
+<span class="sd">        Args:</span>
+<span class="sd">          params (list,dict):   A list of string or a dictionary with BB&#39;s parameters</span>
+<span class="sd">          kwargs ():            Additional (or all) BB&#39;s parameters and values</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        
+        <span class="k">if</span> <span class="n">params</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;BBaroloWrapper must be initialised with a list of BBarolo&#39;s parameters&quot;</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">opts</span> <span class="o">=</span> <span class="p">{}</span>         <span class="c1"># A dictionary with BB&#39;s parameters</span>
+        <span class="k">if</span> <span class="n">params</span><span class="p">:</span>
+            <span class="c1"># Parameters are given through params</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">params</span><span class="p">,</span><span class="nb">dict</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">opts</span> <span class="o">=</span> <span class="n">params</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">params</span><span class="p">,(</span><span class="nb">list</span><span class="p">,</span><span class="nb">tuple</span><span class="p">)):</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">params</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;All elements of parameter list must be strings.&quot;</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">params</span><span class="p">:</span>
+                    <span class="n">a</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">opts</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="p">:</span> <span class="n">a</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()})</span>
+            <span class="k">else</span><span class="p">:</span> 
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Parameters must given as either a list of strings or a dictionary.&quot;</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">add_options</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="BBaroloWrapper.add_options">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.BBaroloWrapper.add_options">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">add_options</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Add new options to the parameter list &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">kwargs</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">opts</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+    
+<div class="viewcode-block" id="BBaroloWrapper.remove_option">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.BBaroloWrapper.remove_option">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">remove_option</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">toremove</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Remove an option from the parameter list &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">opts</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">toremove</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span></div>
+
+    
+    
+<div class="viewcode-block" id="BBaroloWrapper.run">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.BBaroloWrapper.run">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">exe</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">stdout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Run BBarolo with the given parameters after checking executable and stdout</span>
+<span class="sd">    </span>
+<span class="sd">        Args:</span>
+<span class="sd">          exe (str):      Path to BBarolo executable. If None, search in $PATH</span>
+<span class="sd">          stdout (str):   How to report BBarolo&#39;s messages. </span>
+<span class="sd">                          None=screen, str=file, &#39;null&#39;=NULL</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        
+        <span class="c1"># Check if given BBarolo executable exists</span>
+        <span class="k">if</span> <span class="n">exe</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">exe</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">NameError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">exe</span><span class="si">}</span><span class="s2"> does not exist.&quot;</span><span class="p">)</span>
+        
+        <span class="c1"># If not given using global BBexe variable</span>
+        <span class="n">exe</span> <span class="o">=</span> <span class="n">BBexe</span> <span class="k">if</span> <span class="n">exe</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">exe</span>
+        <span class="k">if</span> <span class="n">exe</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># Try to find BBarolo executable exists in path</span>
+            <span class="n">exe</span> <span class="o">=</span> <span class="n">find_executable</span><span class="p">(</span><span class="s1">&#39;BBarolo&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">exe</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">NameError</span><span class="p">(</span><span class="s2">&quot;Cannot find any BBarolo executable in $PATH. Please specify it with exe=yourBBarolo&quot;</span><span class="p">)</span>
+        
+        <span class="c1"># Deciding where to print BB&#39;s messages (screen,file or null)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stdout</span><span class="p">,</span><span class="nb">str</span><span class="p">):</span> 
+            <span class="k">if</span> <span class="s1">&#39;null&#39;</span> <span class="ow">in</span> <span class="n">stdout</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span> <span class="n">stdout</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">DEVNULL</span>
+            <span class="k">else</span><span class="p">:</span> <span class="n">stdout</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">stdout</span><span class="p">,</span><span class="s1">&#39;w&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Running BBarolo</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">run_nochecks</span><span class="p">(</span><span class="n">exe</span><span class="o">=</span><span class="n">exe</span><span class="p">,</span><span class="n">stdout</span><span class="o">=</span><span class="n">stdout</span><span class="p">)):</span>
+            <span class="n">warn</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;BBarolo returned an unsuccessful exit code&quot;</span><span class="p">,</span> <span class="ne">RuntimeWarning</span><span class="p">)</span>
+        
+        <span class="c1"># Closing log file if open</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stdout</span><span class="p">,</span><span class="n">io</span><span class="o">.</span><span class="n">IOBase</span><span class="p">):</span> <span class="n">stdout</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="BBaroloWrapper.run_nochecks">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.BBaroloWrapper.run_nochecks">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">run_nochecks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">exe</span><span class="o">=</span><span class="n">BBexe</span><span class="p">,</span><span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">DEVNULL</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Run BBarolo with no further checks &quot;&quot;&quot;</span>
+        <span class="n">cmd</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">exe</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;-c&#39;</span><span class="p">]</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s1">=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">opts</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="si">}</span><span class="s1">&#39;</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">opts</span><span class="p">]</span>
+        <span class="n">cmd</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="n">cmd</span><span class="p">,</span><span class="n">stdout</span><span class="o">=</span><span class="n">stdout</span><span class="p">,</span><span class="n">stderr</span><span class="o">=</span><span class="n">stdout</span><span class="p">)</span></div>
+
+
+    
+<div class="viewcode-block" id="BBaroloWrapper.write_parameterfile">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.BBaroloWrapper.write_parameterfile">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">write_parameterfile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">fileout</span><span class="o">=</span><span class="s1">&#39;param.par&#39;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Write a BBarolo&#39;s parameter file in fileout &quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">fileout</span><span class="p">,</span><span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="fm">__str__</span><span class="p">())</span></div>
+
+    
+
+<div class="viewcode-block" id="BBaroloWrapper.reset">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.BBaroloWrapper.reset">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Reset options &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">opts</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span></div>
+
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">key</span><span class="p">):</span>
+       <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">opts</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="s2">&quot;##### Input parameters for BBarolo #####</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">opts</span><span class="p">:</span>
+            <span class="n">s</span> <span class="o">+=</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">k</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">:</span><span class="s1">18s</span><span class="si">}</span><span class="s1"> </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">opts</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="si">}</span><span class="s1"> </span><span class="se">\n</span><span class="s1">&#39;</span> 
+        <span class="k">return</span> <span class="n">s</span></div>
+
+
+
+
+<div class="viewcode-block" id="GenericTask">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.GenericTask">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">GenericTask</span><span class="p">(</span><span class="n">BBaroloWrapper</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">task</span><span class="p">,</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">specopt</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;fitsfile&#39;</span> <span class="p">:</span> <span class="n">fitsname</span><span class="p">,</span> <span class="n">task</span> <span class="p">:</span> <span class="kc">True</span> <span class="p">}</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">GenericTask</span><span class="p">,</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">specopt</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="GalMod">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.GalMod">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">GalMod</span><span class="p">(</span><span class="n">GenericTask</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">GalMod</span><span class="p">,</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">task</span><span class="o">=</span><span class="s1">&#39;galmod&#39;</span><span class="p">,</span><span class="n">fitsname</span><span class="o">=</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="GalWind">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.GalWind">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">GalWind</span><span class="p">(</span><span class="n">GenericTask</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">GalWind</span><span class="p">,</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">task</span><span class="o">=</span><span class="s1">&#39;galwind&#39;</span><span class="p">,</span><span class="n">fitsname</span><span class="o">=</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="FitMod3D">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.FitMod3D">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">FitMod3D</span><span class="p">(</span><span class="n">GenericTask</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">FitMod3D</span><span class="p">,</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">task</span><span class="o">=</span><span class="s1">&#39;fit3d&#39;</span><span class="p">,</span><span class="n">fitsname</span><span class="o">=</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="FitMod2D">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.FitMod2D">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">FitMod2D</span><span class="p">(</span><span class="n">GenericTask</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">FitMod2D</span><span class="p">,</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">task</span><span class="o">=</span><span class="s1">&#39;fit2d&#39;</span><span class="p">,</span><span class="n">fitsname</span><span class="o">=</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+        
+<div class="viewcode-block" id="Search">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.Search">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Search</span><span class="p">(</span><span class="n">GenericTask</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Search</span><span class="p">,</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">task</span><span class="o">=</span><span class="s1">&#39;search&#39;</span><span class="p">,</span><span class="n">fitsname</span><span class="o">=</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+ 
+<div class="viewcode-block" id="EllProf">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.EllProf">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">EllProf</span><span class="p">(</span><span class="n">GenericTask</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">EllProf</span><span class="p">,</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">task</span><span class="o">=</span><span class="s1">&#39;ellprof&#39;</span><span class="p">,</span><span class="n">fitsname</span><span class="o">=</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SpectralSmoothing">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.SpectralSmoothing">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SpectralSmoothing</span><span class="p">(</span><span class="n">GenericTask</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">SpectralSmoothing</span><span class="p">,</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">task</span><span class="o">=</span><span class="s1">&#39;smoothspec&#39;</span><span class="p">,</span><span class="n">fitsname</span><span class="o">=</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+     
+<div class="viewcode-block" id="SpatialSmoothing">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.SpatialSmoothing">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SpatialSmoothing</span><span class="p">(</span><span class="n">GenericTask</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">SpatialSmoothing</span><span class="p">,</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">task</span><span class="o">=</span><span class="s1">&#39;smooth&#39;</span><span class="p">,</span><span class="n">fitsname</span><span class="o">=</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="MakeMask">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.MakeMask">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">MakeMask</span><span class="p">(</span><span class="n">GenericTask</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">MakeMask</span><span class="p">,</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">task</span><span class="o">=</span><span class="s1">&#39;makemask&#39;</span><span class="p">,</span><span class="n">fitsname</span><span class="o">=</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="PVSlice">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.PVSlice">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">PVSlice</span><span class="p">(</span><span class="n">GenericTask</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">PVSlice</span><span class="p">,</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">task</span><span class="o">=</span><span class="s1">&#39;pvslice&#39;</span><span class="p">,</span><span class="n">fitsname</span><span class="o">=</span><span class="n">fitsname</span><span class="p">,</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+        
+
+<div class="viewcode-block" id="read_parameter_file">
+<a class="viewcode-back" href="../../pybb_api.html#pyBBarolo.wrapper.read_parameter_file">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">read_parameter_file</span><span class="p">(</span><span class="n">filein</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; This function reads in a BBarolo&#39;s parameter file </span>
+<span class="sd">    </span>
+<span class="sd">    Args:</span>
+<span class="sd">      filein (str):   Parameter file name</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">filein</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File </span><span class="si">{</span><span class="n">filein</span><span class="si">}</span><span class="s2"> does not exist&quot;</span><span class="p">)</span>
+        
+    <span class="n">s</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filein</span><span class="p">,</span><span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fp</span><span class="p">:</span>
+       <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">fp</span><span class="p">:</span>
+           <span class="n">l</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+           <span class="k">if</span> <span class="ow">not</span> <span class="n">l</span><span class="p">:</span> <span class="k">continue</span>
+           <span class="k">if</span> <span class="n">l</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">]</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;#&#39;</span><span class="p">,</span><span class="s1">&#39;//&#39;</span><span class="p">]:</span> <span class="k">continue</span>
+           <span class="n">ssplit</span> <span class="o">=</span> <span class="n">l</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+           <span class="n">s</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">ssplit</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s1">=</span><span class="si">{</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">ssplit</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+           
+    <span class="k">return</span> <span class="n">s</span></div>
+
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="../../index.html">Table of Contents</a></h3>
+<p class="caption" role="heading"><span class="caption-text">BBarolo:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installing.html">Installing BBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../running.html">Running BBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tasks/index.html">List of tasks and parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../fitsutils.html">Tools for FITS files</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">pyBBarolo:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../pybb_install.html">Installing pyBBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../pybb_quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../pybb_api.html">API</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../license.html">License and citations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../troubleshooting.html">Troubleshooting</a></li>
+</ul>
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+<div id="sidebarbutton" title="Collapse sidebar">
+<span>«</span>
+</div>
+
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">BBarolo 1.8 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">pyBBarolo.wrapper</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2015, Enrico Di Teodoro.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+    </div>
+  </body>
+</html>

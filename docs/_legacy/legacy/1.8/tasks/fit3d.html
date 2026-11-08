@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>3DFIT task &#8212; BBarolo 1.8 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../_static/classic.css?v=d6bdc565" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css" />
+    
+    <script src="../_static/documentation_options.js?v=b81e6271"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    
+    <script src="../_static/sidebar.js"></script>
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="SPACEPAR task" href="spacepar.html" />
+    <link rel="prev" title="General parameters" href="general.html" /> 
+  </head><body>
+<div style="background:#fff3cd;color:#5c3c00;border-bottom:1px solid #e0c97a;padding:8px 14px;font-family:sans-serif;font-size:14px;">
+<strong>BBarolo 1.8 (C++), archived.</strong> This is the documentation of the last C++ version, kept for reference.
+The current version is BBarolo 2, in pure Python: <a href="https://bbarolo.readthedocs.io/" style="color:#8b1a1a;">bbarolo.readthedocs.io</a>.
+</div>
+
+
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="spacepar.html" title="SPACEPAR task"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="general.html" title="General parameters"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">BBarolo 1.8 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="index.html" accesskey="U">List of tasks and parameters</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">3DFIT task</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="dfit-task">
+<span id="dfit"></span><h1>3DFIT task<a class="headerlink" href="#dfit-task" title="Link to this heading">¶</a></h1>
+<p>3DFIT is the main BBarolo’s routine: it fits a 3D tilted-ring model to an emission-line data-cube. Algorithms used are described in <a class="reference external" href="http://adsabs.harvard.edu/abs/2015MNRAS.451.3021D">this paper</a>.</p>
+<section id="parameters">
+<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>3DFIT</strong> [false]. This flag enables the 3D fitting algorithm. Can be <em>true</em> or <em>false</em>. The old flag GALFIT is now deprecated and will be no more supported in future BBarolo’s releases.</p></li>
+</ul>
+<section id="rings-input">
+<span id="ringio"></span><h3>Rings input<a class="headerlink" href="#rings-input" title="Link to this heading">¶</a></h3>
+<p>Following parameters are used to define the initial set of rings used for the fit. All parameters are allowed to vary ring-by-ring or they can just be fixed to their initial value.</p>
+<p>All parameters listed below (except NRADII and RADSEP) can be given in the form of a single value valid for all rings or through a text file containing values at different radii. In this second case, the syntax to be used is <em>file(filename,N,M)</em>, where <em>filename</em> is the name of the file with values, <em>N</em> is the column number (counting from 1) and <em>M</em> is the starting row (all rows if omitted). A subset of rows can also be selected using the syntax <em>file(filename,N,start:stop)</em>, where <em>start</em> and <em>stop</em> are the first and last row to be considered.</p>
+<p>If any of the following parameters is not explicitly specified, BBarolo will estimate an appropriate initial value for that parameter.</p>
+<ul class="simple">
+<li><p><strong>NRADII</strong> [none]. The number of rings to be used and fitted. If not given, BBarolo will determine it from the radial extension of the emission line.</p></li>
+<li><p><strong>RADSEP</strong> [none]. The separation between rings in <em>arcsec</em>. If N radii have been requested, the rings will be placed at N*RADSEP + RADSEP/2. If not given, it will be equal to the FWHM of the beam major axis.</p></li>
+<li><p><strong>RADII</strong> [none]. This parameter can be used as an alternative to NRADII and RADSEP. RADII can be 1) a text file (see above) with ring specified or 2) a list of radii or 3) a string in the format <em>Rmin~Rmax:step</em> (for example <em>60~180:60</em> will center rings at 60, 120 and 180 arcsec).</p></li>
+<li><p><strong>XPOS</strong> [none]. X-center of rings. Accepted format are in <em>pixels</em> (starting from 0, unlike GIPSY) or in WCS coordinates in the format +000.0000d (<em>degrees</em>) or +00:00:00.00 (<em>sexagesimal</em>). If not specified, it is determined from the centroids of the emission.</p></li>
+<li><p><strong>YPOS</strong> [none]. Like XPOS, but for the y-axis.</p></li>
+<li><p><strong>VSYS</strong> [none]. Systemic velocity in <em>km/s</em>. If not given, it is estimated as the central velocity in the global line profile.</p></li>
+<li><p><strong>VROT</strong> [none]. Rotation velocity in <em>km/s</em>.</p></li>
+<li><p><strong>VDISP</strong> [8]. Velocity dispersion in <em>km/s</em>.</p></li>
+<li><p><strong>VRAD</strong> [0]. Radial velocity in <em>km/s</em>.</p></li>
+<li><p><strong>INC</strong> [none]. Inclination in <em>degrees</em>. If not given, it is guessed from the total map.</p></li>
+<li><p><strong>PA</strong> [none]. Position angle in <em>degrees</em> of the receding side of the galaxy, measured anti-clockwise from the North direction. If not given, it is estimated from the velocity field.</p></li>
+<li><p><strong>Z0</strong> [0]. Scale-height of the disc in <em>arcsec</em>.</p></li>
+<li><p><strong>DENS</strong> [1]. Gas surface density in units of <em>1E20 atoms/cm2</em>. Fit of this parameter is not currently implemented and its value is not relevant if a normalization is used. If <em>DENSFLUX</em> is true, the DENS parameter is interpreted as an integrated flux divided by area in arcsec2.</p></li>
+</ul>
+</section>
+<section id="main-options">
+<span id="dfitopt"></span><h3>Main options<a class="headerlink" href="#main-options" title="Link to this heading">¶</a></h3>
+<p>Some important parameters that can be used to control 3DFIT. All following parameters have default values and are therefore optional.</p>
+<ul>
+<li><p><strong>FREE</strong> [VROT VDISP INC PA]. The list of parameters to fit. Can be any combination of VROT, VDISP, VRAD, VSYS, INC, PA, Z0, XPOS, YPOS.</p></li>
+<li><p><strong>MASK</strong> [SEARCH]. This parameter tells the code how to build a mask to identify the regions of genuine galaxy emission. Accepted values are <em>SMOOTH</em>, <em>SEARCH</em>, <em>SMOOTH&amp;SEARCH</em>, <em>THRESHOLD</em>, <em>NONE</em> or a FITS mask file:</p>
+<ul class="simple">
+<li><p><em>SMOOTH</em>: the input cube is smoothed according to the <a class="reference internal" href="smooth.html#smoothtask"><span class="std std-ref">smooth parameters</span></a> and the mask built from the region at S/N&gt;BLANKCUT, where <strong>BLANKCUT</strong> is a parameter representing the S/N cut to apply in the smoothed datacube. Defaults are to smooth by a FACTOR = 2 and cut at BLANKCUT = 3.</p></li>
+<li><p><em>SEARCH</em>: the source finding is run and the largest detection used to determine the mask. The <a class="reference internal" href="search.html#searchtask"><span class="std std-ref">source finding parameters</span></a> can be set to change the default values.</p></li>
+<li><p><em>SMOOTH&amp;SEARCH</em>: first smooth to a lower resolution and then scan the smoothed data for sources. Parameters for smoothing and source-finding are the same as the <a class="reference internal" href="smooth.html#smoothtask"><span class="std std-ref">SMOOTH</span></a> and <a class="reference internal" href="search.html#searchtask"><span class="std std-ref">SEARCH</span></a> tasks.</p></li>
+<li><p><em>SMOOTHSPEC&amp;SEARCH</em>: first smooth spectrally then scan the smoothed data for sources. Parameters for smoothing and source-finding are the same as the <a class="reference internal" href="smooth.html#spectralsmoothtask"><span class="std std-ref">SMOOTHSPEC</span></a> and <a class="reference internal" href="search.html#searchtask"><span class="std std-ref">SEARCH</span></a> tasks.</p></li>
+<li><p><em>THRESHOLD</em>: blank all pixels with flux &lt; THRESHOLD. A <strong>THRESHOLD</strong> parameter must be specified in the same flux units of the input datacube.</p></li>
+<li><p><em>NONE</em>: all regions with flux &gt; 0 are used.</p></li>
+<li><p><em>file(fitsname.fits)</em>: A mask FITS file (i.e. filled with 0s and 1s).</p></li>
+</ul>
+<p><em>_ENLARGE</em> + a number <em>N</em> can be appended to the above string to enlarge the mask by <em>N</em> pixels. For example SEARCH_ENLARGE5 will use the <em>SEARCH</em> algorithm and then grow the mask by 5 pixels at the edges.</p>
+</li>
+<li><p><strong>NORM</strong> [AZIM]. Type of normalization of the model. Accepted values are: <em>LOCAL</em> (pixel by pixel), <em>AZIM</em> (azimuthal) or <em>NONE</em>. Up to three values can be given, representing the normalizations to use for the first and fitting second steps and for the writing of the final model.</p></li>
+<li><p><strong>TWOSTAGE</strong> [true]. This flag enables the second fitting stage after parameter regularisation. This is relevant just if the user wishes to fit parameters other than VROT, VDISP and VRAD. The inclination and the position angle are regularised by polynomials of degree POLYN or a Bezier function (default), while the other parameters by constant functions.</p></li>
+<li><p><strong>REGTYPE</strong> [auto]. Type of regularisation to use for second fitting stage. Accepted values are <em>auto</em> (the code will choose), <em>bezier</em> (Bezier interpolation), <em>median</em> (take the median), or a positive integer <em>n</em> for a nth-degree polynomial interpolation. It is possible to choose different types for INC, PA, VSYS, XPOS, YPOS and Z0 with a list of keyword-value pairs separated with whitespaces. A single value is used only to set INC and PA together. For example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">REGTYPE</span>   <span class="n">bezier</span>                 <span class="c1"># Bezier function for INC and PA, &#39;auto&#39; for others</span>
+<span class="n">REGTYPE</span>   <span class="n">INC</span><span class="o">=</span><span class="mi">1</span> <span class="n">PA</span><span class="o">=</span><span class="n">median</span>        <span class="c1"># A line for INC, median for PA</span>
+<span class="n">REGTYPE</span>   <span class="n">INC</span><span class="o">=</span><span class="mi">2</span> <span class="n">PA</span><span class="o">=</span><span class="mi">0</span> <span class="n">VSYS</span><span class="o">=</span><span class="n">bezier</span> <span class="c1"># A parabola for INC, a constant for PA, bezier for VSYS</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong>POLYN</strong> [-1]. <strong>DEPRECATED</strong>. It will be discontinued after v1.6, use REGTYPE instead.</p></li>
+<li><p><strong>LINEAR</strong> [0.85]. This parameter controls the spectral broadening of the instrument. It is in units of channel and it represents the standard deviation, not the FWHM. The default is for data that has been Hanning smoothed, so that FWHM = 2 channels and LINEAR = FWHM/2.355.</p></li>
+<li><p><strong>SIDE</strong> [B]: Side of the galaxy to be fitted. Accepted values are: A = approaching, R = receding and B = both (default)</p></li>
+<li><p><strong>FLAGERRORS</strong> [false]. Whether the code has to estimate the errors. This heavily slows down the run.</p></li>
+<li><p><strong>ADRIFT</strong> [false]. If true, calculate the asymmetric drift correction. First regularize velocity dispersion and density profile and then compute the correction following classical prescription (see e.g. <a class="reference external" href="http://adsabs.harvard.edu/abs/2017MNRAS.466.4159I">Iorio et al. 2017</a>).</p></li>
+<li><p><strong>ADRIFTPOL1</strong> [3]. Degree of polynomial function used to regularize the velocity dispersion in the computation of the asymmetric drift correction. If set to -1, it will not regularize it and just use the ring-by-ring best fit.</p></li>
+<li><p><strong>ADRIFTPOL2</strong> [3]. Degree of polynomial function used to regularize the function log(VDISP**2*SIGMA) in the computation of the asymmetric drift correction.</p></li>
+</ul>
+</section>
+<section id="advanced-options">
+<span id="dfitopt-add"></span><h3>Advanced options<a class="headerlink" href="#advanced-options" title="Link to this heading">¶</a></h3>
+<p>Additional optional parameters to refine the fit for advanced users.</p>
+<ul class="simple">
+<li><p><strong>DELTAINC</strong> [5]. This parameter fixes the boundaries of parameter space at [INC-DELTAINC, INC+DELTAINC]. It is not advisable to let the inclination varying over the whole range [0,90].</p></li>
+<li><p><strong>DELTAPA</strong> [15]. This parameter fixes the boundaries of parameter space at [PA-DELTAINC, PA+DELTAPA]. It is not advisable to let the position angle varying over the whole range [0,360].</p></li>
+<li><p><strong>DELTAVROT</strong> [inf]. This parameter fixes the boundaries of parameter space at [VROT-DELTAVROT, VROT+DELTAVROT]. Default is no limit.</p></li>
+<li><p><strong>MINVDISP</strong> [0]. Minimum gas velocity dispersion allowed.</p></li>
+<li><p><strong>MAXVDISP</strong> [1000]. Maximum gas velocity dispersion allowed.</p></li>
+<li><p><strong>FTYPE</strong> [2]. Function to be minimized. Accepted values are: 1 = chi-squared, 2 = |mod-obs|, (default) and 3 = |mod-obs|/(mod+obs)).</p></li>
+<li><p><strong>WFUNC</strong> [2]. Weighting function to be used in the fit. Accepted values are: 0 = uniform weight, 1 = |cos(θ)| and 2 = cos(θ)^2, default), where θ is the azimuthal angle (= 0 for galaxy major axis). Negative values can be used to set a sin(θ) weight: -1 = |sin(θ)| and -2 = sin(θ)^2.</p></li>
+<li><p><strong>LTYPE</strong> [1]. Layer type along z. Accepted values are: 1 = Gaussian (default), 2  = sech^2, 3 = exponential, 4 = Lorentzian and 5 = box.</p></li>
+<li><p><strong>CDENS</strong> [10]. Surface density of clouds in the plane of the rings per area of a pixel in units of <em>1E20 atoms/cm^2</em> (see also GIPSY <a class="reference external" href="https://www.astro.rug.nl/~gipsy/tsk/galmod.dc1">GALMOD</a>).</p></li>
+<li><p><strong>NV</strong> [nchan]. Number of subclouds in the velocity profile of a single cloud (see also GIPSY <a class="reference external" href="https://www.astro.rug.nl/~gipsy/tsk/galmod.dc1">GALMOD</a>). Default is the number of channels in the datacube.</p></li>
+<li><p><strong>BWEIGHT</strong> [1]. Exponent of weight for blank pixels. See Section 2.4 of reference paper for details. Large numbers mean that models that extend further away than observations are severely discouraged.</p></li>
+<li><p><strong>STARTRAD</strong> [0]. This parameter allows the user to start the fit from the given ring. Indexing from 0.</p></li>
+<li><p><strong>NOISERMS</strong> [0] If &gt; 0, Gaussian noise with rms = NOISERMS will be added to the final model cube.</p></li>
+<li><p><strong>NORMALCUBE</strong> [true]. If true, the input cube is normalized before the fit. This usually helps convergence and avoids issues with very small flux values.</p></li>
+<li><p><strong>BADOUT</strong> [false]. If true, it writes also unconverged/bad rings in the output ringfile (with a flag identifying them).</p></li>
+<li><p><strong>VELDEF</strong> [AUTO]. Velocity definition to convert frequency/wavelength axis into velocity. Accepted values are <em>RADIO</em>, <em>OPTICAL</em> or <em>RELATIVISTIC</em>. If <em>AUTO</em> (default), the code will use radio definition if spectral axis is frequency and relativistic definition if spectral axis is wavelength.</p></li>
+<li><p><strong>PLOTMASK</strong> [false]. If true, the mask contour is overlaid on the channel maps and PVs plots.</p></li>
+<li><p><strong>PLOTMINCON</strong> [-1]. Minimum flux contour to use in channel map and PV plots. Must be positive. If not given or negative, the code will estimate an appropriate contour. Contour levels will be set at [1,2,4,8,…] x PLOTMINCON.</p></li>
+</ul>
+</section>
+<section id="parameters-for-high-z-galaxies">
+<h3>Parameters for high-z galaxies<a class="headerlink" href="#parameters-for-high-z-galaxies" title="Link to this heading">¶</a></h3>
+<p>For high-z galaxies the following additional parameters are available.</p>
+<ul class="simple">
+<li><p><strong>REDSHIFT</strong> [0]. The redshift of the galaxy.</p></li>
+<li><p><strong>RESTWAVE</strong> [none]. The rest wavelength of the line you want to fit, if the spectral axis of the data is wavelength. Units must be the same of the spectral axis of the cube. For example, if we want to fit the H-alpha line and CUNIT3 = “angstrom”, set a value 6563. It can be a single value, or a list of values for fitting multiple lines at the same time.</p></li>
+<li><p><strong>RESTFREQ</strong> [none]. The rest frequency of the line you want to fit, if the spectral axis of the data is frequency. Units must be the same of the spectral axis of the cube. The rest frequency value is often read from the FITS header and does not need to be explicitly set by the user. If set, the RESTFREQ value overrides the header value. It can be a single value, or a list of values for fitting multiple lines at the same time.</p></li>
+</ul>
+<p>These parameters are used to calculate the conversion from wavelengths/frequencies to velocities. The velocity reference is set to 0 at RESTWAVE*(REDSHIFT+1) or RESTFREQ/(REDSHIFT+1). VSYS has to be set to 0, but can be also used to fine-tune the redshift. Finally, if these two parameters are not set, BBarolo will use the CRPIX3 as velocity reference and the proper VSYS has to be set based on that.</p>
+<ul class="simple">
+<li><p><strong>RELINT</strong> [1]. A list of line ratios for multiple line fitting. The number of ratios must be the same of given <strong>RESTFREQ</strong> or <strong>RESTWAVE</strong>.</p></li>
+</ul>
+</section>
+</section>
+<section id="outputs">
+<h2>Outputs<a class="headerlink" href="#outputs" title="Link to this heading">¶</a></h2>
+<p>The 3DFIT task produces several outputs to check the goodness of the fit. In the following <em>NAME</em> is the name of the galaxy and <em>NORM</em> is the kind normalization used.</p>
+<ul class="simple">
+<li><p>A FITS file <em>NAMEmod_NORM.fits</em>, containing the best-fit model datacube.</p></li>
+<li><p>A FITS file <em>mask.fits</em>, containing the mask used for the fit.</p></li>
+<li><p>FITS files of position-velocity cuts taken along the average major and minor axes for the data and the best-fit model. In particular:</p>
+<ul>
+<li><p><em>NAME_pv_a.fits</em>: P-V of the data along the major axis.</p></li>
+<li><p><em>NAME_pv_b.fits</em>: P-V of the data along the minor axis.</p></li>
+<li><p><em>NAMEmod_pv_a_NORM.fits</em>: P-V of the model along the major axis.</p></li>
+<li><p><em>NAMEmod_pv_b_NORM.fits</em>: P-V of the model along the minor axis.</p></li>
+</ul>
+</li>
+<li><p>FITS files of the moment maps for the data and the model. These can be found in the <em>maps</em> subdirectory:</p>
+<ul>
+<li><p><em>NAME_0mom.fits</em>, <em>NAME_1mom.fits</em>, <em>NAME_2mom.fits:</em> 0th, 1st and 2nd moment maps of the data.</p></li>
+<li><p><em>NAME_NORM_0mom.fits</em>, <em>NAME_NORM_1mom.fits</em>, <em>NAME_NORM_2mom.fits:</em> 0th, 1st and 2nd moment maps of the model.</p></li>
+</ul>
+</li>
+<li><p>Text files <em>rings_final1.txt</em> and <em>rings_final2.txt</em>, containing the ring best-fit parameters for the first and second fitting steps. The file <em>rings_final2.txt</em> is only produced if <strong>TWOSTAGE</strong> is true.</p></li>
+<li><p>A text file <em>densprof.txt</em>, with the radial intensity profiles along the best-fit rings.</p></li>
+<li><p>If <strong>ADRIFT</strong> is true, a text file <em>asymdrift.txt</em> with the asymmetric drift correction parameters.</p></li>
+<li><p>Plotting scripts to produce output plots with Gnuplot/Python can be found in the <em>plotscripts</em> subdirectory.</p></li>
+<li><p>A PDF file <em>NAME_chanmaps_NORM.pdf</em> with a channel-by-channel comparison of data and model cubes.</p></li>
+</ul>
+<figure class="align-center" style="width: 100%">
+<img alt="Channel maps plot" src="../_images/channels.png" />
+</figure>
+<div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+<ul class="simple">
+<li><p>A PDF file <em>NAME_pv_NORM.pdf</em> with a comparison of data and model P-Vs taken along the average major and minor axes.</p></li>
+</ul>
+<figure class="align-center" style="width: 100%">
+<img alt="Position-velocity plots" src="../_images/pvs.png" />
+</figure>
+<div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+<ul class="simple">
+<li><p>A PDF file <em>NAME_maps_NORM.pdf</em> with a comparison of data and model moment maps.</p></li>
+</ul>
+<figure class="align-center" style="width: 100%">
+<img alt="Position-velocity plots" src="../_images/mom.png" />
+</figure>
+<div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+<ul class="simple">
+<li><p>A PDF file <em>NAME_parameters.pdf</em> with the best-fit parameters.</p></li>
+</ul>
+<figure class="align-center" style="width: 100%">
+<img alt="Position-velocity plots" src="../_images/params.png" />
+</figure>
+<div class="line-block">
+<div class="line"><br /></div>
+<div class="line"><br /></div>
+</div>
+<ul class="simple">
+<li><p>If <strong>ADRIFT</strong> is true, a PDF file <em>asymmetricdrift.pdf</em> with the asymmetric drift correction.</p></li>
+</ul>
+<figure class="align-center" style="width: 100%">
+<img alt="Asymmetric drift plots" src="../_images/adrift.png" />
+</figure>
+</section>
+<section id="example">
+<h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
+<p>Above outputs can be obtained with the following <a class="reference download internal" download="" href="../_downloads/0da750a554421161c1bce7c49a3dcecf/n2403_3dfit.par"><code class="xref download docutils literal notranslate"><span class="pre">parameter</span></code></a> file and the usual example <a class="reference external" href="https://github.com/editeodoro/Bbarolo/raw/docs/docs/source/tasks/examples/ngc2403.fits">datacube</a>.</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="n">FITSFILE</span><span class="w">    </span><span class="n">ngc2403</span><span class="p">.</span><span class="n">fits</span>
+<span class="n">THREADS</span><span class="w">     </span><span class="mi">4</span>
+
+<span class="c1">/////////// 3DFIT parameters /////////////</span>
+<span class="mi">3</span><span class="n">DFIT</span><span class="w">       </span><span class="nb">true</span>
+<span class="c1">// Input rings</span>
+<span class="n">NRADII</span><span class="w">      </span><span class="mi">41</span>
+<span class="n">RADSEP</span><span class="w">      </span><span class="mi">30</span><span class="w">     </span>
+<span class="n">VSYS</span><span class="w">        </span><span class="mf">132.8</span>
+<span class="n">XPOS</span><span class="w">        </span><span class="mi">77</span><span class="w">         </span>
+<span class="n">YPOS</span><span class="w">        </span><span class="mi">77</span><span class="w">     </span>
+<span class="n">VROT</span><span class="w">        </span><span class="mi">120</span><span class="w">  </span>
+<span class="n">VDISP</span><span class="w">       </span><span class="mi">8</span><span class="w">          </span>
+<span class="n">INC</span><span class="w">         </span><span class="mi">60</span>
+<span class="n">PA</span><span class="w">          </span><span class="mf">123.7</span>
+<span class="n">Z0</span><span class="w">          </span><span class="mi">10</span>
+<span class="c1">// Free parameters</span>
+<span class="n">FREE</span><span class="w">        </span><span class="n">VROT</span><span class="w"> </span><span class="n">VDISP</span><span class="w"> </span><span class="n">PA</span>
+<span class="c1">// Normalization type</span>
+<span class="n">NORM</span><span class="w">        </span><span class="n">LOCAL</span>
+<span class="c1">// Mask</span>
+<span class="n">MASK</span><span class="w">        </span><span class="n">SEARCH</span>
+<span class="c1">// Other options</span>
+<span class="n">LTYPE</span><span class="w">       </span><span class="mi">2</span>
+<span class="n">FTYPE</span><span class="w">       </span><span class="mi">2</span>
+<span class="n">DISTANCE</span><span class="w">    </span><span class="mf">3.2</span>
+<span class="n">BWEIGHT</span><span class="w">     </span><span class="mi">1</span>
+<span class="n">WFUNC</span><span class="w">       </span><span class="mi">2</span>
+<span class="n">TWOSTAGE</span><span class="w">    </span><span class="nb">true</span>
+<span class="n">ADRIFT</span><span class="w">      </span><span class="nb">true</span>
+<span class="c1">///////////////////////////////////////////</span>
+</pre></div>
+</div>
+</section>
+<section id="guidelines-for-a-successful-fit">
+<h2>Guidelines for a successful fit<a class="headerlink" href="#guidelines-for-a-successful-fit" title="Link to this heading">¶</a></h2>
+<p>To obtain a good fit with very low resolution data, I usually follow some basic steps:</p>
+<div class="line-block">
+<div class="line">1. <em>Observational parameters</em>. Check that the header of your datacube has information on the PSF/beam of your observations. These are usually stored in the BMAJ, BMIN and BPA keywords. If these are not present in the header, you can use the <a class="reference internal" href="general.html#beam"><span class="std std-ref">beam parameters</span></a> to specify them. Be sure also to set the correct spectral broadening with the LINEAR parameter. These infos are fundamental to properly account for observational biases.</div>
+</div>
+<div class="line-block">
+<div class="line">2. <em>Obtain a mask</em>. A good mask is important for a nice fit because it tells the code which regions are real emission and which are just noise. The mask should be as large as possible to include faint emission, but not too large to include lots of noise. Try the different algorithms available in BBarolo and compare the produced masks with your data. When you find a mask you’re happy with, keep that configuration.</div>
+</div>
+<div class="line-block">
+<div class="line">3. <em>Initial guesses</em>. The parameter space can be quite degenerate and it’s very important to provide the code with reliable initial guesses for parameters. In particular, the code is very sensitive to the initial value of the inclination angle. BBarolo comes with some algorithms to automatically estimate initial values when these are not explicitly given in the parameter file. However these algorithms are simple and may fail in a number of situations, depending also on the quality of your data. If you let the code estimating the initial values, always check that these make sense before going on with the fit. I usually prefer to provide my initial guesses. I extract the moment maps using the mask just obtained and use them to get the initial guesses. Center position and inclination (XPOS, YPOS, INC) can be obtained from the intensity map. If higher resolution observations are available (like HST), I would rather use them for the galaxy center and inclination. The velocity field can be used to estimate the kinematic position angle (PA). The midpoint of the global spectrum can be used as systemic velocity (VSYS). I stress that the code is quite good in estimating the VSYS, so it is quite safe to let it unset (but always check!). The initial values of rotation velocity and velocity dispersion are not very important, so you can give some random sensible value.</div>
+</div>
+<div class="line-block">
+<div class="line">4. <em>Fit</em>. Depending on the data, you can decide to fit several parameters at the same time or keep some of them fixed. If your data have very low resolution, it may be wise to keep the geometry fixed and fit only the kinematics (VROT and VDISP). Check the outputs and if you are not happy with the model, try to change the initial parameters and/or the <a class="reference internal" href="#dfitopt"><span class="std std-ref">fit options</span></a>.</div>
+</div>
+</section>
+<section id="fitting-several-galaxies-at-the-same-time">
+<h2>Fitting several galaxies at the same time<a class="headerlink" href="#fitting-several-galaxies-at-the-same-time" title="Link to this heading">¶</a></h2>
+<p>An experimental function of BBarolo 1.5 allow the user to fit several galaxies at the same time. This can be useful, for example, when a large sample needs to be analysed on a supercluster. BBarolo launches a number of MPI processes and each process takes care of a galaxy at a time.</p>
+<p>To use this function, you need to compile BBarolo with MPI:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="n">make</span> <span class="n">mpi</span>
+</pre></div>
+</div>
+<p>If you have an MPI interface (OpenMPI, MPICH, etc…), this command will create an executable BBarolo_MPI in the working directory. You need to prepare a text file with a list of parameter files <em>params.list</em> and then run BBarolo_MPI through mpirun:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="n">mpirun</span> <span class="o">-</span><span class="n">np</span> <span class="n">NPROC</span> <span class="n">BBarolo_MPI</span> <span class="o">-</span><span class="n">l</span> <span class="n">params</span><span class="o">.</span><span class="n">list</span>
+</pre></div>
+</div>
+<p>where NPROC is the number of MPI processes. Each MPI process can be also run in multi-thread mode with the usual <strong>THREADS</strong> parameter. This is basically the same of running NPROC instances of BBarolo, each with a single parameter file.</p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="../index.html">Table of Contents</a></h3>
+<p class="caption" role="heading"><span class="caption-text">BBarolo:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../installing.html">Installing BBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../running.html">Running BBarolo</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">List of tasks and parameters</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="general.html">General parameters</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">3DFIT task</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#parameters">Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#outputs">Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example">Example</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#guidelines-for-a-successful-fit">Guidelines for a successful fit</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fitting-several-galaxies-at-the-same-time">Fitting several galaxies at the same time</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="spacepar.html">SPACEPAR task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="galmod.html">GALMOD task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="search.html">SEARCH task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="smooth.html">SMOOTH task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="smooth.html#smoothspec-task">SMOOTHSPEC task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fit2d.html">2DFIT task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ellprof.html">ELLPROF task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="moment.html">Moment maps and position-velocity cuts</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../fitsutils.html">Tools for FITS files</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">pyBBarolo:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../pybb_install.html">Installing pyBBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pybb_quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pybb_api.html">API</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License and citations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../troubleshooting.html">Troubleshooting</a></li>
+</ul>
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+<div id="sidebarbutton" title="Collapse sidebar">
+<span>«</span>
+</div>
+
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="spacepar.html" title="SPACEPAR task"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="general.html" title="General parameters"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">BBarolo 1.8 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="index.html" >List of tasks and parameters</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">3DFIT task</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2015, Enrico Di Teodoro.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>ELLPROF task &#8212; BBarolo 1.8 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../_static/classic.css?v=d6bdc565" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css" />
+    
+    <script src="../_static/documentation_options.js?v=b81e6271"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    
+    <script src="../_static/sidebar.js"></script>
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Moment maps and position-velocity cuts" href="moment.html" />
+    <link rel="prev" title="2DFIT task" href="fit2d.html" /> 
+  </head><body>
+<div style="background:#fff3cd;color:#5c3c00;border-bottom:1px solid #e0c97a;padding:8px 14px;font-family:sans-serif;font-size:14px;">
+<strong>BBarolo 1.8 (C++), archived.</strong> This is the documentation of the last C++ version, kept for reference.
+The current version is BBarolo 2, in pure Python: <a href="https://bbarolo.readthedocs.io/" style="color:#8b1a1a;">bbarolo.readthedocs.io</a>.
+</div>
+
+
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="moment.html" title="Moment maps and position-velocity cuts"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="fit2d.html" title="2DFIT task"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">BBarolo 1.8 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="index.html" accesskey="U">List of tasks and parameters</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">ELLPROF task</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="ellprof-task">
+<span id="ellproftask"></span><h1>ELLPROF task<a class="headerlink" href="#ellprof-task" title="Link to this heading">¶</a></h1>
+<p>This task can be used to calculate the radial density profile of a galaxy.</p>
+<section id="parameters">
+<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>ELLPROF</strong> [false]. This flag enables the radial profile task.</p></li>
+</ul>
+<p>Parameters for the task are: <strong>RADII</strong>, <strong>NRADII</strong>, <strong>RADSEP</strong>, <strong>XPOS</strong>, <strong>YPOS</strong>, <strong>PA</strong>, <strong>INC</strong>, <strong>SIDE</strong> (see <a class="reference internal" href="fit3d.html#dfit"><span class="std std-ref">3DFIT</span></a>). If <strong>FITSFILE</strong> is a datacube, the profile is calculated from the column density map calculated after masking the cube accordingly to the <strong>MASK</strong> parameter. If <strong>FITSFILE</strong> is a 2D intensity map, this is used to extract the profile.</p>
+</section>
+<section id="outputs">
+<h2>Outputs<a class="headerlink" href="#outputs" title="Link to this heading">¶</a></h2>
+<p>The task produces the following outputs. <em>NAME</em> is the name of the galaxy.</p>
+<ul class="simple">
+<li><p>A FITS file <em>NAME_densmap.fits</em> with the map used to extract the profile.</p></li>
+<li><p>A text file <em>NAME_densprof.txt</em>, containing with the radial profiles.</p></li>
+</ul>
+</section>
+<section id="example">
+<h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
+<p>An example <a class="reference download internal" download="" href="../_downloads/f6cfd4c0c2a46fc692a27a25b1c9d057/n2403_ellprof.par"><code class="xref download docutils literal notranslate"><span class="pre">parameter</span></code></a> file to extract the radial profile from the usual NGC2403 <a class="reference external" href="https://github.com/editeodoro/Bbarolo/raw/docs/docs/source/tasks/examples/ngc2403.fits">datacube</a>, given a set of rings.</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="n">FITSFILE</span><span class="w">    </span><span class="n">ngc2403</span><span class="p">.</span><span class="n">fits</span>
+
+<span class="c1">/////////// ELLPROF parameters /////////////</span>
+<span class="n">ELLPROF</span><span class="w">       </span><span class="nb">true</span>
+<span class="c1">// Input rings</span>
+<span class="n">NRADII</span><span class="w">      </span><span class="mi">41</span>
+<span class="n">RADSEP</span><span class="w">      </span><span class="mi">30</span><span class="w">     </span>
+<span class="n">XPOS</span><span class="w">        </span><span class="mi">77</span><span class="w">         </span>
+<span class="n">YPOS</span><span class="w">        </span><span class="mi">77</span><span class="w">     </span>
+<span class="n">INC</span><span class="w">         </span><span class="mi">60</span>
+<span class="n">PA</span><span class="w">          </span><span class="mf">123.7</span>
+<span class="c1">// Mask for extracting intensity map</span>
+<span class="n">MASK</span><span class="w">        </span><span class="n">SEARCH</span>
+<span class="c1">// Which side of the galaxy</span>
+<span class="n">SIDE</span><span class="w">        </span><span class="n">B</span>
+<span class="c1">///////////////////////////////////////////</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="../index.html">Table of Contents</a></h3>
+<p class="caption" role="heading"><span class="caption-text">BBarolo:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../installing.html">Installing BBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../running.html">Running BBarolo</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">List of tasks and parameters</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="general.html">General parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fit3d.html">3DFIT task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spacepar.html">SPACEPAR task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="galmod.html">GALMOD task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="search.html">SEARCH task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="smooth.html">SMOOTH task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="smooth.html#smoothspec-task">SMOOTHSPEC task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fit2d.html">2DFIT task</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">ELLPROF task</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#parameters">Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#outputs">Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example">Example</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="moment.html">Moment maps and position-velocity cuts</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../fitsutils.html">Tools for FITS files</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">pyBBarolo:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../pybb_install.html">Installing pyBBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pybb_quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pybb_api.html">API</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License and citations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../troubleshooting.html">Troubleshooting</a></li>
+</ul>
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+<div id="sidebarbutton" title="Collapse sidebar">
+<span>«</span>
+</div>
+
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="moment.html" title="Moment maps and position-velocity cuts"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="fit2d.html" title="2DFIT task"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">BBarolo 1.8 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="index.html" >List of tasks and parameters</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">ELLPROF task</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2015, Enrico Di Teodoro.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+    </div>
+  </body>
+</html>

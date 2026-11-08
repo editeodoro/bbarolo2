@@ -34,7 +34,7 @@ extensions = [
 ]
 source_suffix = {".md": "markdown", ".rst": "restructuredtext"}
 root_doc = "index"
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "_legacy", "_redirects", "Thumbs.db", ".DS_Store"]
 myst_enable_extensions = ["colon_fence", "dollarmath", "amsmath", "deflist", "attrs_inline", "substitution"]
 myst_heading_anchors = 3
 myst_substitutions = {"version": version}
@@ -49,6 +49,14 @@ pygments_dark_style = "github-dark"
 html_theme = "pydata_sphinx_theme"
 html_title = f"BBarolo {version}"
 html_static_path = ["_static"]
+# The archived documentation of the C++ BBarolo 1.8, served as it is at legacy/1.8/ (do not edit those HTML
+# files). Built once from the branch docs of github.com/editeodoro/Bbarolo (commit in legacy/1.8/BUILD.txt) with,
+# for the build only: ngc2403.fits left out (the pages link to the copy on GitHub), sphinx.ext.mathjax instead
+# of imgmath, no copies of the sources, a template _templates/layout.html that adds the banner
+# "BBarolo 1.8 (C++), archived" to every page, and the pyBBarolo of that branch on PYTHONPATH (API page).
+html_extra_path = ["_legacy", "_redirects"]
+# _redirects: the old pages of the C++ documentation (bbarolo.readthedocs.io before BBarolo 2) redirect to their
+# new places, so that links to them keep working.
 html_css_files = ["custom.css"]
 html_show_sourcelink = False
 html_theme_options = {

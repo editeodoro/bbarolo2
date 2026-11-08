@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>SPACEPAR task &#8212; BBarolo 1.8 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../_static/classic.css?v=d6bdc565" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css" />
+    
+    <script src="../_static/documentation_options.js?v=b81e6271"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    
+    <script src="../_static/sidebar.js"></script>
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="GALMOD task" href="galmod.html" />
+    <link rel="prev" title="3DFIT task" href="fit3d.html" /> 
+  </head><body>
+<div style="background:#fff3cd;color:#5c3c00;border-bottom:1px solid #e0c97a;padding:8px 14px;font-family:sans-serif;font-size:14px;">
+<strong>BBarolo 1.8 (C++), archived.</strong> This is the documentation of the last C++ version, kept for reference.
+The current version is BBarolo 2, in pure Python: <a href="https://bbarolo.readthedocs.io/" style="color:#8b1a1a;">bbarolo.readthedocs.io</a>.
+</div>
+
+
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="galmod.html" title="GALMOD task"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="fit3d.html" title="3DFIT task"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">BBarolo 1.8 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="index.html" accesskey="U">List of tasks and parameters</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">SPACEPAR task</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="spacepar-task">
+<span id="spacepartask"></span><h1>SPACEPAR task<a class="headerlink" href="#spacepar-task" title="Link to this heading">¶</a></h1>
+<p>SPACEPAR allows the user to explore the full parameter space for any pair of <a class="reference internal" href="fit3d.html#dfitopt"><span class="std std-ref">3DFIT</span></a> parameters in a given range. It is useful to check that 3DFIT is converging to a good enough minimum of the parameter space. It can be very slow to run, but it is particularly recommended for low quality observations and small data-cubes.</p>
+<section id="parameters">
+<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
+<p>Basic parameters for SPACEPAR are the same of the <a class="reference internal" href="fit3d.html#ringio"><span class="std std-ref">3DFIT task</span></a>. Additional specific parameters are:</p>
+<ul class="simple">
+<li><p><strong>SPACEPAR</strong> [false]. This flag enables the SPACEPAR task. Can be <em>true</em> or <em>false</em>.</p></li>
+<li><p><strong>P1</strong> [none]. First parameter to explore. Can be any of the 3DFIT <strong>FREE</strong> parameters.</p></li>
+<li><p><strong>P1PAR</strong> [none]. A list of three numbers: the minimum value, the maximum value and the step size of the parameter space sampling for <strong>P1</strong>. For example, ‘0 100 1’ samples between 0 and 100 with step size 1.</p></li>
+<li><p><strong>P2</strong> [none]. Second parameter to explore. Can be any of the 3DFIT <strong>FREE</strong> parameters.</p></li>
+<li><p><strong>P2PAR</strong> [none]. A list of three numbers: the minimum value, the maximum value and the step size of the parameter space sampling for <strong>P2</strong>. For example, ‘1 50 0.5’ samples between 1 and 50 with step size 0.5.</p></li>
+</ul>
+</section>
+<section id="outputs">
+<h2>Outputs<a class="headerlink" href="#outputs" title="Link to this heading">¶</a></h2>
+<p>The task produces the following outputs:</p>
+<ul class="simple">
+<li><p>A FITS file <em>NAME_spacepar.fits</em>, containing the full parameter space for each ring.</p></li>
+<li><p>A FITS file <em>mask.fits</em>, containing the mask used.</p></li>
+<li><p>A Python script <em>spacepar.py</em> to conveniently plot parameter spaces.</p></li>
+<li><p>A PDF file <em>NAME_spacepar.pdf</em> with the plots of parameter spaces for each ring (Python required), produced through the <em>spacepar.py</em> script.  Example below.</p></li>
+</ul>
+<figure class="align-center" style="width: 100%">
+<img alt="Spacepar plot" src="../_images/spacepar.png" />
+</figure>
+</section>
+<section id="example">
+<h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
+<p>Above outputs can be obtained with the following <a class="reference download internal" download="" href="../_downloads/0a05e5427aec31c464f471489c789d0e/n2403_spacepar.par"><code class="xref download docutils literal notranslate"><span class="pre">parameter</span></code></a> file and the usual example <a class="reference external" href="https://github.com/editeodoro/Bbarolo/raw/docs/docs/source/tasks/examples/ngc2403.fits">datacube</a>.</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="n">FITSFILE</span><span class="w">    </span><span class="n">ngc2403</span><span class="p">.</span><span class="n">fits</span>
+<span class="n">THREADS</span><span class="w">     </span><span class="mi">1</span>
+
+<span class="c1">/////////// SPACEPAR-specific /////////////</span>
+<span class="n">SPACEPAR</span><span class="w">    </span><span class="nb">true</span>
+<span class="c1">//First parameter</span>
+<span class="n">P1</span><span class="w">          </span><span class="n">VROT</span>
+<span class="c1">//Second parameter</span>
+<span class="n">P2</span><span class="w">          </span><span class="n">VDISP</span><span class="w">  </span>
+<span class="c1">//First parameter range </span>
+<span class="n">P1PAR</span><span class="w">       </span><span class="mi">0</span><span class="w"> </span><span class="mi">150</span><span class="w"> </span><span class="mi">2</span>
+<span class="c1">//Second parameter range</span>
+<span class="n">P2PAR</span><span class="w">       </span><span class="mi">0</span><span class="w"> </span><span class="mi">30</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span>
+<span class="c1">///////////////////////////////////////////</span>
+
+<span class="c1">// OTHER PARAMETERS IN COMMON WITH 3DFIT</span>
+<span class="n">NRADII</span><span class="w">      </span><span class="mi">8</span>
+<span class="n">RADSEP</span><span class="w">      </span><span class="mi">30</span><span class="w">     </span>
+<span class="n">VSYS</span><span class="w">        </span><span class="mf">132.8</span>
+<span class="n">XPOS</span><span class="w">        </span><span class="mi">77</span><span class="w">         </span>
+<span class="n">YPOS</span><span class="w">        </span><span class="mi">77</span><span class="w">     </span>
+<span class="n">VROT</span><span class="w">        </span><span class="mi">120</span><span class="w">  </span>
+<span class="n">VDISP</span><span class="w">       </span><span class="mi">8</span><span class="w">          </span>
+<span class="n">INC</span><span class="w">         </span><span class="mi">60</span>
+<span class="n">PA</span><span class="w">          </span><span class="mf">123.7</span>
+<span class="n">Z0</span><span class="w">          </span><span class="mi">10</span>
+<span class="n">FREE</span><span class="w">        </span><span class="n">VROT</span><span class="w"> </span><span class="n">VDISP</span>
+<span class="n">LTYPE</span><span class="w">       </span><span class="mi">2</span>
+<span class="n">FTYPE</span><span class="w">       </span><span class="mi">2</span>
+<span class="n">DISTANCE</span><span class="w">    </span><span class="mf">3.2</span>
+<span class="n">MASK</span><span class="w">        </span><span class="n">SEARCH</span>
+<span class="n">WFUNC</span><span class="w">       </span><span class="mi">2</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="../index.html">Table of Contents</a></h3>
+<p class="caption" role="heading"><span class="caption-text">BBarolo:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../installing.html">Installing BBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../running.html">Running BBarolo</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">List of tasks and parameters</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="general.html">General parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fit3d.html">3DFIT task</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">SPACEPAR task</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#parameters">Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#outputs">Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example">Example</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="galmod.html">GALMOD task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="search.html">SEARCH task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="smooth.html">SMOOTH task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="smooth.html#smoothspec-task">SMOOTHSPEC task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fit2d.html">2DFIT task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ellprof.html">ELLPROF task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="moment.html">Moment maps and position-velocity cuts</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../fitsutils.html">Tools for FITS files</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">pyBBarolo:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../pybb_install.html">Installing pyBBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pybb_quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pybb_api.html">API</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License and citations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../troubleshooting.html">Troubleshooting</a></li>
+</ul>
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+<div id="sidebarbutton" title="Collapse sidebar">
+<span>«</span>
+</div>
+
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="galmod.html" title="GALMOD task"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="fit3d.html" title="3DFIT task"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">BBarolo 1.8 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="index.html" >List of tasks and parameters</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">SPACEPAR task</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2015, Enrico Di Teodoro.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+    </div>
+  </body>
+</html>

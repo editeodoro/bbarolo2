@@ -28,6 +28,10 @@ BBarolo = "bbarolo.cli:main"
 
 [project.urls]
 Homepage = "https://bbarolo.readthedocs.io"
+Documentation = "https://bbarolo.readthedocs.io"
+Source = "https://github.com/editeodoro/bbarolo2"
+Issues = "https://github.com/editeodoro/bbarolo2/issues"
+Changelog = "https://bbarolo.readthedocs.io/en/latest/reference/changes.html"
 
 [tool.setuptools]
 packages = ["bbarolo", "bbarolo.bayesian"]

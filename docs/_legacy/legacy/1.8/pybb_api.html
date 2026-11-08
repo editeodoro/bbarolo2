@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>API &#8212; BBarolo 1.8 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css?v=d6bdc565" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css" />
+    
+    <script src="_static/documentation_options.js?v=b81e6271"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    
+    <script src="_static/sidebar.js"></script>
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="License and citations" href="license.html" />
+    <link rel="prev" title="Quickstart" href="pybb_quickstart.html" /> 
+  </head><body>
+<div style="background:#fff3cd;color:#5c3c00;border-bottom:1px solid #e0c97a;padding:8px 14px;font-family:sans-serif;font-size:14px;">
+<strong>BBarolo 1.8 (C++), archived.</strong> This is the documentation of the last C++ version, kept for reference.
+The current version is BBarolo 2, in pure Python: <a href="https://bbarolo.readthedocs.io/" style="color:#8b1a1a;">bbarolo.readthedocs.io</a>.
+</div>
+
+
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="license.html" title="License and citations"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="pybb_quickstart.html" title="Quickstart"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">BBarolo 1.8 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">API</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="module-pyBBarolo.pyBBarolo">
+<span id="api"></span><h1>API<a class="headerlink" href="#module-pyBBarolo.pyBBarolo" title="Link to this heading">¶</a></h1>
+<p>This module defines several classes to interface pyBBarolo with
+the underlying BBarolo C++ code, with some extra functionality.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Ellprof">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.pyBBarolo.</span></span><span class="sig-name descname"><span class="pre">Ellprof</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Ellprof"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Ellprof" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.pyBBarolo.Task" title="pyBBarolo.pyBBarolo.Task"><code class="xref py py-class docutils literal notranslate"><span class="pre">Task</span></code></a></p>
+<p>Find statistics over rings</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>fitsname (str): FITS file to fit with a 2D tilted-ring model</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Ellprof.compute">
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">threads</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Ellprof.compute" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the model</p>
+<p>This function needs to be called after <a class="reference internal" href="#pyBBarolo.pyBBarolo.Ellprof.init" title="pyBBarolo.pyBBarolo.Ellprof.init"><code class="xref py py-func docutils literal notranslate"><span class="pre">init()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Ellprof.init">
+<span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Ellprof.init" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize a task. Refer to derived class for <a href="#id1"><span class="problematic" id="id2">*</span></a>args and <a href="#id3"><span class="problematic" id="id4">**</span></a>kwargs.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Ellprof.set_arguments">
+<span class="sig-name descname"><span class="pre">set_arguments</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Ellprof.set_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id5"><span class="problematic" id="id6">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Ellprof.set_options">
+<span class="sig-name descname"><span class="pre">set_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Ellprof.set_options" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id7"><span class="problematic" id="id8">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Ellprof.show_arguments">
+<span class="sig-name descname"><span class="pre">show_arguments</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Ellprof.show_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Show needed arguments for the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Ellprof.show_options">
+<span class="sig-name descname"><span class="pre">show_options</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Ellprof.show_options" title="Link to this definition">¶</a></dt>
+<dd><p>Show current options for the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Ellprof.writeto">
+<span class="sig-name descname"><span class="pre">writeto</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Ellprof.writeto"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Ellprof.writeto" title="Link to this definition">¶</a></dt>
+<dd><p>Write the profiles to a text file</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod2D">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.pyBBarolo.</span></span><span class="sig-name descname"><span class="pre">FitMod2D</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#FitMod2D"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod2D" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.pyBBarolo.Task" title="pyBBarolo.pyBBarolo.Task"><code class="xref py py-class docutils literal notranslate"><span class="pre">Task</span></code></a></p>
+<p>Classic 2D tilted-ring model</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>fitsname (str): FITS file to fit with a 2D tilted-ring model</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod2D.compute">
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">threads</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod2D.compute" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the model</p>
+<p>This function needs to be called after <a class="reference internal" href="#pyBBarolo.pyBBarolo.FitMod2D.init" title="pyBBarolo.pyBBarolo.FitMod2D.init"><code class="xref py py-func docutils literal notranslate"><span class="pre">init()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod2D.init">
+<span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod2D.init" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize a task. Refer to derived class for <a href="#id9"><span class="problematic" id="id10">*</span></a>args and <a href="#id11"><span class="problematic" id="id12">**</span></a>kwargs.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod2D.set_arguments">
+<span class="sig-name descname"><span class="pre">set_arguments</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod2D.set_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id13"><span class="problematic" id="id14">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod2D.set_options">
+<span class="sig-name descname"><span class="pre">set_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod2D.set_options" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id15"><span class="problematic" id="id16">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod2D.show_arguments">
+<span class="sig-name descname"><span class="pre">show_arguments</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod2D.show_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Show needed arguments for the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod2D.show_options">
+<span class="sig-name descname"><span class="pre">show_options</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod2D.show_options" title="Link to this definition">¶</a></dt>
+<dd><p>Show current options for the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod2D.writeto">
+<span class="sig-name descname"><span class="pre">writeto</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#FitMod2D.writeto"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod2D.writeto" title="Link to this definition">¶</a></dt>
+<dd><p>Write the best-fit ring model to a text file</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod3D">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.pyBBarolo.</span></span><span class="sig-name descname"><span class="pre">FitMod3D</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#FitMod3D"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod3D" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.pyBBarolo.Model3D" title="pyBBarolo.pyBBarolo.Model3D"><code class="xref py py-class docutils literal notranslate"><span class="pre">Model3D</span></code></a></p>
+<p>Fit a galaxy model to a 3D datacube</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>fitsname (str): FITS file of the galaxy to fit</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod3D.compute">
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">threads</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod3D.compute" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the model</p>
+<p>This function needs to be called after <a class="reference internal" href="#pyBBarolo.pyBBarolo.FitMod3D.init" title="pyBBarolo.pyBBarolo.FitMod3D.init"><code class="xref py py-func docutils literal notranslate"><span class="pre">init()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod3D.init">
+<span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod3D.init" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize a task. Refer to derived class for <a href="#id17"><span class="problematic" id="id18">*</span></a>args and <a href="#id19"><span class="problematic" id="id20">**</span></a>kwargs.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod3D.plot_model">
+<span class="sig-name descname"><span class="pre">plot_model</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#FitMod3D.plot_model"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod3D.plot_model" title="Link to this definition">¶</a></dt>
+<dd><p>Plot the model using BBarolo built-in output functions.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod3D.set_arguments">
+<span class="sig-name descname"><span class="pre">set_arguments</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod3D.set_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id21"><span class="problematic" id="id22">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod3D.set_beam">
+<span class="sig-name descname"><span class="pre">set_beam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bmaj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bmin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bpa</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod3D.set_beam" title="Link to this definition">¶</a></dt>
+<dd><p>Change the Beam parameters</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>bmaj (float): Beam major axis in arcsec
+bmin (float): Beam minor axis in arcsec
+bpa  (float): Beam position angle in degrees (default 0.0)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod3D.set_options">
+<span class="sig-name descname"><span class="pre">set_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod3D.set_options" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id23"><span class="problematic" id="id24">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod3D.show_arguments">
+<span class="sig-name descname"><span class="pre">show_arguments</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod3D.show_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Show needed arguments for the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod3D.show_options">
+<span class="sig-name descname"><span class="pre">show_options</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod3D.show_options" title="Link to this definition">¶</a></dt>
+<dd><p>Show current options for the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitMod3D.smooth">
+<span class="sig-name descname"><span class="pre">smooth</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">beam</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitMod3D.smooth" title="Link to this definition">¶</a></dt>
+<dd><p>Smooth the model and return the smoothed array</p>
+<p>This function needs to be called after <a class="reference internal" href="#pyBBarolo.pyBBarolo.FitMod3D.compute" title="pyBBarolo.pyBBarolo.FitMod3D.compute"><code class="xref py py-func docutils literal notranslate"><span class="pre">compute()</span></code></a>. The smoothed array is written
+in outmodel instance and returned.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><dl class="simple">
+<dt>beam (tuple,list): The beam in the form (bmaj,bmin,bpa), bmaj and bmin in arcs.</dt><dd><p>If None, use the beam from the FITS header.</p>
+</dd>
+</dl>
+</dd>
+<dt>Returns:</dt><dd><p>astropy PrimaryHDU: a datacube with the output smoothed model</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitsCube">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.pyBBarolo.</span></span><span class="sig-name descname"><span class="pre">FitsCube</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">astropy_pointer</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#FitsCube"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitsCube" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/builtins/functions.html#object" title="(in Python v3.15)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.FitsCube.setBeam">
+<span class="sig-name descname"><span class="pre">setBeam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bmaj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bmin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bpa</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#FitsCube.setBeam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.FitsCube.setBeam" title="Link to this definition">¶</a></dt>
+<dd><p>Change the Beam parameters</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>bmaj (float): Beam major axis in degrees
+bmin (float): Beam minor axis in degrees
+bpa  (float): Beam position angle in degrees (default 0.0)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalMod">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.pyBBarolo.</span></span><span class="sig-name descname"><span class="pre">GalMod</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#GalMod"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalMod" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.pyBBarolo.Model3D" title="pyBBarolo.pyBBarolo.Model3D"><code class="xref py py-class docutils literal notranslate"><span class="pre">Model3D</span></code></a></p>
+<p>Produce a simulated 3D datacube of disk galaxy</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>fitsname (str): FITS file of the galaxy to model</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalMod.compute">
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">threads</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalMod.compute" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the model</p>
+<p>This function needs to be called after <a class="reference internal" href="#pyBBarolo.pyBBarolo.GalMod.init" title="pyBBarolo.pyBBarolo.GalMod.init"><code class="xref py py-func docutils literal notranslate"><span class="pre">init()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalMod.init">
+<span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalMod.init" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize a task. Refer to derived class for <a href="#id25"><span class="problematic" id="id26">*</span></a>args and <a href="#id27"><span class="problematic" id="id28">**</span></a>kwargs.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalMod.set_arguments">
+<span class="sig-name descname"><span class="pre">set_arguments</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalMod.set_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id29"><span class="problematic" id="id30">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalMod.set_beam">
+<span class="sig-name descname"><span class="pre">set_beam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bmaj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bmin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bpa</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalMod.set_beam" title="Link to this definition">¶</a></dt>
+<dd><p>Change the Beam parameters</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>bmaj (float): Beam major axis in arcsec
+bmin (float): Beam minor axis in arcsec
+bpa  (float): Beam position angle in degrees (default 0.0)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalMod.set_options">
+<span class="sig-name descname"><span class="pre">set_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalMod.set_options" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id31"><span class="problematic" id="id32">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalMod.show_arguments">
+<span class="sig-name descname"><span class="pre">show_arguments</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalMod.show_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Show needed arguments for the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalMod.show_options">
+<span class="sig-name descname"><span class="pre">show_options</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalMod.show_options" title="Link to this definition">¶</a></dt>
+<dd><p>Show current options for the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalMod.smooth">
+<span class="sig-name descname"><span class="pre">smooth</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">beam</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalMod.smooth" title="Link to this definition">¶</a></dt>
+<dd><p>Smooth the model and return the smoothed array</p>
+<p>This function needs to be called after <a class="reference internal" href="#pyBBarolo.pyBBarolo.GalMod.compute" title="pyBBarolo.pyBBarolo.GalMod.compute"><code class="xref py py-func docutils literal notranslate"><span class="pre">compute()</span></code></a>. The smoothed array is written
+in outmodel instance and returned.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><dl class="simple">
+<dt>beam (tuple,list): The beam in the form (bmaj,bmin,bpa), bmaj and bmin in arcs.</dt><dd><p>If None, use the beam from the FITS header.</p>
+</dd>
+</dl>
+</dd>
+<dt>Returns:</dt><dd><p>astropy PrimaryHDU: a datacube with the output smoothed model</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalWind">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.pyBBarolo.</span></span><span class="sig-name descname"><span class="pre">GalWind</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#GalWind"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalWind" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.pyBBarolo.Model3D" title="pyBBarolo.pyBBarolo.Model3D"><code class="xref py py-class docutils literal notranslate"><span class="pre">Model3D</span></code></a></p>
+<p>Produce a simulated 3D datacube of a biconical outflow</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>fitsname (str): FITS file of the galaxy to fit</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalWind.compute">
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">threads</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalWind.compute" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the model</p>
+<p>This function needs to be called after <a class="reference internal" href="#pyBBarolo.pyBBarolo.GalWind.init" title="pyBBarolo.pyBBarolo.GalWind.init"><code class="xref py py-func docutils literal notranslate"><span class="pre">init()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalWind.init">
+<span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalWind.init" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize a task. Refer to derived class for <a href="#id33"><span class="problematic" id="id34">*</span></a>args and <a href="#id35"><span class="problematic" id="id36">**</span></a>kwargs.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalWind.set_arguments">
+<span class="sig-name descname"><span class="pre">set_arguments</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalWind.set_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id37"><span class="problematic" id="id38">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalWind.set_beam">
+<span class="sig-name descname"><span class="pre">set_beam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bmaj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bmin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bpa</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalWind.set_beam" title="Link to this definition">¶</a></dt>
+<dd><p>Change the Beam parameters</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>bmaj (float): Beam major axis in arcsec
+bmin (float): Beam minor axis in arcsec
+bpa  (float): Beam position angle in degrees (default 0.0)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalWind.set_options">
+<span class="sig-name descname"><span class="pre">set_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalWind.set_options" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id39"><span class="problematic" id="id40">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalWind.show_arguments">
+<span class="sig-name descname"><span class="pre">show_arguments</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalWind.show_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Show needed arguments for the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalWind.show_options">
+<span class="sig-name descname"><span class="pre">show_options</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalWind.show_options" title="Link to this definition">¶</a></dt>
+<dd><p>Show current options for the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.GalWind.smooth">
+<span class="sig-name descname"><span class="pre">smooth</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">beam</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.GalWind.smooth" title="Link to this definition">¶</a></dt>
+<dd><p>Smooth the model and return the smoothed array</p>
+<p>This function needs to be called after <a class="reference internal" href="#pyBBarolo.pyBBarolo.GalWind.compute" title="pyBBarolo.pyBBarolo.GalWind.compute"><code class="xref py py-func docutils literal notranslate"><span class="pre">compute()</span></code></a>. The smoothed array is written
+in outmodel instance and returned.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><dl class="simple">
+<dt>beam (tuple,list): The beam in the form (bmaj,bmin,bpa), bmaj and bmin in arcs.</dt><dd><p>If None, use the beam from the FITS header.</p>
+</dd>
+</dl>
+</dd>
+<dt>Returns:</dt><dd><p>astropy PrimaryHDU: a datacube with the output smoothed model</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Model3D">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.pyBBarolo.</span></span><span class="sig-name descname"><span class="pre">Model3D</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Model3D"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Model3D" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.pyBBarolo.Task" title="pyBBarolo.pyBBarolo.Task"><code class="xref py py-class docutils literal notranslate"><span class="pre">Task</span></code></a></p>
+<p>Superclass for all 3D models, derived from Task</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>fitsname (str): FITS file of the galaxy to model</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Model3D.compute">
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">threads</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Model3D.compute" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the model</p>
+<p>This function needs to be called after <a class="reference internal" href="#pyBBarolo.pyBBarolo.Model3D.init" title="pyBBarolo.pyBBarolo.Model3D.init"><code class="xref py py-func docutils literal notranslate"><span class="pre">init()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Model3D.init">
+<span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Model3D.init" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize a task. Refer to derived class for <a href="#id41"><span class="problematic" id="id42">*</span></a>args and <a href="#id43"><span class="problematic" id="id44">**</span></a>kwargs.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Model3D.set_arguments">
+<span class="sig-name descname"><span class="pre">set_arguments</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Model3D.set_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id45"><span class="problematic" id="id46">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Model3D.set_beam">
+<span class="sig-name descname"><span class="pre">set_beam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bmaj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bmin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bpa</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Model3D.set_beam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Model3D.set_beam" title="Link to this definition">¶</a></dt>
+<dd><p>Change the Beam parameters</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>bmaj (float): Beam major axis in arcsec
+bmin (float): Beam minor axis in arcsec
+bpa  (float): Beam position angle in degrees (default 0.0)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Model3D.set_options">
+<span class="sig-name descname"><span class="pre">set_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Model3D.set_options" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id47"><span class="problematic" id="id48">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Model3D.show_arguments">
+<span class="sig-name descname"><span class="pre">show_arguments</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Model3D.show_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Show needed arguments for the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Model3D.show_options">
+<span class="sig-name descname"><span class="pre">show_options</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Model3D.show_options" title="Link to this definition">¶</a></dt>
+<dd><p>Show current options for the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Model3D.smooth">
+<span class="sig-name descname"><span class="pre">smooth</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">beam</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Model3D.smooth"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Model3D.smooth" title="Link to this definition">¶</a></dt>
+<dd><p>Smooth the model and return the smoothed array</p>
+<p>This function needs to be called after <a class="reference internal" href="#pyBBarolo.pyBBarolo.Model3D.compute" title="pyBBarolo.pyBBarolo.Model3D.compute"><code class="xref py py-func docutils literal notranslate"><span class="pre">compute()</span></code></a>. The smoothed array is written
+in outmodel instance and returned.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><dl class="simple">
+<dt>beam (tuple,list): The beam in the form (bmaj,bmin,bpa), bmaj and bmin in arcs.</dt><dd><p>If None, use the beam from the FITS header.</p>
+</dd>
+</dl>
+</dd>
+<dt>Returns:</dt><dd><p>astropy PrimaryHDU: a datacube with the output smoothed model</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Param">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.pyBBarolo.</span></span><span class="sig-name descname"><span class="pre">Param</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Param"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Param" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/builtins/functions.html#object" title="(in Python v3.15)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Wrapper class for C++ Param class (param.hh)</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Param.add_params">
+<span class="sig-name descname"><span class="pre">add_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Param.add_params"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Param.add_params" title="Link to this definition">¶</a></dt>
+<dd><p>Add new parameter to the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Param.add_params_opts">
+<span class="sig-name descname"><span class="pre">add_params_opts</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Param.add_params_opts"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Param.add_params_opts" title="Link to this definition">¶</a></dt>
+<dd><p>Add new parameter to the parameter list from _opts variable</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Param.make_object">
+<span class="sig-name descname"><span class="pre">make_object</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Param.make_object"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Param.make_object" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Param.remove_param">
+<span class="sig-name descname"><span class="pre">remove_param</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">toremove</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Param.remove_param"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Param.remove_param" title="Link to this definition">¶</a></dt>
+<dd><p>Remove an option from the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Param.write_parameterfile">
+<span class="sig-name descname"><span class="pre">write_parameterfile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fileout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'param.par'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Param.write_parameterfile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Param.write_parameterfile" title="Link to this definition">¶</a></dt>
+<dd><p>Write a BBarolo’s parameter file in fileout</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Rings">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.pyBBarolo.</span></span><span class="sig-name descname"><span class="pre">Rings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nrings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Rings"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Rings" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/builtins/functions.html#object" title="(in Python v3.15)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Wrapper class for C++ Rings structure (rings.hh)</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Rings.make_object">
+<span class="sig-name descname"><span class="pre">make_object</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Rings.make_object"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Rings.make_object" title="Link to this definition">¶</a></dt>
+<dd><p>Creates and stores the C++ Rings object</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Rings.modify_parameter">
+<span class="sig-name descname"><span class="pre">modify_parameter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pname</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pvalue</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">makeobj</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Rings.modify_parameter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Rings.modify_parameter" title="Link to this definition">¶</a></dt>
+<dd><p>Modifies one of the ring parameters (e.g., vrot, vdisp, etc.)</p>
+<p>pname (str): Name of the parameter
+other: float or array</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Rings.set_rings">
+<span class="sig-name descname"><span class="pre">set_rings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">radii</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xpos</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ypos</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vsys</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vrot</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vdisp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vrad</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vvert</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dvdz</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">zcyl</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dens</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">z0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phi</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Rings.set_rings"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Rings.set_rings" title="Link to this definition">¶</a></dt>
+<dd><p>Define rings given the input parameters</p>
+<p>radii: List or array
+other: float or array</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Rings.set_rings_from_dict">
+<span class="sig-name descname"><span class="pre">set_rings_from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Rings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Rings.set_rings_from_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Rings.set_rings_from_dict" title="Link to this definition">¶</a></dt>
+<dd><p>Define rings given an input Ring dictionary (same as self.r)</p>
+<p>Rings: dict</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Search">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.pyBBarolo.</span></span><span class="sig-name descname"><span class="pre">Search</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Search"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Search" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.pyBBarolo.Task" title="pyBBarolo.pyBBarolo.Task"><code class="xref py py-class docutils literal notranslate"><span class="pre">Task</span></code></a></p>
+<p>3D Source finder</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>fitsname (str): FITS file to search for sources</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Search.compute">
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">threads</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Search.compute" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the model</p>
+<p>This function needs to be called after <a class="reference internal" href="#pyBBarolo.pyBBarolo.Search.init" title="pyBBarolo.pyBBarolo.Search.init"><code class="xref py py-func docutils literal notranslate"><span class="pre">init()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Search.init">
+<span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Search.init" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize a task. Refer to derived class for <a href="#id49"><span class="problematic" id="id50">*</span></a>args and <a href="#id51"><span class="problematic" id="id52">**</span></a>kwargs.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Search.search">
+<span class="sig-name descname"><span class="pre">search</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">threads</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Search.search"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Search.search" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Search.set_arguments">
+<span class="sig-name descname"><span class="pre">set_arguments</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Search.set_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id53"><span class="problematic" id="id54">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Search.set_options">
+<span class="sig-name descname"><span class="pre">set_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Search.set_options" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id55"><span class="problematic" id="id56">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Search.show_arguments">
+<span class="sig-name descname"><span class="pre">show_arguments</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Search.show_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Show needed arguments for the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Search.show_options">
+<span class="sig-name descname"><span class="pre">show_options</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.Search.show_options" title="Link to this definition">¶</a></dt>
+<dd><p>Show current options for the task</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.SpectralSmoothing">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.pyBBarolo.</span></span><span class="sig-name descname"><span class="pre">SpectralSmoothing</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#SpectralSmoothing"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.SpectralSmoothing" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.pyBBarolo.Task" title="pyBBarolo.pyBBarolo.Task"><code class="xref py py-class docutils literal notranslate"><span class="pre">Task</span></code></a></p>
+<p>Spectral smoothing of a datacube with a filtering window.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>fitsname (str): FITS file to fit with a 2D tilted-ring model</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.SpectralSmoothing.compute">
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">threads</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.SpectralSmoothing.compute" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the model</p>
+<p>This function needs to be called after <a class="reference internal" href="#pyBBarolo.pyBBarolo.SpectralSmoothing.init" title="pyBBarolo.pyBBarolo.SpectralSmoothing.init"><code class="xref py py-func docutils literal notranslate"><span class="pre">init()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.SpectralSmoothing.init">
+<span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.SpectralSmoothing.init" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize a task. Refer to derived class for <a href="#id57"><span class="problematic" id="id58">*</span></a>args and <a href="#id59"><span class="problematic" id="id60">**</span></a>kwargs.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.SpectralSmoothing.set_arguments">
+<span class="sig-name descname"><span class="pre">set_arguments</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.SpectralSmoothing.set_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id61"><span class="problematic" id="id62">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.SpectralSmoothing.set_options">
+<span class="sig-name descname"><span class="pre">set_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.SpectralSmoothing.set_options" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id63"><span class="problematic" id="id64">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.SpectralSmoothing.show_arguments">
+<span class="sig-name descname"><span class="pre">show_arguments</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.SpectralSmoothing.show_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Show needed arguments for the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.SpectralSmoothing.show_options">
+<span class="sig-name descname"><span class="pre">show_options</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.SpectralSmoothing.show_options" title="Link to this definition">¶</a></dt>
+<dd><p>Show current options for the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.SpectralSmoothing.smooth">
+<span class="sig-name descname"><span class="pre">smooth</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">window_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'hanning'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">window_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threads</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#SpectralSmoothing.smooth"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.SpectralSmoothing.smooth" title="Link to this definition">¶</a></dt>
+<dd><p>Compute an smoothed 3D array</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>window_type (str): type of filtering window (hanning,bartlett,welch,flattop,boxcar,blackman)
+window_size (int): width of the window (it has to be an odd number)
+threads (int):     number of cpus to use for computation.</p>
+</dd>
+</dl>
+<p>Returns:
+a 3D spectrally-smoothed array</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.SpectralSmoothing.writeto">
+<span class="sig-name descname"><span class="pre">writeto</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">average</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#SpectralSmoothing.writeto"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.SpectralSmoothing.writeto" title="Link to this definition">¶</a></dt>
+<dd><p>Write the spectrally-smoothed 3D array to a FITS file</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>filename (str): name of output FITS file
+average (bool): if true, average over window_size channels</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Task">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.pyBBarolo.</span></span><span class="sig-name descname"><span class="pre">Task</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Task"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Task" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/builtins/functions.html#object" title="(in Python v3.15)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Superclass for all BBarolo tasks</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>fitsname (str): Input FITS file</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Task.compute">
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">threads</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Task.compute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Task.compute" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the model</p>
+<p>This function needs to be called after <a class="reference internal" href="#pyBBarolo.pyBBarolo.Task.init" title="pyBBarolo.pyBBarolo.Task.init"><code class="xref py py-func docutils literal notranslate"><span class="pre">init()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Task.init">
+<span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Task.init"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Task.init" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize a task. Refer to derived class for <a href="#id65"><span class="problematic" id="id66">*</span></a>args and <a href="#id67"><span class="problematic" id="id68">**</span></a>kwargs.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Task.set_arguments">
+<span class="sig-name descname"><span class="pre">set_arguments</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Task.set_arguments"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Task.set_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id69"><span class="problematic" id="id70">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Task.set_options">
+<span class="sig-name descname"><span class="pre">set_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Task.set_options"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Task.set_options" title="Link to this definition">¶</a></dt>
+<dd><p>Set options for the task. Keywords <a href="#id71"><span class="problematic" id="id72">**</span></a>kwargs are given in self._opts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Task.show_arguments">
+<span class="sig-name descname"><span class="pre">show_arguments</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Task.show_arguments"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Task.show_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Show needed arguments for the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.Task.show_options">
+<span class="sig-name descname"><span class="pre">show_options</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#Task.show_options"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.Task.show_options" title="Link to this definition">¶</a></dt>
+<dd><p>Show current options for the task</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.isIterable">
+<span class="sig-prename descclassname"><span class="pre">pyBBarolo.pyBBarolo.</span></span><span class="sig-name descname"><span class="pre">isIterable</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#isIterable"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.isIterable" title="Link to this definition">¶</a></dt>
+<dd><p>Check if p is an iteratable (list,tuple or numpy array).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.isNumber">
+<span class="sig-prename descclassname"><span class="pre">pyBBarolo.pyBBarolo.</span></span><span class="sig-name descname"><span class="pre">isNumber</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#isNumber"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.isNumber" title="Link to this definition">¶</a></dt>
+<dd><p>Check if p is an iteratable (list,tuple or numpy array).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.reshapePointer">
+<span class="sig-prename descclassname"><span class="pre">pyBBarolo.pyBBarolo.</span></span><span class="sig-name descname"><span class="pre">reshapePointer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/pyBBarolo.html#reshapePointer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.pyBBarolo.reshapePointer" title="Link to this definition">¶</a></dt>
+<dd><p>Take a POINTER to c_float and reshape it.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>p (POINTER(c_float)): The pointer to be reshaped
+shape (tuple, list): The new shape of the array</p>
+</dd>
+<dt>Returns:</dt><dd><p>ndarray: The reshaped array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pyBBarolo.pyBBarolo.vprint">
+<span class="sig-prename descclassname"><span class="pre">pyBBarolo.pyBBarolo.</span></span><span class="sig-name descname"><span class="pre">vprint</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">verbose</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.pyBBarolo.vprint" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p id="module-pyBBarolo.wrapper">This module defines a few classes to call BBarolo C++ executable</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.BBaroloWrapper">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.wrapper.</span></span><span class="sig-name descname"><span class="pre">BBaroloWrapper</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#BBaroloWrapper"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.BBaroloWrapper" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/builtins/functions.html#object" title="(in Python v3.15)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>A class to directly call BBarolo given some parameters</p>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">¶</a></h2>
+<dl class="simple">
+<dt>opts: (dict)</dt><dd><p>A dictionary {param : value} with stored BBarolo’s parameters.</p>
+</dd>
+</dl>
+</section>
+<section id="methods">
+<h2>Methods<a class="headerlink" href="#methods" title="Link to this heading">¶</a></h2>
+<dl class="simple">
+<dt>add_options(<a href="#id73"><span class="problematic" id="id74">**</span></a>kwargs):</dt><dd><p>Add new options to the opts attribute</p>
+</dd>
+<dt>remove_option(toremove):</dt><dd><p>Remove a previously added option from opts list</p>
+</dd>
+<dt>run(exe=None,stdout=None):</dt><dd><p>Run BBarolo after checking that the executable exists and stdout</p>
+</dd>
+<dt>run_nochecks(exe=’BBarolo’,stdout=subprocess.DEVNULL):</dt><dd><p>Run BBarolo without any checks</p>
+</dd>
+<dt>write_parameterfile(fileout=’param.par’):</dt><dd><p>Write a parameter file with the parameters stored in the class</p>
+</dd>
+<dt>reset():</dt><dd><p>Reset BBarolo’s options to an empty list</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.BBaroloWrapper.add_options">
+<span class="sig-name descname"><span class="pre">add_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#BBaroloWrapper.add_options"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.BBaroloWrapper.add_options" title="Link to this definition">¶</a></dt>
+<dd><p>Add new options to the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.BBaroloWrapper.remove_option">
+<span class="sig-name descname"><span class="pre">remove_option</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">toremove</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#BBaroloWrapper.remove_option"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.BBaroloWrapper.remove_option" title="Link to this definition">¶</a></dt>
+<dd><p>Remove an option from the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.BBaroloWrapper.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#BBaroloWrapper.reset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.BBaroloWrapper.reset" title="Link to this definition">¶</a></dt>
+<dd><p>Reset options</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.BBaroloWrapper.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#BBaroloWrapper.run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.BBaroloWrapper.run" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with the given parameters after checking executable and stdout</p>
+<dl>
+<dt>Args:</dt><dd><p>exe (str):      Path to BBarolo executable. If None, search in $PATH
+stdout (str):   How to report BBarolo’s messages.</p>
+<blockquote>
+<div><p>None=screen, str=file, ‘null’=NULL</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.BBaroloWrapper.run_nochecks">
+<span class="sig-name descname"><span class="pre">run_nochecks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/claude-1008/-SSD-claudio-bbarolo/fcc87b8d-0eac-48c4-a71f-b556bf331802/scratchpad/legacy/src/pyBBarolo/BBarolo'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-3</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#BBaroloWrapper.run_nochecks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.BBaroloWrapper.run_nochecks" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with no further checks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.BBaroloWrapper.write_parameterfile">
+<span class="sig-name descname"><span class="pre">write_parameterfile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fileout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'param.par'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#BBaroloWrapper.write_parameterfile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.BBaroloWrapper.write_parameterfile" title="Link to this definition">¶</a></dt>
+<dd><p>Write a BBarolo’s parameter file in fileout</p>
+</dd></dl>
+
+</section>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.EllProf">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.wrapper.</span></span><span class="sig-name descname"><span class="pre">EllProf</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#EllProf"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.EllProf" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.wrapper.GenericTask" title="pyBBarolo.wrapper.GenericTask"><code class="xref py py-class docutils literal notranslate"><span class="pre">GenericTask</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.EllProf.add_options">
+<span class="sig-name descname"><span class="pre">add_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.EllProf.add_options" title="Link to this definition">¶</a></dt>
+<dd><p>Add new options to the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.EllProf.remove_option">
+<span class="sig-name descname"><span class="pre">remove_option</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">toremove</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.EllProf.remove_option" title="Link to this definition">¶</a></dt>
+<dd><p>Remove an option from the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.EllProf.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.EllProf.reset" title="Link to this definition">¶</a></dt>
+<dd><p>Reset options</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.EllProf.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.EllProf.run" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with the given parameters after checking executable and stdout</p>
+<dl>
+<dt>Args:</dt><dd><p>exe (str):      Path to BBarolo executable. If None, search in $PATH
+stdout (str):   How to report BBarolo’s messages.</p>
+<blockquote>
+<div><p>None=screen, str=file, ‘null’=NULL</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.EllProf.run_nochecks">
+<span class="sig-name descname"><span class="pre">run_nochecks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/claude-1008/-SSD-claudio-bbarolo/fcc87b8d-0eac-48c4-a71f-b556bf331802/scratchpad/legacy/src/pyBBarolo/BBarolo'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-3</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.EllProf.run_nochecks" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with no further checks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.EllProf.write_parameterfile">
+<span class="sig-name descname"><span class="pre">write_parameterfile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fileout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'param.par'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.EllProf.write_parameterfile" title="Link to this definition">¶</a></dt>
+<dd><p>Write a BBarolo’s parameter file in fileout</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.FitMod2D">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.wrapper.</span></span><span class="sig-name descname"><span class="pre">FitMod2D</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#FitMod2D"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.FitMod2D" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.wrapper.GenericTask" title="pyBBarolo.wrapper.GenericTask"><code class="xref py py-class docutils literal notranslate"><span class="pre">GenericTask</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.FitMod2D.add_options">
+<span class="sig-name descname"><span class="pre">add_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.FitMod2D.add_options" title="Link to this definition">¶</a></dt>
+<dd><p>Add new options to the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.FitMod2D.remove_option">
+<span class="sig-name descname"><span class="pre">remove_option</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">toremove</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.FitMod2D.remove_option" title="Link to this definition">¶</a></dt>
+<dd><p>Remove an option from the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.FitMod2D.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.FitMod2D.reset" title="Link to this definition">¶</a></dt>
+<dd><p>Reset options</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.FitMod2D.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.FitMod2D.run" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with the given parameters after checking executable and stdout</p>
+<dl>
+<dt>Args:</dt><dd><p>exe (str):      Path to BBarolo executable. If None, search in $PATH
+stdout (str):   How to report BBarolo’s messages.</p>
+<blockquote>
+<div><p>None=screen, str=file, ‘null’=NULL</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.FitMod2D.run_nochecks">
+<span class="sig-name descname"><span class="pre">run_nochecks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/claude-1008/-SSD-claudio-bbarolo/fcc87b8d-0eac-48c4-a71f-b556bf331802/scratchpad/legacy/src/pyBBarolo/BBarolo'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-3</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.FitMod2D.run_nochecks" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with no further checks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.FitMod2D.write_parameterfile">
+<span class="sig-name descname"><span class="pre">write_parameterfile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fileout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'param.par'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.FitMod2D.write_parameterfile" title="Link to this definition">¶</a></dt>
+<dd><p>Write a BBarolo’s parameter file in fileout</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.FitMod3D">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.wrapper.</span></span><span class="sig-name descname"><span class="pre">FitMod3D</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#FitMod3D"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.FitMod3D" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.wrapper.GenericTask" title="pyBBarolo.wrapper.GenericTask"><code class="xref py py-class docutils literal notranslate"><span class="pre">GenericTask</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.FitMod3D.add_options">
+<span class="sig-name descname"><span class="pre">add_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.FitMod3D.add_options" title="Link to this definition">¶</a></dt>
+<dd><p>Add new options to the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.FitMod3D.remove_option">
+<span class="sig-name descname"><span class="pre">remove_option</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">toremove</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.FitMod3D.remove_option" title="Link to this definition">¶</a></dt>
+<dd><p>Remove an option from the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.FitMod3D.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.FitMod3D.reset" title="Link to this definition">¶</a></dt>
+<dd><p>Reset options</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.FitMod3D.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.FitMod3D.run" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with the given parameters after checking executable and stdout</p>
+<dl>
+<dt>Args:</dt><dd><p>exe (str):      Path to BBarolo executable. If None, search in $PATH
+stdout (str):   How to report BBarolo’s messages.</p>
+<blockquote>
+<div><p>None=screen, str=file, ‘null’=NULL</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.FitMod3D.run_nochecks">
+<span class="sig-name descname"><span class="pre">run_nochecks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/claude-1008/-SSD-claudio-bbarolo/fcc87b8d-0eac-48c4-a71f-b556bf331802/scratchpad/legacy/src/pyBBarolo/BBarolo'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-3</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.FitMod3D.run_nochecks" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with no further checks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.FitMod3D.write_parameterfile">
+<span class="sig-name descname"><span class="pre">write_parameterfile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fileout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'param.par'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.FitMod3D.write_parameterfile" title="Link to this definition">¶</a></dt>
+<dd><p>Write a BBarolo’s parameter file in fileout</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GalMod">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.wrapper.</span></span><span class="sig-name descname"><span class="pre">GalMod</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#GalMod"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.GalMod" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.wrapper.GenericTask" title="pyBBarolo.wrapper.GenericTask"><code class="xref py py-class docutils literal notranslate"><span class="pre">GenericTask</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GalMod.add_options">
+<span class="sig-name descname"><span class="pre">add_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GalMod.add_options" title="Link to this definition">¶</a></dt>
+<dd><p>Add new options to the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GalMod.remove_option">
+<span class="sig-name descname"><span class="pre">remove_option</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">toremove</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GalMod.remove_option" title="Link to this definition">¶</a></dt>
+<dd><p>Remove an option from the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GalMod.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GalMod.reset" title="Link to this definition">¶</a></dt>
+<dd><p>Reset options</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GalMod.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GalMod.run" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with the given parameters after checking executable and stdout</p>
+<dl>
+<dt>Args:</dt><dd><p>exe (str):      Path to BBarolo executable. If None, search in $PATH
+stdout (str):   How to report BBarolo’s messages.</p>
+<blockquote>
+<div><p>None=screen, str=file, ‘null’=NULL</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GalMod.run_nochecks">
+<span class="sig-name descname"><span class="pre">run_nochecks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/claude-1008/-SSD-claudio-bbarolo/fcc87b8d-0eac-48c4-a71f-b556bf331802/scratchpad/legacy/src/pyBBarolo/BBarolo'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-3</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GalMod.run_nochecks" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with no further checks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GalMod.write_parameterfile">
+<span class="sig-name descname"><span class="pre">write_parameterfile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fileout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'param.par'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GalMod.write_parameterfile" title="Link to this definition">¶</a></dt>
+<dd><p>Write a BBarolo’s parameter file in fileout</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GalWind">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.wrapper.</span></span><span class="sig-name descname"><span class="pre">GalWind</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#GalWind"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.GalWind" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.wrapper.GenericTask" title="pyBBarolo.wrapper.GenericTask"><code class="xref py py-class docutils literal notranslate"><span class="pre">GenericTask</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GalWind.add_options">
+<span class="sig-name descname"><span class="pre">add_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GalWind.add_options" title="Link to this definition">¶</a></dt>
+<dd><p>Add new options to the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GalWind.remove_option">
+<span class="sig-name descname"><span class="pre">remove_option</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">toremove</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GalWind.remove_option" title="Link to this definition">¶</a></dt>
+<dd><p>Remove an option from the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GalWind.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GalWind.reset" title="Link to this definition">¶</a></dt>
+<dd><p>Reset options</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GalWind.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GalWind.run" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with the given parameters after checking executable and stdout</p>
+<dl>
+<dt>Args:</dt><dd><p>exe (str):      Path to BBarolo executable. If None, search in $PATH
+stdout (str):   How to report BBarolo’s messages.</p>
+<blockquote>
+<div><p>None=screen, str=file, ‘null’=NULL</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GalWind.run_nochecks">
+<span class="sig-name descname"><span class="pre">run_nochecks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/claude-1008/-SSD-claudio-bbarolo/fcc87b8d-0eac-48c4-a71f-b556bf331802/scratchpad/legacy/src/pyBBarolo/BBarolo'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-3</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GalWind.run_nochecks" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with no further checks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GalWind.write_parameterfile">
+<span class="sig-name descname"><span class="pre">write_parameterfile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fileout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'param.par'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GalWind.write_parameterfile" title="Link to this definition">¶</a></dt>
+<dd><p>Write a BBarolo’s parameter file in fileout</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GenericTask">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.wrapper.</span></span><span class="sig-name descname"><span class="pre">GenericTask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#GenericTask"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.GenericTask" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.wrapper.BBaroloWrapper" title="pyBBarolo.wrapper.BBaroloWrapper"><code class="xref py py-class docutils literal notranslate"><span class="pre">BBaroloWrapper</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GenericTask.add_options">
+<span class="sig-name descname"><span class="pre">add_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GenericTask.add_options" title="Link to this definition">¶</a></dt>
+<dd><p>Add new options to the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GenericTask.remove_option">
+<span class="sig-name descname"><span class="pre">remove_option</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">toremove</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GenericTask.remove_option" title="Link to this definition">¶</a></dt>
+<dd><p>Remove an option from the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GenericTask.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GenericTask.reset" title="Link to this definition">¶</a></dt>
+<dd><p>Reset options</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GenericTask.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GenericTask.run" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with the given parameters after checking executable and stdout</p>
+<dl>
+<dt>Args:</dt><dd><p>exe (str):      Path to BBarolo executable. If None, search in $PATH
+stdout (str):   How to report BBarolo’s messages.</p>
+<blockquote>
+<div><p>None=screen, str=file, ‘null’=NULL</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GenericTask.run_nochecks">
+<span class="sig-name descname"><span class="pre">run_nochecks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/claude-1008/-SSD-claudio-bbarolo/fcc87b8d-0eac-48c4-a71f-b556bf331802/scratchpad/legacy/src/pyBBarolo/BBarolo'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-3</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GenericTask.run_nochecks" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with no further checks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.GenericTask.write_parameterfile">
+<span class="sig-name descname"><span class="pre">write_parameterfile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fileout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'param.par'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.GenericTask.write_parameterfile" title="Link to this definition">¶</a></dt>
+<dd><p>Write a BBarolo’s parameter file in fileout</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.MakeMask">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.wrapper.</span></span><span class="sig-name descname"><span class="pre">MakeMask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#MakeMask"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.MakeMask" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.wrapper.GenericTask" title="pyBBarolo.wrapper.GenericTask"><code class="xref py py-class docutils literal notranslate"><span class="pre">GenericTask</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.MakeMask.add_options">
+<span class="sig-name descname"><span class="pre">add_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.MakeMask.add_options" title="Link to this definition">¶</a></dt>
+<dd><p>Add new options to the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.MakeMask.remove_option">
+<span class="sig-name descname"><span class="pre">remove_option</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">toremove</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.MakeMask.remove_option" title="Link to this definition">¶</a></dt>
+<dd><p>Remove an option from the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.MakeMask.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.MakeMask.reset" title="Link to this definition">¶</a></dt>
+<dd><p>Reset options</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.MakeMask.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.MakeMask.run" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with the given parameters after checking executable and stdout</p>
+<dl>
+<dt>Args:</dt><dd><p>exe (str):      Path to BBarolo executable. If None, search in $PATH
+stdout (str):   How to report BBarolo’s messages.</p>
+<blockquote>
+<div><p>None=screen, str=file, ‘null’=NULL</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.MakeMask.run_nochecks">
+<span class="sig-name descname"><span class="pre">run_nochecks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/claude-1008/-SSD-claudio-bbarolo/fcc87b8d-0eac-48c4-a71f-b556bf331802/scratchpad/legacy/src/pyBBarolo/BBarolo'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-3</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.MakeMask.run_nochecks" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with no further checks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.MakeMask.write_parameterfile">
+<span class="sig-name descname"><span class="pre">write_parameterfile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fileout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'param.par'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.MakeMask.write_parameterfile" title="Link to this definition">¶</a></dt>
+<dd><p>Write a BBarolo’s parameter file in fileout</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.PVSlice">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.wrapper.</span></span><span class="sig-name descname"><span class="pre">PVSlice</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#PVSlice"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.PVSlice" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.wrapper.GenericTask" title="pyBBarolo.wrapper.GenericTask"><code class="xref py py-class docutils literal notranslate"><span class="pre">GenericTask</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.PVSlice.add_options">
+<span class="sig-name descname"><span class="pre">add_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.PVSlice.add_options" title="Link to this definition">¶</a></dt>
+<dd><p>Add new options to the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.PVSlice.remove_option">
+<span class="sig-name descname"><span class="pre">remove_option</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">toremove</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.PVSlice.remove_option" title="Link to this definition">¶</a></dt>
+<dd><p>Remove an option from the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.PVSlice.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.PVSlice.reset" title="Link to this definition">¶</a></dt>
+<dd><p>Reset options</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.PVSlice.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.PVSlice.run" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with the given parameters after checking executable and stdout</p>
+<dl>
+<dt>Args:</dt><dd><p>exe (str):      Path to BBarolo executable. If None, search in $PATH
+stdout (str):   How to report BBarolo’s messages.</p>
+<blockquote>
+<div><p>None=screen, str=file, ‘null’=NULL</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.PVSlice.run_nochecks">
+<span class="sig-name descname"><span class="pre">run_nochecks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/claude-1008/-SSD-claudio-bbarolo/fcc87b8d-0eac-48c4-a71f-b556bf331802/scratchpad/legacy/src/pyBBarolo/BBarolo'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-3</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.PVSlice.run_nochecks" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with no further checks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.PVSlice.write_parameterfile">
+<span class="sig-name descname"><span class="pre">write_parameterfile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fileout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'param.par'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.PVSlice.write_parameterfile" title="Link to this definition">¶</a></dt>
+<dd><p>Write a BBarolo’s parameter file in fileout</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.Search">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.wrapper.</span></span><span class="sig-name descname"><span class="pre">Search</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#Search"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.Search" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.wrapper.GenericTask" title="pyBBarolo.wrapper.GenericTask"><code class="xref py py-class docutils literal notranslate"><span class="pre">GenericTask</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.Search.add_options">
+<span class="sig-name descname"><span class="pre">add_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.Search.add_options" title="Link to this definition">¶</a></dt>
+<dd><p>Add new options to the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.Search.remove_option">
+<span class="sig-name descname"><span class="pre">remove_option</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">toremove</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.Search.remove_option" title="Link to this definition">¶</a></dt>
+<dd><p>Remove an option from the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.Search.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.Search.reset" title="Link to this definition">¶</a></dt>
+<dd><p>Reset options</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.Search.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.Search.run" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with the given parameters after checking executable and stdout</p>
+<dl>
+<dt>Args:</dt><dd><p>exe (str):      Path to BBarolo executable. If None, search in $PATH
+stdout (str):   How to report BBarolo’s messages.</p>
+<blockquote>
+<div><p>None=screen, str=file, ‘null’=NULL</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.Search.run_nochecks">
+<span class="sig-name descname"><span class="pre">run_nochecks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/claude-1008/-SSD-claudio-bbarolo/fcc87b8d-0eac-48c4-a71f-b556bf331802/scratchpad/legacy/src/pyBBarolo/BBarolo'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-3</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.Search.run_nochecks" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with no further checks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.Search.write_parameterfile">
+<span class="sig-name descname"><span class="pre">write_parameterfile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fileout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'param.par'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.Search.write_parameterfile" title="Link to this definition">¶</a></dt>
+<dd><p>Write a BBarolo’s parameter file in fileout</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.SpatialSmoothing">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.wrapper.</span></span><span class="sig-name descname"><span class="pre">SpatialSmoothing</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#SpatialSmoothing"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.SpatialSmoothing" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.wrapper.GenericTask" title="pyBBarolo.wrapper.GenericTask"><code class="xref py py-class docutils literal notranslate"><span class="pre">GenericTask</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.SpatialSmoothing.add_options">
+<span class="sig-name descname"><span class="pre">add_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.SpatialSmoothing.add_options" title="Link to this definition">¶</a></dt>
+<dd><p>Add new options to the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.SpatialSmoothing.remove_option">
+<span class="sig-name descname"><span class="pre">remove_option</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">toremove</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.SpatialSmoothing.remove_option" title="Link to this definition">¶</a></dt>
+<dd><p>Remove an option from the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.SpatialSmoothing.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.SpatialSmoothing.reset" title="Link to this definition">¶</a></dt>
+<dd><p>Reset options</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.SpatialSmoothing.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.SpatialSmoothing.run" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with the given parameters after checking executable and stdout</p>
+<dl>
+<dt>Args:</dt><dd><p>exe (str):      Path to BBarolo executable. If None, search in $PATH
+stdout (str):   How to report BBarolo’s messages.</p>
+<blockquote>
+<div><p>None=screen, str=file, ‘null’=NULL</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.SpatialSmoothing.run_nochecks">
+<span class="sig-name descname"><span class="pre">run_nochecks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/claude-1008/-SSD-claudio-bbarolo/fcc87b8d-0eac-48c4-a71f-b556bf331802/scratchpad/legacy/src/pyBBarolo/BBarolo'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-3</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.SpatialSmoothing.run_nochecks" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with no further checks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.SpatialSmoothing.write_parameterfile">
+<span class="sig-name descname"><span class="pre">write_parameterfile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fileout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'param.par'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.SpatialSmoothing.write_parameterfile" title="Link to this definition">¶</a></dt>
+<dd><p>Write a BBarolo’s parameter file in fileout</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.SpectralSmoothing">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pyBBarolo.wrapper.</span></span><span class="sig-name descname"><span class="pre">SpectralSmoothing</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fitsname</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#SpectralSmoothing"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.SpectralSmoothing" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pyBBarolo.wrapper.GenericTask" title="pyBBarolo.wrapper.GenericTask"><code class="xref py py-class docutils literal notranslate"><span class="pre">GenericTask</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.SpectralSmoothing.add_options">
+<span class="sig-name descname"><span class="pre">add_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.SpectralSmoothing.add_options" title="Link to this definition">¶</a></dt>
+<dd><p>Add new options to the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.SpectralSmoothing.remove_option">
+<span class="sig-name descname"><span class="pre">remove_option</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">toremove</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.SpectralSmoothing.remove_option" title="Link to this definition">¶</a></dt>
+<dd><p>Remove an option from the parameter list</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.SpectralSmoothing.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.SpectralSmoothing.reset" title="Link to this definition">¶</a></dt>
+<dd><p>Reset options</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.SpectralSmoothing.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.SpectralSmoothing.run" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with the given parameters after checking executable and stdout</p>
+<dl>
+<dt>Args:</dt><dd><p>exe (str):      Path to BBarolo executable. If None, search in $PATH
+stdout (str):   How to report BBarolo’s messages.</p>
+<blockquote>
+<div><p>None=screen, str=file, ‘null’=NULL</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.SpectralSmoothing.run_nochecks">
+<span class="sig-name descname"><span class="pre">run_nochecks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exe</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/claude-1008/-SSD-claudio-bbarolo/fcc87b8d-0eac-48c4-a71f-b556bf331802/scratchpad/legacy/src/pyBBarolo/BBarolo'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stdout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-3</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.SpectralSmoothing.run_nochecks" title="Link to this definition">¶</a></dt>
+<dd><p>Run BBarolo with no further checks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.SpectralSmoothing.write_parameterfile">
+<span class="sig-name descname"><span class="pre">write_parameterfile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fileout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'param.par'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pyBBarolo.wrapper.SpectralSmoothing.write_parameterfile" title="Link to this definition">¶</a></dt>
+<dd><p>Write a BBarolo’s parameter file in fileout</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pyBBarolo.wrapper.read_parameter_file">
+<span class="sig-prename descclassname"><span class="pre">pyBBarolo.wrapper.</span></span><span class="sig-name descname"><span class="pre">read_parameter_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filein</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pyBBarolo/wrapper.html#read_parameter_file"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#pyBBarolo.wrapper.read_parameter_file" title="Link to this definition">¶</a></dt>
+<dd><p>This function reads in a BBarolo’s parameter file</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>filein (str):   Parameter file name</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="index.html">Table of Contents</a></h3>
+<p class="caption" role="heading"><span class="caption-text">BBarolo:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installing.html">Installing BBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="running.html">Running BBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tasks/index.html">List of tasks and parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fitsutils.html">Tools for FITS files</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">pyBBarolo:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="pybb_install.html">Installing pyBBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pybb_quickstart.html">Quickstart</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.pyBBarolo.Ellprof"><code class="docutils literal notranslate"><span class="pre">Ellprof</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.pyBBarolo.FitMod2D"><code class="docutils literal notranslate"><span class="pre">FitMod2D</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.pyBBarolo.FitMod3D"><code class="docutils literal notranslate"><span class="pre">FitMod3D</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.pyBBarolo.FitsCube"><code class="docutils literal notranslate"><span class="pre">FitsCube</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.pyBBarolo.GalMod"><code class="docutils literal notranslate"><span class="pre">GalMod</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.pyBBarolo.GalWind"><code class="docutils literal notranslate"><span class="pre">GalWind</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.pyBBarolo.Model3D"><code class="docutils literal notranslate"><span class="pre">Model3D</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.pyBBarolo.Param"><code class="docutils literal notranslate"><span class="pre">Param</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.pyBBarolo.Rings"><code class="docutils literal notranslate"><span class="pre">Rings</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.pyBBarolo.Search"><code class="docutils literal notranslate"><span class="pre">Search</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.pyBBarolo.SpectralSmoothing"><code class="docutils literal notranslate"><span class="pre">SpectralSmoothing</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.pyBBarolo.Task"><code class="docutils literal notranslate"><span class="pre">Task</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.pyBBarolo.isIterable"><code class="docutils literal notranslate"><span class="pre">isIterable()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.pyBBarolo.isNumber"><code class="docutils literal notranslate"><span class="pre">isNumber()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.pyBBarolo.reshapePointer"><code class="docutils literal notranslate"><span class="pre">reshapePointer()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.pyBBarolo.vprint"><code class="docutils literal notranslate"><span class="pre">vprint()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.wrapper.BBaroloWrapper"><code class="docutils literal notranslate"><span class="pre">BBaroloWrapper</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.wrapper.EllProf"><code class="docutils literal notranslate"><span class="pre">EllProf</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.wrapper.FitMod2D"><code class="docutils literal notranslate"><span class="pre">FitMod2D</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.wrapper.FitMod3D"><code class="docutils literal notranslate"><span class="pre">FitMod3D</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.wrapper.GalMod"><code class="docutils literal notranslate"><span class="pre">GalMod</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.wrapper.GalWind"><code class="docutils literal notranslate"><span class="pre">GalWind</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.wrapper.GenericTask"><code class="docutils literal notranslate"><span class="pre">GenericTask</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.wrapper.MakeMask"><code class="docutils literal notranslate"><span class="pre">MakeMask</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.wrapper.PVSlice"><code class="docutils literal notranslate"><span class="pre">PVSlice</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.wrapper.Search"><code class="docutils literal notranslate"><span class="pre">Search</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.wrapper.SpatialSmoothing"><code class="docutils literal notranslate"><span class="pre">SpatialSmoothing</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.wrapper.SpectralSmoothing"><code class="docutils literal notranslate"><span class="pre">SpectralSmoothing</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyBBarolo.wrapper.read_parameter_file"><code class="docutils literal notranslate"><span class="pre">read_parameter_file()</span></code></a></li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License and citations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+<div id="sidebarbutton" title="Collapse sidebar">
+<span>«</span>
+</div>
+
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="license.html" title="License and citations"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="pybb_quickstart.html" title="Quickstart"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">BBarolo 1.8 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">API</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2015, Enrico Di Teodoro.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+    </div>
+  </body>
+</html>

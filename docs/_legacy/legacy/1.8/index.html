@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Welcome to BBarolo’s and pyBBarolo’s documentation! &#8212; BBarolo 1.8 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css?v=d6bdc565" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css" />
+    
+    <script src="_static/documentation_options.js?v=b81e6271"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    
+    <script src="_static/sidebar.js"></script>
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Installing BBarolo" href="installing.html" /> 
+  </head><body>
+<div style="background:#fff3cd;color:#5c3c00;border-bottom:1px solid #e0c97a;padding:8px 14px;font-family:sans-serif;font-size:14px;">
+<strong>BBarolo 1.8 (C++), archived.</strong> This is the documentation of the last C++ version, kept for reference.
+The current version is BBarolo 2, in pure Python: <a href="https://bbarolo.readthedocs.io/" style="color:#8b1a1a;">bbarolo.readthedocs.io</a>.
+</div>
+
+
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="installing.html" title="Installing BBarolo"
+             accesskey="N">next</a> |</li>
+        <li class="nav-item nav-item-0"><a href="#">BBarolo 1.8 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Welcome to BBarolo’s and pyBBarolo’s documentation!</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="welcome-to-bbarolo-s-and-pybbarolo-s-documentation">
+<h1>Welcome to BBarolo’s and pyBBarolo’s documentation!<a class="headerlink" href="#welcome-to-bbarolo-s-and-pybbarolo-s-documentation" title="Link to this heading">¶</a></h1>
+<p><strong>3D-Barolo</strong> (3D-Based Analysis of Rotating Objects via Line Observations) or <strong>BBarolo</strong> is a tool for fitting 3D tilted-ring models to emission-line datacubes. The Python wrapper is <strong>pyBBarolo</strong>.</p>
+<p>For a detailed description of the algorithms used in this code, please refer to <a class="reference external" href="http://adsabs.harvard.edu/abs/2015MNRAS.451.3021D">BBarolo’s main paper</a>. The documentantion is also available in PDF <a class="reference external" href="https://media.readthedocs.org/pdf/bbarolo/latest/bbarolo.pdf">here</a>.</p>
+<p><strong>Table of contents:</strong></p>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">BBarolo:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installing.html">Installing BBarolo</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="installing.html#pre-compiled-binaries">Pre-compiled binaries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installing.html#compiling-from-source">Compiling from source</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="installing.html#requirements">Requirements</a></li>
+<li class="toctree-l3"><a class="reference internal" href="installing.html#compiling">Compiling</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="installing.html#installing-via-homebrew-mac-only">Installing via Homebrew (MAC only)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="running.html">Running BBarolo</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="running.html#graphical-user-interface">Graphical User Interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="running.html#command-line">Command line</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="tasks/index.html">List of tasks and parameters</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="tasks/general.html">General parameters</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="tasks/general.html#input-output-parameters">Input/output parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/general.html#beam-parameters">Beam parameters</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="tasks/fit3d.html">3DFIT task</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="tasks/fit3d.html#parameters">Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/fit3d.html#outputs">Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/fit3d.html#example">Example</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/fit3d.html#guidelines-for-a-successful-fit">Guidelines for a successful fit</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/fit3d.html#fitting-several-galaxies-at-the-same-time">Fitting several galaxies at the same time</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="tasks/spacepar.html">SPACEPAR task</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="tasks/spacepar.html#parameters">Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/spacepar.html#outputs">Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/spacepar.html#example">Example</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="tasks/galmod.html">GALMOD task</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="tasks/galmod.html#parameters">Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/galmod.html#outputs">Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/galmod.html#example">Example</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="tasks/search.html">SEARCH task</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="tasks/search.html#parameters">Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/search.html#outputs">Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/search.html#example">Example</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="tasks/smooth.html">SMOOTH task</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="tasks/smooth.html#parameters">Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/smooth.html#outputs">Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/smooth.html#example">Example</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="tasks/smooth.html#smoothspec-task">SMOOTHSPEC task</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="tasks/smooth.html#id1">Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/smooth.html#id2">Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/smooth.html#id3">Example</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="tasks/fit2d.html">2DFIT task</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="tasks/fit2d.html#parameters">Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/fit2d.html#outputs">Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/fit2d.html#example">Example</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="tasks/ellprof.html">ELLPROF task</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="tasks/ellprof.html#parameters">Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/ellprof.html#outputs">Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/ellprof.html#example">Example</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="tasks/moment.html">Moment maps and position-velocity cuts</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="tasks/moment.html#parameters-for-maps">Parameters for maps</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/moment.html#parameters-for-pv-slices">Parameters for PV slices</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/moment.html#outputs">Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tasks/moment.html#example">Example</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="fitsutils.html">Tools for FITS files</a></li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">pyBBarolo:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="pybb_install.html">Installing pyBBarolo</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pybb_install.html#from-pip">From pip</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_install.html#build-and-install">Build and install</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="pybb_quickstart.html">Quickstart</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pybb_quickstart.html#running-a-task">Running a task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_quickstart.html#available-tasks">Available tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_quickstart.html#example-1-3d-fit-of-a-galaxy">Example 1: 3D fit of a galaxy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_quickstart.html#example-2-3d-model-of-a-galaxy">Example 2: 3D model of a galaxy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_quickstart.html#example-3-all-tasks">Example 3: All tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_quickstart.html#pybbarolo-for-pros">pyBBarolo for PROs</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="pybb_api.html">API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.pyBBarolo.Ellprof"><code class="docutils literal notranslate"><span class="pre">Ellprof</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.pyBBarolo.FitMod2D"><code class="docutils literal notranslate"><span class="pre">FitMod2D</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.pyBBarolo.FitMod3D"><code class="docutils literal notranslate"><span class="pre">FitMod3D</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.pyBBarolo.FitsCube"><code class="docutils literal notranslate"><span class="pre">FitsCube</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.pyBBarolo.GalMod"><code class="docutils literal notranslate"><span class="pre">GalMod</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.pyBBarolo.GalWind"><code class="docutils literal notranslate"><span class="pre">GalWind</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.pyBBarolo.Model3D"><code class="docutils literal notranslate"><span class="pre">Model3D</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.pyBBarolo.Param"><code class="docutils literal notranslate"><span class="pre">Param</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.pyBBarolo.Rings"><code class="docutils literal notranslate"><span class="pre">Rings</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.pyBBarolo.Search"><code class="docutils literal notranslate"><span class="pre">Search</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.pyBBarolo.SpectralSmoothing"><code class="docutils literal notranslate"><span class="pre">SpectralSmoothing</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.pyBBarolo.Task"><code class="docutils literal notranslate"><span class="pre">Task</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.pyBBarolo.isIterable"><code class="docutils literal notranslate"><span class="pre">isIterable()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.pyBBarolo.isNumber"><code class="docutils literal notranslate"><span class="pre">isNumber()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.pyBBarolo.reshapePointer"><code class="docutils literal notranslate"><span class="pre">reshapePointer()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.pyBBarolo.vprint"><code class="docutils literal notranslate"><span class="pre">vprint()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.wrapper.BBaroloWrapper"><code class="docutils literal notranslate"><span class="pre">BBaroloWrapper</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.wrapper.EllProf"><code class="docutils literal notranslate"><span class="pre">EllProf</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.wrapper.FitMod2D"><code class="docutils literal notranslate"><span class="pre">FitMod2D</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.wrapper.FitMod3D"><code class="docutils literal notranslate"><span class="pre">FitMod3D</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.wrapper.GalMod"><code class="docutils literal notranslate"><span class="pre">GalMod</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.wrapper.GalWind"><code class="docutils literal notranslate"><span class="pre">GalWind</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.wrapper.GenericTask"><code class="docutils literal notranslate"><span class="pre">GenericTask</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.wrapper.MakeMask"><code class="docutils literal notranslate"><span class="pre">MakeMask</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.wrapper.PVSlice"><code class="docutils literal notranslate"><span class="pre">PVSlice</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.wrapper.Search"><code class="docutils literal notranslate"><span class="pre">Search</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.wrapper.SpatialSmoothing"><code class="docutils literal notranslate"><span class="pre">SpatialSmoothing</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.wrapper.SpectralSmoothing"><code class="docutils literal notranslate"><span class="pre">SpectralSmoothing</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pybb_api.html#pyBBarolo.wrapper.read_parameter_file"><code class="docutils literal notranslate"><span class="pre">read_parameter_file()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License and citations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#frequently-asked-questions">Frequently Asked Questions</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="#">Table of Contents</a></h3>
+<p class="caption" role="heading"><span class="caption-text">BBarolo:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installing.html">Installing BBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="running.html">Running BBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tasks/index.html">List of tasks and parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fitsutils.html">Tools for FITS files</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">pyBBarolo:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="pybb_install.html">Installing pyBBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pybb_quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pybb_api.html">API</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License and citations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+<div id="sidebarbutton" title="Collapse sidebar">
+<span>«</span>
+</div>
+
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="installing.html" title="Installing BBarolo"
+             >next</a> |</li>
+        <li class="nav-item nav-item-0"><a href="#">BBarolo 1.8 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Welcome to BBarolo’s and pyBBarolo’s documentation!</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2015, Enrico Di Teodoro.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+    </div>
+  </body>
+</html>

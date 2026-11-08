@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Moment maps and position-velocity cuts &#8212; BBarolo 1.8 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../_static/classic.css?v=d6bdc565" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css" />
+    
+    <script src="../_static/documentation_options.js?v=b81e6271"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    
+    <script src="../_static/sidebar.js"></script>
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Tools for FITS files" href="../fitsutils.html" />
+    <link rel="prev" title="ELLPROF task" href="ellprof.html" /> 
+  </head><body>
+<div style="background:#fff3cd;color:#5c3c00;border-bottom:1px solid #e0c97a;padding:8px 14px;font-family:sans-serif;font-size:14px;">
+<strong>BBarolo 1.8 (C++), archived.</strong> This is the documentation of the last C++ version, kept for reference.
+The current version is BBarolo 2, in pure Python: <a href="https://bbarolo.readthedocs.io/" style="color:#8b1a1a;">bbarolo.readthedocs.io</a>.
+</div>
+
+
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../fitsutils.html" title="Tools for FITS files"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="ellprof.html" title="ELLPROF task"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">BBarolo 1.8 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="index.html" accesskey="U">List of tasks and parameters</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Moment maps and position-velocity cuts</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="moment-maps-and-position-velocity-cuts">
+<span id="momentstask"></span><h1>Moment maps and position-velocity cuts<a class="headerlink" href="#moment-maps-and-position-velocity-cuts" title="Link to this heading">¶</a></h1>
+<p>BBarolo can be used to extract global profiles, moment maps and position velocity diagrams. For moment maps and profile, the input datacube can be masked using the MASK parameter (see <a class="reference internal" href="fit3d.html#dfitopt"><span class="std std-ref">3DFIT</span></a>).</p>
+<section id="parameters-for-maps">
+<h2>Parameters for maps<a class="headerlink" href="#parameters-for-maps" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>GLOBALPROFILE</strong> [false]. If <em>true</em>, calculate the total line profile from a datacube and write it to a text file.</p></li>
+<li><p><strong>TOTALMAP</strong> [false]. If <em>true</em>, calculate the total intensity map from a datacube and write it to a FITS file.</p></li>
+<li><p><strong>VELOCITYMAP</strong> [false]. If <em>true</em>, calculate the velocity field from a datacube and write it to a FITS file. If spectral axis in the datacube is frequency/wavelength, the velocity definition can be chosen through the <strong>VELDEF</strong> parameter (see <a class="reference internal" href="fit3d.html#dfitopt-add"><span class="std std-ref">3DFIT advanced options</span></a>).</p></li>
+<li><p><strong>DISPERSIONMAP</strong> [false]. If <em>true</em>, calculate the velocity dispersion field from a datacube and write it to a FITS file.</p></li>
+<li><p><strong>MAPTYPE</strong> [MOMENT]. It specifies the way the kinematic maps are derived. Can be either <em>MOMENT</em> (classical moments) or <em>GAUSSIAN</em> (gaussian fit).</p></li>
+<li><p><strong>RMSMAP</strong> [false]. If <em>true</em>, calculate the RMS map, i.e. the RMS in each spectrum, from a datacube and write it to a FITS file. The RMS is calculated in an iterative way. RMS is the standard deviation for normal statistics and MADFM/0.6745 for robust statistics (<strong>FLAGROBUSTSTATS</strong> parameter).</p></li>
+<li><p><strong>MASSDENSMAP</strong> [false]. If <em>true</em>, calculate a mass surface-density map in units of Msun/pc^2 from a datacube and write it to a FITS file. This is just for HI data and the input datacube is required to have JY/BEAM flux density units.</p></li>
+<li><p><strong>SNMAP</strong> [false]. If <em>true</em>, calculate a signal-to-noise map for the masked total map, following the prescriptions by <a class="reference external" href="https://ui.adsabs.harvard.edu/abs/2001A%26A...370..765V/abstract">Verheijen &amp; Sancisi (2001)</a> and <a class="reference external" href="https://ui.adsabs.harvard.edu/abs/2014MNRAS.445.1694L/abstract">Lelli et al. (2014)</a> (see their appendixes). It has to be combined with <strong>TOTALMAP</strong> = <em>true</em>. The noise and S/N maps are written in individual FITS files.</p></li>
+<li><p><strong>CONTCHANS</strong> [1E06 1E06]. Number of line-free channels at the low/high velocity ends of the data that have been used to calculate and subtract the continuum. If a single number is given, it will assume the same number of channels have been used at both velocity ends. If no continuum subtraction has been done, use large numbers (default). Only relevant if <strong>SNMAP</strong> is <em>true</em>.</p></li>
+<li><p><strong>TAPER</strong> [UNIFORM]. Type of online tapering used during data acquisition. Accepted values are <em>UNIFORM</em> (uniform taper), <em>HANNING1</em> (hanning taper with all channels kept) and <em>HANNING2</em> (hanning taper with half channels thrown away). Only relevant if <strong>SNMAP</strong> is <em>true</em>.</p></li>
+</ul>
+</section>
+<section id="parameters-for-pv-slices">
+<h2>Parameters for PV slices<a class="headerlink" href="#parameters-for-pv-slices" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>PVSLICE</strong> [false]. If <em>true</em>, extract a position-velocity image from a datacube and write it to a FITS file. The slice can be defined by either a point and an angle (see <strong>XPOS_PV</strong>, <strong>YPOS_PV</strong>, <strong>PA_PV</strong> below), or by two points (see <strong>P1_PV</strong>, <strong>P2_PV</strong> below). The former has priority over the latter.</p></li>
+<li><p><strong>XPOS_PV</strong> [none]. Reference X of the slice. Can be a pixel or a coordinate (see also <strong>XPOS</strong> for <a class="reference internal" href="fit3d.html#ringio"><span class="std std-ref">3DFIT</span></a>).</p></li>
+<li><p><strong>YPOS_PV</strong> [none]. Reference X of the slice. Can be a pixel or a coordinate (see also <strong>YPOS</strong> for <a class="reference internal" href="fit3d.html#ringio"><span class="std std-ref">3DFIT</span></a>).</p></li>
+<li><p><strong>P1_PV</strong> [none]. X and Y coordinates of the first point defining a slice. For example: ‘10 30’ for a pixel at X=10 and Y=30.</p></li>
+<li><p><strong>P2_PV</strong> [none]. X and Y coordinates of the second point defining a slice.</p></li>
+<li><p><strong>WIDTH_PV</strong> [0]. Width of the slice in arcsec. The PV cut will be averaged over a rectangular window extending from -width/2 to +width/2 from the slice defined above.</p></li>
+<li><p><strong>ANTIALIAS</strong> [0.5]. It defines how many pixels to use for antialiasing algorithm. It can be an integer or 0.5. The number of pixels used for antialiasing will be (1+2*ANTIALIAS)^2. Set it to 0 for no antialiasing.</p></li>
+</ul>
+</section>
+<section id="outputs">
+<h2>Outputs<a class="headerlink" href="#outputs" title="Link to this heading">¶</a></h2>
+<p>The required map/P-V is written in a FITS file.</p>
+</section>
+<section id="example">
+<h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
+<p>The following <a class="reference download internal" download="" href="../_downloads/e80a02d1d3e0944e52c3b17dc66b568a/n2403_moment.par"><code class="xref download docutils literal notranslate"><span class="pre">parameter</span></code></a> file extract maps and PV diagrams from the usual <a class="reference external" href="https://github.com/editeodoro/Bbarolo/raw/docs/docs/source/tasks/examples/ngc2403.fits">datacube</a>.</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="n">FITSFILE</span><span class="w">      </span><span class="n">ngc2403</span><span class="p">.</span><span class="n">fits</span>
+<span class="n">THREADS</span><span class="w">       </span><span class="mi">4</span>
+<span class="c1">// Using a threshold mask</span>
+<span class="n">MASK</span><span class="w">          </span><span class="n">THRESHOLD</span>
+<span class="n">THRESHOLD</span><span class="w">     </span><span class="mf">0.01</span>
+<span class="c1">// Extracting all maps </span>
+<span class="n">TOTALMAP</span><span class="w">      </span><span class="nb">true</span>
+<span class="n">VELOCITYMAP</span><span class="w">   </span><span class="nb">true</span>
+<span class="n">DISPERSIONMAP</span><span class="w"> </span><span class="nb">true</span>
+<span class="n">RMSMAP</span><span class="w">        </span><span class="nb">true</span>
+<span class="c1">// Extract PV along major axis</span>
+<span class="n">PVSLICE</span><span class="w">       </span><span class="nb">true</span>
+<span class="n">XPOS_PV</span><span class="w">       </span><span class="mi">77</span>
+<span class="n">YPOS_PV</span><span class="w">       </span><span class="mi">77</span>
+<span class="n">PA_PV</span><span class="w">         </span><span class="mi">123</span>
+</pre></div>
+</div>
+<figure class="align-center" id="id1">
+<a class="reference internal image-reference" href="../_images/moment.png"><img alt="Maps" height="408" src="../_images/moment.png" width="724" />
+</a>
+<figcaption>
+<p><span class="caption-text">Moment maps, RMS map and P-Vs along the major and minor axis</span><a class="headerlink" href="#id1" title="Link to this image">¶</a></p>
+</figcaption>
+</figure>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="../index.html">Table of Contents</a></h3>
+<p class="caption" role="heading"><span class="caption-text">BBarolo:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../installing.html">Installing BBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../running.html">Running BBarolo</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">List of tasks and parameters</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="general.html">General parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fit3d.html">3DFIT task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spacepar.html">SPACEPAR task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="galmod.html">GALMOD task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="search.html">SEARCH task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="smooth.html">SMOOTH task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="smooth.html#smoothspec-task">SMOOTHSPEC task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fit2d.html">2DFIT task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ellprof.html">ELLPROF task</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Moment maps and position-velocity cuts</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#parameters-for-maps">Parameters for maps</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#parameters-for-pv-slices">Parameters for PV slices</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#outputs">Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example">Example</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../fitsutils.html">Tools for FITS files</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">pyBBarolo:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../pybb_install.html">Installing pyBBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pybb_quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pybb_api.html">API</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License and citations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../troubleshooting.html">Troubleshooting</a></li>
+</ul>
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+<div id="sidebarbutton" title="Collapse sidebar">
+<span>«</span>
+</div>
+
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../fitsutils.html" title="Tools for FITS files"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="ellprof.html" title="ELLPROF task"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">BBarolo 1.8 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="index.html" >List of tasks and parameters</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Moment maps and position-velocity cuts</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2015, Enrico Di Teodoro.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+    </div>
+  </body>
+</html>

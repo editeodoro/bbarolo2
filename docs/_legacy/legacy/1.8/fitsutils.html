@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Tools for FITS files &#8212; BBarolo 1.8 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css?v=d6bdc565" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css" />
+    
+    <script src="_static/documentation_options.js?v=b81e6271"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    
+    <script src="_static/sidebar.js"></script>
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Installing pyBBarolo" href="pybb_install.html" />
+    <link rel="prev" title="Moment maps and position-velocity cuts" href="tasks/moment.html" /> 
+  </head><body>
+<div style="background:#fff3cd;color:#5c3c00;border-bottom:1px solid #e0c97a;padding:8px 14px;font-family:sans-serif;font-size:14px;">
+<strong>BBarolo 1.8 (C++), archived.</strong> This is the documentation of the last C++ version, kept for reference.
+The current version is BBarolo 2, in pure Python: <a href="https://bbarolo.readthedocs.io/" style="color:#8b1a1a;">bbarolo.readthedocs.io</a>.
+</div>
+
+
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="pybb_install.html" title="Installing pyBBarolo"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="tasks/moment.html" title="Moment maps and position-velocity cuts"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">BBarolo 1.8 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Tools for FITS files</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="tools-for-fits-files">
+<span id="fitsutilities"></span><h1>Tools for FITS files<a class="headerlink" href="#tools-for-fits-files" title="Link to this heading">¶</a></h1>
+<p>Sometimes a FITS file does not conform with BBarolo or keywords in the FITS header can not be understood by the code. A few utilities to easily modify a FITS file and its header are now included in the latest versions of BBarolo.
+These tools are based on or developed from the
+<a class="reference external" href="https://heasarc.gsfc.nasa.gov/docs/software/fitsio/cexamples.html">NASA’s FITS utilities</a>.</p>
+<p>A list of implemented tools can be obtained with <code class="docutils literal notranslate"><span class="pre">BBarolo</span> <span class="pre">--fitsutils</span></code>. Four utilities are currently available. Each tool is promptly accessible from the command line through <code class="docutils literal notranslate"><span class="pre">BBarolo</span> <span class="pre">--UTILNAME</span></code>, where UTILNAME is one of the utilities listed below:</p>
+<p><strong>listhead</strong>. Print all keywords in the FITS header. Type <code class="docutils literal notranslate"><span class="pre">BBarolo</span> <span class="pre">--listhead</span></code> for help:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$$ BBarolo --listhead
+
+ BBarolo&#39;s LISTHEAD FITS utility: 
+
+ List the FITS header keywords in a single extension, or, if [ext] is
+ not given, list the keywords in all the extensions.
+
+ Usage:
+   BBarolo --listhead filename[ext] 
+
+ Examples: 
+   BBarolo --listhead file.fits      (list every header in the file) 
+   BBarolo --listhead file.fits[0]   (list primary array header) 
+   BBarolo --listhead file.fits[2]   (list header of 2nd extension) 
+   BBarolo --listhead file.fits[GTI] (list header of GTI extension) 
+
+ NOTE: it may be necessary to enclose the input file name in single 
+ quote characters on some Unix shells.
+
+</pre></div>
+</div>
+<div class="line-block">
+<div class="line"><br /></div>
+</div>
+<p><strong>modhead</strong>. Modify or add a keyword to a FITS header. Type <code class="docutils literal notranslate"><span class="pre">BBarolo</span> <span class="pre">--modhead</span></code> for help:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$$ BBarolo --modhead
+
+ BBarolo&#39;s MODHEAD FITS utility: 
+
+ Write or modify the value of a header keyword.
+ If a newvalue is not specified, just print the current value.
+
+ Usage:
+   BBarolo --modhead filename[ext] keyword [newvalue]
+
+ Examples: 
+   BBarolo --modhead in.fits cunit1      (list the CUNIT1 keyword)
+   BBarolo --modhead in.fits cunit1 deg  (set CUNIT1 = &#39;deg&#39;)
+
+ NOTE: it may be necessary to enclose the input file name in single 
+ quote characters on some Unix shells.
+</pre></div>
+</div>
+<div class="line-block">
+<div class="line"><br /></div>
+</div>
+<p><strong>remhead</strong>. Remove a keyword from a FITS header. Type <code class="docutils literal notranslate"><span class="pre">BBarolo</span> <span class="pre">--remhead</span></code> for help:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$$ BBarolo --remhead
+
+ BBarolo&#39;s REMHEAD FITS utility: 
+
+ Delete a header keyword from a FITS file.
+
+ Usage:
+   BBarolo --remhead filename[ext] keyword 
+
+ Examples: 
+   BBarolo --remhead in.fits object      (remove the OBJECT keyword)
+
+ NOTE: it may be necessary to enclose the input file name in single 
+ quote characters on some Unix shells.
+</pre></div>
+</div>
+<div class="line-block">
+<div class="line"><br /></div>
+</div>
+<p><strong>listhead</strong>. List all keywords in a FITS header. Type <code class="docutils literal notranslate"><span class="pre">BBarolo</span> <span class="pre">--listhead</span></code> for help.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$$ BBarolo --listhead
+
+ BBarolo&#39;s LISTHEAD FITS utility: 
+
+ List the FITS header keywords in a single extension, or, if [ext] is
+ not given, list the keywords in all the extensions.
+
+ Usage:
+   BBarolo --listhead filename[ext] 
+
+ Examples: 
+   BBarolo --listhead file.fits      (list every header in the file) 
+   BBarolo --listhead file.fits[0]   (list primary array header) 
+   BBarolo --listhead file.fits[2]   (list header of 2nd extension) 
+   BBarolo --listhead file.fits[GTI] (list header of GTI extension) 
+
+ NOTE: it may be necessary to enclose the input file name in single 
+ quote characters on some Unix shells.
+
+</pre></div>
+</div>
+<div class="line-block">
+<div class="line"><br /></div>
+</div>
+<p><strong>fitscopy</strong>. Make a copy of a FITS file, optionally selecting a subset. Type <code class="docutils literal notranslate"><span class="pre">BBarolo</span> <span class="pre">--fitscopy</span></code> for help:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$$ BBarolo --fitscopy
+
+ BBarolo&#39;s FITSCOPY FITS utility: 
+
+ Copy an input file to an output file, optionally filtering the file in the 
+ process. Filters may be used to extract a subimage from a larger image, 
+ select rows from a table, filter a table with a GTI time extension or a SAO
+ region file, create or delete columns in a table, create an image by binning
+ 2 table columns, and convert IRAF format .imh or raw binary data files into 
+ FITS images (see CFITSIO User&#39;s Guide for filtering syntax).
+
+ Usage:
+   BBarolo --fitscopy inputfile[filter] outputfile 
+
+ Examples: 
+   BBarolo --fitscopy in.fits out.fits                   (simple file copy)
+   BBarolo --fitscopy in.fits[11:50,21:60] out.fits      (copy a subimage)
+   BBarolo --fitscopy in.fits[-*,*] out.fits             (mirror reverse axis 0)
+   BBarolo --fitscopy iniraf.imh out.fits                (IRAF image to FITS)
+   BBarolo --fitscopy in.dat[i512,512] out.fit           (binary file to FITS)
+   BBarolo --fitscopy in.fits[events][pi&gt;35] out.fits    (copy rows with pi&gt;35)
+   BBarolo --fitscopy in.fits[events][bin X,Y] out.fits  (bin an image)
+
+ NOTE: it may be necessary to enclose the input file name in single quote
+ characters on some Unix shells.
+</pre></div>
+</div>
+<div class="line-block">
+<div class="line"><br /></div>
+</div>
+<p><strong>fitsarith</strong>. Perform arithmetic operations between two FITS files or on a single FITS file. Type <code class="docutils literal notranslate"><span class="pre">BBarolo</span> <span class="pre">--fitsarith</span></code> for help:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$$ BBarolo --fitsarith
+
+ BBarolo&#39;s FITSARITH FITS utility: 
+
+ Perform an operation between two images or between an image and a number. 
+ Supported operators are add, sub, mul, div (first character required). 
+
+ Usage:
+   BBarolo --fitsarith image1 { image2 | value } oper outimage 
+
+ Examples: 
+   BBarolo --fitsarith in1.fits in2.fits add out.fits  (add the 2 files)
+   BBarolo --fitsarith in1.fits 1000.0 mul out.fits    (mult in1 by 1000)
+
+ NOTE: it may be necessary to enclose the file names in single quote
+ characters on some Unix shells.
+</pre></div>
+</div>
+<div class="line-block">
+<div class="line"><br /></div>
+</div>
+<p><strong>jybeam2k</strong> and <strong>k2jybeam</strong>. Utilities to convert the flux units between JY/BEAM and K.</p>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="index.html">Table of Contents</a></h3>
+<p class="caption" role="heading"><span class="caption-text">BBarolo:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installing.html">Installing BBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="running.html">Running BBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tasks/index.html">List of tasks and parameters</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Tools for FITS files</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">pyBBarolo:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="pybb_install.html">Installing pyBBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pybb_quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pybb_api.html">API</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License and citations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+<div id="sidebarbutton" title="Collapse sidebar">
+<span>«</span>
+</div>
+
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="pybb_install.html" title="Installing pyBBarolo"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="tasks/moment.html" title="Moment maps and position-velocity cuts"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">BBarolo 1.8 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Tools for FITS files</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2015, Enrico Di Teodoro.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+    </div>
+  </body>
+</html>

@@ -8,6 +8,9 @@ kernels are compiled at run time with numba; the rest uses numpy, scipy, astropy
 
 **Status:** under development.
 
+**Documentation:** [bbarolo.readthedocs.io](https://bbarolo.readthedocs.io): installation, a first fit,
+every task with its parameters and how it works, examples, and the differences from BBarolo 1.8.
+
 ```bash
 pip install .                     # pip install ".[bayesian]" adds the samplers for BAYESIAN3DFIT
 BBarolo -p param.par              # a parameter file, as with the C++ BBarolo
@@ -23,4 +26,5 @@ res = f.run()                     # in memory: res.rings (the fitted rings), res
 res.write("output/")              # the files and plots of the command line
 ```
 
-Requires Python 3.9 or later. License: GPL-3.0-or-later.
+Requires Python 3.9 or later. License: GPL-3.0-or-later. If you use BBarolo, please cite
+[Di Teodoro & Fraternali (2015)](https://ui.adsabs.harvard.edu/abs/2015MNRAS.451.3021D).

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Quickstart &#8212; BBarolo 1.8 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css?v=d6bdc565" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css" />
+    
+    <script src="_static/documentation_options.js?v=b81e6271"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    
+    <script src="_static/sidebar.js"></script>
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="API" href="pybb_api.html" />
+    <link rel="prev" title="Installing pyBBarolo" href="pybb_install.html" /> 
+  </head><body>
+<div style="background:#fff3cd;color:#5c3c00;border-bottom:1px solid #e0c97a;padding:8px 14px;font-family:sans-serif;font-size:14px;">
+<strong>BBarolo 1.8 (C++), archived.</strong> This is the documentation of the last C++ version, kept for reference.
+The current version is BBarolo 2, in pure Python: <a href="https://bbarolo.readthedocs.io/" style="color:#8b1a1a;">bbarolo.readthedocs.io</a>.
+</div>
+
+
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="pybb_api.html" title="API"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="pybb_install.html" title="Installing pyBBarolo"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">BBarolo 1.8 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Quickstart</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="quickstart">
+<h1>Quickstart<a class="headerlink" href="#quickstart" title="Link to this heading">¶</a></h1>
+<section id="running-a-task">
+<h2>Running a task<a class="headerlink" href="#running-a-task" title="Link to this heading">¶</a></h2>
+<p>In pyBBarolo, BBarolo’s task are wrapped as python classes. The generic procedure to run a task is as follow:</p>
+<ol class="arabic">
+<li><p>Import the task from pyBBarolo module:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pyBBarolo</span><span class="w"> </span><span class="kn">import</span> <span class="n">Task</span>
+</pre></div>
+</div>
+</li>
+</ol>
+<blockquote>
+<div><p>where Task is one of pyBBarolo <a class="reference internal" href="#pybbtasks"><span class="std std-ref">tasks</span></a>.</p>
+</div></blockquote>
+<ol class="arabic" start="2">
+<li><p>Create an object of the task class:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">bb</span> <span class="o">=</span> <span class="n">Task</span><span class="p">(</span><span class="n">fitsname</span><span class="p">)</span>
+</pre></div>
+</div>
+</li>
+</ol>
+<blockquote>
+<div><p>where <em>fitsname</em> is the input FITS file. All tasks need an initial FITS file.</p>
+</div></blockquote>
+<ol class="arabic" start="3">
+<li><p>Initialize the task:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">bb</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+</pre></div>
+</div>
+</li>
+</ol>
+<blockquote>
+<div><p>where <em>args</em> are required arguments that depend on the various tasks. Required arguments can be printed with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">bb</span><span class="o">.</span><span class="n">show_arguments</span><span class="p">()</span>
+</pre></div>
+</div>
+</div></blockquote>
+<ol class="arabic" start="4">
+<li><p>Set options:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">bb</span><span class="o">.</span><span class="n">set_options</span><span class="p">(</span><span class="n">opts</span><span class="p">)</span>
+</pre></div>
+</div>
+</li>
+</ol>
+<blockquote>
+<div><p>where <em>opts</em> are the task-dependent available options. All options have default values, so this step is not mandatory. To see a list of available options:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">bb</span><span class="o">.</span><span class="n">show_options</span><span class="p">()</span>
+</pre></div>
+</div>
+</div></blockquote>
+<ol class="arabic" start="5">
+<li><p>Run the task:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">bb</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+<section id="available-tasks">
+<span id="pybbtasks"></span><h2>Available tasks<a class="headerlink" href="#available-tasks" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>FitMod3D()</strong>: wrapped class for BBarolo’s <a class="reference internal" href="tasks/fit3d.html#dfit"><span class="std std-ref">3DFIT</span></a> task.</p></li>
+<li><p><strong>GalMod()</strong>: wrapped class for BBarolo’s <a class="reference internal" href="tasks/galmod.html#galmodtask"><span class="std std-ref">GALMOD</span></a> task.</p></li>
+<li><p><strong>Search()</strong>: wrapped class for BBarolo’s <a class="reference internal" href="tasks/search.html#searchtask"><span class="std std-ref">SEARCH</span></a> task.</p></li>
+<li><p><strong>FitMod2D()</strong>: wrapped class for BBarolo’s <a class="reference internal" href="tasks/fit2d.html#dfit"><span class="std std-ref">2DFIT</span></a> task.</p></li>
+<li><p><strong>Ellprof()</strong>: wrapped class for BBarolo’s <a class="reference internal" href="tasks/ellprof.html#ellproftask"><span class="std std-ref">ELLPROF</span></a> task.</p></li>
+<li><p><strong>SpectralSmooth()</strong>: wrapped class for BBarolo’s <a class="reference internal" href="tasks/smooth.html#spectralsmoothtask"><span class="std std-ref">SMOOTHSPEC</span></a> task.</p></li>
+</ul>
+</section>
+<section id="example-1-3d-fit-of-a-galaxy">
+<h2>Example 1: 3D fit of a galaxy<a class="headerlink" href="#example-1-3d-fit-of-a-galaxy" title="Link to this heading">¶</a></h2>
+<p>Suppose you have an astonishing observation of your favorite galaxy and you want to fit a 3D kinematic model to your emission line datacube.</p>
+<p>Let’s fit the HI datacube of NGC 2403, which is available as a part of BBarolo’s working <a class="reference external" href="http://editeodoro.github.io/Bbarolo/downloads/examples/">examples</a>.
+We just have to set initial conditions, options and then run the task.</p>
+<p>First of all, we import and start FitMod3D:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pyBBarolo</span><span class="w"> </span><span class="kn">import</span> <span class="n">FitMod3D</span>
+
+<span class="c1"># FITS file of the galaxy to model</span>
+<span class="n">filen</span> <span class="o">=</span> <span class="s2">&quot;./examples/ngc2403.fits&quot;</span>
+<span class="c1"># Initializing a 3DFIT object</span>
+<span class="n">f3d</span> <span class="o">=</span> <span class="n">FitMod3D</span><span class="p">(</span><span class="n">filen</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Secondly, we initialize rings with initial guesses for the fit:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Initializing rings. Parameters can be values or arrays</span>
+<span class="n">f3d</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">radii</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span><span class="mi">1200</span><span class="p">,</span><span class="mi">30</span><span class="p">),</span><span class="n">xpos</span><span class="o">=</span><span class="mi">77</span><span class="p">,</span><span class="n">ypos</span><span class="o">=</span><span class="mi">77</span><span class="p">,</span><span class="n">vsys</span><span class="o">=</span><span class="mf">132.8</span><span class="p">,</span><span class="n">vrot</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span><span class="n">vdisp</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span><span class="n">vrad</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span><span class="n">z0</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span><span class="n">inc</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span><span class="n">phi</span><span class="o">=</span><span class="mf">123.7</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>A list of needed arguments can be printed with <code class="docutils literal notranslate"><span class="pre">f3d.show_arguments()</span></code>.</p>
+<p>Thirdly, we can change some default options for the fit. For a list of available options: <code class="docutils literal notranslate"><span class="pre">f3d.show_options()</span></code>.</p>
+<p>For instance, we can set a mask made through the source-finding algorithm (<code class="docutils literal notranslate"><span class="pre">mask=&quot;SEARCH&quot;</span></code>), parameters to fit (<code class="docutils literal notranslate"><span class="pre">free=&quot;VROT</span> <span class="pre">VDISP&quot;</span></code>), the distance of the galaxy in Mpc (<code class="docutils literal notranslate"><span class="pre">distance=3.2</span></code>) and the directory for outputs (<code class="docutils literal notranslate"><span class="pre">outfolder='output/ngc2403</span></code>):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">f3d</span><span class="o">.</span><span class="n">set_options</span><span class="p">(</span><span class="n">mask</span><span class="o">=</span><span class="s2">&quot;SEARCH&quot;</span><span class="p">,</span><span class="n">free</span><span class="o">=</span><span class="s2">&quot;VROT VDISP&quot;</span><span class="p">,</span><span class="n">wfunc</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span><span class="n">distance</span><span class="o">=</span><span class="mf">3.2</span><span class="p">,</span><span class="n">outfolder</span><span class="o">=</span><span class="s1">&#39;output/ngc2403&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>If the beam information is not available in the FITS header, it is fundamental to set the size of the beam:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">f3d</span><span class="o">.</span><span class="n">set_beam</span><span class="p">(</span><span class="n">bmaj</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span><span class="n">bmin</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span><span class="n">bpa</span><span class="o">=-</span><span class="mi">80</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>It is now time to run the fit:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">bfrings</span><span class="p">,</span> <span class="n">bestmod</span> <span class="o">=</span> <span class="n">f3d</span><span class="o">.</span><span class="n">compute</span><span class="p">(</span><span class="n">threads</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This function performs the fit and writes relevant FITS files in the output directory. The function returns a <em>n</em> x <em>m</em> matrix containing the best-fit rings (<code class="docutils literal notranslate"><span class="pre">bfrings</span></code>), where <em>n</em> = number of rings and <em>m</em> = number of parameters, and a FITS astropy object (<code class="docutils literal notranslate"><span class="pre">bestmod</span></code>) containing the best-fit model. These are also written in <code class="docutils literal notranslate"><span class="pre">bfit</span></code> and <code class="docutils literal notranslate"><span class="pre">outmodel</span></code> methods of FitMod3D class.</p>
+<p>Finally, we can use BBarolo built-in routines to write plots of data and model, like channel maps, moment maps, position-velocity diagrams and best-fit parameters:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">f3d</span><span class="o">.</span><span class="n">plot_model</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="example-2-3d-model-of-a-galaxy">
+<h2>Example 2: 3D model of a galaxy<a class="headerlink" href="#example-2-3d-model-of-a-galaxy" title="Link to this heading">¶</a></h2>
+<p>It is also possible to simply build a 3D model datacube from given parameters. This is accomplished with the GalMod task. The procedure is similar to the one above:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pyBBarolo</span><span class="w"> </span><span class="kn">import</span> <span class="n">GalMod</span>
+
+<span class="c1"># FITS file of the galaxy to model</span>
+<span class="n">filen</span> <span class="o">=</span> <span class="s2">&quot;./examples/ngc2403.fits&quot;</span>
+<span class="c1"># Initializing a GalMod object</span>
+<span class="n">gm</span> <span class="o">=</span> <span class="n">GalMod</span><span class="p">(</span><span class="n">filen</span><span class="p">)</span>
+<span class="c1"># Initializing rings. Parameters can be values or arrays</span>
+<span class="n">gm</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">radii</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span><span class="mi">1200</span><span class="p">,</span><span class="mi">30</span><span class="p">),</span><span class="n">xpos</span><span class="o">=</span><span class="mi">74</span><span class="p">,</span><span class="n">ypos</span><span class="o">=</span><span class="mi">74</span><span class="p">,</span><span class="n">vsys</span><span class="o">=</span><span class="mf">132.8</span><span class="p">,</span><span class="n">vrot</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span><span class="n">vrad</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span><span class="n">vvert</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span><span class="n">vdisp</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span><span class="n">z0</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span><span class="n">inc</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span><span class="n">phi</span><span class="o">=</span><span class="mf">123.7</span><span class="p">)</span>
+<span class="c1"># Now, let&#39;s take a look to the default options (see BB documentation)</span>
+<span class="n">gm</span><span class="o">.</span><span class="n">show_options</span><span class="p">()</span>
+<span class="c1"># Changing some options</span>
+<span class="n">gm</span><span class="o">.</span><span class="n">set_options</span><span class="p">(</span><span class="n">ltype</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="c1"># Compute the model</span>
+<span class="n">mymodel</span> <span class="o">=</span> <span class="n">gm</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
+<span class="c1"># Smooth to the same resolution of data</span>
+<span class="n">mymodel</span> <span class="o">=</span> <span class="n">gm</span><span class="o">.</span><span class="n">smooth</span><span class="p">()</span>
+<span class="c1"># mymodel is an astropy cube and we can do whatever we like with it.</span>
+<span class="n">mymodel</span><span class="o">.</span><span class="n">writeto</span><span class="p">(</span><span class="s2">&quot;awesome_model.fits&quot;</span><span class="p">,</span><span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="example-3-all-tasks">
+<h2>Example 3: All tasks<a class="headerlink" href="#example-3-all-tasks" title="Link to this heading">¶</a></h2>
+<p>This <a class="reference download internal" download="" href="_downloads/203b3b12cf6c5a8fae407c161cde1cf5/pyBB_test.py"><code class="xref download docutils literal notranslate"><span class="pre">script</span></code></a> shows how to use all wrapped classes:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pyBBarolo</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+
+    <span class="n">fitsname</span> <span class="o">=</span> <span class="s2">&quot;./examples/ngc2403.fits&quot;</span>
+
+    <span class="c1">#&#39;&#39;&#39;</span>
+    <span class="c1">### 3D FIT TUTORIAL ############################################################</span>
+    <span class="n">f3d</span> <span class="o">=</span> <span class="n">FitMod3D</span><span class="p">(</span><span class="n">fitsname</span><span class="p">)</span>
+    <span class="n">f3d</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">radii</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span><span class="mi">450</span><span class="p">,</span><span class="mi">30</span><span class="p">),</span><span class="n">xpos</span><span class="o">=</span><span class="mi">77</span><span class="p">,</span><span class="n">ypos</span><span class="o">=</span><span class="mi">77</span><span class="p">,</span><span class="n">vsys</span><span class="o">=</span><span class="mf">132.8</span><span class="p">,</span>\
+             <span class="n">vrot</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span><span class="n">vdisp</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span><span class="n">vrad</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span><span class="n">z0</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span><span class="n">inc</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span><span class="n">phi</span><span class="o">=</span><span class="mf">123.7</span><span class="p">)</span>
+    <span class="n">f3d</span><span class="o">.</span><span class="n">show_options</span><span class="p">()</span>
+    <span class="n">f3d</span><span class="o">.</span><span class="n">set_options</span><span class="p">(</span><span class="n">mask</span><span class="o">=</span><span class="s2">&quot;SEARCH&quot;</span><span class="p">,</span><span class="n">free</span><span class="o">=</span><span class="s2">&quot;VROT VDISP&quot;</span><span class="p">,</span><span class="n">wfunc</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span><span class="n">distance</span><span class="o">=</span><span class="mf">3.2</span><span class="p">,</span><span class="n">ltype</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">f3d</span><span class="o">.</span><span class="n">set_options</span><span class="p">(</span><span class="n">outfolder</span><span class="o">=</span><span class="s2">&quot;output/ngc2403&quot;</span><span class="p">)</span>
+    <span class="n">f3d</span><span class="o">.</span><span class="n">set_beam</span><span class="p">(</span><span class="n">bmaj</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span><span class="n">bmin</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span><span class="n">bpa</span><span class="o">=-</span><span class="mi">80</span><span class="p">)</span>
+    <span class="n">bfrings</span><span class="p">,</span> <span class="n">bestmod</span> <span class="o">=</span> <span class="n">f3d</span><span class="o">.</span><span class="n">compute</span><span class="p">(</span><span class="n">threads</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span> 
+    <span class="n">f3d</span><span class="o">.</span><span class="n">plot_model</span><span class="p">()</span>
+    <span class="c1">################################################################################</span>
+    <span class="c1">#&#39;&#39;&#39;</span>
+
+    <span class="c1">#&#39;&#39;&#39;</span>
+    <span class="c1">### GALMOD TUTORIAL ############################################################</span>
+    <span class="n">gm</span> <span class="o">=</span> <span class="n">GalMod</span><span class="p">(</span><span class="n">fitsname</span><span class="p">)</span>
+    <span class="n">gm</span><span class="o">.</span><span class="n">show_arguments</span><span class="p">()</span>
+    <span class="n">gm</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">radii</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span><span class="mi">1200</span><span class="p">,</span><span class="mi">30</span><span class="p">),</span><span class="n">xpos</span><span class="o">=</span><span class="mi">74</span><span class="p">,</span><span class="n">ypos</span><span class="o">=</span><span class="mi">74</span><span class="p">,</span><span class="n">vsys</span><span class="o">=</span><span class="mf">132.8</span><span class="p">,</span>\
+             <span class="n">vrot</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span><span class="n">vdisp</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span><span class="n">z0</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span><span class="n">inc</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span><span class="n">phi</span><span class="o">=</span><span class="mf">123.7</span><span class="p">)</span>
+    <span class="n">gm</span><span class="o">.</span><span class="n">show_options</span><span class="p">()</span>
+    <span class="n">gm</span><span class="o">.</span><span class="n">set_options</span><span class="p">(</span><span class="n">ltype</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">mymodel</span> <span class="o">=</span> <span class="n">gm</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
+    <span class="n">mymodel</span> <span class="o">=</span> <span class="n">gm</span><span class="o">.</span><span class="n">smooth</span><span class="p">()</span>
+    <span class="n">mymodel</span><span class="o">.</span><span class="n">writeto</span><span class="p">(</span><span class="s2">&quot;awesome_model.fits&quot;</span><span class="p">,</span><span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="c1">################################################################################</span>
+    <span class="c1">#&#39;&#39;&#39;</span>
+
+    <span class="c1">#&#39;&#39;&#39;</span>
+    <span class="c1">### ELLPROF TUTORIAL #############################################################</span>
+    <span class="n">el</span> <span class="o">=</span> <span class="n">Ellprof</span><span class="p">(</span><span class="n">fitsname</span><span class="p">)</span>
+    <span class="n">el</span><span class="o">.</span><span class="n">show_arguments</span><span class="p">()</span>
+    <span class="n">el</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">radii</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span><span class="mi">1200</span><span class="p">,</span><span class="mi">30</span><span class="p">),</span><span class="n">xpos</span><span class="o">=</span><span class="mi">74</span><span class="p">,</span><span class="n">ypos</span><span class="o">=</span><span class="mi">74</span><span class="p">,</span><span class="n">inc</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span><span class="n">phi</span><span class="o">=</span><span class="mf">123.7</span><span class="p">)</span>
+    <span class="n">el</span><span class="o">.</span><span class="n">show_options</span><span class="p">()</span>
+    <span class="n">el</span><span class="o">.</span><span class="n">set_options</span><span class="p">(</span><span class="n">mask</span><span class="o">=</span><span class="s2">&quot;SMOOTH&quot;</span><span class="p">)</span>
+    <span class="n">rings</span> <span class="o">=</span> <span class="n">el</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>   
+    <span class="nb">print</span> <span class="p">(</span><span class="n">rings</span><span class="p">[</span><span class="s1">&#39;rad&#39;</span><span class="p">],</span><span class="n">rings</span><span class="p">[</span><span class="s1">&#39;msurfdens&#39;</span><span class="p">])</span> 
+    <span class="n">el</span><span class="o">.</span><span class="n">writeto</span><span class="p">(</span><span class="s2">&quot;rings_ellprof.txt&quot;</span><span class="p">)</span>
+    <span class="c1">################################################################################</span>
+    <span class="c1">#&#39;&#39;&#39;</span>
+
+    <span class="c1">#&#39;&#39;&#39;</span>
+    <span class="c1">### 2DFIT TUTORIAL #############################################################</span>
+    <span class="n">rm</span> <span class="o">=</span> <span class="n">FitMod2D</span><span class="p">(</span><span class="n">fitsname</span><span class="p">)</span>
+    <span class="n">rm</span><span class="o">.</span><span class="n">show_arguments</span><span class="p">()</span>
+    <span class="n">rm</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">radii</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span><span class="mi">1200</span><span class="p">,</span><span class="mi">30</span><span class="p">),</span><span class="n">xpos</span><span class="o">=</span><span class="mi">74</span><span class="p">,</span><span class="n">ypos</span><span class="o">=</span><span class="mi">74</span><span class="p">,</span><span class="n">vsys</span><span class="o">=</span><span class="mf">132.8</span><span class="p">,</span><span class="n">vrot</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span><span class="n">inc</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span><span class="n">phi</span><span class="o">=</span><span class="mf">123.7</span><span class="p">)</span>
+    <span class="n">rm</span><span class="o">.</span><span class="n">show_options</span><span class="p">()</span>
+    <span class="n">rm</span><span class="o">.</span><span class="n">set_options</span><span class="p">(</span><span class="n">wfunc</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">free</span><span class="o">=</span><span class="s2">&quot;VROT INC&quot;</span><span class="p">)</span>
+    <span class="n">rings</span> <span class="o">=</span> <span class="n">rm</span><span class="o">.</span><span class="n">compute</span><span class="p">(</span><span class="n">threads</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>   
+    <span class="nb">print</span> <span class="p">(</span><span class="n">rings</span><span class="p">[</span><span class="s1">&#39;rad&#39;</span><span class="p">],</span><span class="n">rings</span><span class="p">[</span><span class="s1">&#39;vrot&#39;</span><span class="p">])</span> 
+    <span class="n">rm</span><span class="o">.</span><span class="n">writeto</span><span class="p">(</span><span class="s2">&quot;rings_2dfit.txt&quot;</span><span class="p">)</span>
+    <span class="c1">################################################################################</span>
+    <span class="c1">#&#39;&#39;&#39;</span>
+    
+    <span class="c1">#&#39;&#39;&#39;</span>
+    <span class="c1">### SEARCH TUTORIAL ############################################################</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="n">Search</span><span class="p">(</span><span class="n">fitsname</span><span class="p">)</span>
+    <span class="n">s</span><span class="o">.</span><span class="n">set_options</span><span class="p">(</span><span class="n">growth</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">s</span><span class="o">.</span><span class="n">show_options</span><span class="p">()</span>
+    <span class="n">s</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">threads</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>    
+    <span class="c1">################################################################################</span>
+    <span class="c1">#&#39;&#39;&#39;</span>
+    
+    <span class="c1">#&#39;&#39;&#39;</span>
+    <span class="c1">### SPECTRAL SMOOTHING TUTORIAL ################################################</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="n">SpectralSmoothing</span><span class="p">(</span><span class="n">fitsname</span><span class="p">)</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">smooth</span><span class="p">(</span><span class="n">window_type</span><span class="o">=</span><span class="s1">&#39;hanning&#39;</span><span class="p">,</span><span class="n">window_size</span><span class="o">=</span><span class="mi">11</span><span class="p">,</span><span class="n">threads</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
+    <span class="n">s</span><span class="o">.</span><span class="n">writeto</span><span class="p">(</span><span class="s2">&quot;smoothedcube.fits&quot;</span><span class="p">,</span><span class="n">average</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="c1">################################################################################</span>
+    <span class="c1">#&#39;&#39;&#39;</span>
+    
+</pre></div>
+</div>
+</section>
+<section id="pybbarolo-for-pros">
+<h2>pyBBarolo for PROs<a class="headerlink" href="#pybbarolo-for-pros" title="Link to this heading">¶</a></h2>
+<p>Beside the python classes described above, there is probably a better way to run BBarolo from python for users who are familiar with BBarolo’s parameter files. A class <code class="docutils literal notranslate"><span class="pre">BBaroloWrapper</span></code> to call conveniently BBarolo C++ executable is implemented in the <code class="docutils literal notranslate"><span class="pre">pyBBarolo.wrapper</span></code> module. This class allows the user to set any parameter supported in BBarolo and it is extremely useful for scripting.</p>
+<p>The  <code class="docutils literal notranslate"><span class="pre">BBaroloWrapper</span></code> class takes in input a list of BBarolo’s parameters, which can be given as either a python dictionary or a list of strings. The class is basically a container of parameters. A working example is below:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pyBBarolo.wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">BBaroloWrapper</span>
+
+<span class="c1"># Initializing class (doing some spatial smoothing for example)</span>
+<span class="n">bb</span> <span class="o">=</span> <span class="n">BBaroloWrapper</span><span class="p">(</span><span class="n">fitsfile</span><span class="o">=</span><span class="s1">&#39;./examples/ngc2403.fits&#39;</span><span class="p">,</span><span class="n">smooth</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span><span class="n">bmaj</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span><span class="n">bmin</span><span class="o">=</span><span class="mi">120</span><span class="p">)</span>
+
+<span class="c1"># Parameters can alternatively be given as a list of strings or dictionary</span>
+<span class="c1"># bb = BBaroloWrapper([&#39;FITSFILE=./examples/ngc2403.fits&#39;,&#39;SMOOTH=True&#39;,&#39;BMAJ=120&#39;,&#39;BMIN=120&#39;])</span>
+<span class="c1"># bb = BBaroloWrapper(dict(fitsfile=&#39;./examples/ngc2403.fits&#39;,smooth=True,bmaj=120,bmin=120))</span>
+
+<span class="c1"># Parameters can also be added or removed</span>
+<span class="n">bb</span><span class="o">.</span><span class="n">add_options</span><span class="p">(</span><span class="n">threads</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span><span class="n">outfolder</span><span class="o">=</span><span class="s1">&#39;myoutfolder&#39;</span><span class="p">)</span>
+<span class="n">bb</span><span class="o">.</span><span class="n">remove_option</span><span class="p">(</span><span class="s1">&#39;threads&#39;</span><span class="p">)</span>
+
+<span class="c1"># Parameters can be printed or easily be written in a parameter file</span>
+<span class="nb">print</span> <span class="p">(</span><span class="n">bb</span><span class="p">)</span>
+<span class="n">bb</span><span class="o">.</span><span class="n">write_parameterfile</span><span class="p">(</span><span class="s2">&quot;param.par&quot;</span><span class="p">)</span>
+
+<span class="c1"># Now we can run BBarolo</span>
+<span class="n">bb</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">exe</span><span class="o">=</span><span class="s2">&quot;/path_to_BBarolo/BBarolo&quot;</span><span class="p">,</span><span class="n">stdout</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The above is exactly the same as calling BBarolo with a parameter file, thus it will write all the outputs in the usual output folder. The <code class="docutils literal notranslate"><span class="pre">run()</span></code> function above takes in input two optional parameters, <code class="docutils literal notranslate"><span class="pre">exe</span></code> and <code class="docutils literal notranslate"><span class="pre">stdout</span></code>. The former is your local BBarolo binary (if not given, it will search in your $PATH). The latter is where to write BBarolo’s messages: if <code class="docutils literal notranslate"><span class="pre">None</span></code> or not given, BBarolo will print messages on the command line, if <code class="docutils literal notranslate"><span class="pre">'filename.log'</span></code> it will write everything in a file <em>filename.log</em> , if <code class="docutils literal notranslate"><span class="pre">'null'</span></code> no output message will be written.</p>
+<p><strong>NB 1</strong>: Parameter names given to <code class="docutils literal notranslate"><span class="pre">BBaroloWrapper</span></code> are not case sensitive.</p>
+<p><strong>NB 2</strong>: No check is performed on the given parameters. If a parameter does not exist in BBarolo, it will just be ignored.</p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="index.html">Table of Contents</a></h3>
+<p class="caption" role="heading"><span class="caption-text">BBarolo:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installing.html">Installing BBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="running.html">Running BBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tasks/index.html">List of tasks and parameters</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fitsutils.html">Tools for FITS files</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">pyBBarolo:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="pybb_install.html">Installing pyBBarolo</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Quickstart</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#running-a-task">Running a task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#available-tasks">Available tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#example-1-3d-fit-of-a-galaxy">Example 1: 3D fit of a galaxy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#example-2-3d-model-of-a-galaxy">Example 2: 3D model of a galaxy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#example-3-all-tasks">Example 3: All tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pybbarolo-for-pros">pyBBarolo for PROs</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="pybb_api.html">API</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License and citations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+<div id="sidebarbutton" title="Collapse sidebar">
+<span>«</span>
+</div>
+
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="pybb_api.html" title="API"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="pybb_install.html" title="Installing pyBBarolo"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">BBarolo 1.8 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Quickstart</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2015, Enrico Di Teodoro.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+    </div>
+  </body>
+</html>

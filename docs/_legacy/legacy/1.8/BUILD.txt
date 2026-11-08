@@ -1,0 +1,1 @@
+Built on 2026-11-08 from github.com/editeodoro/Bbarolo, branch docs, commit dc3eedd, with Sphinx 9.1.1.

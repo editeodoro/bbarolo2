@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>SEARCH task &#8212; BBarolo 1.8 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../_static/classic.css?v=d6bdc565" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css" />
+    
+    <script src="../_static/documentation_options.js?v=b81e6271"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    
+    <script src="../_static/sidebar.js"></script>
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="SMOOTH task" href="smooth.html" />
+    <link rel="prev" title="GALMOD task" href="galmod.html" /> 
+  </head><body>
+<div style="background:#fff3cd;color:#5c3c00;border-bottom:1px solid #e0c97a;padding:8px 14px;font-family:sans-serif;font-size:14px;">
+<strong>BBarolo 1.8 (C++), archived.</strong> This is the documentation of the last C++ version, kept for reference.
+The current version is BBarolo 2, in pure Python: <a href="https://bbarolo.readthedocs.io/" style="color:#8b1a1a;">bbarolo.readthedocs.io</a>.
+</div>
+
+
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="smooth.html" title="SMOOTH task"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="galmod.html" title="GALMOD task"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">BBarolo 1.8 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="index.html" accesskey="U">List of tasks and parameters</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">SEARCH task</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="search-task">
+<span id="searchtask"></span><h1>SEARCH task<a class="headerlink" href="#search-task" title="Link to this heading">¶</a></h1>
+<p>BBarolo’s search algorithm is derived from <a class="reference external" href="https://www.atnf.csiro.au/people/Matthew.Whiting/Duchamp">Duchamp</a>, a 3D source finder for spectral-line data developed by <a class="reference external" href="https://www.atnf.csiro.au/people/Matthew.Whiting/">Matthew Whiting</a>. BBarolo adds a few new functionalities and parallelization. For a comprehensive description of the algorithm and the input parameters, see Duchamp’s <a class="reference external" href="http://adsabs.harvard.edu/abs/2012MNRAS.421.3242W">main paper</a> and <a class="reference external" href="http://www.atnf.csiro.au/people/Matthew.Whiting/Duchamp/downloads/UserGuide-1.6.1.pdf">user guide</a>.</p>
+<section id="parameters">
+<h2>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>SEARCH</strong> [false]. This flag enables the source finding algorithm. Can be <em>true</em> or <em>false</em>.</p></li>
+<li><p><strong>FLAGROBUSTSTATS</strong> [true]. Whether to use to robust estimators (median and MADFM) instead of normal estimators (mean and standard deviation) when calculating cube statistics.</p></li>
+<li><p><strong>ITERNOISE</strong> [false]. Whether to use an iterative algorithm to estimate the noise level. If true, it will reiterate over the array, masking pixels above 3sigma and re-calculating noise statistics until convergence.</p></li>
+<li><p><strong>SORTSOURCES</strong> [NVOX]. This parameter specifies how to sort detections. Accepted values are <em>XVALUE</em>, <em>YVALUE</em>, <em>ZVALUE</em>, <em>RA</em>, <em>DEC</em>, <em>VEL</em>, <em>IFLUX</em> (integrated flux), <em>PFLUX</em> (peak flux), <em>NPIX</em> (number of pixels), <em>NVOX</em> (number of voxels), <em>W20</em> (width at 20% peak flux), <em>W50</em> (width at 50% peak flux) and <em>SNR</em> (average signal-to-noise). By default, sorting is descending, but it can be done ascending by adding a <em>-</em> (e.g. <em>-VEL</em>).</p></li>
+<li><p><strong>CUBELETS</strong> [false]. If true, it produces individual cubelets and sub-images for each detected source.</p></li>
+<li><p><strong>SEARCHTYPE</strong> [spatial]. How the search is performed. Accepted values are <em>spatial</em>, <em>spectral</em> and <em>spatialsmooth</em>. Spatial search is done in 2D channel maps, spectral search along 1D spectra. Spatialsmoooth search is also done in 2D channel maps, but it’s performed on a pre-smoothed array (smoothing options are the same of the <a class="reference internal" href="smooth.html#smoothtask"><span class="std std-ref">SMOOTH</span></a> task).</p></li>
+<li><p><strong>SNRCUT</strong> [5]. The primary S/N cut (number of σ above the mean/median).</p></li>
+<li><p><strong>THRESHOLD</strong> [none]. Alternatively to SNRCUT, the primary threshold can be given in the same flux units of the input datacube. This overrides SNRCUT.</p></li>
+<li><p><strong>FLAGGROWTH</strong> [true]. Whether to grow detected sources to a secondary threshold.</p></li>
+<li><p><strong>GROWTHCUT</strong> [3]. Secondary S/N cut used when growing objects (number of σ above the mean/median).</p></li>
+<li><p><strong>GROWTHTHRESHOLD</strong> [none]. Alternatively to GROWTHCUT, the secondary threshold can be given in the same flux units of the input datacube. This overrides GROWTHCUT.</p></li>
+<li><p><strong>MINPIX</strong> [beam area]. The minimum number of spatial pixels for a detection to be accepted. Default is the area covered by the observational beam.</p></li>
+<li><p><strong>MINCHANNELS</strong> [2]. The minimum number of channels for a detection to be accepted.</p></li>
+<li><p><strong>MINVOXELS</strong> [none].  The minimum number of voxels for a detection to be accepted. If not set, MINVOXELS = MINPIX*MINCHANNELS.</p></li>
+<li><p><strong>MAXCHANNELS</strong> [none]. The maximum number of channels for a detection to be accepted. Default is no limits.</p></li>
+<li><p><strong>MAXANGSIZE</strong> [none]. The maximum angular size of a detection to be accepted in <em>arcmin</em>. Default is no limits.</p></li>
+<li><p><strong>FLAGADJACENT</strong> [true]. Whether to use the adjacent criterion to merge objects. If <em>false</em>, the next two parameters are used to determine whether objects are to be merged.</p></li>
+<li><p><strong>THRESHSPATIAL</strong> [2]. The maximum minimum spatial separation in <em>pixels</em> for two objects to be merged into a single one. Ignored if FLAGADJACENT is <em>true</em>.</p></li>
+<li><p><strong>THRESHVELOCITY</strong> [2]. The maximum minimum channel separation in <em>channels</em> for two objects to be merged into a single one.</p></li>
+<li><p><strong>REJECTBEFOREMERGE</strong> [true]. Whether to reject sources before merging them.</p></li>
+<li><p><strong>TWOSTAGEMERGING</strong> [true]. Whether to do a partial merge during search.</p></li>
+<li><p><strong>PBCORR</strong> [1]. Whether and how to corrects measured integrated fluxes for primary beam attenuation. Primary beam models are available only for WSRT, VLA, ATCA, GMRT and FST telescopes. Accepted values are: 0 = no PB correction; 1 = correct, and set to 0 if behind cutoff; 2 = correct, and set to NaN if behind cutoff; 3 = correct, and set to NaN if behind cutoff; 4 = correct, even behind cutoff. Pointing center is assumed to be at the CRVAL1 and CRVAL2 values.</p></li>
+</ul>
+</section>
+<section id="outputs">
+<h2>Outputs<a class="headerlink" href="#outputs" title="Link to this heading">¶</a></h2>
+<p>The task produces the following outputs. Here <em>NAME</em> is the name of the galaxy.</p>
+<ul class="simple">
+<li><p>A FITS file <em>detections.fits</em>, a datacube with just the detections.</p></li>
+<li><p>A FITS file <em>DetectMap.fits</em>, containing a 2D map telling how many channels are detected in each spaxel.</p></li>
+<li><p>FITS files of the moment maps for the detections (<em>NAME_mom0th.fits</em>, <em>NAME_mom1st.fits</em>, <em>NAME_mom2nd.fits</em>).</p></li>
+<li><p>A text file <em>detections.txt</em>, containing a list of detections and their properties.</p></li>
+</ul>
+</section>
+<section id="example">
+<h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
+<p>With the following <a class="reference download internal" download="" href="../_downloads/347328c91308a0df88c3af5c60f1fbbe/n2403_search.par"><code class="xref download docutils literal notranslate"><span class="pre">parameter</span></code></a> file, the <a class="reference external" href="https://github.com/editeodoro/Bbarolo/raw/docs/docs/source/tasks/examples/ngc2403.fits">datacube</a> of NGC2403 is searched. Unsurprisingly, the galaxy is detected…</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="n">FITSFILE</span><span class="w">    </span><span class="n">ngc2403</span><span class="p">.</span><span class="n">fits</span>
+<span class="n">THREADS</span><span class="w">     </span><span class="mi">4</span>
+
+<span class="c1">/////////// SEARCH parameters /////////////</span>
+<span class="n">SEARCH</span><span class="w">      </span><span class="nb">true</span>
+<span class="c1">// Searching map by map</span>
+<span class="n">SEARCHTYPE</span><span class="w">  </span><span class="n">spatial</span>
+<span class="c1">// Primary and secondary cut</span>
+<span class="n">SNRCUT</span><span class="w">      </span><span class="mi">10</span>
+<span class="n">GROWTHCUT</span><span class="w">   </span><span class="mi">3</span><span class="w"> </span>
+<span class="c1">// Setting some criteria for rejection    </span>
+<span class="n">MINPIX</span><span class="w">      </span><span class="mi">30</span>
+<span class="n">MINCHANNELS</span><span class="w"> </span><span class="mi">5</span>
+<span class="c1">///////////////////////////////////////////</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="../index.html">Table of Contents</a></h3>
+<p class="caption" role="heading"><span class="caption-text">BBarolo:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../installing.html">Installing BBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../running.html">Running BBarolo</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">List of tasks and parameters</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="general.html">General parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fit3d.html">3DFIT task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="spacepar.html">SPACEPAR task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="galmod.html">GALMOD task</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">SEARCH task</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#parameters">Parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#outputs">Outputs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example">Example</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="smooth.html">SMOOTH task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="smooth.html#smoothspec-task">SMOOTHSPEC task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fit2d.html">2DFIT task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ellprof.html">ELLPROF task</a></li>
+<li class="toctree-l2"><a class="reference internal" href="moment.html">Moment maps and position-velocity cuts</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../fitsutils.html">Tools for FITS files</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">pyBBarolo:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../pybb_install.html">Installing pyBBarolo</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pybb_quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pybb_api.html">API</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License and citations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../troubleshooting.html">Troubleshooting</a></li>
+</ul>
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+<div id="sidebarbutton" title="Collapse sidebar">
+<span>«</span>
+</div>
+
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="smooth.html" title="SMOOTH task"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="galmod.html" title="GALMOD task"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">BBarolo 1.8 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="index.html" >List of tasks and parameters</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">SEARCH task</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2015, Enrico Di Teodoro.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+    </div>
+  </body>
+</html>
