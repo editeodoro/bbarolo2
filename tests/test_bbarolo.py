@@ -3088,3 +3088,38 @@ def test_bayesian_noisecorr_conservative(tmp_path):
             assert nc['spatial'] < 0.4 * f.beam_area and area >= f.beam_area
         else:
             assert 1.7 < nc['spatial'] / f.beam_area < 2.3 and np.isclose(area, max(nc['spatial'], nc['spatial_core']))
+
+
+def test_ellprof_deconvolved_profile(tmp_path):
+    """ELLPROF also gives the profile deconvolved from the beam (as BayesianBBarolo): on a simulated disk it
+    recovers the profile of the model without the beam (the observed one is 30% low at the centre), in the units
+    of the column SDENS_FO; written in <prefix>_ellprof_deconvolved.txt (cubes only)."""
+    from astropy.io import fits
+    from bbarolo import GalMod, Ellprof
+    tmpl = emptyfits([64, 64, 48], [-10 / 3600., 10 / 3600., 10.], beam=50 / 3600., bunit="JY/BEAM", obj="SIM")
+    R = np.arange(5, 300, 10.)
+    kw = dict(radii=R, xpos=31.5, ypos=31.5, vsys=0., vrot=150 * np.tanh(R / 40.), vdisp=10., z0=5., inc=55., pa=30.,
+              dens=np.exp(-R / 50.), norm="NONE", mask="NONE", galmodtype="ANALYTIC", ringmode="NODES", verbose=False,
+              threads=2)
+    prof = {}
+    for name, sm in (("conv", True), ("true", False)):
+        hdu = GalMod(tmpl, sm=sm, **kw).run().model
+        e = Ellprof(fits.PrimaryHDU(np.asarray(hdu.data, np.float32), tmpl.header), nradii=6, radsep=25, xpos=31.5,
+                    ypos=31.5, inc=55, pa=30, z0=5, mask="THRESHOLD", threshold=1e-9, verbose=False)
+        prof[name] = e.run()
+    t, truth = prof["conv"].profile_deconvolved, prof["true"].profile["sdens_fo"]
+    assert np.allclose(t["sdens_fo_obs"], prof["conv"].profile["sdens_fo"], rtol=2e-3)
+    assert t["sdens_fo_obs"][0] < 0.75 * truth[0] and abs(t["sdens_fo"][0] / truth[0] - 1) < 0.05
+    assert np.all(np.abs(np.asarray(t["sdens_fo"]) / np.asarray(truth) - 1) < 0.15)
+    assert "himassdens" in t.colnames and np.all(t["e_sdens_fo_hi"] >= 0)
+    files = e.write(str(tmp_path / "out"))
+    assert str(tmp_path / "out" / "SIM_ellprof_deconvolved.txt") in files
+    a = np.loadtxt(str(tmp_path / "out" / "SIM_ellprof_deconvolved.txt"))
+    assert np.allclose(a[:, 1], prof["true"].profile_deconvolved["sdens_fo"], rtol=1e-3)
+    # a 2D map: no deconvolved profile
+    m2 = fits.PrimaryHDU(np.asarray(hdu.data, np.float32).sum(axis=0), tmpl.header)
+    for k in ("NAXIS3", "CDELT3", "CRPIX3", "CRVAL3", "CTYPE3", "CUNIT3"):
+        m2.header.remove(k, ignore_missing=True)
+    m2.header["NAXIS"] = 2
+    r2 = Ellprof(m2, nradii=6, radsep=25, xpos=31.5, ypos=31.5, inc=55, pa=30, mask="NONE", verbose=False).run()
+    assert "profile_deconvolved" not in r2 and len(r2.profile) == 6

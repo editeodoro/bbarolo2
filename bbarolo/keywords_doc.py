@@ -653,6 +653,16 @@ of single pixels and its face-on value
 (times cos `INC`); the number of blank pixels and the surface densities including them; for maps in
 Jy, also the face-on HI column density (1E20 atoms/cm2) and mass surface density (Msun/pc2). In
 BBarolo 1.8 the files were `<prefix>_densprof.txt` and `<prefix>_densmap.fits`.
+
+For a cube with a beam, `<prefix>_ellprof_deconvolved.txt` also gives the profile corrected for the
+beam, as BAYESIAN3DFIT computes it: the face-on surface densities of the rings whose beam-convolved
+model reproduces the total intensity map (the data in the mask dilated by one beam and ±3 channels, not
+clipped), with a weak smoothness prior and an annulus beyond the last ring that takes the emission
+outside the rings; `Z0` is the thickness of the model (thin if not given). The table has the radius, the
+deconvolved face-on surface density with its 1-sigma errors from the noise (the rings are fixed), the
+observed one (`SDENS_FO` above, which the beam smooths), the densities of the model (as `DENS` of
+GALMOD) and, for maps in Jy, the HI mass surface densities. With `SIDE` `A` or `R` it uses that half
+only. A 2D map has no deconvolved profile.
 """),
     '3DFIT': dict(
         group='Task',

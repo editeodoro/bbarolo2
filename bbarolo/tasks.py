@@ -430,13 +430,29 @@ def _compute_ellprof(c, par):
     text = buf.getvalue()
     if p.verbose:
         sys.stdout.write(text)
-    return Outputs(profile=read_table(io.StringIO(text)), map=ell.im.to_hdu(), ellprof=ell, _text=text)
+    out = Outputs(profile=read_table(io.StringIO(text)), map=ell.im.to_hdu(), ellprof=ell, _text=text)
+    # the profile deconvolved from the beam, as that of BayesianBBarolo (cubes only)
+    from .profile import ellprof_deconvolved
+    from .rings import readRings
+    dp = ellprof_deconvolved(c, readRings(p.gf, c.Head()), side=p.gf.SIDE)
+    if dp is not None:
+        seg = ell.getNseg() - 1
+        out["profile_deconvolved"] = ell.deconvolvedTable(dp, seg)
+        out["_dtext"] = ell.deconvolvedText(dp, seg)
+        if p.verbose:
+            sys.stdout.write("\n" + out["_dtext"])
+    elif p.verbose:
+        print(" ELLPROF: no deconvolved profile (it needs a cube with a beam, and enough pixels with data).")
+    return out
 
 
 def _write_ellprof(c, par, out):
     with open(_fn(c, "_ellprof.txt"), "w") as f:
         f.write(out["_text"])
     write_hdu(out["map"], _fn(c, "_ellprof_map.fits"))
+    if "_dtext" in out:
+        with open(_fn(c, "_ellprof_deconvolved.txt"), "w") as f:
+            f.write(out["_dtext"])
 
 
 def _compute_rend3d(c, par):
@@ -1488,7 +1504,9 @@ _doc(FitMod2D, """Fit a 2D tilted-ring model to a velocity field (2DFIT).
     the model velocity field), velfield (HDU of the velocity field that was fitted), mask.""")
 _doc(Ellprof, """Radial profiles in elliptical rings (ELLPROF).
 
-    Result: profile (Table), map (HDU of the map used), mask.""")
+    Result: profile (Table), profile_deconvolved (Table: the face-on surface density deconvolved from
+    the beam, as in BayesianBBarolo, with errors from the noise and the observed one; cubes only),
+    map (HDU of the map used), mask.""")
 _doc(Smooth, """Smooth a datacube spatially to a new beam (SMOOTH): BMAJ, BMIN, BPA (arcsec,
     degrees), or FACTOR (times the old beam).
 

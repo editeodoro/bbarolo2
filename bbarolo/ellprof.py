@@ -275,11 +275,72 @@ class Ellprof:
                     + e(self.Blankarea[i, seg]) + " " + e(self.Surfdens_Bl[i, seg]) + " "
                     + f"{self.getSurfDensFaceOn_Bl(i, seg):>{m + 1}.3e} ")
             if isJy:
-                # (2.356E5 D^2 S Msun, the constant of MASSDENSMAP; C++ used 2.36E5, and Jy for mJy and uJy)
-                mds = 2.356E-07 * self.getSurfDensFaceOn(i, seg) / (arctorad * arctorad)
-                mds *= _jy_prefix(unit.lower())
-                if "/b" in unit.lower() and h.BeamArea() != 0:
-                    mds /= h.BeamArea()
-                nd = mds / (8.41185687E-02 * 3.0857 * 3.0857)
+                nd, mds = self.hiDensities(self.getSurfDensFaceOn(i, seg))
                 line += f"{nd:>{m + 1}.3e} {mds:>{m + 1}.3e} "
             st.write(line + "\n")
+
+    def hiDensities(self, sdfo):
+        """(ONLY FOR HI DATA, map in Jy) the face-on number (1E20/cm2) and mass (Msun/pc2) surface densities of a
+        face-on surface density sdfo in the units of the map per arcsec2."""
+        h = self.im.Head()
+        unit = h.Bunit().replace(" ", "")
+        arctorad = 1 / 3600. * math.pi / 180.
+        # (2.356E5 D^2 S Msun, the constant of MASSDENSMAP; C++ used 2.36E5, and Jy for mJy and uJy)
+        mds = 2.356E-07 * sdfo / (arctorad * arctorad)
+        mds *= _jy_prefix(unit.lower())
+        if "/b" in unit.lower() and h.BeamArea() != 0:
+            mds /= h.BeamArea()
+        nd = mds / (8.41185687E-02 * 3.0857 * 3.0857)
+        return nd, mds
+
+    def deconvolvedText(self, dp, seg=0):
+        """The deconvolved profile dp (see profile.ellprof_deconvolved) as written in <prefix>_ellprof_deconvolved.txt,
+        with the observed face-on surface density of segment seg (column SDENS_FO of <prefix>_ellprof.txt)."""
+        h = self.im.Head()
+        unit = h.Bunit().replace(" ", "")
+        isJy = "jy" in unit.lower()
+        m = 12
+        s = (f"# ELLPROF deconvolved profile for {h.Name()}\n#\n# Map units: u = {unit}\n"
+             "# SDENS_FO: the face-on surface density whose beam-convolved model reproduces the total intensity map\n"
+             f"#   (beam {dp['beam']:.2f} arcsec), with its 1-sigma errors E_LO, E_HI from the noise "
+             f"({dp['nmc']} realisations; the rings are fixed);\n"
+             "# SDENS_FO_OBS: the observed face-on surface density (column SDENS_FO of _ellprof.txt), smoothed by "
+             "the beam;\n# DENS: the densities of the model, as DENS of GALMOD.\n")
+        if isJy:
+            s += ("# HIMASSDENS, HIMASSDENS_OBS: (ONLY FOR HI DATA!) the face-on mass surface densities of SDENS_FO and "
+                  "SDENS_FO_OBS.\n")
+        cols = ["SDENS_FO", "E_LO", "E_HI", "SDENS_FO_OBS", "DENS"]
+        units = ["u/arcs2", "u/arcs2", "u/arcs2", "u/arcs2", ""]
+        if isJy:
+            cols += ["HIMASSDENS", "E_LO", "E_HI", "HIMASSDENS_OBS"]
+            units += ["Msun/pc2"] * 4
+        s += "#" + f"{'RADIUS':>{m - 1}} " + "".join(f"{c:>{m}} " for c in cols) + "\n"
+        s += "#" + f"{'arcsec':>{m - 1}} " + "".join(f"{c:>{m}} " for c in units) + "\n#\n"
+        for i in range(len(dp["radii"])):
+            obs = self.getSurfDensFaceOn(i, seg)
+            vals = [dp["sdens_fo"][i], dp["err_lo"][i], dp["err_hi"][i], obs, dp["dens"][i]]
+            if isJy:
+                vals += [self.hiDensities(v)[1] for v in (dp["sdens_fo"][i], dp["err_lo"][i], dp["err_hi"][i], obs)]
+            s += f"{dp['radii'][i]:>{m}.3f} " + "".join(f"{v:>{m}.4e} " for v in vals) + "\n"
+        return s
+
+    def deconvolvedTable(self, dp, seg=0):
+        """The deconvolved profile dp as an astropy Table at full precision (columns radii, sdens_fo, e_sdens_fo_lo,
+        e_sdens_fo_hi, sdens_fo_obs, dens and, for HI data in Jy, himassdens, e_himassdens_lo, e_himassdens_hi,
+        himassdens_obs)."""
+        from astropy.table import Table
+        import astropy.units as u
+        h = self.im.Head()
+        isJy = "jy" in h.Bunit().replace(" ", "").lower()
+        nr = len(dp["radii"])
+        obs = np.array([self.getSurfDensFaceOn(i, seg) for i in range(nr)])
+        t = Table()
+        t["radii"] = np.asarray(dp["radii"], float) * u.arcsec
+        for k, v in (("sdens_fo", dp["sdens_fo"]), ("e_sdens_fo_lo", dp["err_lo"]), ("e_sdens_fo_hi", dp["err_hi"]),
+                     ("sdens_fo_obs", obs), ("dens", dp["dens"])):
+            t[k] = np.asarray(v, float)
+        if isJy:
+            for k, v in (("himassdens", dp["sdens_fo"]), ("e_himassdens_lo", dp["err_lo"]),
+                         ("e_himassdens_hi", dp["err_hi"]), ("himassdens_obs", obs)):
+                t[k] = np.array([self.hiDensities(x)[1] for x in np.asarray(v, float)]) * u.Msun / u.pc ** 2
+        return t

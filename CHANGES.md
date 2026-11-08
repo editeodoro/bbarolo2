@@ -253,6 +253,13 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **ELLPROF: the deconvolved profile** (`<prefix>_ellprof_deconvolved.txt`, `Result.profile_deconvolved`): for a
+  cube with a beam, the face-on surface density of the rings whose beam-convolved model reproduces the total
+  intensity map, as in BAYESIAN3DFIT (`bbarolo/profile.py`), with errors from the noise, next to the observed
+  one and, for HI in Jy, the mass surface densities. On a simulated marginally resolved disk it recovers the
+  profile without the beam (centre within 2%, where the observed one is 30% low). `<prefix>_ellprof.txt` is
+  unchanged.
+
 - **SIDE in BAYESIAN3DFIT** (`A`/`APPROACHING`, `R`/`RECEDING`): the likelihood uses only the pixels of that
   half of the galaxy, divided by the minor axis of the initial rings (median centre and position angle) and
   fixed during the sampling; before, SIDE was used only with `LIKEOPTS bbres=true`.
