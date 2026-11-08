@@ -3180,10 +3180,19 @@ def test_ellprof_deconvolved_profile(tmp_path):
     assert str(tmp_path / "out" / "SIM_ellprof_deconvolved.txt") in files
     a = np.loadtxt(str(tmp_path / "out" / "SIM_ellprof_deconvolved.txt"))
     assert np.allclose(a[:, 1], prof["true"].profile_deconvolved["sdens_fo"], rtol=1e-3)
-    # a 2D map: no deconvolved profile
-    m2 = fits.PrimaryHDU(np.asarray(hdu.data, np.float32).sum(axis=0), tmpl.header)
-    for k in ("NAXIS3", "CDELT3", "CRPIX3", "CRVAL3", "CTYPE3", "CUNIT3"):
-        m2.header.remove(k, ignore_missing=True)
-    m2.header["NAXIS"] = 2
-    r2 = Ellprof(m2, nradii=6, radsep=25, xpos=31.5, ypos=31.5, inc=55, pa=30, mask="NONE", verbose=False).run()
-    assert "profile_deconvolved" not in r2 and len(r2.profile) == 6
+    # a 2D map (the total intensity map of the cube): the rings projected and convolved with the beam give the same
+    # profile, in the units of the map
+    maps = {}
+    for name, sm in (("conv", True), ("true", False)):
+        m2 = fits.PrimaryHDU(np.asarray(GalMod(tmpl, sm=sm, **kw).run().model.data, np.float32).sum(axis=0) * 10.,
+                             tmpl.header.copy())
+        for k in ("NAXIS3", "CDELT3", "CRPIX3", "CRVAL3", "CTYPE3", "CUNIT3"):
+            m2.header.remove(k, ignore_missing=True)
+        m2.header["NAXIS"], m2.header["BUNIT"] = 2, "JY/BEAM*KM/S"
+        maps[name] = Ellprof(m2, nradii=6, radsep=25, xpos=31.5, ypos=31.5, inc=55, pa=30, z0=5, mask="NONE",
+                             verbose=False).run()
+    t2, truth2 = maps["conv"].profile_deconvolved, np.asarray(maps["true"].profile["sdens_fo"])
+    assert t2["sdens_fo_obs"][0] < 0.75 * truth2[0] and abs(t2["sdens_fo"][0] / truth2[0] - 1) < 0.05
+    dev = np.abs(np.asarray(t2["sdens_fo"]) / truth2 - 1)
+    assert np.all(dev[:-1] < 0.1) and dev[-1] < 0.25          # (the last ring: the edge of the disk)
+    assert np.allclose(t2["sdens_fo"], t["sdens_fo"], rtol=0.06)        # (the cube: its map is the same, x channel width)

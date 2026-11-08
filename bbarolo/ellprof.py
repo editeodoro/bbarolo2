@@ -303,9 +303,11 @@ class Ellprof:
         s = (f"# ELLPROF deconvolved profile for {h.Name()}\n#\n# Map units: u = {unit}\n"
              "# SDENS_FO: the face-on surface density whose beam-convolved model reproduces the total intensity map\n"
              f"#   (beam {dp['beam']:.2f} arcsec), with its 1-sigma errors E_LO, E_HI from the noise "
-             f"({dp['nmc']} realisations; the rings are fixed);\n"
+             f"({dp['nmc']} realisations of the " + ("scatter of the residuals" if dp.get("map2d") else "noise")
+             + "; the rings are fixed);\n"
              "# SDENS_FO_OBS: the observed face-on surface density (column SDENS_FO of _ellprof.txt), smoothed by "
-             "the beam;\n# DENS: the densities of the model, as DENS of GALMOD.\n")
+             "the beam;\n# DENS: " + ("the face-on surface density in map units per pixel.\n" if dp.get("map2d") else
+                                      "the densities of the model, as DENS of GALMOD.\n"))
         if isJy:
             s += ("# HIMASSDENS, HIMASSDENS_OBS: (ONLY FOR HI DATA!) the face-on mass surface densities of SDENS_FO and "
                   "SDENS_FO_OBS.\n")

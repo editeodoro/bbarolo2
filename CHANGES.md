@@ -264,7 +264,9 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   intensity map, as in BAYESIAN3DFIT (`bbarolo/profile.py`), with errors from the noise, next to the observed
   one and, for HI in Jy, the mass surface densities. On a simulated marginally resolved disk it recovers the
   profile without the beam (centre within 2%, where the observed one is 30% low). `<prefix>_ellprof.txt` is
-  unchanged.
+  unchanged. A 2D map (e.g. a moment-0 map) is deconvolved with the rings projected on the sky (thin, or with
+  `LTYPE` and `Z0`) and convolved with the beam (`profile.MapRingModel`), with errors from the residuals; it
+  gives the same profile as the cube.
 
 - **SIDE in BAYESIAN3DFIT** (`A`/`APPROACHING`, `R`/`RECEDING`): the likelihood uses only the pixels of that
   half of the galaxy, divided by the minor axis of the initial rings (median centre and position angle) and
