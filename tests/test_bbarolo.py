@@ -3196,3 +3196,29 @@ def test_ellprof_deconvolved_profile(tmp_path):
     dev = np.abs(np.asarray(t2["sdens_fo"]) / truth2 - 1)
     assert np.all(dev[:-1] < 0.1) and dev[-1] < 0.25          # (the last ring: the edge of the disk)
     assert np.allclose(t2["sdens_fo"], t["sdens_fo"], rtol=0.06)        # (the cube: its map is the same, x channel width)
+
+
+def test_ellprof_deconvolved_clipped_map_errors():
+    """The errors of the deconvolved profile of a clipped 2D map (zero outside the emission, as moment maps
+    within a mask) come from the residuals of its pixels with data: the zeros, which the model fits almost exactly,
+    made them 3-5 times too small (68% intervals covering 11-28% of the true values on simulated disks)."""
+    from astropy.io import fits
+    from bbarolo import GalMod, Ellprof
+    tmpl = emptyfits([64, 64, 48], [-10 / 3600., 10 / 3600., 10.], beam=30 / 3600., bunit="JY/BEAM", obj="CLIP")
+    R = np.arange(5., 300, 10.)
+    gm = GalMod(tmpl, radii=R, xpos=31.5, ypos=31.5, vsys=0., vrot=150 * np.tanh(R / 30.), vdisp=10., z0=5., inc=60.,
+                pa=30., dens=np.exp(-R / 50.), norm="NONE", mask="NONE", galmodtype="ANALYTIC", ringmode="NODES",
+                verbose=False, threads=2)
+    m = np.asarray(gm.run().model.data, np.float64).sum(axis=0) * 10.
+    h = tmpl.header.copy()
+    for k in ("NAXIS3", "CDELT3", "CRPIX3", "CRVAL3", "CTYPE3", "CUNIT3"):
+        h.remove(k, ignore_missing=True)
+    h["NAXIS"], h["BUNIT"] = 2, "JY/BEAM*KM/S"
+    rng = np.random.default_rng(4)
+    noisy = m + rng.normal(0., 0.02 * m.max(), m.shape)
+    err = {}
+    for name, data in (("full", noisy), ("clipped", np.where(m > 0.01 * m.max(), noisy, 0.))):
+        e = Ellprof(fits.PrimaryHDU(data.astype(np.float32), h), nradii=8, radsep=20, xpos=31.5, ypos=31.5, inc=60,
+                    pa=30, z0=5, mask="NONE", verbose=False).run()
+        err[name] = np.asarray(e.profile_deconvolved["e_sdens_fo_hi"])
+    assert np.all(err["clipped"][:6] > 0.6 * err["full"][:6])

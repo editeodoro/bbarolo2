@@ -276,6 +276,9 @@ def ellprof_deconvolved(c, rings, side="B", smooth=0.1, nmc=200, seed=0):
     noise = 1.                                          # (the noise of b: 1, as b is divided by the rms)
     if is2d:                                            # (uniform weights: the scatter of the residuals)
         res = b - A @ sol
+        nz = b != 0                                     # (a clipped map: its zeros are not data, and fit too well)
+        if nz.sum() > 2 * A.shape[1] and nz.sum() < 0.9 * nz.size:
+            res = res[nz]
         noise = float(np.std(res) * math.sqrt(res.size / max(res.size - A.shape[1], 1)))
     # errors: refits of the best-fit map plus noise with the spatial correlation of the data
     lo = hi = np.zeros(nr)
