@@ -68,7 +68,9 @@ class DensityMixin(object):
     def _profile_system(self, rings):
         """ The weighted least-squares system of the deconvolved profile (see
         bbarolo.profile.profile_system), in the likelihood box: the data map data_mom0 with its
-        noise map_rms, in the pixels of the likelihood region with data. """
+        noise map_rms, in the pixels of the likelihood region with data. The data map sums the
+        likelihood voxels, the ring maps all the channels: the profile assumes that the likelihood
+        voxels hold the whole line (true with the default dilated mask, not with dilation (0, 0)). """
         from ..profile import profile_system
         Lb, Hb = self._likebox
         h = self._cube_obj.Head()

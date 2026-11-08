@@ -7,6 +7,36 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **3DFIT: the rings that failed in the first stage (C++).** The regularisation of the second stage used
+  all the rings, also those skipped, not converged, rejected (VROT out of the band) or inside STARTRAD,
+  with their initial or rejected values; it uses only the rings fitted now, evaluated at all the radii.
+  When the regularisation failed, the rings not fitted kept their DENS and appeared in the final model
+  with their initial values: they are empty now. ADRIFT used them too; it uses only the rings fitted.
+- **3DFIT: VDISP trial values out of [MINVDISP, MAXVDISP]** were redrawn as the bound ∓ u·VDISP, which
+  crossed the other bound when the initial VDISP was larger than MAXVDISP − MINVDISP (and with MAXVDISP
+  below VDISP a negative dispersion stopped the fit) **(C++)**. They are redrawn within the interval, and
+  MINVDISP ≥ MAXVDISP is an error of the checks.
+- **3DFIT with REVERSE**: the beam-wide rings that replace narrower ones took the initial values of the
+  ring with the same index, i.e. of a smaller radius; they are interpolated at the new radii now **(C++)**.
+- **Several emission lines (RESTWAVE/RESTFREQ with RELINT) (C++).** Each line was shifted from the first
+  by a fixed velocity, exact only for a cloud at velocity 0 (relative to REDSHIFT): with optical or radio
+  velocities [NII]6583 was off by ~1 km/s per 300 km/s of the cloud, Hβ relative to Hα by 80–100 km/s,
+  and lines given with cz in VSYS by ~85 km/s at z = 0.1. Each line now has its own reference frequency,
+  so the lines of a cloud share its Doppler factor (GALMOD, 3DFIT, GALWIND, GalMod3D). Several lines on a
+  velocity axis, where only one is modelled, give a warning.
+- **MC models in a box** (the models of single rings in 3DFIT and in the Bayesian likelihood) were not
+  crops of the model of the whole cube when clouds fell outside the box (a Lorentzian layer, a disk cut by
+  the edge of the field): those clouds did not draw their velocity deviates, so the rest of the ring was
+  another realisation, and the residuals jumped by the MC noise as the fit moved clouds across the edge of
+  the box **(C++)**. Models of disks inside the field with LTYPE 1–3 do not change.
+- **BayesianBBarolo: the exterior annulus of the deconvolved density profile** started at the outer edge
+  of the rings also when RADMAX (edge or taper) puts the edge of the disk inside the last ring, so the
+  truncated last ring took the emission between the two; it starts at RADMAX now.
+- **BayesianBBarolo: the smoothness penalties (`lambdas`)** used the separation of the first two rings for
+  all the rings, and put the zero of VROT one separation inside the first ring instead of at R = 0, so a
+  rotation curve rising linearly from the centre was penalised **(C++)**. They are second derivatives on
+  the radii of the rings now.
+
 - **SMOOTH did not rescale cubes in mJy/beam, uJy/beam and W.U.** to the new beam (scale factor 1, as for
   data per pixel): mJy/beam and uJy/beam since they are no longer taken as Jy/beam, W.U. also in C++
   **(C++)**. They are rescaled as Jy/beam now.
@@ -222,15 +252,16 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   fits (`--galmodtype MC`), 3DFIT on the same cubes (`--fit3d`), and the errors of the medians
   in the summary. Validation of the defaults (12 disks per case; S/N 5–40; 3, 5 and 8 beams; flat,
   warped, thick and lagging disks; ANALYTIC and MC fits; 144 fits, one failed: at S/N 5 SEARCH found no source):
-  * the medians are more accurate than 3DFIT on the same cubes: at 3 beams and S/N 20, scatter of
+  * the medians are more accurate than 3DFIT on the same cubes: at 3 beams and S/N 20 (12 fits), scatter of
     VROT 6.5 against 10.1 km/s, INC 1.2° against 2.3°, PA 0.7° against 1.9°; 3DFIT's INC is
     biased by −1.8° and −3.0° at 5 and 8 beams (the posterior: −0.3° and −0.4°);
   * the credible intervals of VROT are 2–3 times too wide (coverage of the 68% intervals
     0.92–1.00, pulls ± 0.3–0.5), those of INC and PA up to twice at 3 beams: the factor
     1/(correlation volume of the noise) is exact only for a signal smoother than the beam;
-  * VDISP is biased low by 0.3–1.6 km/s at S/N 20–40 (coverage 0.25–0.75), with the data in the
-    dilated mask or in all the voxels, and with the true density profile; at S/N 5 INC is
-    biased by −7.5° (3DFIT: +5°);
+  * VDISP is biased low by 0.4–1.6 km/s at S/N 20–40 (coverage 0.25–0.75), with the data in the
+    dilated mask or in all the voxels, and with the true density profile, and by 3.7 ± 1.6 km/s at
+    S/N 10 (true VDISP 10–22 km/s; coverage 0.83; 3DFIT −0.9 ± 3.4); at S/N 10 INC is biased by
+    +2.3°, at S/N 5 by −7.5° (3DFIT: +5°);
   * MC fits, thick and lagging disks, and warps (INC and PA in each ring) behave as flat disks
     with ANALYTIC fits.
 - **GUESSTYPE: new initial estimates** of the parameters that are not given (3DFIT, 2DFIT,

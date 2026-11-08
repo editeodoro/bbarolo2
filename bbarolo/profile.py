@@ -8,9 +8,9 @@ where K_r is the map of ring r with unit density convolved with the beam
 on the geometry. For a given geometry the densities that reproduce an observed map are a
 non-negative weighted least-squares problem, with:
 
-  * an exterior annulus, from the outer edge of the rings to two beams beyond, with its own
-    density: it takes the emission beyond the last ring, which the last ring would otherwise
-    absorb (its density is not used);
+  * an exterior annulus, from the outer edge of the disk (the edge of the rings, or RADMAX when it
+    is the edge of the disk) to two beams beyond, with its own density: it takes the emission beyond
+    the disk, which the last ring would otherwise absorb (its density is not used);
   * a smoothness prior: rings narrower than the beam are nearly degenerate once convolved, and
     noise or non-axisymmetric structure make the solution oscillate from ring to ring. The squared
     second differences of the profile (including the exterior annulus) are penalised with a weight
@@ -41,7 +41,10 @@ def profile_system(model, rings, box, data_map, rms_map, ok_map, beam_arcsec=Non
         w = 2. * beam_arcsec
     else:
         w = 2. * float(np.max(np.diff(R), initial=R[-1]))
-    rext = outer_edge(r, model.ringmode) + w / 2.
+    edge = outer_edge(r, model.ringmode)
+    if getattr(r, "edge", None) is not None:          # (RADMAX as the edge of the disk, also inside the last ring)
+        edge = min(edge, float(r.edge))
+    rext = edge + w / 2.
     ext = Rings().setRings(radii=[rext], xpos=r.xpos[-1], ypos=r.ypos[-1], vsys=r.vsys[-1], vrot=r.vrot[-1],
                            vdisp=r.vdisp[-1], z0=r.z0[-1], inc=r.inc[-1], phi=r.phi[-1], dens=1., radsep=w)
     K = np.concatenate([K, model.ring_maps(ext, Lb, Hb, ringmode="CENTRED")])

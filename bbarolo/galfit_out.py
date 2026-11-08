@@ -230,8 +230,12 @@ def writeModel(c, model, rings, normtype, mask, par=None, makeplots=False, fit=N
                 print("    Computing asymmetric drift correction...", end="", flush=True)
             strad = par.STARTRAD if par.STARTRAD < rings.nr else 0
             dens_m = np.array([ell.getMedian(i) for i in range(rings.nr)])
-            ok = asymmetricDrift(c, par, rings.radii[strad:], dens_m[strad:], rings.vdisp[strad:],
-                                 rings.vrot[strad:], rings.inc[strad:])
+            # the rings fitted, from STARTRAD (C++ used also those that were not fitted)
+            sel = np.arange(rings.nr) >= strad
+            if getattr(fit, "fitok", None) is not None:
+                sel &= np.asarray(fit.fitok, bool)
+            ok = sel.sum() >= 2 and asymmetricDrift(c, par, rings.radii[sel], dens_m[sel], rings.vdisp[sel],
+                                                    rings.vrot[sel], rings.inc[sel])
             if verb:
                 print(" Done." if ok else " Failed.")
     if makeplots and fit is not None:

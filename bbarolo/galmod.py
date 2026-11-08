@@ -27,7 +27,7 @@ import numpy as np
 import numba as nb
 from concurrent.futures import ThreadPoolExecutor
 
-from .bbutils import BBaroloError, DeltaVel, AlltoVel, C_MS, arcsconv
+from .bbutils import BBaroloError, DeltaVel, C_MS, arcsconv
 from ._rng import rng_init, rng_uniform, rng_normal
 from .smooth import Smooth3D, FFTConvolver
 
@@ -80,13 +80,14 @@ def _fdev(ltype, st):
 
 @nb.njit(nogil=True, cache=True)
 def _galmod_mc(out, sr, ring_lo, ring_hi, seed, radsep, nv, cdens, cmode, pixarea, cdelt0, cdelt1,
-               crota2, blo0, blo1, bhi0, bhi1, ltype, sig_instr, axtyp, velsys, freq0, crval3,
-               cdelt3, crpix3, relvel, relint, cd2i):
+               crota2, blo0, blo1, bhi0, bhi1, ltype, sig_instr, axtyp, velsys, lfreq0, crval3,
+               cdelt3, crpix3, relint, cd2i):
     """Monte-Carlo GALMOD kernel. sr: (14, nsub) array of sub-ring values in internal units:
-    radius, vrot, vrad, vvert, vdisp, dens, z0, dvdz, zcyl, inc, phi, xpos, ypos, vsys."""
+    radius, vrot, vrad, vvert, vdisp, dens, z0, dvdz, zcyl, inc, phi, xpos, ypos, vsys. lfreq0, relint: the
+    reference frequency (the rest frequency at REDSHIFT) and the relative intensity of each line."""
     st = rng_init(seed)
     nz = out.shape[2]
-    nlines = relvel.shape[0]
+    nlines = lfreq0.shape[0]
     linear = axtyp == 4 and nlines == 1
     ia = 1.0 / cdelt3
     ib = -crval3 / cdelt3 + crpix3 - 1
@@ -123,7 +124,10 @@ def _galmod_mc(out, sr, ring_lo, ring_hi, seed, radsep, nv, cdens, cmode, pixare
             g0 = _lround(xpos + (x * spa - y * cpa) / cdelt0)
             g1 = _lround(ypos + (x * cpa + y * spa) / cdelt1)
             if g0 < blo0 or g0 >= bhi0 or g1 < blo1 or g1 >= bhi1:
-                # NB: the random numbers for the velocity deviates are not drawn
+                # the velocity deviates are drawn all the same, so that the model in a box is the crop of
+                # the model of the whole cube (C++ did not draw them)
+                for iv in range(nvr):
+                    rng_normal(st)
                 continue
             px = g0 - blo0
             py = g1 - blo1
@@ -135,7 +139,7 @@ def _galmod_mc(out, sr, ring_lo, ring_hi, seed, radsep, nv, cdens, cmode, pixare
             vs += vvert * cinc
             if linear:
                 # velocity axis, single line: linear velocity->channel mapping
-                g0 = (vs + relvel[0]) * ia + ib
+                g0 = vs * ia + ib
                 sg = vdisptmp * ia
                 val = relint[0] * fluxsc
                 for iv in range(nvr):
@@ -145,10 +149,9 @@ def _galmod_mc(out, sr, ring_lo, ring_hi, seed, radsep, nv, cdens, cmode, pixare
                     out[py, px, isubs] += val * cd2i[isubs]
             else:
                 for iv in range(nvr):
-                    vdev = rng_normal(st) * vdisptmp
+                    v = vs + rng_normal(st) * vdisptmp
                     for nl in range(nlines):
-                        v = vs + vdev + relvel[nl]
-                        isubs = _lround(_velgrid(v, axtyp, velsys, freq0, crval3, cdelt3, crpix3))
+                        isubs = _lround(_velgrid(v, axtyp, velsys, lfreq0[nl], crval3, cdelt3, crpix3))
                         if isubs < 0 or isubs >= nz:
                             continue
                         out[py, px, isubs] += relint[nl] * fluxsc * cd2i[isubs]
@@ -159,6 +162,7 @@ def _galmod_mc(out, sr, ring_lo, ring_hi, seed, radsep, nv, cdens, cmode, pixare
 # Linear interpolation on a 1/512 grid: |error| < 5e-7. Beyond +-6 sigma Phi is 0 or 1.
 _PHI_TMAX = 6.0
 _PHI_ISTEP = 512.0
+_WARNED_LINES = set()         # (the cubes already warned about several lines on a velocity axis)
 _PHI_TAB = np.array([0.5 * math.erfc(-(-_PHI_TMAX + k / _PHI_ISTEP) / math.sqrt(2.0))
                      for k in range(int(2 * _PHI_TMAX * _PHI_ISTEP) + 2)])
 
@@ -248,8 +252,8 @@ def _lorentz_frac(ltype, z0, R0, radsep, sinc, xpos, ypos, cdelt0, cdelt1, blo0,
 
 @nb.njit(nogil=True, cache=True)
 def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, cdelt1, crota2,
-                     blo0, blo1, bhi0, bhi1, ltype, sig_instr, vedges, relvel, relint, cd2i, nzq,
-                     axtyp, velsys, freq0, crval3, cdelt3, crpix3, chwidth, ptab):
+                     blo0, blo1, bhi0, bhi1, ltype, sig_instr, vedges, relint, cd2i, nzq,
+                     axtyp, velsys, lfreq0, crval3, cdelt3, crpix3, chwidth, ptab):
     """Deterministic GALMOD: clouds on a regular grid in radius/azimuth/height (nearest-pixel
     deposit, as in the Monte-Carlo GALMOD) with analytic channel-integrated line profiles.
 
@@ -258,7 +262,7 @@ def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, 
     same pixel are deposited together, and the Gaussian integrals use a tabulated CDF
     with shared channel edges."""
     nz = out.shape[2]
-    nlines = relvel.shape[0]
+    nlines = lfreq0.shape[0]           # (vedges: the channel edges in the velocity of each line)
     pixsize = math.sqrt(pixarea)
     zq = np.empty(max(nzq, 1))
     nzcur = -1
@@ -332,9 +336,9 @@ def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, 
                 for nl in range(nlines):
                     a = relint[nl] * fluxsc
                     if not zdep:
-                        v = vplane + relvel[nl]
-                        kc = _lround(_velgrid(v, axtyp, velsys, freq0, crval3, cdelt3, crpix3))
-                        k0, nk = _line_profile(prof, v, sig, vedges, cd2i, ptab, kc, K, nz)
+                        v = vplane
+                        kc = _lround(_velgrid(v, axtyp, velsys, lfreq0[nl], crval3, cdelt3, crpix3))
+                        k0, nk = _line_profile(prof, v, sig, vedges[nl], cd2i, ptab, kc, K, nz)
                         if nk == 0:
                             continue
                         kz = 0
@@ -364,9 +368,8 @@ def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, 
                                 v = vsys0 + ((vrot - dvdz * (az_ - zcyl)) * caz + vrad * saz) * sinc + vvert * cinc
                             else:
                                 v = vplane
-                            v += relvel[nl]
-                            kc = _lround(_velgrid(v, axtyp, velsys, freq0, crval3, cdelt3, crpix3))
-                            k0, nk = _line_profile(prof, v, sig, vedges, cd2i, ptab, kc, K, nz)
+                            kc = _lround(_velgrid(v, axtyp, velsys, lfreq0[nl], crval3, cdelt3, crpix3))
+                            k0, nk = _line_profile(prof, v, sig, vedges[nl], cd2i, ptab, kc, K, nz)
                             if nk == 0:
                                 continue
                             if in1 and in2 and gx[kz] == gx[kz2] and gy[kz] == gy[kz2]:
@@ -451,13 +454,13 @@ def _ring_maps_analytic(out, sr, widx, wval, radsep, pixarea, cdelt0, cdelt1, cr
 
 @nb.njit(nogil=True, cache=True)
 def _galmod_wind(out, sr, ring_lo, ring_hi, seed, sep, nv, cdens, cmode, pixarea, cdelt0, cdelt1,
-                 crota2, blo0, blo1, bhi0, bhi1, sig_instr, axtyp, velsys, freq0, crval3, cdelt3,
-                 crpix3, relvel, relint, cd2i):
+                 crota2, blo0, blo1, bhi0, bhi1, sig_instr, axtyp, velsys, lfreq0, crval3, cdelt3,
+                 crpix3, relint, cd2i):
     """GALMOD for spherical (bi-conical) winds. sr rows: radius, vrot, vsph, vdisp, dens, inc,
     pa, openang, xpos, ypos, vsys (internal units)."""
     st = rng_init(seed)
     nz = out.shape[2]
-    nlines = relvel.shape[0]
+    nlines = lfreq0.shape[0]
     for ir in range(ring_lo, ring_hi):
         rtmp = sr[0, ir]
         nc = _lround(cdens * sr[4, ir] ** cmode * 2 * math.pi * rtmp * sep / pixarea)
@@ -488,14 +491,15 @@ def _galmod_wind(out, sr, ring_lo, ring_hi, seed, sep, nv, cdens, cmode, pixarea
             g0 = _lround(sr[8, ir] + (x * spa - y * cpa) / cdelt0)
             g1 = _lround(sr[9, ir] + (x * cpa + y * spa) / cdelt1)
             if g0 < blo0 or g0 >= bhi0 or g1 < blo1 or g1 >= bhi1:
+                for iv in range(nvr):              # (as in _galmod_mc: the box model is a crop)
+                    rng_normal(st)
                 continue
             px, py = g0 - blo0, g1 - blo1
             vs = vsystmp + vsphtmp * (cphi * cinc + sphi * saz * sinc) + vrottmp * caz * sinc
             for iv in range(nvr):
-                vdev = rng_normal(st) * vdisptmp
+                v = vs + rng_normal(st) * vdisptmp
                 for nl in range(nlines):
-                    v = vs + vdev + relvel[nl]
-                    isubs = _lround(_velgrid(v, axtyp, velsys, freq0, crval3, cdelt3, crpix3))
+                    isubs = _lround(_velgrid(v, axtyp, velsys, lfreq0[nl], crval3, cdelt3, crpix3))
                     if isubs < 0 or isubs >= nz:
                         continue
                     out[py, px, isubs] += relint[nl] * fluxsc * cd2i[isubs]
@@ -541,7 +545,10 @@ class GalmodSetup:
         self.crpix3 = h.Crpix(2)
         self.velsys = {"radio": 1, "optical": 2, "relativistic": 3}.get(h.VelDef(), 1)
         sptype = h.SpectralType()
-        self.relvel = np.array([0.])
+        # several lines: the reference frequency of each (its rest frequency at REDSHIFT), so that every line
+        # of a cloud has the same Doppler factor (C++ added a fixed velocity offset to each line, which did
+        # not scale with the velocity of the cloud)
+        lfreq0 = None
         self.relint = np.array([1.])
         self.freq0 = 0.1420405751786E10
         if sptype == "wave":
@@ -556,7 +563,7 @@ class GalmodSetup:
             restw = p.getRestwave()
             self.freq0 = C_MS / (restw * (1 + reds) * mconv) if restw != -1 else C_MS / self.crval3
             if len(gm.RESTWAVE) > 1:
-                self.relvel = np.array([AlltoVel(w * (1 + reds), h) * 1000. for w in gm.RESTWAVE])
+                lfreq0 = C_MS / (np.asarray(gm.RESTWAVE, float) * (1 + reds) * mconv)
                 self.relint = np.array(gm.RELINT, float)
         elif sptype == "freq":
             self.axtyp = 3
@@ -570,7 +577,7 @@ class GalmodSetup:
                 self.freq0 = 0.1420405751786E10
             if len(gm.RESTFREQ) > 1:
                 # observed frequency of each line: f/(1+z) (C++ used f*(1+z))
-                self.relvel = np.array([AlltoVel(f / (1 + reds) / hz, h) * 1000. for f in gm.RESTFREQ])
+                lfreq0 = np.asarray(gm.RESTFREQ, float) / (1 + reds)
                 self.relint = np.array(gm.RELINT, float)
         elif "velo" in sptype:
             self.axtyp = 4
@@ -583,6 +590,10 @@ class GalmodSetup:
                 self.freq0 = 0.1420405751786E10
             self.crval3 *= msconv
             self.cdelt3 *= msconv
+            if max(len(gm.RESTWAVE), len(gm.RESTFREQ)) > 1 and h.fitsname not in _WARNED_LINES:
+                _WARNED_LINES.add(h.fitsname)
+                sys.stderr.write(" GALMOD WARNING: several lines (RESTWAVE/RESTFREQ) on a velocity axis: only one "
+                                 "line is modelled.\n")
         else:
             raise BBaroloError("GALMOD ERROR: unknown Spectral axis type. Check CTYPE3 and CUNIT3 keywords.")
         nch = p.specres if getattr(p, "specres", -1) != -1 else p.linear     # (LINEAR: as in C++)
@@ -610,9 +621,11 @@ class GalmodSetup:
             self.cd2i = np.full(self.nsubs, np.float32(3600. / self.chwidth * 1000.), dtype=np.float64)
         else:
             self.cd2i = self._NHItoRAD()
-        self.relvel = np.ascontiguousarray(self.relvel, dtype=np.float64)
+        self.lfreq0 = np.ascontiguousarray([self.freq0] if lfreq0 is None else lfreq0, dtype=np.float64)
         self.relint = np.ascontiguousarray(self.relint, dtype=np.float64)
         self._vedges = self._velocity_edges()
+        # the channel edges in the velocity of each line (ANALYTIC models)
+        self._vedges_lines = np.ascontiguousarray([self._velocity_edges(f) for f in self.lfreq0])
         # narrowest channel (km/s -> m/s units as vedges), to size the line-profile windows
         self._chmin = float(np.min(np.abs(np.diff(self._vedges)))) if self.nsubs > 0 else self.chwidth
 
@@ -632,14 +645,15 @@ class GalmodSetup:
         ddum = 2 * (K / jy) / (fac * lab * lab) / abs(self.cdelt3)
         return (ddum * (math.pi / (180.0 * 60.0)) ** 2).astype(np.float32).astype(np.float64)
 
-    def _velocity_edges(self):
-        """Velocity (m/s) of the channel boundaries (inverse of velgrid at k-0.5)."""
+    def _velocity_edges(self, freq0=None):
+        """Velocity (m/s) of the channel boundaries (inverse of velgrid at k-0.5), for the line of reference
+        frequency freq0 (default: the first line)."""
         g = np.arange(self.nsubs + 1) - 0.5
         w = (g + 1 - self.crpix3) * self.cdelt3 + self.crval3
         if self.axtyp == 4:
             return w
         f = C_MS / w if self.axtyp == 2 else w
-        r = f / self.freq0
+        r = f / (self.freq0 if freq0 is None else freq0)
         if self.velsys == 1:
             v = C_MS * (1 - r)
         elif self.velsys == 2:
@@ -758,8 +772,8 @@ class GalmodSetup:
             # maximum number of vertical samples (more with a vertical gradient: see _galmod_analytic)
             nzq = 1 if not np.any(sr[6] > 0) else (256 if np.any(sr[7] != 0) else 64)
             args = (sr, self.radsep, self.cdens, self.pixarea, self.cdelt[0], self.cdelt[1], self.crota2,
-                    blo[0], blo[1], bhi[0], bhi[1], self.ltype, self.sig_instr, self._vedges,
-                    self.relvel, self.relint, self.cd2i, nzq, self.axtyp, self.velsys, self.freq0,
+                    blo[0], blo[1], bhi[0], bhi[1], self.ltype, self.sig_instr, self._vedges_lines,
+                    self.relint, self.cd2i, nzq, self.axtyp, self.velsys, self.lfreq0,
                     self.crval3, self.cdelt3, self.crpix3, self._chmin, _PHI_TAB)
             if nthreads <= 1 or nsub < 2 * nthreads:
                 _galmod_analytic(out, sr, 0, nsub, *args[1:])
@@ -774,7 +788,7 @@ class GalmodSetup:
             return out
         args = (self.radsep, nv, self.cdens, self.cmode, self.pixarea, self.cdelt[0], self.cdelt[1],
                 self.crota2, blo[0], blo[1], bhi[0], bhi[1], self.ltype, self.sig_instr, self.axtyp,
-                self.velsys, self.freq0, self.crval3, self.cdelt3, self.crpix3, self.relvel, self.relint, self.cd2i)
+                self.velsys, self.lfreq0, self.crval3, self.cdelt3, self.crpix3, self.relint, self.cd2i)
         if nthreads <= 1 or nsub < 2 * nthreads:
             _galmod_mc(out, sr, 0, nsub, seed, *args)
         else:

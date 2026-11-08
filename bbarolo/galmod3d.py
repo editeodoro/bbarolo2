@@ -118,13 +118,13 @@ class _Field:
 # numba kernels
 # --------------------------------------------------------------------------
 @nb.njit(cache=True, nogil=True)
-def _deposit_analytic(out, gx, gy, vel, sig, w, sig_instr, vedges, relvel, relint, ones, ptab, chmin,
-                      axtyp, velsys, freq0, crval3, cdelt3, crpix3):
+def _deposit_analytic(out, gx, gy, vel, sig, w, sig_instr, vedges, relint, ones, ptab, chmin,
+                      axtyp, velsys, lfreq0, crval3, cdelt3, crpix3):
     """Deposit the points (gx, gy: pixels; vel: m/s; sig: m/s; w: weights) in the nearest pixel of out
     (ny, nx, nz), as GALMOD, each with its Gaussian line (dispersion sqrt(sig^2 + sig_instr^2)) integrated
-    over the channels, for each line (relvel, relint)."""
+    over the channels, for each line (reference frequency lfreq0, channel edges vedges, intensity relint)."""
     ny, nx, nz = out.shape
-    nlines = relvel.shape[0]
+    nlines = lfreq0.shape[0]
     prof = np.empty(nz)
     for i in range(gx.shape[0]):
         ix, iy = _lround(gx[i]), _lround(gy[i])
@@ -135,9 +135,9 @@ def _deposit_analytic(out, gx, gy, vel, sig, w, sig_instr, vedges, relvel, relin
             s = 1e-6 * chmin
         K = int(5.0 * s / chmin) + 2
         for nl in range(nlines):
-            v = vel[i] + relvel[nl]
-            kc = _lround(_velgrid(v, axtyp, velsys, freq0, crval3, cdelt3, crpix3))
-            k0, nk = _line_profile(prof, v, s, vedges, ones, ptab, kc, K, nz)
+            v = vel[i]
+            kc = _lround(_velgrid(v, axtyp, velsys, lfreq0[nl], crval3, cdelt3, crpix3))
+            k0, nk = _line_profile(prof, v, s, vedges[nl], ones, ptab, kc, K, nz)
             if nk == 0:
                 continue
             a = w[i] * relint[nl]
@@ -147,16 +147,16 @@ def _deposit_analytic(out, gx, gy, vel, sig, w, sig_instr, vedges, relvel, relin
 
 
 @nb.njit(cache=True, nogil=True)
-def _deposit_mc(out, gx, gy, vel, w, relvel, relint, axtyp, velsys, freq0, crval3, cdelt3, crpix3):
+def _deposit_mc(out, gx, gy, vel, w, relint, axtyp, velsys, lfreq0, crval3, cdelt3, crpix3):
     """Deposit the clouds (gx, gy: pixels; vel: m/s, with their random deviates; w: weights) in the nearest
-    pixel and channel of out (ny, nx, nz), for each line (relvel, relint)."""
+    pixel and channel of out (ny, nx, nz), for each line (reference frequency lfreq0, intensity relint)."""
     ny, nx, nz = out.shape
     for i in range(gx.shape[0]):
         ix, iy = _lround(gx[i]), _lround(gy[i])
         if ix < 0 or ix >= nx or iy < 0 or iy >= ny:
             continue
-        for nl in range(relvel.shape[0]):
-            k = _lround(_velgrid(vel[i] + relvel[nl], axtyp, velsys, freq0, crval3, cdelt3, crpix3))
+        for nl in range(lfreq0.shape[0]):
+            k = _lround(_velgrid(vel[i], axtyp, velsys, lfreq0[nl], crval3, cdelt3, crpix3))
             if 0 <= k < nz:
                 out[iy, ix, k] += w[i] * relint[nl]
 
@@ -382,7 +382,7 @@ class GalMod3D:
         c = self.cube
         out = np.zeros((c.DimY(), c.DimX(), c.DimZ()), dtype=np.float64)
         xs, zs, vol, steps = self._grid()
-        spec = (su.axtyp, su.velsys, su.freq0, su.crval3, su.cdelt3, su.crpix3)
+        spec = (su.axtyp, su.velsys, su.lfreq0, su.crval3, su.cdelt3, su.crpix3)
         if typ == "ANALYTIC":
             ones = np.ones(c.DimZ())
             for zc in self._chunks(xs, zs):
@@ -395,7 +395,7 @@ class GalMod3D:
                 x, y, z, d = x[keep], y[keep], z[keep], d[keep]
                 args = tuple(a[keep] for a in args)
                 gx, gy, vlos, sig = self._project(x, y, z, args)
-                _deposit_analytic(out, gx, gy, vlos, sig, d * vol, su.sig_instr, su._vedges, su.relvel, su.relint,
+                _deposit_analytic(out, gx, gy, vlos, sig, d * vol, su.sig_instr, su._vedges_lines, su.relint,
                                   ones, _PHI_TAB, su._chmin, *spec)
         else:
             self._model_mc(out, xs, zs, vol, steps, int(nclouds), rng, spec)
@@ -444,7 +444,7 @@ class GalMod3D:
             args = self._args(x, y, z)
             gx, gy, vlos, sig = self._project(x, y, z, args)
             vlos = vlos + rng.standard_normal(n) * np.sqrt(sig * sig + su.sig_instr ** 2)
-            _deposit_mc(out, gx, gy, vlos, np.full(n, w), su.relvel, su.relint, *spec)
+            _deposit_mc(out, gx, gy, vlos, np.full(n, w), su.relint, *spec)
 
     def _flux_scale(self, m):
         """The factor that scales the model m (nz, ny, nx) to the total flux of self.flux."""

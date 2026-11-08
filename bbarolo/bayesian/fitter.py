@@ -262,7 +262,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             vvert=dict(name='uniform', loc=0, scale=30),                      # 0-30 km/s
             dvdz=dict(name='uniform', loc=0, scale=2),                        # 0-2 km/s/arcsec
             zcyl=dict(name='uniform', loc=0, scale=5),                        # 0-5 arcsec
-            dens=dict(name='uniform', loc=0.1, scale=200),                    # 0.1-200 1E20 cm^-2
+            dens=dict(name='uniform', loc=0.1, scale=200),                    # 0.1-200.1 (flux units x km/s/arcsec2)
             z0=dict(name='uniform', loc=0, scale=10),                         # 0-10 arcsec
             sigma=dict(name='loguniform', a=None, b=None),                    # None: 0.5 and 1000 x noise rms
             fracerr=dict(name='loguniform', a=1e-3, b=1.),                    # fractional model error
@@ -650,7 +650,10 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
           * let the rings cover the whole disk (a warning tells when they do not): the emission
             beyond them biases INC low;
           * restrict the prior of phi to one half: the map does not change with PA -> PA + 180
-            (the default prior, 0-360, gives two modes). """
+            (the default prior, 0-360, gives two modes).
+        The data map sums the voxels of the likelihood, the model map all the channels (as in pyBBarolo):
+        they agree when the likelihood voxels hold the whole line (with the default dilated mask the
+        signal outside them is below 0.1%; with dilation (0, 0) about 20%). """
         from ..params import bayes_name
         allowed = {'xpos_single', 'ypos_single', 'inc_single', 'phi_single', 'z0_single', 'dens', 'dens_single',
                    'dens_func', 'radmax', 'sigma', 'fracerr'}

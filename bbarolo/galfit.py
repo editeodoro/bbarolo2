@@ -395,13 +395,17 @@ class Galfit:
                 if self.verb:
                     print(" To this end, I will set ring widths >= beam major axis.")
                 new_nr = int(math.ceil(inR.radii[-1] / beamarcs))
+                new_r = np.arange(new_nr) * beamarcs + beamarcs / 2.
+
+                def at(v):          # the initial values at the new radii (C++ took those of ring i)
+                    return np.interp(new_r, inR.radii, np.asarray(v, float))
+                phi = np.degrees(np.unwrap(np.radians(np.asarray(inR.phi, float))))
                 nr = Rings()
                 nr.radsep = beamarcs
+                cols = [at(v) for v in (inR.xpos, inR.ypos, inR.vsys, inR.vrot, inR.vdisp, inR.vrad, inR.vvert,
+                                        inR.dvdz, inR.zcyl, inR.dens, inR.z0, inR.inc, phi)]
                 for i in range(new_nr):
-                    j = min(i, inR.nr - 1)
-                    nr.addRing(i * beamarcs + beamarcs / 2., inR.xpos[j], inR.ypos[j], inR.vsys[j], inR.vrot[j],
-                               inR.vdisp[j], inR.vrad[j], inR.vvert[j], inR.dvdz[j], inR.zcyl[j], inR.dens[j],
-                               inR.z0[j], inR.inc[j], inR.phi[j])
+                    nr.addRing(new_r[i], *(float(col[i]) for col in cols))
                 inR = nr
 
         # A little trick: fit a 2D model first to get better PA variation (not for SPACEPAR, which keeps
@@ -648,8 +652,11 @@ class Galfit:
             vals["vrot"] = v; zpar[np_] = v; np_ += 1
         if m[VDISP]:
             z = zpar[np_]
-            if z > maxs[VDISP]: v = maxs[VDISP] - fran() * inr.vdisp[w]
-            elif z < mins[VDISP]: v = mins[VDISP] + fran() * inr.vdisp[w]
+            # (redrawn within the bounds: C++ used u·VDISP, which crossed the other bound when the initial
+            # VDISP exceeded MAXVDISP - MINVDISP)
+            span = min(inr.vdisp[w], maxs[VDISP] - mins[VDISP])
+            if z > maxs[VDISP]: v = maxs[VDISP] - fran() * span
+            elif z < mins[VDISP]: v = mins[VDISP] + fran() * span
             else: v = z
             vals["vdisp"] = v; zpar[np_] = v; np_ += 1
         if m[DENS]:
@@ -984,6 +991,10 @@ class Galfit:
             return isNeeded
         self.second = True
         nr = self.outr.nr
+        # only the rings fitted in the first stage are regularised (C++ used also the rings skipped, not
+        # converged, rejected or inside STARTRAD, with their initial or rejected values)
+        good = np.asarray(getattr(self, "fitok", [True] * nr), bool)
+        ngood = int(good.sum())
         reg = [-3] * 6
         regstr = ["inc", "pa", "vsys", "xpos", "ypos", "z0"]
 
@@ -1005,19 +1016,19 @@ class Galfit:
             if reg[i] == -3:
                 auto[i] = True
                 if i < 2:
-                    if nr <= 4:
+                    if ngood <= 4:
                         reg[i] = 1
                     else:
-                        vec = self.outr.inc if i == 0 else self.outr.phi
+                        vec = (self.outr.inc if i == 0 else self.outr.phi)[good]
                         med = findMedian(vec)
                         if madfmToSigma(findMADFM(vec, med)) > 3:
-                            reg[i] = 2 if nr < 10 else -1
+                            reg[i] = 2 if ngood < 10 else -1
                         else:
                             reg[i] = -2
                 else:
                     reg[i] = -2
         self.inr = self.outr.copy()
-        proceed = True
+        proceed = ngood > 0
         how = []
         for flag, key, r, name, short, unit, a in (
                 (m[INC], "inc", reg[0], "inclination", "INC", "deg", auto[0]),
@@ -1026,11 +1037,15 @@ class Galfit:
                 (m[XPOS], "xpos", reg[3], "X center", "XPOS", "pix", auto[3]),
                 (m[YPOS], "ypos", reg[4], "Y center", "YPOS", "pix", auto[4]),
                 (m[Z0], "z0", reg[5], "disk thickness", "Z0", "arcs", auto[5])):
-            if flag:
-                ok, out = self.regularizeParams(self.inr.radii, getattr(self.inr, key), r, name)
+            if flag and proceed:
+                x, y = self.inr.radii, getattr(self.inr, key)
+                if good.all():
+                    ok, out = self.regularizeParams(x, y, r, name)
+                else:                               # (fitted on the good rings, evaluated at all the radii)
+                    ok, out = self.regularizeParams(x[good], y[good], r, name, xout=x)
                 if ok:
                     setattr(self.inr, key, out)
-                    deg = (max(r - 1, 0) if nr > r else 0) if r > 0 else None
+                    deg = (max(r - 1, 0) if ngood > r else 0) if r > 0 else None
                     how.append(f"{short} " + (f"median = {out[0]:.2f} {unit}" if r == -2 else "Bezier curve" if r == -1
                                                else f"constant = {out[0]:.2f} {unit}" if deg == 0
                                                else f"polynomial of degree {deg}") + (" (auto)" if a else ""))
@@ -1049,20 +1064,28 @@ class Galfit:
                 self.galfit()
             finally:
                 self._shown = None
-        elif self.verb:
-            sys.stderr.write("3DFIT ERROR: Regularization failed. I will not proceed to second fitting stage. \n")
+        else:
+            if self.verb:
+                sys.stderr.write("3DFIT ERROR: Regularization failed. I will not proceed to second fitting stage. \n")
+            # the first stage is final: the rings not fitted are empty in the final model (C++ kept their DENS)
+            for ir in range(nr):
+                if not good[ir]:
+                    self.outr.dens[ir] = 0
         self.mpar, self.nfree = oldmpar, oldnfree
         return isNeeded
 
-    def regularizeParams(self, x, y, rtype, whichpar=""):
+    def regularizeParams(self, x, y, rtype, whichpar="", xout=None):
+        """Regularise the values y at the radii x: median (rtype -2), Bezier curve (-1) or polynomial with
+        rtype coefficients. Returns (ok, values at the radii x, or at the radii xout if given)."""
         x = np.asarray(x, float)
         y = np.asarray(y, float)
+        xo = x if xout is None else np.asarray(xout, float)
         n = x.size
         if rtype == -2:
-            return True, np.full(n, findMedian(y))
+            return True, np.full(xo.size, findMedian(y))
         if rtype == -1:
-            _, yo = bezier_interp(x, y)
-            return True, yo
+            xb, yo = bezier_interp(x, y)
+            return True, (yo if xout is None else np.interp(xo, xb, yo))
         if n <= rtype:
             if self.verb:
                 sys.stderr.write("3DFIT WARNING - Second stage: too few degree of freedom. Using a constant value.\n")
@@ -1077,7 +1100,7 @@ class Galfit:
             if self.verb:
                 sys.stderr.write(f"3DFIT ERROR: cannot least-square fit {whichpar}.\n")
             return False, y
-        yout = np.polyval(coeff[::-1], x)
+        yout = np.polyval(coeff[::-1], xo)
         if self.verb >= 2:
             print(f"  Best parameters for {whichpar}:")
             for i in range(rtype):

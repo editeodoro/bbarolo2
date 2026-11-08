@@ -581,6 +581,8 @@ class Param:
             if gf.flagGALFIT:
                 if gf.FREE == "":
                     out("3DFIT error: FREE" + msg); good = False
+                if gf.MINVDISP >= gf.MAXVDISP:
+                    out(f"3DFIT error: MINVDISP ({gf.MINVDISP:g}) must be smaller than MAXVDISP ({gf.MAXVDISP:g})."); good = False
                 elif free_problem(gf.FREE):
                     out("3DFIT error: " + free_problem(gf.FREE)); good = False
             if gf.flagGALFIT or self.flagSpace:          # (SPACEPAR computes the residuals of 3DFIT)

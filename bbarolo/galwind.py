@@ -249,8 +249,8 @@ class GalWind:
         nthreads = max(1, min(int(c.pars().threads), ns))
         chunks = np.array_split(np.arange(ns), nthreads)
         args = (sep, nv, setup.cdens, 1, setup.pixarea, setup.cdelt[0], setup.cdelt[1], setup.crota2,
-                0, 0, c.DimX(), c.DimY(), setup.sig_instr, setup.axtyp, setup.velsys, setup.freq0,
-                setup.crval3, setup.cdelt3, setup.crpix3, setup.relvel, setup.relint, setup.cd2i)
+                0, 0, c.DimX(), c.DimY(), setup.sig_instr, setup.axtyp, setup.velsys, setup.lfreq0,
+                setup.crval3, setup.cdelt3, setup.crpix3, setup.relint, setup.cd2i)
         seed = _seed(par.ISEED)
 
         def work(t, buf):

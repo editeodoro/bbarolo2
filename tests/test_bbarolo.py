@@ -1067,7 +1067,7 @@ def test_frequency_axes_lines_and_units(tmp_path):
         c = Cube(_freq_cube(str(tmp_path / f"f{unit}.fits"), unit, scale, f1, z), par=p)
         assert np.isclose(DeltaVel(c.Head()), C * 2e4 / (f1 / (1 + z)), rtol=1e-4)
         dm = DiskModel(c, smooth=False)
-        assert np.allclose(dm.setup.relvel / 1000., [0., 300.], atol=0.5)
+        assert np.allclose(dm.setup.lfreq0, np.array([f1, f2]) / (1 + z))
         r = Rings().setRings(radii=np.arange(15, 200, 30), xpos=31.5, ypos=31.5, vsys=0., vrot=100, vdisp=10, z0=0,
                              inc=60, phi=45, dens=1)
         specs.append(dm.array(r, galmodtype="ANALYTIC").sum((1, 2)))
@@ -2435,3 +2435,141 @@ def test_reduce_factor_check():
     assert not p.checkPars(quiet=True)
     p.readParamString("FACTOR 2\n")
     assert p.checkPars(quiet=True)
+
+
+def _galfit_n2403(tmp_path, extra):
+    """A Galfit on NGC 2403 with the rings given (nothing estimated), set up but not run."""
+    from bbarolo.galfit import Galfit
+    p = Param()
+    p.readParamString(f"FITSFILE {N2403}\n3DFIT true\nVSYS 132.8\nXPOS 77\nYPOS 77\nVDISP 8\nINC 60\nPA 123.7\n"
+                      f"Z0 10\nMASK SEARCH\nTHREADS 2\nVERBOSE false\nOUTFOLDER {tmp_path}/\n" + extra)
+    assert p.checkPars(quiet=True)
+    return Galfit(Cube(N2403, par=p))
+
+
+@needs_data
+def test_vdisp_trials_within_bounds(tmp_path):
+    """A VDISP trial value out of [MINVDISP, MAXVDISP] is redrawn within the interval (as bound -/+ u·VDISP
+    it crossed the other bound when VDISP > MAXVDISP - MINVDISP, and a negative dispersion stopped the fit);
+    MINVDISP must be smaller than MAXVDISP."""
+    gf = _galfit_n2403(tmp_path, "RADII 60 120 180\nVROT 120\nFREE VDISP\nMINVDISP 1\nMAXVDISP 5\n")
+    dring = gf._make_dring(1)
+    for trial in (50., -50.) * 10:
+        z = np.array([trial])
+        gf.func3D(dring, z)
+        assert 1 <= z[0] <= 5
+    p = Param()
+    p.readParamString("FITSFILE a.fits\n3DFIT true\nMINVDISP 10\nMAXVDISP 5\n")
+    assert not p.checkPars(quiet=True)
+
+
+@needs_data
+def test_reverse_rings_by_radius(tmp_path):
+    """REVERSE replaces rings narrower than the beam with beam-wide rings, whose initial values are those of
+    the given rings at the new radii (they were those of the ring with the same index, at a smaller radius)."""
+    radii, vrot = np.array([15., 45., 75., 105., 135., 165.]), np.array([10., 40., 70., 100., 130., 160.])
+    gf = _galfit_n2403(tmp_path, f"RADII {' '.join(map(str, radii))}\nVROT {' '.join(map(str, vrot))}\n"
+                                 "FREE VROT\nREVERSE true\n")
+    assert gf.inr.nr == 3 and gf.inr.radsep > 55
+    assert np.allclose(gf.inr.vrot, np.interp(gf.inr.radii, radii, vrot))
+
+
+@needs_data
+def test_second_stage_and_adrift_skip_failed_rings(tmp_path, monkeypatch):
+    """The second stage of 3DFIT regularises only the rings fitted in the first stage (C++ used also the
+    rings not fitted, with their initial values), evaluated at all the radii; when the regularisation fails,
+    the rings not fitted are empty in the final model (they kept their DENS); ADRIFT uses only the rings
+    fitted."""
+    from bbarolo import galfit_out
+    gf = _galfit_n2403(tmp_path, "RADII 60 120 180 240 300 360\nVROT 120\nFREE VROT INC\nREGTYPE 0\nADRIFT true\n")
+    gf.outr = gf.inr.copy()
+    gf.outr.inc[:] = [30., 30., 60., 61., 62., 63.]
+    gf.fitok = [False, False, True, True, True, True]
+    monkeypatch.setattr(gf, "galfit", lambda: None)
+    gf.SecondStage()
+    assert np.allclose(gf.inr.inc, 61.5)              # (the mean of 61 and 62: max and min left out)
+    dens = gf.outr.dens.copy()
+    monkeypatch.setattr(gf, "regularizeParams", lambda *a, **k: (False, None))
+    gf.SecondStage()
+    assert np.all(gf.outr.dens[:2] == 0) and np.all(gf.outr.dens[2:] == dens[2:])
+    seen = {}
+    monkeypatch.setattr(galfit_out, "asymmetricDrift", lambda c, par, rad, *a: seen.setdefault("rad", rad) is None)
+    gf.outr.dens[:] = 1.
+    gf.writeModel("LOCAL", makeplots=False)
+    assert list(seen["rad"]) == [180., 240., 300., 360.]
+
+
+def test_mc_model_in_box_is_crop(synthetic_cube):
+    """An MC model built in a box is the crop of the model of the whole cube, also when clouds fall outside
+    the box (a Lorentzian layer): they did not draw their velocity deviates, so the rest of the ring was
+    another realisation."""
+    setup = GalmodSetup(synthetic_cube, densflux=True)
+    setup.ltype = 4
+    r = _rings(3)
+    r.z0[:] = 30.
+    full = setup.build(r, galmodtype="MC", seed=7)
+    blo, bhi = (12, 12), (52, 52)
+    box = setup.build(r, blo=blo, bhi=bhi, galmodtype="MC", seed=7)
+    crop = full[..., blo[1]:bhi[1], blo[0]:bhi[0]] if full.shape[-2:] == synthetic_cube.array.shape[1:] else None
+    assert crop is not None and full.sum() > box.sum() > 0
+    assert np.array_equal(box, crop)
+
+
+def test_several_lines_scale_with_velocity(tmp_path):
+    """Several lines: each line of a cloud is at its own rest wavelength times the same Doppler factor (each
+    line had a fixed velocity offset from the first, so with optical velocities and VSYS = 3000 km/s
+    [NII]6583 was 0.2 A, 2 channels, too blue), in the MC and ANALYTIC models."""
+    from astropy.io import fits
+    from bbarolo import DiskModel
+    C = 299792.458
+    h = fits.Header()
+    for k, v in dict(NAXIS=3, NAXIS1=32, NAXIS2=32, NAXIS3=400, CTYPE1="RA---SIN", CTYPE2="DEC--SIN",
+                     CTYPE3="WAVE", CRPIX1=16.5, CRPIX2=16.5, CRPIX3=1, CRVAL1=150., CRVAL2=30., CRVAL3=6620.,
+                     CDELT1=-1 / 3600., CDELT2=1 / 3600., CDELT3=0.1, CUNIT1="deg", CUNIT2="deg", CUNIT3="Angstrom",
+                     BMAJ=3 / 3600., BMIN=3 / 3600., BPA=0., BUNIT="JY/BEAM", OBJECT="LINES").items():
+        h[k] = v
+    fn = str(tmp_path / "lines.fits")
+    fits.writeto(fn, np.zeros((400, 32, 32), np.float32), h)
+    p = Param()
+    p.readParamString("RESTWAVE 6562.8 6583.45\nRELINT 1 1\nVELDEF optical\nVERBOSE false\n")
+    c = Cube(fn, par=p)
+    lam = 6620. + 0.1 * np.arange(400)
+    r = Rings().setRings(radii=[2., 4., 6.], xpos=15.5, ypos=15.5, vsys=3000., vrot=0., vdisp=5., z0=0., inc=30.,
+                         phi=0., dens=1.)
+    for gtype in ("MC", "ANALYTIC"):
+        spec = DiskModel(c, smooth=False).array(r, galmodtype=gtype).sum((1, 2))
+        nii = lam > 6640.
+        centre = np.sum(spec[nii] * lam[nii]) / spec[nii].sum()
+        assert abs(centre - 6583.45 * (1 + 3000. / C)) < 0.03, (gtype, centre)
+
+
+def test_profile_annulus_starts_at_radmax(synthetic_cube):
+    """The exterior annulus of the deconvolved density profile starts at the outer edge of the disk: RADMAX
+    when it is the edge (RADMAX edge or taper), also inside the last ring (it started at the outer edge of
+    the rings, so the truncated last ring took the emission between the two)."""
+    from bbarolo.galmod import DiskModel
+    from bbarolo.profile import profile_system
+    model = DiskModel(synthetic_cube, galmodtype="ANALYTIC")
+    r = _rings(4)                                    # radii 10-70", CENTRED edges up to 80"
+    maps = np.ones((64, 64)), np.ones((64, 64)), np.ones((64, 64), bool)
+    Rc = profile_system(model, r, ((0, 0), (64, 64)), *maps, beam_arcsec=30.)[3]
+    assert np.isclose(Rc[-1], 80. + 30.)
+    r.edge = 62.
+    Rc = profile_system(model, r, ((0, 0), (64, 64)), *maps, beam_arcsec=30.)[3]
+    assert np.isclose(Rc[-1], 62. + 30.)
+
+
+@needs_data
+def test_bayesian_smoothness_penalty_spacing(tmp_path):
+    """The smoothness penalties (lambdas) are second derivatives on the radii of the rings, with VROT 0 at
+    R = 0: a rotation curve rising linearly from the centre has no penalty, also with uneven rings (the first
+    separation was used for all the rings, and the zero of VROT put one separation inside the first ring)."""
+    from bbarolo.bayesian import BayesianBBarolo
+    f = BayesianBBarolo(N2403, radii=[60., 120., 240., 300.], xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
+                        inc=60, pa=123.7, z0=10, mask="SEARCH", outfolder=str(tmp_path) + "/")
+    f._setup(['vrot', 'vdisp_single'])
+    th = np.array([30., 60., 120., 150., 10.])
+    L0 = f._log_likelihood(th, sigma=1.)
+    assert np.isclose(f._log_likelihood(th, sigma=1., lambdas=dict(f.lambdas, vrot=1.)), L0, rtol=0, atol=1e-9)
+    th2 = np.array([30., 60., 90., 150., 10.])
+    assert f._log_likelihood(th2, sigma=1., lambdas=dict(f.lambdas, vrot=1.)) < f._log_likelihood(th2, sigma=1.)

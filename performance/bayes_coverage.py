@@ -237,6 +237,7 @@ def _matches(name, p):
 
 def summary(path):
     recs = [json.loads(line) for line in open(path) if line.strip()]
+    recs = list({r["key"]: r for r in recs}.values())      # (a fit run again: its last record)
     print(f"{len(recs)} fits, {sum(r['status'] != 'ok' for r in recs)} failed")
     key = lambda r: (r.get("kind", "flat"), r.get("galmodtype", "ANALYTIC"), r["snr"], r["spatial"], r["hanning"])
     pars = ("vrot", "vdisp", "inc", "phi")

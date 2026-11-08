@@ -661,9 +661,11 @@ beam (Di Teodoro & Fraternali 2015). `true` runs the task.
 
 The ring parameters that are not given are estimated from the data (`GUESSTYPE`) or take their
 defaults, and `FREE` lists those that are fitted. With `TWOSTAGE`, the geometry is regularised and the
-rings are fitted again. The outputs are the ring tables `<prefix>_rings_initial.txt`,
-`<prefix>_rings_final1.txt` and `<prefix>_rings_final2.txt`, the model `<prefix>_mod_<norm>.fits` with
-its moment maps and position-velocity slices, the radial profile `<prefix>_densprof.txt` and the plots.
+rings are fitted again. The outputs are the ring tables `<prefix>_rings_initial.txt` (the values given
+or estimated, before the 2D refinement of PA and VROT, in `<prefix>_2drings.txt`, and before the
+beam-wide rings of `REVERSE`), `<prefix>_rings_final1.txt` and `<prefix>_rings_final2.txt`, the model
+`<prefix>_mod_<norm>.fits` with its moment maps and position-velocity slices, the radial profile
+`<prefix>_densprof.txt` and the plots.
 
 3DFIT does not run with `BAYESIAN3DFIT`, which turns it off; when both 3DFIT and `GALMOD` are set,
 GALMOD is turned off.
@@ -1038,7 +1040,9 @@ axis (e.g. `6562.8` for Hα with `CUNIT3` in Angstrom). The zero of the velociti
 given in that frame.
 
 Several values, separated by spaces, model several lines at once (e.g. Hα and the [NII] doublet) with
-the relative intensities `RELINT`: the velocities refer to the first line.
+the relative intensities `RELINT`: the velocities refer to the first line, and each line of a cloud is at
+its own rest wavelength times the same Doppler factor. On a velocity axis only one line is modelled,
+with a warning.
 """),
     'RESTFREQ': dict(
         group='Spectral lines',
@@ -1050,7 +1054,9 @@ axis, for cubes with a frequency axis. It replaces the rest frequency of the hea
 RESTFREQ/(1 + `REDSHIFT`).
 
 Several values, separated by spaces, model several lines at once with the relative intensities
-`RELINT`: the velocities refer to the first line.
+`RELINT`: the velocities refer to the first line, and each line of a cloud is at its own rest frequency
+times the same Doppler factor (BBarolo 1.8 shifted the lines by fixed velocities, which was exact only at
+velocity 0).
 """),
     'RELINT': dict(
         group='Spectral lines',
@@ -1128,13 +1134,13 @@ on the values of the first stage. The default, 1000 km/s, is in practice no limi
         group='Free parameters and fit',
         doc="""\
 The lowest velocity dispersion (km/s) allowed in the fit of 3DFIT, when `FREE` includes `VDISP`; a trial
-value below it is replaced by a random value above. See also `MAXVDISP`.
+value below it is replaced by a random value between the two limits. It must be smaller than `MAXVDISP`.
 """),
     'MAXVDISP': dict(
         group='Free parameters and fit',
         doc="""\
 The highest velocity dispersion (km/s) allowed in the fit of 3DFIT, when `FREE` includes `VDISP`; a
-trial value above it is replaced by a random value below. See also `MINVDISP`.
+trial value above it is replaced by a random value between the two limits. See also `MINVDISP`.
 """),
     'FTYPE': dict(
         group='Free parameters and fit',
@@ -1149,6 +1155,7 @@ voxels, where m is the model and o the data (the noise rms where the data are no
 
 Each term is weighted by `WFUNC`; the sum is divided by the number of voxels and multiplied by the
 penalty for blanks (`BWEIGHT`). 3DFIT and SPACEPAR replace other values with 2, with a warning.
+BAYESIAN3DFIT uses it only with `LIKEOPTS` `bbres=true`.
 """),
     'WFUNC': dict(
         group='Free parameters and fit',
@@ -1158,6 +1165,7 @@ disk (0 on the receding major axis): 0 uniform; 1 |cos θ|; 2 cos²θ (the defau
 −2 sin²θ. The cosine weights favour the pixels near the major axis, which carry most of the information
 on the rotation. Used by 3DFIT, SPACEPAR and 2DFIT (on the velocity field); 3DFIT and SPACEPAR replace
 values beyond ±2 with 1, with a warning.
+BAYESIAN3DFIT uses it only with `LIKEOPTS` `bbres=true`.
 """),
     'TOL': dict(
         group='Free parameters and fit',
@@ -1218,7 +1226,8 @@ The half of the galaxy that is used, divided by the minor axis: `A` the approach
 receding side, `B` both (the default). 3DFIT and SPACEPAR use only the pixels of that side in the
 residuals, 2DFIT in the fit of the velocity field (with one side it keeps the centre and `VSYS` fixed),
 ELLPROF in the radial profile. All these tasks also accept `APPROACHING`, `RECEDING`, `BOTH` and their
-abbreviations (`APP`, `REC`, ...); other values are taken as `B`, with a warning.
+abbreviations (`APP`, `REC`, ...); other values are taken as `B`, with a warning. BAYESIAN3DFIT uses it
+only with `LIKEOPTS` `bbres=true`.
 """),
     'FREEANGLE': dict(
         group='Free parameters and fit',
@@ -1235,18 +1244,19 @@ The weight of the blank voxels in the residuals of 3DFIT and SPACEPAR: the voxel
 emission and the mask (`MASK`) has none. The residual of a ring is multiplied by
 (1 + N_blank/N)^BWEIGHT, where N is the number of voxels compared (section 2.4 of Di Teodoro &
 Fraternali 2015). Larger values penalise more the models that extend beyond the observed emission; 0
-ignores the blanks.
+ignores the blanks. BAYESIAN3DFIT uses it only with `LIKEOPTS` `bbres=true`.
 """),
     'TWOSTAGE': dict(
         group='Free parameters and fit',
         doc="""\
 Whether 3DFIT fits the rings a second time after regularising the geometry. After the first stage, the
 free parameters among `INC`, `PA`, `Z0`, `XPOS`, `YPOS` and `VSYS` are replaced by smooth functions of
-radius (see `REGTYPE`) and fixed; the second stage fits again the free `VROT`, `VDISP` and `VRAD` (and
+radius (see `REGTYPE`), fitted to the rings of the first stage that were fitted, and fixed; the second
+stage fits again the free `VROT`, `VDISP` and `VRAD` (and
 `DENS` with `FREE` `ALL`) and writes `<prefix>_rings_final2.txt`.
 
 The second stage runs only if one of those geometric parameters is free; it is skipped if the
-regularisation fails.
+regularisation fails (or no ring was fitted), and the rings not fitted are then empty in the final model.
 """),
     'FLAGERRORS': dict(
         group='Free parameters and fit',
@@ -1257,6 +1267,11 @@ others within their limits of the fit), with the other parameters at their best 
 to them gives the interval where the residuals are within 5% of the minimum. The lower and upper errors
 are written in the columns `E_VROT1`, `E_VROT2`, ... of the ring files. This slows the fit down
 considerably.
+
+As in BBarolo 1.8: an error that cannot be estimated (e.g. too few points near the minimum) is replaced
+by the mean of the errors of the ring, all the parameters together; a VDISP error smaller than half the
+dispersion of a channel (ΔV/2.355/2) is raised to it plus a random 0–1 km/s; with `FREE` `ALL` the
+errors of DENS are not meaningful (its interval of random values is empty).
 """),
     'NORM': dict(
         group={'3DFIT': 'Free parameters and fit', '*': 'Model'},
@@ -1268,10 +1283,14 @@ profile of the data; `NONE`, no normalisation: the flux of the model is set by `
 
 3DFIT takes up to three values: the normalisation of the first stage, of the second stage
 (`TWOSTAGE`) and of the final model; one value is used for all, and with two the second is also that of
-the final model. The final model can also be `BOTH`, which writes the `AZIM` and the `LOCAL` model.
+the final model. The final model can also be `BOTH`, which writes the `AZIM` and the `LOCAL` model: in
+3DFIT only as the third value (e.g. `NORM AZIM AZIM BOTH`), since in the first two values it is not a
+normalisation of the fit and becomes `LOCAL`, with a warning, so `NORM BOTH` gives LOCAL fits and a LOCAL
+final model.
 GALMOD takes one value (the second, if more are given): `AZIM`, `LOCAL`, `NONE` or `BOTH`. `AZIMUTHAL`
 is the same as `AZIM`. Values not recognised become `LOCAL`, with a warning. SPACEPAR uses the first
 value, the normalisation of the first stage of 3DFIT (BBarolo 1.8 always used `LOCAL`).
+BAYESIAN3DFIT uses it only with `LIKEOPTS` `bbres=true`.
 """),
     'REGTYPE': dict(
         group='Free parameters and fit',
@@ -1301,8 +1320,8 @@ SPACEPAR also starts from this ring, and the asymmetric drift (`ADRIFT`) uses th
 Whether 3DFIT computes the asymmetric drift correction of the rotation curve (Iorio et al. 2017). The
 circular velocity is √(VROT² + V_A²), with V_A² = −R·σ²·(d ln σ²/dR + d ln Σ/dR), where σ is the velocity
 dispersion and Σ the face-on surface density (the median of the total intensity map in each ring times
-cos INC), regularised with polynomials of degree `ADRIFTPOL1` and `ADRIFTPOL2`. The rings from
-`STARTRAD` are used.
+cos INC), regularised with polynomials of degree `ADRIFTPOL1` and `ADRIFTPOL2`. The rings fitted, from
+`STARTRAD`, are used.
 
 The results (radius, VCIRC, V_A², σ² and Σ, with their regularised values) are written in
 `<prefix>_asymdrift.txt` and plotted; if a polynomial fit fails nothing is written, with a warning.
@@ -1330,7 +1349,8 @@ from the outermost ring inwards, the model of each ring includes the rings alrea
 reverse if the median initial inclination is above 75°.
 
 In reverse mode, rings narrower than the major axis of the beam are replaced by rings as wide as the
-beam. Other values become `auto`, with an error message.
+beam, with the initial values of the given rings interpolated at their radii. Other values become
+`auto`, with an error message.
 """),
     'NORMALCUBE': dict(
         group='Free parameters and fit',
@@ -1396,7 +1416,8 @@ The priors that are not given are uniform:
 
 - `VROT` 0–350 km/s, `VDISP` 0–50 km/s, `VRAD` 0–50 km/s, `VVERT` 0–30 km/s, `INC` 0–90°, `PA` 0–360°;
 - `XPOS` and `YPOS` ±5 pixels, and `VSYS` ±20 km/s, around the initial values;
-- `Z0` 0–10 arcsec, `ZCYL` 0–5 arcsec, `DVDZ` 0–2, `DENS` 0.1–200.1 (1E20 atoms/cm2);
+- `Z0` 0–10 arcsec, `ZCYL` 0–5 arcsec, `DVDZ` 0–2, `DENS` 0.1–200.1 (a flux per unit area: the flux
+  units of the cube × km/s per arcsec², see `DENS`; give a prior suited to the units of the cube);
 - `RADMAX` within half a ring separation of the last radius (only the inner half with `RINGMODE NODES`,
   unless `LIKEOPTS radmax=ring`);
 - `SIGMA` log-uniform between 0.5 and 1000 times the noise rms, `FRACERR` log-uniform between 0.001 and 1;
