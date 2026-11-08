@@ -10,7 +10,6 @@ import numpy as np
 from scipy import stats
 
 from ..tasks import FitMod3D, build_param, _checked
-from ..galmod import ringmode_name
 from .common import vprint, get_distribution
 from .rings import _RingDict
 from .likelihood import LikelihoodMixin
@@ -24,8 +23,12 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
     BayesianBBarolo(cube, **params): the cube (FITS file, HDU or (data, header)) and any
     BBarolo parameter, including the rings (radii or nradii/radsep, xpos, ypos, vsys, vrot,
     vdisp, inc, pa, z0, vrad, dens, vvert, dvdz, zcyl: single values or one value per ring).
-    Ring parameters not fitted are kept fixed. Geometric parameters that are not given are
-    estimated as in 3DFIT (VDISP=8, Z0=one pixel, VRAD=VVERT=DVDZ=ZCYL=0, DENS=1 if not given).
+    Ring parameters not fitted are kept fixed. The initial rings are those of 3DFIT for the same
+    parameters: the values not given are read from RINGFILE, estimated from the data as set by
+    GUESSTYPE (the rings, centre, VSYS, VROT, INC, PA, and VDISP with GUESSTYPE FIT) or set to the
+    defaults (VDISP=8, Z0=one pixel, VRAD=VVERT=DVDZ=ZCYL=0, DENS=1). The default priors follow
+    the initial values (e.g. INC +- 10 deg, PA +- 15 deg, VROT 0 to twice the largest initial
+    VROT: see _set_default_priors and the keyword PRIORS).
 
     The parameters of the BAYESIAN3DFIT task of parameter files are accepted too: FREE (the
     free parameters, e.g. 'VROT VDISP_SINGLE INC_SINGLE'; run() needs them, as FREE or as
@@ -208,42 +211,20 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         return c
 
     def _init_rings(self, show_initial=False):
-        """ The initial rings from the parameters (estimating the missing geometry as in
-        3DFIT), and the default priors. show_initial: print the table of the initial parameters
-        of 3DFIT (given, estimated or default); otherwise, the estimated values only. """
-        from ..rings import readRings
-        from ..paramguess import EstimateInitial
-        from ..galfit import ringfile_values, default_z0, estimatedParameters, initialParametersText
+        """ The initial rings from the parameters, as those of 3DFIT (galfit.initial_rings: the
+        values not given are read from RINGFILE, estimated from the data with GUESSTYPE, or set to
+        the defaults of 3DFIT; the mask of the fit is built only when something is estimated), and
+        the default priors, which depend on them. show_initial: print the table of the initial
+        parameters of 3DFIT (given, estimated or default); otherwise, the estimated values only.
+        (3DFIT then changes its rings for REVERSE and, with PA free, refines PA and VROT with a 2D
+        fit: those are steps of its fit, not of the initial rings.) """
+        from ..galfit import initial_rings, initialParametersText
         c = self._cube_obj if self._cube_obj is not None else self._load_cube()
-        par = copy.deepcopy(c.pars().gf)
-        ringfile_values(par)                     # RINGFILE: the values not given
-        estimated = estimatedParameters(par)
-        toEstimate = ((par.RADII == "-1" and (par.NRADII == -1 or par.RADSEP == -1)) or par.XPOS == "-1"
-                      or par.YPOS == "-1" or par.VSYS == "-1" or par.VROT == "-1" or par.PHI == "-1"
-                      or par.INC == "-1")
-        if toEstimate:
-            c.checkBeam()
-            if not c.MaskAll():
-                c.BlankMask()
-            ip = EstimateInitial(c, par)
-            if par.RADII == "-1":
-                if par.NRADII == -1: par.NRADII = ip.nrings
-                if par.RADSEP == -1: par.RADSEP = ip.radsep
-            if par.XPOS == "-1": par.XPOS = repr(float(ip.xcentre))
-            if par.YPOS == "-1": par.YPOS = repr(float(ip.ycentre))
-            if par.VSYS == "-1": par.VSYS = repr(float(ip.vsystem))
-            if par.VROT == "-1": par.VROT = repr(float(ip.vrot))
-            if par.INC == "-1": par.INC = repr(float(ip.inclin))
-            if par.PHI == "-1": par.PHI = repr(float(ip.posang))
-        for k, v in (("VDISP", "8.0"), ("Z0", repr(default_z0(c.Head()))), ("VRAD", "0.0"), ("DENS", "1.0"),
-                     ("VVERT", "0.0"), ("DVDZ", "0.0"), ("ZCYL", "0.0")):
-            if getattr(par, k) == "-1":
-                setattr(par, k, v)
-        inR = readRings(par, c.Head())
-        if inR.nr == 0:
-            raise ValueError("BAYESIAN3DFIT ERROR: the number of radii must be > 0.")
+        c.checkBeam()                            # (as 3DFIT; the default priors use the beam)
+        ini = initial_rings(c, copy.deepcopy(c.pars().gf), write=False, buildmask=True, task=self.TASK)
+        inR, toEstimate = ini.rings, ini.toEstimate
         if show_initial:
-            print(initialParametersText(inR, estimated), end="")
+            print(initialParametersText(inR, ini.estimated), end="")
         elif toEstimate:
             print(f"\n{self.taskname}: initial rings ({inR.nr} rings every {inR.radsep:.2f} arcsec) with "
                   "estimated parameters:")
@@ -254,28 +235,57 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         self._set_default_priors()
 
     def _set_default_priors(self):
-        """ Default priors (uniform), parametric functions and smoothness penalties. The
-        priors that depend on the rings follow them, unless they were changed. """
+        """ Default priors (uniform), parametric functions and smoothness penalties.
+
+        The default priors of the ring parameters follow the initial rings (given or estimated, see
+        _init_rings), and change with them. A prior serves all the rings, so 'initial +- w' spans
+        the initial values of every ring, from the smallest - w to the largest + w:
+          INC     initial +- 10 deg, within 0-90 deg;
+          PA      initial +- 15 deg (one sense of rotation: PA+180 is excluded);
+          VROT    0 to 2 x the largest initial VROT (0-350 km/s if it is not positive): the largest,
+                  because the prior of each ring must hold the outer, flat part of the curve; the
+                  value of each ring would give the inner rings of a rising curve a narrow prior,
+                  where the initial values are the least reliable (and an estimate is one value);
+          XPOS, YPOS initial +- 2 beam FWHM (major axis, in pixels);
+          VSYS    initial +- 5 channels, at least +- 20 km/s;
+          VDISP   0 to 2 x the largest initial VDISP, at least 0-50 km/s;
+          Z0      0 to one beam FWHM (arcsec);
+          RADMAX  the last radius +- one beam FWHM, within the rings (see _prior_kwargs);
+          VROT_P1 (the amplitude of the arctan curve) 1 km/s to 2 x the largest initial VROT.
+        The others do not depend on the rings: VRAD 0-50 km/s, VVERT 0-30 km/s, DVDZ 0-2 km/s/arcsec,
+        ZCYL 0-5 arcsec, DENS 0.1-200.1, SIGMA and FRACERR log-uniform (see _prior_kwargs), and those of
+        the functions of radius. A prior that was changed (in priors, or with PRIORS) is kept: only
+        those equal to the previous defaults (_default_pri) follow the rings. """
+        from ..bbutils import DeltaVel, arcsconv
         rr = {k: np.asarray(v, dtype=float) for k, v in self._inri.r.items()}
-        radsep = float(np.abs(rr['radii'][-1] - rr['radii'][-2])) if len(rr['radii']) > 1 else float(rr['radii'][0])
+        h = self._cube_obj.Head()
+        beam = abs(h.Bmaj()) * arcsconv(h.Cunit(0))              # the beam FWHM (arcsec)
+        beampix = abs(h.Bmaj()) / h.PixScale()                    # (pixels)
+
+        def around(v, w, lo=-np.inf, hi=np.inf):
+            a, b = max(float(np.min(v)) - w, lo), min(float(np.max(v)) + w, hi)
+            return dict(name='uniform', loc=a, scale=b - a)
+        vtop = 2. * float(rr['vrot'].max()) if rr['vrot'].max() > 0 else 350.
+        last = float(rr['radii'][-1])
+        rlo = max(last - beam, 0.)
         new = dict(
-            xpos=dict(name='uniform', loc=rr['xpos'][0] - 5, scale=10),       # +- 5 pixels
-            ypos=dict(name='uniform', loc=rr['ypos'][0] - 5, scale=10),       # +- 5 pixels
-            vsys=dict(name='uniform', loc=rr['vsys'][0] - 20, scale=40),      # +- 20 km/s
-            vrot=dict(name='uniform', loc=0, scale=350),                      # 0-350 km/s
-            vdisp=dict(name='uniform', loc=0, scale=50),                      # 0-50 km/s
+            xpos=around(rr['xpos'], 2. * beampix),                           # +- 2 beams
+            ypos=around(rr['ypos'], 2. * beampix),
+            vsys=around(rr['vsys'], max(5. * abs(DeltaVel(h)), 20.)),        # +- 5 channels, >= 20 km/s
+            vrot=dict(name='uniform', loc=0., scale=vtop),                   # 0 - 2 x VROT
+            vdisp=dict(name='uniform', loc=0., scale=max(2. * float(rr['vdisp'].max()), 50.)),
             vrad=dict(name='uniform', loc=0, scale=50),                       # 0-50 km/s
-            inc=dict(name='uniform', loc=0, scale=90),                        # 0-90 degrees
-            phi=dict(name='uniform', loc=0, scale=360),                       # 0-360 degrees
+            inc=around(rr['inc'], 10., 0., 90.),                              # +- 10 degrees
+            phi=around(np.degrees(np.unwrap(np.radians(rr['phi']))), 15.),    # +- 15 degrees
             vvert=dict(name='uniform', loc=0, scale=30),                      # 0-30 km/s
             dvdz=dict(name='uniform', loc=0, scale=2),                        # 0-2 km/s/arcsec
             zcyl=dict(name='uniform', loc=0, scale=5),                        # 0-5 arcsec
             dens=dict(name='uniform', loc=0.1, scale=200),                    # 0.1-200.1 (flux units x km/s/arcsec2)
-            z0=dict(name='uniform', loc=0, scale=10),                         # 0-10 arcsec
+            z0=dict(name='uniform', loc=0., scale=beam),                     # 0 - 1 beam
             sigma=dict(name='loguniform', a=None, b=None),                    # None: 0.5 and 1000 x noise rms
             fracerr=dict(name='loguniform', a=1e-3, b=1.),                    # fractional model error
-            radmax=dict(name='uniform', loc=float(rr['radii'][-1]) - radsep / 2., scale=radsep),
-            vrot_p1=dict(name='uniform', loc=1, scale=350),
+            radmax=dict(name='uniform', loc=rlo, scale=last + beam - rlo),   # last radius +- 1 beam
+            vrot_p1=dict(name='uniform', loc=1., scale=max(vtop, 2.) - 1.),
             vrot_p2=dict(name='uniform', loc=1, scale=1000),
             vdisp_p1=dict(name='uniform', loc=0, scale=10),
             vdisp_p2=dict(name='uniform', loc=-10, scale=20),
@@ -380,9 +390,8 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         edge of the disk, with the rings fixed (the model has no emission beyond it: see
         galmod.edge_weights); 'taper', a Gaussian edge of width radmax_width (default a quarter of
         the beam FWHM); 'ring', the radius of the last ring (which moves, with its annulus: the
-        RADMAX of the original module). The default prior is the last ring, its radius +- half the
-        ring separation; with NODES rings, whose disk ends at the last radius, the edge lies within
-        half a ring separation inside it (see _prior_kwargs). """
+        RADMAX of the original module). The default prior is the last radius +- one beam FWHM, within
+        the rings (see _prior_kwargs). """
         self._radmax_mode = str(self.like_kwargs.get('radmax') or 'edge')
         w = self.like_kwargs.get('radmax_width')
         if self._radmax_mode != 'taper':
@@ -436,13 +445,23 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         """ Parameters of the prior of key (self.priors without 'name'). For sigma, None values
         are relative to the measured noise rms: loguniform a = 0.5 rms, b = 1000 rms (the
         default prior: scale-invariant between half and 1000 times the noise); scale = rms
-        (e.g. halfcauchy, the default before November 2026). The default prior of an edge (radmax
-        'edge' or 'taper') with NODES rings is the half of the last ring inside its radius. """
+        (e.g. halfcauchy, the default before November 2026). The default prior of RADMAX, the last
+        radius +- one beam FWHM, is kept within the rings: an edge (radmax 'edge' or 'taper') ends at
+        the outer edge of the disk of the rings (galmod.outer_edge: the last radius with NODES rings,
+        half a ring beyond it otherwise), beyond which it has no effect; the last ring (radmax 'ring')
+        stays beyond the middle of the last two radii, so that the radii stay in order. """
+        from ..galmod import outer_edge
         kw = {k: v for k, v in self.priors[key].items() if k != "name"}
         if key == 'radmax' and self.priors[key] == getattr(self, '_default_pri', {}).get(key) \
-                and self._galfit is not None and getattr(self, '_radmax_mode', 'edge') != 'ring' \
-                and ringmode_name(self._galfit.model.ringmode) == 'NODES':
-            kw['scale'] = 0.5 * kw['scale']     # (the disk of NODES rings ends at the last radius)
+                and self._galfit is not None:
+            lo, hi = kw['loc'], kw['loc'] + kw['scale']
+            radii = np.asarray(self._inri.r['radii'], float)
+            if getattr(self, '_radmax_mode', 'edge') == 'ring':
+                if len(radii) > 1:
+                    lo = max(lo, 0.5 * (radii[-2] + radii[-1]))
+            else:
+                hi = min(hi, outer_edge(self._inri.object, self._galfit.model.ringmode))
+            kw['loc'], kw['scale'] = lo, hi - lo
         if key == 'sigma':
             for k, f in (('a', 0.5), ('b', 1000.), ('scale', 1.)):
                 if k in kw and kw[k] is None:
@@ -664,8 +683,8 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             'fracerr' is not suitable here (it weights the faint outer disk);
           * let the rings cover the whole disk (a warning tells when they do not): the emission
             beyond them biases INC low;
-          * restrict the prior of phi to one half: the map does not change with PA -> PA + 180
-            (the default prior, 0-360, gives two modes).
+          * keep the prior of phi within one half: the map does not change with PA -> PA + 180
+            (the default prior, the initial PA +- 15 deg, does; one 0-360 wide gives two modes).
         The data map sums the voxels of the likelihood, the model map all the channels (as in pyBBarolo):
         they agree when the likelihood voxels hold the whole line (with the default dilated mask the
         signal outside them is below 0.1%; with dilation (0, 0) about 20%). """

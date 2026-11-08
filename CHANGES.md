@@ -12,6 +12,12 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   **(C++)**.
 - **The table of the initial parameters** marked the number and width of the rings as estimated `(e)` when
   they were given with RADII; they are `(i)` now **(C++)**.
+- **BayesianBBarolo: the initial rings are those of 3DFIT.** They were built by a copy of the code of 3DFIT
+  that set VDISP to 8 km/s also with GUESSTYPE FIT, where 3DFIT takes the estimate from the second moment.
+  BayesianBBarolo now calls the code of 3DFIT (`galfit.initial_rings`): its initial rings are identical to
+  those of 3DFIT for the same parameters, the estimated ones too. (3DFIT then changes its rings for REVERSE
+  and, with PA free, refines PA and VROT with a 2D fit: these are steps of its fit, not taken by
+  BayesianBBarolo.)
 
 - **ELLPROF: SIDE A and R were swapped** when the mean PA of the rings is at most 180°, i.e. for most
   galaxies: `A` gave the receding half (`R` the approaching one). They are right at any PA now; this also
@@ -410,6 +416,22 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 - **BayesianBBarolo.run() writes nothing** (it wrote `<prefix>_rings_final1.txt`, and `<OBJECT>_input.fits`
   for an in-memory cube); the new `BayesianBBarolo.write(outfolder=None, plots=None)` writes what the
   BAYESIAN3DFIT task writes (best model and its outputs, rings with the posterior errors, samples, plots).
+- **BayesianBBarolo: the default priors follow the initial rings** (given or estimated), instead of fixed
+  wide ranges: INC ±10° around the initial values, within 0–90° (was 0–90°); PA ±15° (was 0–360°, which
+  allowed both senses of rotation); VROT 0 to twice the largest initial VROT (was 0–350 km/s); XPOS and
+  YPOS ±2 beam FWHM (was ±5 pixels); VSYS ±5 channels, at least ±20 km/s (was ±20 km/s); VDISP 0 to twice
+  the largest initial VDISP, at least 0–50 km/s (was 0–50 km/s); Z0 0 to one beam FWHM (was 0–10″);
+  RADMAX the last radius ±1 beam within the rings (was ± half a ring separation); VROT_P1 1 km/s to twice
+  the largest initial VROT (was 1–351 km/s). One prior serves all the rings, so with values per ring it
+  spans them all (from the smallest − w to the largest + w); VROT uses the largest value, so that the prior
+  of every ring holds the flat part of the rotation curve (the value of each ring would give the inner
+  rings of a rising curve a prior narrower than their uncertainty). An edge (RADMAX, LIKEOPTS radmax=edge
+  or taper) has no effect beyond the outer edge of the rings, so its prior stops there; the last ring
+  (radmax=ring) stays beyond the middle of the last two radii. The priors given (`f.priors`, PRIORS) are
+  kept, and the defaults follow the rings when they change. Fits with free parameters that use these
+  priors change: narrower priors give narrower posteriors where the data constrain them poorly (Z0, INC
+  of a nearly face-on disk), and the INC prior can miss the true INC when the estimate is 10° off (LEGACY
+  estimates scatter by 10–12° below 45°).
 - **Files written while computing are kept in memory** and written by the task: the mask (`BlankMask` no
   longer writes `<prefix>_mask.fits`; `Cube.mask_hdu()`, `Cube.writeMask()`), `<prefix>_2drings.txt`,
   `<prefix>_map_1st.fits` of the 2D fit, `<prefix>_rings_initial.txt`, `<prefix>_rings_final*.txt`, the plots of

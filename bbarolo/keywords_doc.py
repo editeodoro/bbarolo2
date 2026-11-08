@@ -1430,18 +1430,31 @@ prior of a parameter with one value per ring applies to each ring), or `VROT_P1`
 `VDISP_P1`, ... for the parameters of a function of radius (`NAME_FUNC` in `FREE`). For `SIGMA`, the
 arguments `a`, `b` and `scale` can be `none`: 0.5, 1000 and 1 times the measured noise rms.
 
-The priors that are not given are uniform:
+The priors that are not given are uniform. Those of the ring parameters follow the initial rings, the
+values given or estimated as in 3DFIT (see `GUESSTYPE`), and the beam and channels of the cube. One prior
+serves all the rings, so "initial ± w" spans the values of all the rings, from the smallest − w to the
+largest + w:
 
-- `VROT` 0–350 km/s, `VDISP` 0–50 km/s, `VRAD` 0–50 km/s, `VVERT` 0–30 km/s, `INC` 0–90°, `PA` 0–360°;
-- `XPOS` and `YPOS` ±5 pixels, and `VSYS` ±20 km/s, around the initial values;
-- `Z0` 0–10 arcsec, `ZCYL` 0–5 arcsec, `DVDZ` 0–2, `DENS` 0.1–200.1 (a flux per unit area: the flux
-  units of the cube × km/s per arcsec², see `DENS`; give a prior suited to the units of the cube);
-- `RADMAX` within half a ring separation of the last radius (only the inner half with `RINGMODE NODES`,
-  unless `LIKEOPTS radmax=ring`);
+- `INC` initial ±10° (within 0–90°), `PA` initial ±15°;
+- `VROT` 0 to twice the largest initial VROT; `VDISP` 0 to twice the largest initial VDISP, at least
+  0–50 km/s;
+- `XPOS` and `YPOS` initial ±2 beam FWHM, `VSYS` initial ±5 channels (at least ±20 km/s);
+- `Z0` 0 to one beam FWHM;
+- `RADMAX` the last radius ±1 beam FWHM, within the rings: with `LIKEOPTS radmax=edge` or `taper` (the
+  edge of the disk) up to the outer edge of the last ring (the last radius with `RINGMODE NODES`), beyond
+  which the edge has no effect; with `radmax=ring` (the last ring moves) beyond the middle of the last two
+  radii;
+- `VRAD` 0–50 km/s, `VVERT` 0–30 km/s, `ZCYL` 0–5 arcsec, `DVDZ` 0–2, `DENS` 0.1–200.1 (a flux per unit
+  area: the flux units of the cube × km/s per arcsec², see `DENS`; give a prior suited to the units of the
+  cube);
 - `SIGMA` log-uniform between 0.5 and 1000 times the noise rms, `FRACERR` log-uniform between 0.001 and 1;
-- the functions of radius R (arcsec): `VROT` = 2/π · P1 · arctan(R/P2), with P1 1–351 km/s and P2
-  1–1001 arcsec; `VDISP` = P1 + P2 · R, with P1 0–10 km/s and P2 −10 to 10 km/s/arcsec; `DENS` =
-  P1 · exp(−R/P2), with P1 1–21 and P2 1–201 arcsec.
+- the functions of radius R (arcsec): `VROT` = 2/π · P1 · arctan(R/P2), with P1 from 1 km/s to twice
+  the largest initial VROT and P2 1–1001 arcsec; `VDISP` = P1 + P2 · R, with P1 0–10 km/s and P2 −10 to
+  10 km/s/arcsec; `DENS` = P1 · exp(−R/P2), with P1 1–21 and P2 1–201 arcsec.
+
+The priors follow the rings when they change (in Python, `update`), but those given are kept. An
+estimated INC can be wrong by 10° or more below 45° (see `GUESSTYPE`): for a galaxy seen nearly face-on,
+give `INC` or a wider prior.
 """),
     'SAMPLEROPTS': dict(
         group='Bayesian sampling',

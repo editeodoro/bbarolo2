@@ -6,7 +6,7 @@ nautilus). Pure-Python port of bayesian.py of the original C++-based pyBBarolo (
 The interface follows the other bbarolo tasks (it builds on bbarolo.FitMod3D): the
 cube and any BBarolo parameter are given to the constructor, the rings with the usual
 keywords (radii or nradii/radsep, xpos, ypos, vsys, vrot, vdisp, inc, pa, z0, vrad, dens,
-...; single values or one value per ring; geometric parameters not given are estimated):
+...; single values or one value per ring; the values not given are estimated or set as in 3DFIT):
 
     >>> from bbarolo import BayesianBBarolo
     >>> f = BayesianBBarolo("ngc2403.fits", radii=np.arange(30,600,60), xpos=77, ypos=77,
@@ -29,7 +29,9 @@ for all rings), 'vrot_func' (parametric function of radius, see ``funcs``), plus
 measured noise), 'fracerr' (fractional model error: the variance of a voxel is
 sigma^2 + (fracerr*model)^2) and 'radmax' (the outer edge of the disk; like_kwargs radmax='ring'
 moves the last ring instead, as in the original module). Priors are frozen scipy.stats
-distributions (``priors`` dictionary or ``prior_distr``).
+distributions (``priors`` dictionary or ``prior_distr``). The default priors follow the initial
+rings, given or estimated as in 3DFIT (e.g. INC +- 10 deg, PA +- 15 deg, VROT 0 to twice the
+largest initial VROT; see BayesianBBarolo._set_default_priors and the keyword PRIORS).
 
 The options of the likelihood are given in run(like_kwargs=...) (LIKEOPTS in parameter files;
 the options of the fit are in f.like_kwargs): likemask, dilation, noisecorr, densprof_smooth,

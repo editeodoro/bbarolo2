@@ -317,15 +317,18 @@ def default_z0(h):
     return float(h.PixScale() * arcsconv(h.Cunit(0)))
 
 
-def initial_rings(c, par, galmod=False, write=True):
-    """The initial rings of 3DFIT, or the rings of GALMOD (galmod=True), from the
+def initial_rings(c, par, galmod=False, write=True, buildmask=False, task="3DFIT"):
+    """The initial rings of 3DFIT and BAYESIAN3DFIT, or the rings of GALMOD (galmod=True), from the
     parameters par (a GalfitPar; changed in place: the values that are not given are set).
 
     Values not given are read from RINGFILE, estimated from the data (centre, systemic and
     rotation velocity, inclination, position angle, number and width of the rings), or set
-    to the defaults (VDISP=8, Z0=one pixel, VRAD=0, DENS=1, VVERT=0, DVDZ=0, ZCYL=0). With write=True
-    the rings are kept in the cube for rings_model.txt (GALMOD) or rings_initial.txt (3DFIT), see
-    Cube.add_output.
+    to the defaults (VDISP=8, or its estimate with GUESSTYPE FIT; Z0=one pixel, VRAD=0, DENS=1,
+    VVERT=0, DVDZ=0, ZCYL=0). The estimates use the mask of the cube: 3DFIT builds it before;
+    buildmask=True builds it here (MASK; BAYESIAN3DFIT, only when something is estimated), otherwise
+    only a mask from a file is built (GALMOD). With write=True the rings are kept in the cube for
+    rings_model.txt (GALMOD) or rings_initial.txt (3DFIT), see Cube.add_output. task: the name in
+    the error messages.
 
     Returns a namespace with: rings (a Rings object), fromfile (the rings were read from a
     file), estimated (dict: which parameters were not given), toEstimate (bool) and ip (the
@@ -338,7 +341,11 @@ def initial_rings(c, par, galmod=False, write=True):
     estimated = estimatedParameters(par)
     ip = None
     if toEstimate:
-        if "FILE(" in p.MaskType and not c.MaskAll():      # the estimates use a mask from a file
+        if buildmask:                                       # the mask of the fit, as 3DFIT
+            c.checkBeam()
+            if not c.MaskAll():
+                c.BlankMask()
+        elif "FILE(" in p.MaskType and not c.MaskAll():    # the estimates use a mask from a file
             c.BlankMask()
         ip = EstimateInitial(c, par)
         if par.RADII == "-1":
@@ -362,7 +369,7 @@ def initial_rings(c, par, galmod=False, write=True):
 
     inR, fromfile = readRings(par, c.Head(), return_fromfile=True)
     if inR.nr == 0:
-        raise BBaroloError("\n 3DFIT ERROR: The number of radii must be > 0! ")
+        raise BBaroloError(f"\n {task} ERROR: The number of radii must be > 0! ")
     if write:
         c.add_output("_rings_model.txt" if galmod else "_rings_initial.txt", initialRingsText(inR))
     return types.SimpleNamespace(rings=inR, fromfile=fromfile, estimated=estimated, toEstimate=toEstimate, ip=ip)
