@@ -194,13 +194,16 @@ class LikelihoodMixin(object):
         """ rms noise of the sum of nchan channels (array), for the total intensity map of
         run_geometry: noiserms * sqrt(nchan) for independent channels; with the measured
         correlation of the noise (noisecorr='measured'), the channels are assumed contiguous,
-        variance = noiserms^2 * (n + 2 sum_l (n - l) rho_l) over the spectral lags l. """
+        variance = noiserms^2 * (n + 2 sum_l (n - l) rho_l) over the spectral lags l of the positive
+        core (up to the first lag with rho_l <= 0). """
         n = np.asarray(nchan, np.float64)
         var = n.copy()
         nc = self.noise_correlation if str(self.like_kwargs['noisecorr']).lower() == 'measured' else None
         if nc is not None:
             rho = np.asarray(nc['rho_spectral'], float)
             for lag in range(1, len(rho)):
+                if rho[lag] <= 0:               # (the positive core only: conservative, as the likelihood)
+                    break
                 var += 2. * np.clip(n - lag, 0., None) * rho[lag]
         return self.noiserms * np.sqrt(np.clip(var, 0., None))
 
@@ -220,7 +223,13 @@ class LikelihoodMixin(object):
                           without emission, spatial x spectral; see noise_correlation), and
                           1/(spatial correlation area) for the likelihood of run_geometry;
                           if it cannot be measured (too few voxels without emission, e.g.
-                          MASK=NONE), the beam area;
+                          MASK=NONE), the beam area. The measure is conservative (wider
+                          posteriors rather than narrower): the spatial area is the largest
+                          of the sum of the autocorrelation of the noise, its sum over the
+                          positive core and the beam area; the spectral one the largest of
+                          the sum, the positive core and one channel. (The sum alone can be
+                          much smaller than the beam for the noise of synthesis images,
+                          whose autocorrelation has a negative ring: e.g. 0.2 beam areas.)
         'beam':           1/(beam area in pixels), spatial correlation only (the default
                           before November 2026);
         a number N > 0:   N voxels (and N pixels of the total intensity map) per independent
@@ -244,9 +253,13 @@ class LikelihoodMixin(object):
                 print("BAYESIAN WARNING: too few voxels without emission to measure the correlation of the "
                       "noise:\n         using the beam area (like_kwargs noisecorr='beam').")
             else:
-                A, A2 = nc['volume'], nc['spatial']
-                self._likefactor_note = (f"1/{A:.2f} (measured noise correlation: {nc['spatial']:.2f} pixels x "
-                                         f"{nc['spectral']:.2f} channels; beam area {self.beam_area:.2f} pixels)")
+                sp = max(nc['spatial'], nc.get('spatial_core', nc['spatial']), self.beam_area)
+                sz = max(nc['spectral'], nc.get('spectral_core', nc['spectral']), 1.)
+                A, A2 = sp * sz, sp
+                self._corr_below_beam = nc['spatial'] < 0.5 * self.beam_area
+                self._likefactor_note = (f"1/{A:.2f} (measured noise correlation: {sp:.2f} pixels x {sz:.2f} "
+                                         f"channels, at least one beam area, {self.beam_area:.2f} pixels; sum of the "
+                                         f"autocorrelation {nc['spatial']:.2f} pixels x {nc['spectral']:.2f} channels)")
         elif str(mode).lower() != 'beam':
             raise ValueError(f"ERROR! noisecorr must be 'beam', 'measured' or a number, not {mode!r}.")
         self.likefactor = 1. / A

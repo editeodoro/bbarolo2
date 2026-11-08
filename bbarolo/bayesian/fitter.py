@@ -562,6 +562,12 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                 else:
                     print(f"\nLikelihood: noise per voxel sigma = {sg}{fe}; log-likelihood x {fc}; "
                           f"{self.nvox} voxels ({self._likemask_note})")
+                if getattr(self, '_corr_below_beam', False) and str(self.like_kwargs['noisecorr']).lower() == \
+                        'measured' and log_like != self._log_likelihood_geometry:
+                    print("WARNING: the sum of the autocorrelation of the noise is less than half the beam area: "
+                          "the noise has\n         a negative ring (synthesis images without short spacings), or "
+                          "the beam in the header\n         is wrong. The likelihood counts one independent value "
+                          "per beam area at most.")
                 if self._side() is not None:
                     print(f"           the {'approaching' if self._side() == 'A' else 'receding'} half of the "
                           "galaxy only (SIDE), divided by the minor axis of the initial rings")

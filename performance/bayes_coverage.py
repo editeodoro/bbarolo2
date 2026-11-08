@@ -73,7 +73,18 @@ CONFIGS = {
     "dilated_deconv_sigma": dict(noisecorr="measured", fracerr=False, sigma=True, likemask="dilated"),
     "none_deconv": dict(noisecorr="measured", fracerr=False, sigma=False, likemask="none"),
     "dilated_truedens": dict(noisecorr="measured", fracerr=False, sigma=False, likemask="dilated", truedens=True),
+    # other measures of the correlation area of the noise (see noise_correlation), compared on 8 Nov 2026: the sum
+    # of the squared autocorrelation (not conservative) and the sum over its positive core
+    "dilated_deconv_sq": dict(noisecorr="measured", fracerr=False, sigma=False, likemask="dilated", corrarea="sq"),
+    "dilated_deconv_core": dict(noisecorr="measured", fracerr=False, sigma=False, likemask="dilated",
+                                corrarea="core"),
+    # the conservative measure: the largest of the sum, the positive core and one beam area (spatial), of the sum,
+    # the positive core and one channel (spectral); the default of noisecorr='measured' since 8 Nov 2026, so that
+    # dilated_deconv now runs it too (the results of dilated_deconv before that date are those of the sum)
+    "dilated_deconv_cons": dict(noisecorr="measured", fracerr=False, sigma=False, likemask="dilated",
+                                corrarea="cons"),
 }
+NOISES = ("beam", "interf")
 # configurations of options removed on 3 November 2026 (in the results file, shown by --summary)
 HISTORICAL = ["beam", "measured", "fracerr", "both", "sigma", "dilated", "dilated_fracerr", "dilated_sigma",
               "dilated_sigma_fracerr", "none", "deconv_v1", "dilated_deconv_v1", "dilated_deconv_fracerr_v1"]
@@ -88,10 +99,24 @@ def vertical(g, kind):
     return z0, (-0.1 * g["vflat"] / z0 if kind == "lag" else 0.)
 
 
-def simulate(g, cg, snr, seed, wd, hanning, kind="flat"):
-    """Noiseless ANALYTIC model + noise convolved with the beam (rms = peak / snr), Hanning
-    smoothed along the spectral axis if hanning (the noise only). Returns (file, centre, total flux
-    of the noiseless model)."""
+def interf_noise(shape, fwhm_pix, rng, hole=0.8):
+    """Noise as in synthesis images: white noise filtered so that its power spectrum is the transform of the
+    Gaussian beam (FWHM fwhm_pix) without the large scales (a central hole of the uv plane of radius
+    hole / fwhm_pix, as missing short spacings): the autocorrelation is a core of about one beam with a negative
+    ring at ~1.3 beams, and sums to ~0.2 beam areas (hole 0.8 matches the WSRT cube UGC1281_1)."""
+    nz, ny, nx = shape
+    s = fwhm_pix / np.sqrt(8 * np.log(2))
+    ky = np.fft.fftfreq(ny)[:, None] * 2 * np.pi
+    kx = np.fft.rfftfreq(nx)[None, :] * 2 * np.pi
+    k2 = kx ** 2 + ky ** 2
+    P = np.exp(-k2 * s * s / 2.) * (1 - np.exp(-k2 / (2 * (hole / fwhm_pix) ** 2)))
+    return np.fft.irfft2(np.fft.rfft2(rng.standard_normal(shape)) * np.sqrt(P)[None], s=(ny, nx))
+
+
+def simulate(g, cg, snr, seed, wd, hanning, kind="flat", noisekind="beam"):
+    """Noiseless ANALYTIC model + noise convolved with the beam (noisekind 'beam'), or with the correlation of
+    synthesis images (noisekind 'interf', see interf_noise), rms = peak / snr, Hanning smoothed along the
+    spectral axis if hanning (the noise only). Returns (file, centre, total flux of the noiseless model)."""
     from bbarolo import GalMod
     from bbarolo.utils import emptyfits
     from astropy.io import fits
@@ -108,7 +133,10 @@ def simulate(g, cg, snr, seed, wd, hanning, kind="flat"):
                 galmodtype="ANALYTIC", threads=1, verbose=False)
     clean = gm.run().model.data.astype(np.float64)
     rms = clean.max() / snr
-    noise = gm.diskmodel.addnoise(np.zeros_like(clean), 1., seed=seed).astype(np.float64)
+    if noisekind == "interf":
+        noise = interf_noise(clean.shape, cg["beam"] / cg["pix"], np.random.default_rng(seed))
+    else:
+        noise = gm.diskmodel.addnoise(np.zeros_like(clean), 1., seed=seed).astype(np.float64)
     if hanning:
         noise = 0.25 * np.roll(noise, 1, 0) + 0.5 * noise + 0.25 * np.roll(noise, -1, 0)
     noise *= rms / noise.std()
@@ -123,12 +151,13 @@ def fit(job):
     from bbarolo.bayesian import BayesianBBarolo
     g, cg, cfg = job["galaxy"], job["cube"], CONFIGS[job["config"]]
     kind, gtype = job.get("kind", "flat"), job.get("galmodtype", "ANALYTIC")
+    noisekind = job.get("noise", "beam")
     rec = dict(key=job["key"], config=job["config"], gid=g["id"], snr=job["snr"], hanning=job["hanning"],
-               spatial=job["spatial"], inc=g["inc"], kind=kind, galmodtype=gtype)
+               spatial=job["spatial"], inc=g["inc"], kind=kind, galmodtype=gtype, noise=noisekind)
     t0 = time.time()
     try:
         with tempfile.TemporaryDirectory(prefix="bbcov_") as wd:
-            fn, xc, ftot = simulate(g, cg, job["snr"], job["seed"], wd, job["hanning"], kind)
+            fn, xc, ftot = simulate(g, cg, job["snr"], job["seed"], wd, job["hanning"], kind, noisekind)
             R = rs.fit_radii(cg["beam"])
             t = rs.profiles(g, R)
             z0, dvdz = vertical(g, kind)
@@ -149,6 +178,20 @@ def fit(job):
             if cfg["sigma"]:
                 free.append('sigma')
             like = dict(noisecorr=cfg["noisecorr"], likemask=cfg.get("likemask", "dilated"))
+            if cfg.get("corrarea"):                 # (under study: another measure of the correlation area)
+                ca, setfac = cfg["corrarea"], f._set_likefactor
+
+                def corrarea_factor(ca=ca, setfac=setfac, f=f):
+                    setfac()
+                    nc = f.noise_correlation
+                    if nc is not None and ca == "cons":
+                        sp = max(nc["spatial"], nc["spatial_core"], f.beam_area)
+                        f.likefactor = 1. / (sp * max(nc["spectral"], nc["spectral_core"], 1.))
+                        f.likefactor2d = 1. / sp
+                    elif nc is not None:
+                        f.likefactor = 1. / (nc["spatial_" + ca] * nc["spectral_" + ca])
+                        f.likefactor2d = 1. / nc["spatial_" + ca]
+                f._set_likefactor = corrarea_factor
             if cfg.get("truedens"):                 # diagnostic: DENS = the true profile, not from the data
                 f._set_like_options(like)
                 f._setup(free)
@@ -210,14 +253,14 @@ def fit3d(fn, R, xc, g, z0, dvdz, gtype, wd):
 
 
 def jobs(ngal, snrs, configs, spatial, hanning, nlive, neff, seed=2026, kind="flat", galmodtype="ANALYTIC",
-         fit3d=False):
+         fit3d=False, noise="beam"):
     if kind == "warp":
         gal = [dict(galaxy=rs.draw_galaxy("warp", k, seed), seed=int(np.random.default_rng([seed, 7, k]).integers(2 ** 31)))
                for k in range(ngal)]
     else:
         gal = [j for j in rs.make_jobs(["geometry"], 24, 200, 120, seed) if j["fitmode"] == "truth"
                and 30 <= j["galaxy"]["inc"] < 75][:ngal]
-    pre = "" if kind == "flat" else f"{kind}/"
+    pre = ("" if kind == "flat" else f"{kind}/") + ("" if noise == "beam" else f"{noise}/")
     post = "" if galmodtype == "ANALYTIC" else f"/{galmodtype.lower()}"
     out = []
     for snr in snrs:
@@ -227,7 +270,8 @@ def jobs(ngal, snrs, configs, spatial, hanning, nlive, neff, seed=2026, kind="fl
             for c in configs:
                 out.append(dict(key=f"{pre}{c}/snr{snr:g}/sp{spatial:g}/h{int(hanning)}/g{g['id']}{post}", config=c,
                                 galaxy=g, cube=cg, snr=snr, spatial=spatial, hanning=hanning, nlive=nlive, neff=neff,
-                                seed=j["seed"] ^ int(snr), kind=kind, galmodtype=galmodtype, fit3d=fit3d))
+                                seed=j["seed"] ^ int(snr), kind=kind, galmodtype=galmodtype, fit3d=fit3d,
+                                noise=noise))
     return out
 
 
@@ -240,11 +284,13 @@ def summary(path):
     recs = [json.loads(line) for line in open(path) if line.strip()]
     recs = list({r["key"]: r for r in recs}.values())      # (a fit run again: its last record)
     print(f"{len(recs)} fits, {sum(r['status'] != 'ok' for r in recs)} failed")
-    key = lambda r: (r.get("kind", "flat"), r.get("galmodtype", "ANALYTIC"), r["snr"], r["spatial"], r["hanning"])
+    key = lambda r: (r.get("kind", "flat"), r.get("noise", "beam"), r.get("galmodtype", "ANALYTIC"), r["snr"],
+                     r["spatial"], r["hanning"])
     pars = ("vrot", "vdisp", "inc", "phi")
     for grp in sorted({key(r) for r in recs}):
-        kind, gtype, snr, sp, han = grp
-        print(f"\n=== {kind} disks, {gtype} fits, S/N {snr:g}, disk radius {sp:g} beams, Hanning noise {bool(han)}")
+        kind, noisekind, gtype, snr, sp, han = grp
+        print(f"\n=== {kind} disks, {noisekind} noise, {gtype} fits, S/N {snr:g}, disk radius {sp:g} beams, "
+              f"Hanning noise {bool(han)}")
         print(f"{'config':25s} {'fits':>4s} {'factor':>7s}  "
               + "  ".join(f"{p + ': cover  pulls':>22s}" for p in pars)
               + "   time  chi2  sigma/rms  fracerr")
@@ -322,6 +368,8 @@ def main():
     ap.add_argument("--kind", default="flat", choices=KINDS, help="the galaxies (see the documentation)")
     ap.add_argument("--galmodtype", default="ANALYTIC", choices=("ANALYTIC", "MC"), help="the models of the fit")
     ap.add_argument("--fit3d", action="store_true", help="also 3DFIT on the same cubes")
+    ap.add_argument("--noise", default="beam", choices=NOISES,
+                    help="the noise: convolved with the beam, or with the correlation of synthesis images")
     ap.add_argument("--no-hanning", action="store_true", help="noise not Hanning-smoothed")
     ap.add_argument("--nlive", type=int, default=400, help="live points of nautilus")
     ap.add_argument("--neff", type=int, default=1500, help="effective sample size of nautilus")
@@ -336,7 +384,8 @@ def main():
     if os.path.isfile(args.out):
         done = {json.loads(line)["key"] for line in open(args.out) if line.strip()}
     todo = [j for j in jobs(args.ngal, args.snr, args.configs, args.spatial, not args.no_hanning, args.nlive,
-                            args.neff, kind=args.kind, galmodtype=args.galmodtype, fit3d=args.fit3d)
+                            args.neff, kind=args.kind, galmodtype=args.galmodtype, fit3d=args.fit3d,
+                            noise=args.noise)
             if j["key"] not in done]
     print(f"{len(todo)} fits to run ({len(done)} done)", flush=True)
     t0 = time.time()

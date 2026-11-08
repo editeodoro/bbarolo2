@@ -373,6 +373,19 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **BAYESIAN3DFIT: the measured correlation of the noise is conservative** (`LIKEOPTS noisecorr=measured`, the
+  default). The spatial correlation area is the largest of the sum of the autocorrelation of the noise, its
+  sum over the positive core and the beam area; the spectral one the largest of the sum, the positive core
+  and one channel (and the noise of the total intensity map uses the positive core). The noise of synthesis
+  images has an autocorrelation with a negative ring (no short spacings), whose plain sum can be a fraction
+  of the beam (0.18 beam areas for the WSRT cube UGC1281_1), which made the posteriors too narrow: on
+  simulated disks with such noise only 30-50% of the true values were in the 68% intervals; now 79-92%
+  (VDISP: 71% at S/N 20, 42% at S/N 40, from its known low bias). With beam-smoothed noise nothing changes;
+  real cubes change little (NGC 2403: intervals 1.06 times wider, NGC 3198: 1.01). A warning says when the
+  sum is below half the beam area. The comparison (sum, sum of squares, positive core, the conservative
+  measure; beam-smoothed and synthesis-like noise) is `performance/bayes_coverage.py --noise interf` with
+  `performance/results/noisecorr_coverage.jsonl`.
+
 - **The Python tasks compute in memory; writing is a separate step.** `task.run()` (FitMod3D, GalMod,
   Search, Maps, ...) writes nothing: its Result holds the outputs in memory (HDUs and Tables; the moment maps
   and PV slices of a model are computed when first used). `res.write(outfolder=None, plots=None)`, or

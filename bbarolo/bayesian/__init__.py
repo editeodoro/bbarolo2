@@ -38,7 +38,9 @@ bbres (BBarolo's 3DFIT residuals), radmax and radmax_width (what RADMAX is), sig
 
 Correlated noise: the log-likelihood is multiplied by 1/(number of voxels per independent
 measurement). By default (noisecorr='measured') this is the correlation volume of the noise
-(spatial x spectral), measured from the voxels without emission (see noise_correlation);
+(spatial x spectral), measured from the voxels without emission (see noise_correlation), and
+conservative: at least one beam area spatially, and summed over the positive core of the
+autocorrelation where it has negative lobes (the noise of synthesis images);
 noisecorr='beam' uses the beam area in pixels instead, and noisecorr=<number> sets it.
 
 Voxels of the likelihood (likemask): 'dilated' (default) compares the model with the data,

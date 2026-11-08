@@ -58,7 +58,11 @@ def noise_correlation(data, mask=None, beam_fwhm=None, maxlag_xy=None, maxlag_z=
     one beam area. Hanning smoothing along the spectral axis gives 8/3 channels.
 
     Returns None if there are fewer than minvox noise voxels in all, otherwise a dict with
-    spatial (pixels), spectral (channels), volume (= spatial * spectral, voxels), rho_spectral
+    spatial (pixels), spectral (channels), volume (= spatial * spectral, voxels), the alternative
+    areas spatial_sq, spectral_sq (sums of the squared autocorrelation) and spatial_core,
+    spectral_core (sums over the positive core, out to the first lag where the autocorrelation
+    is <= 0; the likelihood uses the largest of the sum, the core and one beam area or one
+    channel, see LikelihoodMixin._set_likefactor), rho_spectral
     (autocorrelation at the spectral lags used), nnoise (number of noise voxels),
     spatial_from and spectral_from (the voxels used: 'free channels', 'free pixels' or
     'voxels outside the mask').
@@ -117,8 +121,17 @@ def noise_correlation(data, mask=None, beam_fwhm=None, maxlag_xy=None, maxlag_z=
     iy, ix = np.ix_(lags % fy, lags % fx)
     with np.errstate(invalid='ignore', divide='ignore'):
         c = np.where(cw[iy, ix] > 0.5, cn[iy, ix] / cw[iy, ix], 0.)
-    inside = np.hypot(*np.meshgrid(lags, lags, indexing='ij')) <= R
+    rlag = np.hypot(*np.meshgrid(lags, lags, indexing='ij'))
+    inside = rlag <= R
     spatial = float(np.sum(c[inside]) / c[L, L]) if c[L, L] > 0 else 1.
+    # alternative areas: the sum of the squared autocorrelation, and the sum over the positive core (out to the
+    # first radius where the azimuthal mean of the autocorrelation is <= 0)
+    rho = c / c[L, L] if c[L, L] > 0 else np.zeros_like(c)
+    spatial_sq = float(np.sum(rho[inside] ** 2)) if c[L, L] > 0 else 1.
+    rbin = np.rint(rlag).astype(int)
+    prof = np.array([rho[rbin == k].mean() for k in range(int(np.ceil(R)) + 1)])
+    r0 = int(np.argmax(prof <= 0)) if np.any(prof <= 0) else len(prof)
+    spatial_core = float(np.sum(rho[inside & (rbin < r0)])) if c[L, L] > 0 else 1.
     # spectral autocorrelation (zero spatial lag)
     K = max(0, min(int(maxlag_z), nz - 1))
     runs = []
@@ -162,7 +175,12 @@ def noise_correlation(data, mask=None, beam_fwhm=None, maxlag_xy=None, maxlag_z=
         rz = np.where(wz > 0.5, cz / wz, 0.)
     rz = rz / rz[0] if rz[0] > 0 else np.r_[1., np.zeros(K)]
     spectral = float(1. + 2. * np.sum(rz[1:]))
+    spectral_sq = float(1. + 2. * np.sum(rz[1:] ** 2))
+    k0 = int(np.argmax(rz <= 0)) if np.any(rz <= 0) else len(rz)
+    spectral_core = float(1. + 2. * np.sum(rz[1:k0]))
     spatial, spectral = max(spatial, 1.), max(spectral, 1.)
     return dict(spatial=spatial, spectral=spectral, volume=spatial * spectral, rho_spectral=rz, nnoise=nnoise,
+                spatial_sq=max(spatial_sq, 1.), spectral_sq=max(spectral_sq, 1.),
+                spatial_core=max(spatial_core, 1.), spectral_core=max(spectral_core, 1.),
                 maxlag_xy=R, maxlag_z=K, spatial_from='free channels' if free_ch else 'voxels outside the mask',
                 spectral_from=spectral_from)

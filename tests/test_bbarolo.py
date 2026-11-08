@@ -656,7 +656,9 @@ def test_bayesian_noisecorr_and_fracerr(tmp_path):
     # interferometric (THINGS) cube with Hanning smoothing: correlation ~ beam, 0.6-0.7 at lag 1
     assert 0.9 < nc['spatial'] / g.beam_area < 1.6 and 2.2 < nc['spectral'] < 3.2
     assert nc['spatial_from'] == 'free channels' and nc['spectral_from'] == 'free channels'
-    assert np.isclose(g.likefactor, 1. / nc['volume']) and np.isclose(g.likefactor2d, 1. / nc['spatial'])
+    sp = max(nc['spatial'], nc['spatial_core'], g.beam_area)          # (conservative: see _set_likefactor)
+    assert np.isclose(g.likefactor, 1. / (sp * max(nc['spectral'], nc['spectral_core'], 1.)))
+    assert np.isclose(g.likefactor2d, 1. / sp) and 1. / g.likefactor >= nc['volume']
     g.like_kwargs['noisecorr'] = 'beam'
     g._set_likefactor()
     assert np.isclose(g.likefactor, 1. / g.beam_area) and np.isclose(g.likefactor2d, 1. / g.beam_area)
@@ -679,7 +681,9 @@ def test_bayesian_noisecorr_and_fracerr(tmp_path):
     f.run(freepar=['vrot_single', 'fracerr'], like_kwargs=dict(noisecorr='measured'), threads=1, dynamic=False,
           verbose=False, sampler_kwargs=dict(nlive=30, rstate=np.random.default_rng(1)), run_kwargs=dict(maxiter=150))
     assert f.freepar_names == ['vrot', 'fracerr'] and np.all(np.isfinite(f.params))
-    assert np.isclose(f.likefactor, 1. / f.noise_correlation['volume'])
+    nc = f.noise_correlation
+    assert np.isclose(f.likefactor, 1. / (max(nc['spatial'], nc['spatial_core'], f.beam_area)
+                                          * max(nc['spectral'], nc['spectral_core'], 1.)))
 
 
 @needs_data
@@ -3053,3 +3057,34 @@ def test_chanmaps_mask_padded_as_data(tmp_path):
     txt = "".join(open(fn).read() for fn in glob.glob(str(tmp_path / "bbb" / "plotscripts" / "*.py")))
     assert "z = np.pad(data[chan,:,:],(pad_y, pad_x)" in txt
     assert "z_mas = np.pad(data_mas[chan],(pad_y, pad_x)" in txt and "contour(data_mas[chan]" not in txt
+
+
+def test_bayesian_noisecorr_conservative(tmp_path):
+    """noisecorr='measured' is conservative: the spatial correlation area is at least the beam area and the sum
+    over the positive core of the autocorrelation (the noise of synthesis images, whose autocorrelation has a
+    negative ring, summed to ~0.2 beam areas: posteriors ~2 times too narrow); beam-smoothed noise (sum ~2 beam
+    areas) is unchanged."""
+    from scipy.ndimage import gaussian_filter
+    from bbarolo.bayesian.noise import noise_correlation
+    f = _bayes_mock(tmp_path)
+    f._setup(['vrot_single'])
+    h = f._cube_obj.Head()
+    fw = abs(h.Bmaj() / h.Cdelt(0))
+    rng = np.random.default_rng(3)
+    s = fw / np.sqrt(8 * np.log(2))
+    ky, kx = np.fft.fftfreq(64)[:, None] * 2 * np.pi, np.fft.rfftfreq(64)[None, :] * 2 * np.pi
+    k2 = kx ** 2 + ky ** 2
+    P = np.exp(-k2 * s * s / 2.) * (1 - np.exp(-k2 / (2 * (0.8 / fw) ** 2)))     # beam without short spacings
+    ring = np.fft.irfft2(np.fft.rfft2(rng.standard_normal((20, 64, 64))) * np.sqrt(P)[None], s=(64, 64))
+    smooth = gaussian_filter(rng.standard_normal((20, 64, 64)), (0, s, s), mode="wrap")
+    for noise, case in ((ring, "ring"), (smooth, "smooth")):
+        nc = noise_correlation(noise, None, fw)
+        f.noise_correlation = nc
+        f._set_likefactor()
+        area = 1. / f.likefactor2d
+        assert np.isclose(area, max(nc['spatial'], nc['spatial_core'], f.beam_area))
+        assert np.isclose(1. / f.likefactor, area * max(nc['spectral'], nc['spectral_core'], 1.))
+        if case == "ring":
+            assert nc['spatial'] < 0.4 * f.beam_area and area >= f.beam_area
+        else:
+            assert 1.7 < nc['spatial'] / f.beam_area < 2.3 and np.isclose(area, max(nc['spatial'], nc['spatial_core']))

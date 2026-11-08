@@ -1486,8 +1486,10 @@ run, and `none` gives the default. The options, with their defaults in brackets:
   include the faint wings of the lines.
 - `noisecorr` (`measured`): the correlation of the noise; the log-likelihood is divided by the number
   of voxels per independent noise value. `measured`: the correlation volume measured in the voxels
-  without emission (the beam area if they are too few); `beam`: the beam area in pixels; a number
-  N > 0: N voxels (1: independent voxels).
+  without emission (the beam area if they are too few), conservative: the spatial area is at least
+  the beam area, and the autocorrelation is summed over its positive core when it has negative lobes
+  (the noise of synthesis images without short spacings, whose plain sum can be a fraction of the
+  beam); `beam`: the beam area in pixels; a number N > 0: N voxels (1: independent voxels).
 - `densprof_smooth` (`0.1`): the weight of the smoothness term of the density profile deconvolved from
   the total intensity map, used when `DENS` is not free (0: none).
 - `bbres` (`false`): `true` uses the residuals minimised by `3DFIT` (with its `FTYPE`, `WFUNC`, `SIDE`,
