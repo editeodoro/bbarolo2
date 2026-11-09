@@ -7,6 +7,24 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **MAPTYPE in 3DFIT, BAYESIAN3DFIT and GALMOD**: their maps of the data and of the models (`maps/`, the
+  maps page of the plots) were always moments, whatever MAPTYPE (as in C++). With MAPTYPE GAUSSIAN they
+  are now Gaussian fits, for both data and models, and the rows of the maps plot are labelled
+  accordingly. The default (MOMENT) gives the same outputs as before.
+- **(C++) Maps of cubes with several lines** (RESTWAVE or RESTFREQ with more than one value). The moment maps
+  of MAPS, of 3DFIT and BAYESIAN3DFIT (data and models), of the detections of SEARCH and those used by ELLPROF
+  and 2DFIT summed all the channels, so every line entered the moments of the first:
+  on NGC 5633 (Hα with [NII] at −674 and +944 km/s) the velocity map was shifted by about +175 km/s and the
+  dispersion map was about 460 km/s instead of about 105 km/s. The moment maps are now those of the first
+  line (the one the velocities refer to): only the channels nearer to it than to any other line, around its
+  flux-weighted velocity in the total spectrum. The total map is then the flux of the first line only. When
+  the lines are blended (the window ends within 2σ of the total spectrum), a warning says so and suggests
+  MAPTYPE GAUSSIAN. MAPTYPE GAUSSIAN now fits all the lines together: one Gaussian per line with one
+  velocity and one dispersion (in the frame of each line) and a free amplitude each (the observed ratios
+  can differ from RELINT), starting from the velocity where the lines weighted with RELINT line up best and
+  from a dispersion of at least one channel (a start at 10 km/s, as with one line, ended on one-channel spikes
+  in about half the spectra of NGC 5633, whose channels are 90 km/s wide). Cubes with one line give the
+  same maps as before.
 - **ANALYTIC models: the vertical layer.** The heights of a thick layer were equal-weight samples at the
   quantiles of its profile, which are several pixels apart in its tails at any number of samples (and,
   with DVDZ, form a comb in velocity). Against converged MC models: a thick edge-on Gaussian layer was off

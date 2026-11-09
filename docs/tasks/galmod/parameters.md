@@ -32,3 +32,9 @@ The parameters of GALMOD: the keywords of the parameter files (case-insensitive;
 ```{bbparams} GALMOD
 :group: Mask
 ```
+
+## Outputs
+
+```{bbparams} GALMOD
+:group: Outputs
+```

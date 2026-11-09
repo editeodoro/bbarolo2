@@ -2824,6 +2824,83 @@ def test_ellprof_side_blanks_and_hi_units(tmp_path):
     assert np.allclose(cols["JY/BEAM*KM/S"], cols["MJY/BEAM*KM/S"])
 
 
+def _lines_cube(path, lines, amps, sig, z=0.01, cdelt=1.0, nz=80):
+    """A wavelength cube (8x8 pixels, optical velocities) with Gaussian lines at rest wavelengths lines (the first
+    at channel 40) and peaks amps, dispersion sig km/s and velocity -150 + 40 x km/s (x: pixel column)."""
+    from astropy.io import fits
+    C = 299792.458
+    h = fits.Header()
+    for k, v in dict(NAXIS=3, NAXIS1=8, NAXIS2=8, NAXIS3=nz, CTYPE1="RA---SIN", CTYPE2="DEC--SIN", CTYPE3="WAVE",
+                     CUNIT1="deg", CUNIT2="deg", CUNIT3="Angstrom", CRPIX1=4.5, CRPIX2=4.5, CRPIX3=40,
+                     CRVAL1=150., CRVAL2=30., CRVAL3=lines[0] * (1 + z), CDELT1=-1e-4, CDELT2=1e-4, CDELT3=cdelt,
+                     BMAJ=3e-4, BMIN=3e-4, BPA=0., BUNIT="JY/BEAM").items():
+        h[k] = v
+    w = lines[0] * (1 + z) + (np.arange(nz) + 1 - 40) * cdelt
+    vel = -150. + 40. * np.arange(8)
+    d = np.zeros((nz, 8, 8), np.float32)
+    for lam, a in zip(lines, amps):
+        cen = lam * (1 + z) * (1 + vel / C)                  # (optical velocity in the frame of each line)
+        sw = lam * (1 + z) * sig / C
+        d += (a * np.exp(-0.5 * ((w[:, None] - cen[None]) / sw) ** 2))[:, None, :]
+    fits.writeto(path, d, h, overwrite=True)
+    p = Param(verbose=False)
+    p.readParamString(f"RESTWAVE {' '.join(map(str, lines))}\nRELINT {' '.join(['1'] * len(lines))}\n"
+                      f"REDSHIFT {z}\nVERBOSE false\n")
+    p.ma.veldef = "optical"
+    return Cube(str(path), par=p), vel
+
+
+def test_maps_several_lines(tmp_path):
+    """Several lines (RESTWAVE): the MOMENT maps are those of the main line (its channels only: before, the other
+    lines shifted the velocity by about +100 km/s and widened the dispersion to about 400 km/s), and MAPTYPE
+    GAUSSIAN fits all the lines with one velocity and dispersion, whatever their ratios; blended lines warn."""
+    import warnings
+    from bbarolo.moments import compute_moments, gaussian_moments, line_velocities
+    lines = [6564.61, 6549.86, 6585.27]
+    c, vel = _lines_cube(tmp_path / "ha.fits", lines, [1., 0.1, 0.3], sig=60.)
+    c.pars().gf.RELINT = [1., 0.15, 0.46]                     # (not the ratios of the cube)
+    V = line_velocities(c)[0]
+    assert V.shape == (3, c.DimZ()) and np.allclose((V[0] - V[1])[40], -674., atol=2.)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")                        # (separated lines: no warning)
+        m0, m1, m2 = compute_moments(c)
+    assert np.allclose(m1, vel[None], atol=3.) and np.allclose(m2, 60., rtol=0.05)
+    assert np.allclose(m0, np.sqrt(2 * np.pi) * 60., rtol=0.02)
+    g0, g1, g2 = gaussian_moments(c)
+    assert np.allclose(g1, vel[None], atol=0.1) and np.allclose(np.abs(g2), 60., atol=0.1)
+    assert np.allclose(g0, np.sqrt(2 * np.pi) * 60., rtol=1e-3)
+    # [OII] doublet, 225 km/s apart: the window cuts the line, the Gaussian fit does not
+    c, vel = _lines_cube(tmp_path / "oii.fits", [3726.03, 3728.82], [1., 1.3], sig=60., cdelt=0.5)
+    with pytest.warns(UserWarning, match="blended"):
+        compute_moments(c)
+    g0, g1, g2 = gaussian_moments(c)
+    assert np.allclose(g1, vel[None], atol=0.1) and np.allclose(np.abs(g2), 60., atol=0.1)
+    # frequency axes: the velocities of the second line (300 km/s from the first)
+    f1, z = 1.420405751786e9, 0.01
+    p = Param()
+    p.readParamString(f"RESTFREQ {f1} {f1 * (1 - 300 / 299792.458)}\nRELINT 1 1\nREDSHIFT {z}\nVERBOSE false\n")
+    cf = Cube(_freq_cube(str(tmp_path / "f.fits"), "MHz", 1e6, f1, z), par=p)
+    V = line_velocities(cf)[0]
+    assert np.allclose(V[0] - V[1], 300., atol=1.)
+
+
+def test_fit_maps_follow_maptype(tmp_path):
+    """The maps of 3DFIT, BAYESIAN3DFIT and GALMOD (data and models) follow MAPTYPE: Gaussian fits with
+    MAPTYPE GAUSSIAN (C++ and before: always moments)."""
+    from bbarolo.galfit_out import kinematic_maps
+    from bbarolo.moments import compute_moments, gaussian_moments
+    c, vel = _lines_cube(tmp_path / "ha.fits", [6564.61, 6549.86, 6585.27], [1., 0.1, 0.3], sig=60.)
+    mask = np.ones(c.array.shape, bool)
+    for mtype, fun in (("MOMENT", compute_moments), ("GAUSSIAN", gaussian_moments)):
+        c.pars().ma.maptype = mtype
+        maps = kinematic_maps(c, c, mask, "_azim")
+        ref = fun(c, mask)
+        for i in range(3):
+            assert np.allclose(maps[f"{i}mom"].data, ref[i], equal_nan=True, rtol=1e-6)
+            assert np.allclose(maps[f"mod_{i}mom_azim"].data, ref[i], equal_nan=True, rtol=1e-6)
+    assert np.allclose(maps["1mom"].data, vel[None], atol=0.1)
+
+
 def test_maps_gaussian_rms_and_massdens(synthetic_cube):
     """MAPS: MAPTYPE GAUSSIAN gives NaN where the fit cannot be done (here, 3 channels: the fit was kept as
     it was after 50 iterations); the RMS of fewer than 5 channels is their rms (1E10); MASSDENSMAP uses

@@ -50,3 +50,9 @@ The parameters of BAYESIANWIND: the keywords of the parameter files (case-insens
 ```{bbparams} BAYESIANWIND
 :group: Mask
 ```
+
+## Outputs
+
+```{bbparams} BAYESIANWIND
+:group: Outputs
+```
