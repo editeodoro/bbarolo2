@@ -50,7 +50,7 @@ from .utils import SimulatedGalaxyCube, emptyfits
 from .bbutils import BBaroloError
 
 __all__ = ['FitMod3D', 'GalMod', 'GalWind', 'Search', 'FitMod2D', 'Ellprof', 'Smooth', 'SmoothSpec', 'Maps',
-           'PVSlice', 'SpacePar', 'Rend3D', 'ContSub', 'Stats', 'MakeMask', 'BayesianBBarolo', 'run',
+           'PVSlice', 'SpacePar', 'Rend3D', 'ContSub', 'Stats', 'MakeMask', 'BayesianBBarolo', 'BayesianWind', 'run',
            'Result', 'read_parfile', 'Param', 'Cube', 'Rings', 'DiskModel', 'GalMod3D', 'pv_path', 'pv_sample',
            'pv_extract', 'SimulatedGalaxyCube', 'emptyfits', 'BBaroloError', '__version__']
 
@@ -62,8 +62,11 @@ BBBversion = __BBBversion__
 
 
 def __getattr__(name):
-    # BayesianBBarolo is imported on demand (its samplers are optional dependencies)
+    # BayesianBBarolo and BayesianWind are imported on demand (its samplers are optional dependencies)
     if name == "BayesianBBarolo":
         from .bayesian import BayesianBBarolo
         return BayesianBBarolo
+    if name == "BayesianWind":
+        from .bayesian import BayesianWind
+        return BayesianWind
     raise AttributeError(f"module 'bbarolo' has no attribute '{name}'")

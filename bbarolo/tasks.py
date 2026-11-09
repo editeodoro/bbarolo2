@@ -263,6 +263,17 @@ def _write_bayesian(c, par, out):
     write_task(out["bayes"], c)
 
 
+def _compute_bayeswind(c, par):
+    from .bayesian.windtask import run_task
+    f = run_task(c, par)
+    return Outputs(bayeswind=f, model=f.model)
+
+
+def _write_bayeswind(c, par, out):
+    from .bayesian.windtask import write_task
+    write_task(out["bayeswind"], c)
+
+
 def _compute_galmod(c, par, seed=None):
     """The GALMOD task on the cube c: the rings from the parameters (initial_rings), the model engine
     (DiskModel, ring convention RINGMODE) and the final model, normalised as NORM (with DEBUG, both AZIM and
@@ -487,6 +498,7 @@ STEPS = [
     ("GALMOD", lambda par, p: p.gm.flagGALMOD, _compute_galmod, _write_galmod),
     ("SPACEPAR", lambda par, p: par.flagSpace, _compute_spacepar, _write_spacepar),
     ("GALWIND", lambda par, p: p.gw.flagGALWIND, _compute_galwind, _write_galwind),
+    ("BAYESIANWIND", lambda par, p: p.gw.flagBAYESIAN, _compute_bayeswind, _write_bayeswind),
     ("2DFIT", lambda par, p: par.flagRing, _compute_2dfit, _write_2dfit),
     ("MAPS", lambda par, p: p.getMaps(), _compute_maps, _write_maps),
     ("PVSLICE", lambda par, p: par.flagPV, _compute_pvslice, _write_pvslice),

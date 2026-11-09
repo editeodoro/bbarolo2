@@ -2,8 +2,10 @@
 GALWIND task: 3D models of bi-conical outflows (port of Tasks/galwind.cpp).
 
 The cone is built either as a stack of ``NTOT`` cylinders (``WTYPE=0``, Lelli's
-approach, each cylinder being a GALMOD disk with vertical/radial velocities) or as
-a set of spherical shells (``WTYPE=1``, Galmod_wind).
+approach, each cylinder being a GALMOD disk with vertical/radial velocities), as
+a set of spherical shells (``WTYPE=1``, Galmod_wind) or, in bbarolo2 only, with the
+noise-free cones of bbarolo.windmodel (``WTYPE=2``, the engine of BAYESIANWIND: inner
+opening angle OPENIN, emissivity DENS per shell).
 
 Differences with the C++ code (all bugs in the original):
   * cylindrical model: VROT is read from VROT (C++ read the DENS column instead);
@@ -108,11 +110,59 @@ class GalWind:
 
     def compute(self):
         from .cube import Cube
+        self._smoothed = False
+        if self.par.WTYPE == 2:
+            m = self._analytic()
+            self.out = Cube.fromArray(np.ascontiguousarray(m).astype(np.float32), self.cin.Head().copy(),
+                                      self.cin.pars())
+            return True
         out = np.zeros((self.cin.DimY(), self.cin.DimX(), self.cin.DimZ()), np.float64)
         ok = self._cylindrical(out) if self.par.WTYPE == 0 else self._spherical(out)
         self.out = Cube.fromArray(np.ascontiguousarray(out.transpose(2, 0, 1)).astype(np.float32),
                                   self.cin.Head().copy(), self.cin.pars())
         return ok
+
+    def _analytic(self):
+        """WTYPE 2: the cones of bbarolo.windmodel (the engine of BAYESIANWIND), noise-free: filled from the apex to
+        HTOT between the half opening angles OPENIN/2 and OPENANG/2, with VWIND, VDISP, VROT and DENS given per shell
+        (RADII, or NTOT shells HTOT/NTOT apart; linear between the shells, constant beyond them). DENS is an
+        emissivity: a flux per arcsec^3 in the units of the cube times km/s (the analogue of DENS of GALMOD, a flux per
+        arcsec^2). The model is convolved with the beam when SM is true. Returns the cube (nz, ny, nx)."""
+        from .windmodel import WindModel, WindCells, WindPars
+        from .bbutils import DeltaVel
+        c, par = self.cin, self.par
+        x0, y0 = self._center()
+        Radii = _column(par.RADII)
+        if Radii is not None:
+            radii = np.asarray(Radii, float)
+        else:
+            nr = max(1, int(par.NTOT))
+            radii = (np.arange(nr) + 0.5) * par.HTOT / nr
+        nr = radii.size
+        oa = _values("OPENANG", par.OPENANG, 1)
+        if _column(par.OPENANG) is not None and len(_column(par.OPENANG)) > 1:
+            raise BBaroloError("GALWIND: WTYPE 2 has one OPENANG (and OPENIN) for the whole cone")
+        oi = _values("OPENIN", getattr(par, "OPENIN", "0") or "0", 1)
+        vw, vd = _values("VWIND", par.VWIND, nr), _values("VDISP", par.VDISP, nr)
+        vr, dens = _values("VROT", par.VROT, nr), _values("DENS", par.DENS, nr)
+        if np.any(vd < 0) or np.any(dens < 0):
+            raise BBaroloError("GALWIND: negative VDISP or DENS")
+        p = WindPars(radii=radii, vwind=vw, vdisp=vd, vrot=vr, xpos=x0, ypos=y0, vsys=float(par.VSYS),
+                     inc=float(par.INC), pa=float(par.PHI), openang=float(oa[0]), openin=float(oi[0]),
+                     htot=float(par.HTOT))
+        p.check()
+        cells = WindCells([0., float(par.HTOT)], 1, 1, thmax=min(90., 0.5 * float(oa[0])))
+        wm = WindModel(c, cells, smooth=bool(par.SM)).quadrature(
+            vmax=float(np.max(np.abs(vw)) + np.max(np.abs(vr))), sigmin=float(np.min(vd)))
+        pts = wm.points(p)
+        weight = np.interp(pts["r"], radii, dens)
+        if c.pars().verbose:
+            print(" Modeling outflow (analytic cones)... ", end="", flush=True)
+        m = wm.cube(p, weight=weight) / abs(DeltaVel(c.Head()))
+        if c.pars().verbose:
+            print("OK.")
+        self._smoothed = bool(par.SM)
+        return m
 
     # ------------------------------------------------------------------
     def _gmpar(self):
@@ -277,6 +327,8 @@ class GalWind:
     def smooth(self, scalefac=True):
         if self.out is None or not self.par.SM:
             return False
+        if getattr(self, "_smoothed", False):          # (WTYPE 2: the engine convolved the model with the beam)
+            return True
         h = self.cin.Head()
         arcconv = arcsconv(h.Cunit(0))
         sm = Smooth3D()

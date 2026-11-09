@@ -12,6 +12,7 @@ the files of the command line (see {doc}`../user-guide/python`).
 
 .. autoclass:: FitMod3D
 .. autoclass:: BayesianBBarolo
+.. autoclass:: BayesianWind
 .. autoclass:: GalMod
 .. autoclass:: GalMod3D
 .. autoclass:: GalWind

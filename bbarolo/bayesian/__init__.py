@@ -103,7 +103,8 @@ statistics, save and load), noise.py (the correlation of the noise), rings.py, t
 ########################################################################
 
 from .fitter import BayesianBBarolo
+from .wind import BayesianWind
 from .noise import noise_correlation, dilate_mask
 from .task import run_task, write_task
 
-__all__ = ["BayesianBBarolo", "noise_correlation", "dilate_mask", "run_task", "write_task"]
+__all__ = ["BayesianBBarolo", "BayesianWind", "noise_correlation", "dilate_mask", "run_task", "write_task"]

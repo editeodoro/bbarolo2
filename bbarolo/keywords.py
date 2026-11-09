@@ -164,6 +164,8 @@ ALL = ("ALL",)
 MOD = ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR")
 RING = ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "ELLPROF")
 BAYES = ("BAYESIAN3DFIT",)
+BAYESW = ("BAYESIAN3DFIT", "BAYESIANWIND")      # (the options of the samplers)
+WIND = ("GALWIND", "BAYESIANWIND")
 MOD3 = ("3DFIT", "GALMOD", "SPACEPAR")        # not BAYESIAN3DFIT
 MAPS = ("TOTALMAP", "VELOCITYMAP", "DISPERSIONMAP", "MASSDENSMAP", "RMSMAP", "GLOBALPROFILE")
 MAPSM = ("TOTALMAP", "VELOCITYMAP", "DISPERSIONMAP", "MASSDENSMAP", "RMSMAP")   # the maps that use the mask
@@ -283,7 +285,7 @@ KEYWORDS = [
     K("EXCLWIND", "str", ["exclude_windows"], ("CONTSUB",), "Channel window(s) to exclude for continuum fit"),
     K("CONTORDER", "int", ["cont_order"], ("CONTSUB",), "Order of polynomial for continuum fit"),
     K("MAKEMASK", "flag", ["makeMask"], ("MAKEMASK",), "Writing the mask to a fitsfile", flag=True),
-    K("MASK", "str", ["MaskType"], ("MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "ELLPROF",
+    K("MASK", "str", ["MaskType"], ("MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "BAYESIANWIND", "GALMOD", "SPACEPAR", "2DFIT", "ELLPROF",
                                     "REND3D") + MAPSM,
       "Type of mask: SMOOTH, SEARCH, SMOOTH&SEARCH, THRESHOLD, NEGATIVE, NONE or FILE(mask.fits)"),
     K("BLANKCUT", "float", ["blankCut"], ("MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT",
@@ -356,25 +358,27 @@ KEYWORDS = [
     K("GALMOD", "flag", ["gm.flagGALMOD"], ("GALMOD",), "Writing a 3D model?", flag=True),
     K("GALWIND", "flag", ["gw.flagGALWIND"], ("GALWIND",), "Generating a 3D datacube with a wind model?",
       flag=True),
+    K("BAYESIANWIND", "flag", ["gw.flagBAYESIAN"], ("BAYESIANWIND",),
+      "Fitting a bi-conical wind to the datacube with nested sampling (posterior of the parameters)?", flag=True),
     K("SPACEPAR", "flag", ["flagSpace"], ("SPACEPAR",), "Full parameter space for a pair of parameters", flag=True),
 
     # ---------------------------------------------------------------- rings (GALMOD/3DFIT/GALWIND)
     K("NRADII", "int", _g(G2, "NRADII"), RING, "Number of radii"),
-    K("RADII", "str", _g(G3, "RADII"), RING, "Radii for rings (arcsec): list of values, Rmin~Rmax:step or file()"),
+    K("RADII", "str", _g(G3, "RADII"), RING + WIND, "Radii for rings (arcsec): list of values, Rmin~Rmax:step or file()"),
     K("RADSEP", "float", _g(G2, "RADSEP"), RING, "Separation between radii (arcsec)"),
-    K("VROT", "str", _g(G3, "VROT"), RING + ("GALWIND",), "Rotation velocity (km/s)"),
+    K("VROT", "str", _g(G3, "VROT"), RING + WIND, "Rotation velocity (km/s)"),
     K("VRAD", "str", _g(G2, "VRAD"), RING, "Radial velocity (km/s)"),
     K("Z0", "str", _g(G2, "Z0"), MOD, "Scale height of the disk (arcsec); the fits use one pixel if not given "
       "(a thin disk), GALMOD needs it"),
     K("VVERT", "str", _g(G2, "VVERT"), MOD, "Vertical velocity (km/s)"),
     K("DVDZ", "str", _g(G2, "DVDZ"), MOD, "Vertical gradient of rotation velocity (km/s/arcs)"),
     K("ZCYL", "str", _g(G2, "ZCYL"), MOD, "Height where the gradient begins (arcs)"),
-    K("VDISP", "str", _g(G3, "VDISP"), MOD + ("GALWIND",), "Velocity dispersion (km/s)"),
-    K("XPOS", "pos", _g(G3, "XPOS"), RING + ("GALWIND",), "X center of the galaxy (pixel, or WCS with a unit)"),
-    K("YPOS", "pos", _g(G3, "YPOS"), RING + ("GALWIND",), "Y center of the galaxy (pixel, or WCS with a unit)"),
-    K("VSYS", "str", _g(G3, "VSYS"), RING + ("GALWIND",), "Systemic velocity of the galaxy (km/s)"),
-    K("INC", "str", _g(G3, "INC"), RING + ("GALWIND",), "Inclination angle (degrees)"),
-    K("PA", "str", _g(G3, "PHI"), RING + ("GALWIND",),
+    K("VDISP", "str", _g(G3, "VDISP"), MOD + WIND, "Velocity dispersion (km/s)"),
+    K("XPOS", "pos", _g(G3, "XPOS"), RING + WIND, "X center of the galaxy (pixel, or WCS with a unit)"),
+    K("YPOS", "pos", _g(G3, "YPOS"), RING + WIND, "Y center of the galaxy (pixel, or WCS with a unit)"),
+    K("VSYS", "str", _g(G3, "VSYS"), RING + WIND, "Systemic velocity of the galaxy (km/s)"),
+    K("INC", "str", _g(G3, "INC"), RING + WIND, "Inclination angle (degrees)"),
+    K("PA", "str", _g(G3, "PHI"), RING + WIND,
       "Position angle of the receding half of the major axis (degrees, anticlockwise from North)", aliases=["phi"]),
     K("DENS", "str", _g(G3, "DENS"), MOD + ("GALWIND",), "Gas surface density (a flux per arcsec2 or a column "
       "density, see DENSFLUX)"),
@@ -384,10 +388,10 @@ KEYWORDS = [
     K("NV", "int", _g(G3, "NV"), MOD + ("GALWIND",), "Number of subclouds per profile"),
     K("SM", "flag", _g(G3, "SM"), MOD + ("GALWIND",), "Whether to smooth the model to the beam"),
     K("LTYPE", "int", _g(G2, "LTYPE"), MOD, "Layer type along z (1=gaussian, 2=sech2, 3=exp, 4=Lorentz, 5=box)"),
-    K("REDSHIFT", "float", _g(G2, "REDSHIFT"), MOD, "Redshift of the galaxy"),
-    K("RESTWAVE", "fvec", _g(G2, "RESTWAVE"), MOD, "Rest wavelength(s) of the line(s)"),
-    K("RESTFREQ", "fvec", _g(G2, "RESTFREQ"), MOD, "Rest frequency(ies) of the line(s)"),
-    K("RELINT", "fvec", _g(G2, "RELINT"), MOD, "Relative intensities of the lines"),
+    K("REDSHIFT", "float", _g(G2, "REDSHIFT"), MOD + WIND, "Redshift of the galaxy"),
+    K("RESTWAVE", "fvec", _g(G2, "RESTWAVE"), MOD + WIND, "Rest wavelength(s) of the line(s)"),
+    K("RESTFREQ", "fvec", _g(G2, "RESTFREQ"), MOD + WIND, "Rest frequency(ies) of the line(s)"),
+    K("RELINT", "fvec", _g(G2, "RELINT"), MOD + WIND, "Relative intensities of the lines"),
     K("NOISERMS", "float", _g(G2, "NOISERMS"), ("3DFIT", "GALMOD"), "RMS noise to add to the model"),
     K("RINGFILE", "str", _g(G2, "ringfile"), MOD, "A BBarolo output file with the rings"),
     K("EMPTY", "flag", _g(G3, "EMPTY"), MOD, "Whether to leave empty inner part"),
@@ -405,7 +409,7 @@ KEYWORDS = [
     K("WFUNC", "int", ["gf.WFUNC"], ("3DFIT", "SPACEPAR", "2DFIT"),
       "Weighting function (0=uniform, 1=|cos|, 2=cos^2, -1=|sin|, -2=sin^2)"),
     K("TOL", "float", ["gf.TOL"], ("3DFIT",), "Minimization tolerance"),
-    K("FREE", "str", ["gf.FREE"], ("3DFIT", "BAYESIAN3DFIT", "2DFIT"),
+    K("FREE", "str", ["gf.FREE"], ("3DFIT", "BAYESIAN3DFIT", "BAYESIANWIND", "2DFIT"),
       "Free parameters, case-insensitive. 3DFIT and 2DFIT: any of VROT, VDISP, DENS, Z0, INC, PA, XPOS, YPOS, "
       "VSYS, VRAD, or ALL. BAYESIAN3DFIT (required): a name alone has one value per ring, NAME_SINGLE one "
       "value for all the rings, NAME_FUNC a function of radius (VROT, VDISP, DENS), plus SIGMA, FRACERR and "
@@ -435,19 +439,19 @@ KEYWORDS = [
     K("PLOTMINCON", "float", ["gf.PLOTMINCON"], ("3DFIT", "BAYESIAN3DFIT"), "Minimum flux contour for output plots"),
 
     # ---------------------------------------------------------------- BAYESIAN3DFIT
-    K("SAMPLER", "ustr", ["gf.SAMPLER"], BAYES, "Nested sampler: NAUTILUS or DYNESTY"),
-    K("PRIORS", "str", ["gf.PRIORS"], BAYES,
+    K("SAMPLER", "ustr", ["gf.SAMPLER"], BAYESW, "Nested sampler: NAUTILUS or DYNESTY"),
+    K("PRIORS", "str", ["gf.PRIORS"], BAYESW,
       "Priors of the free parameters, NAME=(distribution,arguments) with the distributions of scipy.stats, "
       "e.g. VROT=(uniform,loc=0,scale=300) INC=(norm,60,5) (default: see bbarolo.BayesianBBarolo)"),
-    K("SAMPLEROPTS", "str", ["gf.SAMPLEROPTS"], BAYES,
+    K("SAMPLEROPTS", "str", ["gf.SAMPLEROPTS"], BAYESW,
       "Options of the sampler, key=value, e.g. nlive=200 dynamic=true seed=1 (dynesty; the static sampler unless "
       "dynamic=true) or n_live=1000 "
       "seed=1 (nautilus)",
       aliases=["sampler_kwargs"]),
-    K("RUNOPTS", "str", ["gf.RUNOPTS"], BAYES,
+    K("RUNOPTS", "str", ["gf.RUNOPTS"], BAYESW,
       "Options of the sampling, key=value, e.g. dlogz=0.5 maxiter=20000 (dynesty) or f_live=0.01 (nautilus)",
       aliases=["run_kwargs"]),
-    K("LIKEOPTS", "str", ["gf.LIKEOPTS"], BAYES,
+    K("LIKEOPTS", "str", ["gf.LIKEOPTS"], BAYESW,
       "Options of the likelihood, key=value (defaults first): likemask=dilated|none, dilation=1,3 (radius in "
       "beams, channels), noisecorr=measured|beam|<voxels per independent noise value>, densprof_smooth=0.1, "
       "bbres=false|true (3DFIT residuals), radmax=edge|taper|ring (the free RADMAX: the outer edge of the disk, "
@@ -456,13 +460,17 @@ KEYWORDS = [
       aliases=["like_kwargs"]),
 
     # ---------------------------------------------------------------- GALWIND
-    K("HTOT", "float", ["gw.HTOT"], ("GALWIND",), "Wind maximum distance (arcsec)"),
-    K("OPENANG", "str", ["gw.OPENANG"], ("GALWIND",), "Wind opening angle (degrees)"),
-    K("NTOT", "int", ["gw.NTOT"], ("GALWIND",), "Number of layers/cylinder for each cone"),
-    K("VWIND", "str", ["gw.VWIND"], ("GALWIND",), "Radial velocity of the wind (km/s)"),
+    K("HTOT", "float", ["gw.HTOT"], WIND, "Wind maximum distance (arcsec)"),
+    K("OPENANG", "str", ["gw.OPENANG"], WIND, "Wind opening angle (degrees)"),
+    K("OPENIN", "str", ["gw.OPENIN"], WIND, "Wind inner opening angle (degrees): hollow cones (WTYPE 2 and "
+      "BAYESIANWIND; default 0)"),
+    K("NTOT", "int", ["gw.NTOT"], WIND, "Number of layers/cylinder for each cone (BAYESIANWIND: number of shells)"),
+    K("VWIND", "str", ["gw.VWIND"], WIND, "Radial velocity of the wind (km/s)"),
     K("DENSTYPE", "int", ["gw.DENSTYPE"], ("GALWIND",), "How to distribute density in layers",
       aliases=["dtype"]),
-    K("WTYPE", "int", ["gw.WTYPE"], ("GALWIND",), "Cylindrical (0) or spherical (1) model"),
+    K("WTYPE", "int", ["gw.WTYPE"], ("GALWIND",), "Cylindrical (0), spherical (1) or analytic cones (2) model"),
+    K("DISKRINGS", "str", ["gw.DISKRINGS"], ("BAYESIANWIND",), "A rings file of a fixed disk added to the wind "
+      "model (its ring densities are fitted with the emission of the wind)"),
 
     # ---------------------------------------------------------------- SPACEPAR
     K("P1", "str", ["P1"], ("SPACEPAR",), "First parameter to explore"),
@@ -476,9 +484,9 @@ KEYWORDS = [
     K("NEWBEAM", "beam", ["newbeam"], ("SMOOTH", "MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "SPACEPAR", "2DFIT",
                                        "ELLPROF", "REND3D") + MAPSM,
       "New beam of SMOOTH and of the SMOOTH masks, BMAJ BMIN BPA (as BEAM; BPA not given: that of the data)"),
-    K("LINEAR", "float", ["linear"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR"),
+    K("LINEAR", "float", ["linear"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR") + WIND,
       "Spectral resolution of the models (sigma, channels) when SPECRES is not given (as in C++)"),
-    K("SPECRES", "float", ["specres"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR"),
+    K("SPECRES", "float", ["specres"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR") + WIND,
       "Spectral resolution of the models (sigma, in channels; default: LINEAR if given, else "
       "1/2.355, i.e. a FWHM of one channel)"),
     K("FACTOR", "float", ["factor"], ("SMOOTH", "MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "SPACEPAR", "2DFIT", "ELLPROF",
@@ -574,13 +582,13 @@ def unknown_message(name):
 # --------------------------------------------------------------------------
 # Help
 # --------------------------------------------------------------------------
-TASK_NAMES = ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "GALWIND", "SEARCH", "2DFIT", "ELLPROF", "SMOOTH", "SMOOTHSPEC",
+TASK_NAMES = ("3DFIT", "BAYESIAN3DFIT", "BAYESIANWIND", "GALMOD", "GALWIND", "SEARCH", "2DFIT", "ELLPROF", "SMOOTH", "SMOOTHSPEC",
               "MAPS", "PVSLICE", "SPACEPAR", "REND3D", "CONTSUB", "STATS", "MAKEMASK", "SLITFIT")
 _CLASS_TASK = {"fitmod3d": "3DFIT", "galmod": "GALMOD", "galwind": "GALWIND", "search": "SEARCH",
                "fitmod2d": "2DFIT", "ellprof": "ELLPROF", "smooth": "SMOOTH", "smoothspec": "SMOOTHSPEC",
                "maps": "MAPS", "pvslice": "PVSLICE", "spacepar": "SPACEPAR", "rend3d": "REND3D",
                "contsub": "CONTSUB", "stats": "STATS", "makemask": "MAKEMASK",
-               "bayesianbbarolo": "BAYESIAN3DFIT"}
+               "bayesianbbarolo": "BAYESIAN3DFIT", "bayesianwind": "BAYESIANWIND"}
 
 
 def _fmtval(v):

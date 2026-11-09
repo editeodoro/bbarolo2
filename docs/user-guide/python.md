@@ -138,3 +138,12 @@ writes nothing. Then `f.print_stats()`, `f.outri` (the best-fit rings), `f.ring_
 `f.write(outfolder=None, plots=None)` writes what the BAYESIAN3DFIT task writes: the best model with its
 maps and slices, the rings with their errors, the samples and the plots. See
 {doc}`../tasks/bayesian3dfit/index`.
+
+## BayesianWind
+
+{class}`bbarolo.BayesianWind` (BAYESIANWIND) works in the same way for bi-conical winds: `f.run(freepar=...)`
+samples the posterior and writes nothing. In memory are `f.print_stats()`, `f.best` (the wind at the medians),
+`f.model` (the best model cube), `f.emission` (the emissivities of its cells), `f.shells_table()`,
+`f.emission_errors()` and `f.corner_plot()`. `f.write(outfolder=None, plots=None)` writes what the task writes.
+`f.log_likelihood(theta)` evaluates the marginal likelihood of a vector of the free parameters. See
+{doc}`../tasks/bayesianwind/index`.

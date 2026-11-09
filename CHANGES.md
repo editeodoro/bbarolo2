@@ -340,6 +340,27 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **BAYESIANWIND: Bayesian fits of bi-conical winds** (`bbarolo.BayesianWind`, the task `BAYESIANWIND`): the
+  geometry and kinematics of the wind of GALWIND (INC, PA, OPENANG, the new inner opening angle OPENIN, HTOT,
+  VWIND, VDISP and VROT per shell, the centre and VSYS) sampled with nautilus or dynesty, with the emission of the
+  wind not assumed. The emission is a set of emissivities on cells of the cones, about one beam across. They are
+  solved at every evaluation of the likelihood and marginalised (exact Gaussian integral, with the mean EMSCALE and
+  the clumpiness EMCLUMP of their prior fitted). A patchy wind then does not bias the geometry, and cones or
+  velocities larger than the data need are penalised, unlike the voxel weighting of MoKA-3D (Marconcini et al. 2023)
+  and the profile likelihood. On a mock wind with half of its cells empty (log-normal clumps) and noise smoothed by
+  the beam, VWIND, INC and OPENANG came out within one sigma of the truth; the profile likelihood was flat over 25
+  degrees of opening angle. Other descriptions of the emission (LIKEOPTS emission: shells, one per cone, per spaxel,
+  the voxel weighting) are there for comparison. A fixed disk can be added (DISKRINGS: its ring densities fitted
+  with the emission). The engine is the new `bbarolo/windmodel.py` (WindModel: noise-free analytic cones, the beam
+  at the exact positions of the points); the emission and the marginal likelihoods are in
+  `bbarolo/bayesian/emission.py`. The mocks are in `performance/wind_mocks.py` (GalMod3D: clumps or a log-normal
+  field in the cones), and the recovery study (bias, pulls, coverage) is `performance/wind_recovery.py`. New
+  keywords: BAYESIANWIND, OPENIN, DISKRINGS; FREE, PRIORS, SAMPLER, SAMPLEROPTS, RUNOPTS, LIKEOPTS, NTOT, RADII and
+  the geometry of the wind are shared with BAYESIAN3DFIT and GALWIND.
+- **GALWIND WTYPE 2**: the noise-free cones of BAYESIANWIND on the command line. They are filled from the apex to
+  HTOT between OPENIN/2 and OPENANG/2, with VWIND, VDISP, VROT and DENS per shell, DENS being an emissivity (a flux
+  per arcsec³ in the units of the cube times km/s). WTYPE 0 and 1 are unchanged, and any other value still gives
+  shells (WTYPE 2 gave shells before).
 - **3DFIT: the density profile deconvolved from the beam** (`<prefix>_densprof_deconvolved.txt`,
   `Result.densprof_deconvolved`): at the end of the fit, the face-on surface density of the final rings whose
   beam-convolved model (the engine of the fit) reproduces the total intensity map, as for ELLPROF and

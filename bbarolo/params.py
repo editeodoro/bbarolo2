@@ -203,14 +203,17 @@ class GalfitPar(GalmodPar):
 @dataclass
 class GalwindPar(GalmodPar):
     flagGALWIND: bool = False
+    flagBAYESIAN: bool = False          # (BAYESIANWIND)
     VWIND: str = "-1"
     VROT: str = "0"
     OPENANG: str = "-1"
+    OPENIN: str = "0"
     HTOT: float = -1.0
     NTOT: int = 25
     LTYPE: int = 5
     DENSTYPE: int = 1
     WTYPE: int = 0
+    DISKRINGS: str = ""
 
 
 @dataclass
@@ -690,6 +693,40 @@ class Param:
                 if getattr(gf, k) == "-1":
                     out(f"ELLPROF ERROR: {n}" + msg); good = False
 
+        if gw.flagBAYESIAN:
+            from .bayesian.wind import wind_freepar, wind_priors, wind_likeopts
+            if gf.flagBAYESIAN:
+                out("BAYESIANWIND error: BAYESIAN3DFIT and BAYESIANWIND can not be run at the same time (they share "
+                    "FREE, PRIORS and the options of the sampler).")
+                good = False
+            gf.SAMPLER = gf.SAMPLER.strip().upper()
+            if gf.SAMPLER not in ("DYNESTY", "NAUTILUS"):
+                out(f"BAYESIANWIND error: unknown SAMPLER {gf.SAMPLER} (DYNESTY or NAUTILUS).")
+                good = False
+            elif importlib.util.find_spec(gf.SAMPLER.lower()) is None:
+                out(f"BAYESIANWIND error: SAMPLER {gf.SAMPLER} needs the Python package {gf.SAMPLER.lower()} "
+                    f"(pip install {gf.SAMPLER.lower()}).")
+                good = False
+            if "FREE" not in getattr(self, "_given", {}):
+                out("BAYESIANWIND error: FREE is not an optional parameter. Give the free parameters, e.g. "
+                    "FREE VWIND_SINGLE VDISP_SINGLE INC PA OPENANG (see bbarolo.help('BAYESIANWIND')).")
+                good = False
+            for key, check in (("FREE", wind_freepar), ("PRIORS", wind_priors), ("SAMPLEROPTS", bayes_options),
+                               ("RUNOPTS", bayes_options), ("LIKEOPTS", wind_likeopts)):
+                if key == "FREE" and "FREE" not in getattr(self, "_given", {}):
+                    continue
+                try:
+                    check(getattr(gf, key))
+                except ValueError as e:
+                    out(f"BAYESIANWIND error: {key}: {e}")
+                    good = False
+            msg = " is not an optional parameter. Please specify it in the input file (the initial wind)."
+            for k in ("XPOS", "YPOS", "VSYS", "INC", "PHI", "OPENANG", "VWIND"):
+                if getattr(gw, k) == "-1":
+                    out(f"BAYESIANWIND ERROR: {k}" + msg); good = False
+            if gw.HTOT == -1:
+                out("BAYESIANWIND error: HTOT" + msg); good = False
+
         if gw.flagGALWIND:
             msg = " is not an optional parameter. Please specify it in the input file."
             for k in ("XPOS", "YPOS", "VSYS", "VDISP", "INC", "PHI", "DENS", "OPENANG", "VWIND"):
@@ -984,14 +1021,16 @@ BAYES_FUNC_PARS = ("vrot", "vdisp", "dens")
 _BAYES_ALIASES = {"pa": "phi", "disp": "vdisp"}
 
 
-def bayes_name(name):
+def bayes_name(name, aliases=None):
     """The name of a free parameter (or of a prior) as BayesianBBarolo uses it: lower case,
-    PA -> phi and DISP -> vdisp, e.g. 'PA_SINGLE' -> 'phi_single', 'VROT' -> 'vrot'."""
+    PA -> phi and DISP -> vdisp, e.g. 'PA_SINGLE' -> 'phi_single', 'VROT' -> 'vrot' (aliases: other
+    aliases, e.g. those of BayesianWind)."""
+    al = _BAYES_ALIASES if aliases is None else aliases
     base, sep, suffix = str(name).strip().lower().partition("_")
-    return _BAYES_ALIASES.get(base, base) + sep + suffix
+    return al.get(base, base) + sep + suffix
 
 
-def bayes_freepar(free, funcs=BAYES_FUNC_PARS):
+def bayes_freepar(free, funcs=BAYES_FUNC_PARS, ring_pars=BAYES_RING_PARS, other_pars=BAYES_OTHER_PARS, aliases=None):
     """The free parameters of BAYESIAN3DFIT from FREE (as in a parameter file), as a list for
     BayesianBBarolo.run: 'VROT VDISP PA_SINGLE INC_SINGLE RADMAX' -> ['vrot', 'vdisp',
     'phi_single', 'inc_single', 'radmax']. A ring parameter (VROT, VDISP, DENS, Z0, INC, PA,
@@ -1004,12 +1043,12 @@ def bayes_freepar(free, funcs=BAYES_FUNC_PARS):
     for tok in re.split(r"[\s,;]+", str(free).strip()):
         if not tok:
             continue
-        base, _, suffix = bayes_name(tok).partition("_")
-        if base in BAYES_OTHER_PARS:
+        base, _, suffix = bayes_name(tok, aliases).partition("_")
+        if base in other_pars:
             if suffix:
                 raise ValueError(f"{tok}: {base.upper()} is a single parameter (no _{suffix.upper()})")
             name = base
-        elif base in BAYES_RING_PARS:
+        elif base in ring_pars:
             if suffix not in ("", "single", "func"):
                 raise ValueError(f"unknown free parameter {tok} (NAME, NAME_SINGLE or NAME_FUNC)")
             if suffix == "func" and base not in funcs:
@@ -1047,7 +1086,8 @@ def _number(v, where):
         raise ValueError(f"{where}: '{v}' is not a number") from None
 
 
-def bayes_priors(priors):
+def bayes_priors(priors, ring_pars=BAYES_RING_PARS, other_pars=BAYES_OTHER_PARS, func_pars=BAYES_FUNC_PARS,
+                 aliases=None):
     """The priors of BAYESIAN3DFIT from PRIORS (as in a parameter file), as entries of
     BayesianBBarolo.priors:
 
@@ -1072,12 +1112,12 @@ def bayes_priors(priors):
         _check_gap(s[pos:m.start()], fmt)
         pos = m.end()
         label = m.group(1)
-        base, _, suffix = bayes_name(label).partition("_")
-        if base in BAYES_RING_PARS and suffix in ("", "single"):
+        base, _, suffix = bayes_name(label, aliases).partition("_")
+        if base in ring_pars and suffix in ("", "single"):
             key = base
-        elif base in BAYES_OTHER_PARS and not suffix:
+        elif base in other_pars and not suffix:
             key = base
-        elif base in BAYES_FUNC_PARS and re.fullmatch(r"p\d+", suffix):
+        elif base in func_pars and re.fullmatch(r"p\d+", suffix):
             key = f"{base}_{suffix}"
         else:
             raise ValueError(f"{label}: unknown parameter")
