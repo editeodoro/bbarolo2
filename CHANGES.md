@@ -490,11 +490,11 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   of the SMOOTH masks, which were BMAJ, BMIN and BPA; its BPA, if not given, is that of the data. In Python,
   `beam=` is now the keyword BEAM (also a string, `beam='0.01d 0.01d 30'`): the input copy written for the
   plots of a task with a new beam is no longer needed.
-- **BAYESIAN3DFIT: the default prior of RADMAX** goes from the estimated outer radius (the last initial
-  radius) minus one beam to that radius plus two beams (it was ±1 beam), still within the rings. With RADMAX
-  free as the edge of the disk (`radmax=edge` or `taper`) and the number of rings estimated (RADII and NRADII
-  not given), the rings are extended, with the same separation and the values of the last ring, out to the
-  estimated radius plus two beams, so that the edge can be found up to there.
+- **BAYESIAN3DFIT: RADMAX free with estimated rings.** The default prior of RADMAX is the estimated outer
+  radius (the last initial radius) ±1 beam, within the rings. With RADMAX free as the edge of the disk
+  (`radmax=edge` or `taper`) and the number of rings estimated (RADII and NRADII not given), the rings are
+  extended, with the same separation and the values of the last ring, out to the estimated radius plus one
+  beam, so that the edge can be found up to the end of its prior.
 
 - **BAYESIAN3DFIT: the measured correlation of the noise is conservative** (`LIKEOPTS noisecorr=measured`, the
   default). The spatial correlation area is the largest of the sum of the autocorrelation of the noise, its

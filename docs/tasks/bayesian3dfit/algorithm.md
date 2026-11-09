@@ -115,7 +115,7 @@ Three priors are part of the algorithm:
   is the measured noise (below). The prior is scale-invariant, and wide because the misfit of real
   galaxies can be large (65 times the noise for NGC 2403);
 - FRACERR: log-uniform between $10^{-3}$ and 1;
-- RADMAX: uniform from the estimated outer radius minus 1 beam FWHM to the estimated outer radius plus 2 beam
+- RADMAX: uniform from the estimated outer radius minus 1 beam FWHM to the estimated outer radius plus 1 beam
   FWHM, where
   the estimated outer radius is the last radius of the initial rings (given or estimated). It is kept within
   the rings: with `radmax` `edge` or `taper` (below), the edge of the disk, it stops at the outer edge of the
@@ -123,7 +123,7 @@ Three priors are part of the algorithm:
   has no effect; with `radmax=ring`, the last ring itself, it stays beyond the middle of the last two radii.
   When RADMAX is free as the edge of the disk (`radmax=edge` or `taper`, the default being `edge`) and the
   number of rings is estimated (RADII and NRADII not given), the rings are extended, with the same separation
-  and the values of the last ring, out to the estimated radius plus 2 beams, so that the edge can be anywhere up to
+  and the values of the last ring, out to the estimated radius plus 1 beam, so that the edge can be anywhere up to
   there. With RADMAX not free, with `radmax=ring`, or with the rings given, they are not extended.
 
 The bounds of the priors also set the region of the likelihood (below): a prior wider than needed makes the

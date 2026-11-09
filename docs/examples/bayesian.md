@@ -41,7 +41,7 @@ ones that matter by hand, as uniform distributions of `scipy.stats` (`loc` is th
 width): VROT between 50 and 250 km/s, VDISP between 0 and 30 km/s, INC between 40° and 65°, PA between 110°
 and 140°. The priors of SIGMA and RADMAX are the default ones: SIGMA is log-uniform between 0.5 and 1000
 times the measured noise of the cube (0.00047 Jy/beam), and RADMAX is uniform from one beam
-below the last radius to two beams beyond it, kept within the rings (up to the outer edge of the last ring,
+below the last radius to one beam beyond it, kept within the rings (up to the outer edge of the last ring,
 as this example gives its rings and they are not extended). A prior that is too tight cuts the posterior: look at the
 corner plot, and widen the prior if the posterior piles up against one of its limits.
 
