@@ -293,19 +293,20 @@ class Ellprof:
         nd = mds / (8.41185687E-02 * 3.0857 * 3.0857)
         return nd, mds
 
-    def deconvolvedText(self, dp, seg=0):
-        """The deconvolved profile dp (see profile.ellprof_deconvolved) as written in <prefix>_ellprof_deconvolved.txt,
-        with the observed face-on surface density of segment seg (column SDENS_FO of <prefix>_ellprof.txt)."""
+    def deconvolvedText(self, dp, seg=0, task="ELLPROF", obsfile="_ellprof.txt", note=""):
+        """The deconvolved profile dp (see profile.ellprof_deconvolved) as written in <prefix>_ellprof_deconvolved.txt
+        (task ELLPROF) or <prefix>_densprof_deconvolved.txt (3DFIT, obsfile _densprof.txt), with the observed
+        face-on surface density of segment seg (column SDENS_FO of obsfile). note: lines added to the header."""
         h = self.im.Head()
         unit = h.Bunit().replace(" ", "")
         isJy = "jy" in unit.lower()
         m = 12
-        s = (f"# ELLPROF deconvolved profile for {h.Name()}\n#\n# Map units: u = {unit}\n"
+        s = (f"# {task} deconvolved profile for {h.Name()}\n#\n" + note + f"# Map units: u = {unit}\n"
              "# SDENS_FO: the face-on surface density whose beam-convolved model reproduces the total intensity map\n"
              f"#   (beam {dp['beam']:.2f} arcsec), with its 1-sigma errors E_LO, E_HI from the noise "
              f"({dp['nmc']} realisations of the " + ("scatter of the residuals" if dp.get("map2d") else "noise")
              + "; the rings are fixed);\n"
-             "# SDENS_FO_OBS: the observed face-on surface density (column SDENS_FO of _ellprof.txt), smoothed by "
+             f"# SDENS_FO_OBS: the observed face-on surface density (column SDENS_FO of {obsfile}), smoothed by "
              "the beam;\n# DENS: " + ("the face-on surface density in map units per pixel.\n" if dp.get("map2d") else
                                       "the densities of the model, as DENS of GALMOD.\n"))
         if isJy:

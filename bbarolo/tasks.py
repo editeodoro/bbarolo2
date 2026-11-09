@@ -171,7 +171,8 @@ def _write_search(c, par, out):
 
 def _model_results(out, mo, want):
     """Put the outputs of a final model (a galfit_out.ModelOutputs) in out: model (the model normalised as want,
-    lower case), models (all, if more than one), densprof, asymdrift, maps and pvs (computed when used)."""
+    lower case), models (all, if more than one), densprof, densprof_deconvolved (3DFIT), asymdrift, maps and pvs
+    (computed when used)."""
     models = mo.model_hdus()
     if want not in models:
         nonoise = [k for k in models if k != "noise"]
@@ -180,6 +181,8 @@ def _model_results(out, mo, want):
     if len(models) > 1:
         out["models"] = models
     out["densprof"] = Lazy(mo.densprof, "Table")
+    if mo.deconv is not None:
+        out["densprof_deconvolved"] = mo.densprof_deconvolved()
     if mo.adrift:
         out["asymdrift"] = mo.asymdrift()
     out["maps"] = Lazy(mo.maps, "dict of HDUs")
@@ -1018,7 +1021,7 @@ _MASKED = ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "MAPS", "ELL
 
 def _input_copy(task, c, outfolder):
     """The FITS file of the data of a task (for the plots, which read it): the user's file, or a copy written
-    in outfolder as <OBJECT>_input.fits (an in-memory cube, or a new beam)."""
+    in outfolder as <OBJECT>_input.fits (an in-memory cube)."""
     hdu = task._input_hdu() if task is not None else None
     if hdu is None:
         return task._cube if task is not None else c.pars().imageFile
@@ -1063,6 +1066,7 @@ def _canonical(params):
     for k, v in params.items():
         kw = _kw.lookup(k)
         if kw is None:
+            _kw.check_removed(k)
             raise _kw.UnknownParameterError(_kw.unknown_message(k))
         if v is not None and not isinstance(v, _FromFile):
             value_to_string(kw, v)             # type check now, not at run time
@@ -1111,7 +1115,8 @@ class Task:
         params: any BBarolo parameter (parameter-file keyword, case-insensitive, or an
                 alias; see bbarolo.help()). Ring parameters (radii, vrot, inc, ...) can be
                 single values or one value per ring.
-        beam:   (bmaj, bmin, bpa) in arcsec and degrees: replaces the beam of the cube.
+        beam:   the BEAM parameter, (bmaj, bmin, bpa) in arcsec and degrees (or a string, e.g.
+                '0.01d 0.01d 30'; one value: a circular beam): replaces the beam of the cube.
 
     Methods: run(**params) -> Result (in memory, nothing written); write(outfolder=None,
     plots=None) -> files (the outputs of the last run, as the command line writes them);
@@ -1122,13 +1127,12 @@ class Task:
     FLAGS = ()                  # task flags accepted (besides CONTSUB)
     DEFAULT_FLAGS = ()          # flags set if none of FLAGS is given
 
-    def __init__(self, cube=None, beam=None, **params):
+    def __init__(self, cube=None, **params):
         self._params = {}
         self._cube = None
-        self.beam = None
         self.result = None
         self._set_cube(cube)
-        self.update(beam=beam, **params)
+        self.update(**params)
 
     # ------------------------------------------------------------------ parameters
     @classmethod
@@ -1163,17 +1167,8 @@ class Task:
     def _flag_ok(cls, name):
         return name == cls.TASK or name in cls.FLAGS or name == "CONTSUB"
 
-    def update(self, beam=None, **params):
+    def update(self, **params):
         """Set or change parameters (None restores the default). Returns the task."""
-        if beam is not None:
-            b = list(np.ravel(beam).astype(float))
-            if len(b) == 1:
-                b = [b[0], b[0], 0.]
-            elif len(b) == 2:
-                b.append(0.)
-            if len(b) != 3:
-                raise ValueError("beam must be (bmaj, bmin, bpa) in arcsec and degrees")
-            self.beam = tuple(float(x) for x in b)
         new = _canonical(params)
         for k, v in new.items():
             kw = _kw.lookup(k)
@@ -1275,7 +1270,7 @@ class Task:
                 sv = repr(str(v) if isinstance(v, _FromFile) else (v.tolist() if isinstance(v, np.ndarray) else v))
                 sv = sv if len(sv) < 40 else sv[:36] + "..."
             s += f", {k.lower()}={sv}"
-        return s + (f", beam={self.beam}" if self.beam else "") + ")"
+        return s + ")"
 
     # ------------------------------------------------------------------ the cube
     def _set_cube(self, cube):
@@ -1296,21 +1291,13 @@ class Task:
             raise TypeError("cube must be a FITS file name, an astropy HDU or a tuple (data, header)")
 
     def _input_hdu(self):
-        """The cube as an HDU, with the beam if given (None: the user's file, read as it is)."""
+        """The cube as an HDU (None: the user's file, read as it is). BEAM, if given, replaces the beam of the
+        header when the cube is read (Cube.applyBeam)."""
         if self._cube is None:
             raise ValueError(f"{type(self).__name__}: no cube given.")
-        if isinstance(self._cube, str) and self.beam is None:
-            return None
         if isinstance(self._cube, str):
-            with fits.open(self._cube, memmap=False) as h:
-                hdu = fits.PrimaryHDU(data=np.array(h[0].data), header=h[0].header.copy())
-        else:
-            hdu = fits.PrimaryHDU(data=self._cube.data, header=self._cube.header.copy())
-        if self.beam is not None:
-            hdu.header["BMAJ"] = self.beam[0] / 3600.
-            hdu.header["BMIN"] = self.beam[1] / 3600.
-            hdu.header["BPA"] = self.beam[2]
-        return hdu
+            return None
+        return fits.PrimaryHDU(data=self._cube.data, header=self._cube.header.copy())
 
     def _default_outfolder(self):
         from .header import Header
@@ -1462,7 +1449,10 @@ _doc(FitMod3D, """Fit a 3D tilted-ring model to a datacube (3DFIT).
       data, residual HDUs of the data analysed and of data - model (NaN outside the mask)
       maps, pvs      dicts of HDUs: moment maps and PV slices of the data and of the model
                      (computed when first used, as data and residual)
-      densprof, asymdrift (ADRIFT), mask, galfit (the fitting engine)
+      densprof       the observed radial profile (Table, <prefix>_densprof.txt)
+      densprof_deconvolved  the profile deconvolved from the beam at the final geometry (Table: sdens_fo
+                     with errors, sdens_fo_obs, dens), whose densities build the final model
+      asymdrift (ADRIFT), mask, galfit (the fitting engine)
     Methods: plot_rings(), plot_maps(), plot_pv() (matplotlib Figures); write(outfolder) writes the
     files and the PDF plots of the command line. Geometric parameters that are not given are
     estimated, as in BBarolo.

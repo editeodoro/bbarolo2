@@ -10,8 +10,7 @@ In Python: {class}`bbarolo.Smooth`.
 ## Example
 
 This example smooths the cube of {doc}`NGC 2403 <../../getting-started/example-data>`, with a beam of
-59 arcsec, to a circular beam of 150 arcsec ({ref}`BMAJ <par-smooth-bmaj>`, {ref}`BMIN <par-smooth-bmin>`,
-{ref}`BPA <par-smooth-bpa>`; arcsec, arcsec, degrees). With {ref}`REDUCE <par-smooth-reduce>` the smoothed
+59 arcsec, to a circular beam of 150 arcsec ({ref}`NEWBEAM <par-smooth-newbeam>`, in arcsec; one value is a circular beam). With {ref}`REDUCE <par-smooth-reduce>` the smoothed
 cube is also averaged in blocks of 2 by 2 pixels (the {ref}`FACTOR <par-smooth-factor>` of 2 by default), as
 the pixels of 16 arcsec are now small with respect to the beam.
 
@@ -24,9 +23,7 @@ the pixels of 16 arcsec are now small with respect to the beam.
 ```text
 FITSFILE    ngc2403.fits
 SMOOTH      true
-BMAJ        150
-BMIN        150
-BPA         0
+NEWBEAM     150
 REDUCE      true
 ```
 
@@ -41,7 +38,7 @@ BBarolo -p ngc2403_smooth.par
 ```python
 from bbarolo import Smooth
 
-s = Smooth("ngc2403.fits", bmaj=150, bmin=150, bpa=0, reduce=True)
+s = Smooth("ngc2403.fits", newbeam=150, reduce=True)
 res = s.run(threads=4)
 
 res.cube                  # the smoothed cube: an HDU, with the new beam in its header
@@ -58,8 +55,8 @@ higher because the new beam is larger:
 ```{figure} /figures/smooth_channel.png
 :alt: Channel 30 of NGC 2403 before and after smoothing to 150 arcsec
 
-Channel 30 of the cube of NGC 2403 before (left) and after (right) `Smooth(..., bmaj=150, bmin=150,
-bpa=0, reduce=True).run()`, with the beams.
+Channel 30 of the cube of NGC 2403 before (left) and after (right) `Smooth(...,
+newbeam=150, reduce=True).run()`, with the beams.
 ```
 
 ## Outputs

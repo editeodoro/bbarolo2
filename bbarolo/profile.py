@@ -177,7 +177,7 @@ class MapRingModel:
         return out
 
 
-def ellprof_deconvolved(c, rings, side="B", smooth=0.1, nmc=200, seed=0):
+def ellprof_deconvolved(c, rings, side="B", smooth=0.1, nmc=200, seed=0, model=None):
     """The deconvolved radial profile of the ELLPROF task: the face-on surface densities of the rings whose
     beam-convolved model reproduces the total intensity map of the cube c (or the 2D map c), as in
     BayesianBBarolo (see the module docstring), at the fixed geometry of the rings (a Rings object: radii,
@@ -194,6 +194,9 @@ def ellprof_deconvolved(c, rings, side="B", smooth=0.1, nmc=200, seed=0):
     least one beam area spatially). With side 'A' or 'R', only the pixels of that half of the galaxy are used
     (divided by the minor axis of the rings: their median centre and PA). The errors come from nmc refits of the
     best-fit map plus noise with that rms and spatial correlation (the geometry is fixed: no errors from it).
+
+    model: the DiskModel of the cube whose densities are wanted (3DFIT: the engine of the fit, which then builds
+    the final model with them; its ring convention and flux units); default an ANALYTIC model with CENTRED rings.
 
     Returns None for a map without a beam or with too few pixels; otherwise a dict
     with radii (arcsec), dens (the densities of the model, as DENS of GALMOD), sdens_fo (the face-on surface
@@ -265,6 +268,8 @@ def ellprof_deconvolved(c, rings, side="B", smooth=0.1, nmc=200, seed=0):
     par = copy.deepcopy(c.pars().gf)
     if is2d:
         dm = MapRingModel(h, ltype=getattr(par, "LTYPE", 2) or 2)
+    elif model is not None:
+        dm = model
     else:
         dm = DiskModel(c, par=par, ringmode="CENTRED", galmodtype="ANALYTIC", smooth=True)
     sysm = profile_system(dm, r, (blo, bhi), dmap[sl], rms[sl], ok[sl], beam_arcsec=abs(h.Bmaj()) * 3600.)
@@ -308,7 +313,7 @@ def ellprof_deconvolved(c, rings, side="B", smooth=0.1, nmc=200, seed=0):
         uni = Rings().setRings(radii=np.array([w, 2 * w, 3 * w]), xpos=xm, ypos=ym, vsys=float(rings.vsys[0]),
                                vrot=0., vdisp=8., z0=0., inc=0., phi=0., dens=1., radsep=w)
         redge = outer_edge(uni, "CENTRED") / arcs
-        k = float(dm.ring_maps(uni).sum()) / (math.pi * redge * redge)
+        k = float(dm.ring_maps(uni, ringmode="CENTRED").sum()) / (math.pi * redge * redge)
         dv = abs(DeltaVel(h)) if c.HeadDef() else 1.
         conv = (FluxtoJyBeam(1., h) if c.pars().fluxConvert else 1.) * dv
         unit = k * conv / (arcs * arcs)                 # (u/arcsec^2 of the map of ELLPROF per unit of DENS)

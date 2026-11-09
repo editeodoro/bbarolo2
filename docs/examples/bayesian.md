@@ -40,8 +40,9 @@ The default priors follow the initial values (see {ref}`PRIORS <par-bayesian3dfi
 ones that matter by hand, as uniform distributions of `scipy.stats` (`loc` is the lower limit, `scale` the
 width): VROT between 50 and 250 km/s, VDISP between 0 and 30 km/s, INC between 40° and 65°, PA between 110°
 and 140°. The priors of SIGMA and RADMAX are the default ones: SIGMA is log-uniform between 0.5 and 1000
-times the measured noise of the cube (0.00047 Jy/beam), and RADMAX is uniform within one beam of the last
-radius, up to the outer edge of the last ring. A prior that is too tight cuts the posterior: look at the
+times the measured noise of the cube (0.00047 Jy/beam), and RADMAX is uniform from one beam
+below the last radius to twice the last radius, kept within the rings (up to the outer edge of the last ring,
+as this example gives its rings and they are not extended). A prior that is too tight cuts the posterior: look at the
 corner plot, and widen the prior if the posterior piles up against one of its limits.
 
 ### Sampler

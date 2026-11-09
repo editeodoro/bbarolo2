@@ -259,6 +259,17 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **3DFIT: the density profile deconvolved from the beam** (`<prefix>_densprof_deconvolved.txt`,
+  `Result.densprof_deconvolved`): at the end of the fit, the face-on surface density of the final rings whose
+  beam-convolved model (the engine of the fit) reproduces the total intensity map, as for ELLPROF and
+  BAYESIAN3DFIT, with errors from the noise, next to the observed one. The final models are built with its
+  densities: AZIM is that model as it is (it was rescaled to the observed profile, which the beam smooths
+  twice), LOCAL and NONE start from it; with FREE ALL (DENS fitted), or without a deconvolved profile (no beam,
+  too few pixels), the observed profile is used as before. The panel of the surface density of
+  `<prefix>_parameters.pdf` shows the deconvolved and the observed face-on profiles. On NGC 2403 the AZIM model
+  holds 96% of the flux of the data in the mask (90% before); on a marginally resolved mock the densities are
+  within 8% of the true ones. GALMOD is unchanged.
+
 - **ELLPROF: the deconvolved profile** (`<prefix>_ellprof_deconvolved.txt`, `Result.profile_deconvolved`): for a
   cube with a beam, the face-on surface density of the rings whose beam-convolved model reproduces the total
   intensity map, as in BAYESIAN3DFIT (`bbarolo/profile.py`), with errors from the noise, next to the observed
@@ -389,6 +400,20 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   SPECRES is not given, as in C++.
 
 ### Changed
+
+- **BEAM replaces BMAJ, BMIN, BPA, BEAMFWHM, OBMAJ, OBMIN and OBPA**, which are now errors that name it.
+  `BEAM bmaj bmin bpa` gives the beam of the data: the axes in arcsec, or in degrees with a final `d`
+  (`BEAM 0.01d 0.01d 30`), BPA in degrees (0 if not given); one value is a circular beam (`BEAM 30`). It
+  replaces the beam of the header whenever given (BMAJ, BMIN and BEAMFWHM were used only for a header without
+  a beam; OBMAJ, OBMIN and OBPA replaced it for SMOOTH). `NEWBEAM` (same syntax) is the new beam of SMOOTH and
+  of the SMOOTH masks, which were BMAJ, BMIN and BPA; its BPA, if not given, is that of the data. In Python,
+  `beam=` is now the keyword BEAM (also a string, `beam='0.01d 0.01d 30'`): the input copy written for the
+  plots of a task with a new beam is no longer needed.
+- **BAYESIAN3DFIT: the default prior of RADMAX** goes from the estimated outer radius (the last initial
+  radius) minus one beam to twice that radius (it was ±1 beam), still within the rings. With RADMAX free as
+  the edge of the disk (`radmax=edge` or `taper`) and the number of rings estimated (RADII and NRADII not
+  given), the rings are extended, with the same separation and the values of the last ring, out to twice the
+  estimated radius, so that the edge can be found up to there.
 
 - **BAYESIAN3DFIT: the measured correlation of the noise is conservative** (`LIKEOPTS noisecorr=measured`, the
   default). The spatial correlation area is the largest of the sum of the autocorrelation of the noise, its

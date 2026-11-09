@@ -349,7 +349,7 @@ Jy/beam, whatever the units of the cube (Jy per pixel with SM false).
 ## Convolution with the beam
 
 With {ref}`SM <par-galmod-sm>` true (the default) every channel is convolved with the beam of the cube:
-BMAJ, BMIN, BPA of the header, or {ref}`BEAMFWHM <par-all-beamfwhm>`. The kernel is the beam, a 2D
+the beam of the header (BMAJ, BMIN, BPA), or {ref}`BEAM <par-all-beam>` when given. The kernel is the beam, a 2D
 Gaussian
 
 $$

@@ -1485,7 +1485,7 @@ def test_errors_and_exit_codes(tmp_path):
     fb = str(tmp_path / "beam.fits")
     beam.writeto(fb)
     with pytest.raises(BBaroloError, match="smaller than the old beam"):
-        Smooth(fb, bmaj=10, bmin=10, verbose=False).run()
+        Smooth(fb, newbeam=10, verbose=False).run()
     with pytest.raises(BBaroloError, match="outside the cube"):
         PVSlice(fb, xpos_pv=500, ypos_pv=500, pa_pv=30, verbose=False).run()
     cli = [sys.executable, os.path.join(ROOT, "run_bbarolo.py")]
@@ -1547,7 +1547,7 @@ def test_input_checks(tmp_path, capsys):
     del hdu.header["BMAJ"], hdu.header["BMIN"], hdu.header["BPA"]
     hdu.writeto(str(tmp_path / "nob.fits"))
     with pytest.raises(BBaroloError, match="smaller than a quarter of a pixel"):
-        FitMod3D(str(tmp_path / "nob.fits"), bmaj=0.0083, bmin=0.0083, **kw).run()
+        FitMod3D(str(tmp_path / "nob.fits"), beam=0.0083, **kw).run()
     # missing CUNIT3: m/s if the channels are wider than 100
     for cdelt, unit in ((5000., "m/s"), (5., "km/s")):
         h = fits.Header()
@@ -1820,7 +1820,7 @@ def test_bayesian_radmax_edge(tmp_path):
     """RADMAX as the outer edge of the disk (like_kwargs radmax='edge', the default, or 'taper'): the
     rings do not move, the model has no emission beyond the edge (also with the deconvolved density
     profile), and the likelihood is continuous in RADMAX; radmax='ring' moves the last ring. The
-    default prior is the last radius +- one beam (30" here), within the rings: an edge ends at the outer
+    default prior is from the last radius - one beam (30" here) to twice it, within the rings: an edge ends at the outer
     edge of the disk (half a ring beyond the last radius, or the last radius with NODES rings); the last
     ring stays beyond the middle of the last two radii."""
     pytest.importorskip("dynesty")
@@ -1830,7 +1830,7 @@ def test_bayesian_radmax_edge(tmp_path):
     f = _bayes_mock(tmp_path)
     f._setup(['vrot_single', 'radmax'])
     assert f.like_kwargs['radmax'] == 'edge' and f._radmax_mode == 'edge'
-    assert f.priors['radmax'] == dict(name='uniform', loc=110., scale=60.)
+    assert f.priors['radmax'] == dict(name='uniform', loc=110., scale=170.)
     assert f.prior_distr['radmax'].ppf(0.) == 110. and f.prior_distr['radmax'].ppf(1.) == 160.
     r0 = np.array(f._fit0.r['radii'])
     L = [f._log_likelihood(np.array([150., e])) for e in np.linspace(125., 160., 36)]
@@ -1859,14 +1859,14 @@ def test_bayesian_radmax_edge(tmp_path):
     h = _bayes_mock(tmp_path, outfolder=str(tmp_path / "h"))
     h._set_like_options(dict(radmax='ring'))
     h._setup(['vrot_single', 'radmax'])                       # 'ring': the last ring moves
-    assert h.prior_distr['radmax'].ppf(0.) == 120. and h.prior_distr['radmax'].ppf(1.) == 170.
+    assert h.prior_distr['radmax'].ppf(0.) == 120. and h.prior_distr['radmax'].ppf(1.) == 280.
     assert h._update_rings(h._fit0.copy(), np.array([150., 130.])).r['radii'][-1] == 130.
     n = _bayes_mock(tmp_path, outfolder=str(tmp_path / "n"), ringmode="NODES")
     n._setup(['vrot_single', 'radmax'])
     assert n.prior_distr['radmax'].ppf(0.) == 110. and n.prior_distr['radmax'].ppf(1.) == 140.
     n._set_like_options(dict(radmax='ring'))
     n._setup(['vrot_single', 'radmax'])
-    assert n.prior_distr['radmax'].ppf(0.) == 120. and n.prior_distr['radmax'].ppf(1.) == 170.
+    assert n.prior_distr['radmax'].ppf(0.) == 120. and n.prior_distr['radmax'].ppf(1.) == 280.
 
 
 def test_bayesian_flux_beyond_rings(tmp_path, capsys):
@@ -1914,7 +1914,7 @@ def test_bayesian_default_priors_follow_rings(tmp_path):
     """The default priors follow the initial rings (given or estimated) and change with them: INC +- 10 deg
     (within 0-90), PA +- 15 deg, VROT 0 to 2 x the largest VROT, XPOS/YPOS +- 2 beams, VSYS +- 5 channels
     (at least 20 km/s), VDISP 0 to 2 x VDISP (at least 50 km/s), Z0 0 to one beam, RADMAX the last radius
-    +- one beam; with values per ring, from the smallest - w to the largest + w. The priors given (in priors,
+    - one beam to twice it; with values per ring, from the smallest - w to the largest + w. The priors given (in priors,
     with PRIORS, or changed in place) are kept when the rings change."""
     pytest.importorskip("dynesty")
     f = _bayes_mock(tmp_path)          # beam 30" = 3 pixels, channels 10 km/s, rings 20-140"
@@ -1922,7 +1922,7 @@ def test_bayesian_default_priors_follow_rings(tmp_path):
     def bounds(k):
         return f.priors[k]['loc'], f.priors[k]['loc'] + f.priors[k]['scale']
     expect = dict(inc=(50., 70.), phi=(30., 60.), vrot=(0., 240.), xpos=(25.5, 37.5), ypos=(25.5, 37.5),
-                  vsys=(-50., 50.), vdisp=(0., 50.), z0=(0., 30.), radmax=(110., 170.), vrot_p1=(1., 240.))
+                  vsys=(-50., 50.), vdisp=(0., 50.), z0=(0., 30.), radmax=(110., 280.), vrot_p1=(1., 240.))
     for k, v in expect.items():
         assert np.allclose(bounds(k), v), k
     assert bounds('vrad') == (0, 50) and bounds('dens') == (0.1, 200.1)
@@ -1939,7 +1939,7 @@ def test_bayesian_default_priors_follow_rings(tmp_path):
     assert f.priors['phi'] == dict(name='uniform', loc=0., scale=180.)
     assert np.allclose(bounds('xpos'), (27., 39.)) and np.allclose(bounds('ypos'), (25.5, 37.5))
     f.update(radii=[20., 60., 100.], vrot=150.)
-    assert np.allclose(bounds('radmax'), (70., 130.)) and np.allclose(bounds('vrot'), (0., 300.))
+    assert np.allclose(bounds('radmax'), (70., 200.)) and np.allclose(bounds('vrot'), (0., 300.))
     f._setup(['vrot_single', 'inc_single', 'phi_single'])
     assert f.prior_distr['inc'].kwds == dict(loc=60., scale=5.)
     assert np.isclose(f.prior_distr['phi'].ppf(1.), 180.)
@@ -2278,25 +2278,25 @@ def _smooth_run(tmp_path, fn, pars):
 
 
 def test_smooth_cube_without_beam(tmp_path):
-    """With no beam in the header, SMOOTH takes the beam of the data from OBMAJ/OBMIN/OBPA (or BEAMFWHM):
-    BMAJ/BMIN, the new beam, became also the old one, so nothing was smoothed, and OBMAJ alone stopped with
-    'No beam'. The SMOOTH mask of a fit with BMAJ as the beam of the data uses FACTOR times it."""
+    """With no beam in the header, SMOOTH takes the beam of the data from BEAM and the new beam from NEWBEAM
+    (or FACTOR times BEAM); NEWBEAM alone stops with 'No beam'. The SMOOTH mask of a fit with BEAM as the beam
+    of the data uses FACTOR times it."""
     from bbarolo.bbutils import BBaroloError
     from astropy.io import fits
     hdu = emptyfits([32, 32, 3], [-10. / 3600., 10. / 3600., 10.], bunit="JY/BEAM", obj="NOBEAM")
     hdu.data[:, 16, 16] = 1.
     fn = str(tmp_path / "nobeam.fits")
     hdu.writeto(fn)
-    sm = _smooth_run(tmp_path, fn, "SMOOTH true\nOBMAJ 30\nOBMIN 30\nBMAJ 60\nBMIN 60\n")
+    sm = _smooth_run(tmp_path, fn, "SMOOTH true\nBEAM 30\nNEWBEAM 60 60\n")
     assert sm.oldbeam[:2] == (30, 30) and sm.newbeam[:2] == (60, 60) and abs(sm.scalefac - 4) < 0.01
     assert np.nanmax(sm.array) < 0.3
-    sm = _smooth_run(tmp_path, fn, "SMOOTH true\nOBMAJ 30\nOBMIN 30\n")
+    sm = _smooth_run(tmp_path, fn, "SMOOTH true\nBEAM 30 30\n")
     assert sm.oldbeam[:2] == (30, 30) and sm.newbeam[:2] == (60, 60)
-    with pytest.raises(BBaroloError, match="OBMAJ"):
-        _smooth_run(tmp_path, fn, "SMOOTH true\nBMAJ 60\nBMIN 60\n")
+    with pytest.raises(BBaroloError, match="BEAM"):
+        _smooth_run(tmp_path, fn, "SMOOTH true\nNEWBEAM 60 60\n")
     p = Param()
     p.verbose = False
-    p.readParamString(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/\nMAKEMASK true\nMASK SMOOTH\nBMAJ 30\nBMIN 30\n")
+    p.readParamString(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/\nMAKEMASK true\nMASK SMOOTH\nBEAM 30\n")
     c = Cube(fn, par=p)
     c.BlankMask()
     hist = [str(x) for x in c.mask_hdu().header["HISTORY"]]
@@ -2304,16 +2304,18 @@ def test_smooth_cube_without_beam(tmp_path):
 
 
 def test_smooth_new_beam_angle(tmp_path):
-    """The new beam keeps the angle of the old one when BPA is not given (it was 0, also with FACTOR alone),
-    and OBPA 0 is an angle of 0 degrees (it meant the BPA of the header)."""
+    """The new beam keeps the angle of the old one when its BPA is not given (it was 0, also with FACTOR alone),
+    and a BPA of 0 in BEAM and NEWBEAM is an angle of 0 degrees."""
     hdu = emptyfits([32, 32, 3], [-10. / 3600., 10. / 3600., 10.], bunit="JY/BEAM", obj="ELL")
     hdu.header["BMAJ"], hdu.header["BMIN"], hdu.header["BPA"] = 40. / 3600., 25. / 3600., 60.
     fn = str(tmp_path / "ell.fits")
     hdu.writeto(fn)
     sm = _smooth_run(tmp_path, fn, "SMOOTH true\nFACTOR 1.2\n")
     assert sm.oldbeam[2] == sm.newbeam[2] == 60 and sm.conbeam is not None
-    sm = _smooth_run(tmp_path, fn, "SMOOTH true\nFACTOR 1.5\nBPA 0\nOBPA 0\n")
+    sm = _smooth_run(tmp_path, fn, "SMOOTH true\nBEAM 40 25 0\nNEWBEAM 60 40 0\n")
     assert sm.oldbeam[2] == 0 and sm.newbeam[2] == 0
+    sm = _smooth_run(tmp_path, fn, "SMOOTH true\nNEWBEAM 60 40\n")
+    assert sm.oldbeam[2] == sm.newbeam[2] == 60
 
 
 def test_iternoise_converges(synthetic_cube):
@@ -2722,14 +2724,14 @@ def test_fits_utilities_headers_and_units(tmp_path, capsys):
 
 def test_smooth_beam_axes_swapped(tmp_path):
     """A beam given with BMAJ < BMIN has its axes swapped and its major axis at PA + 90 (the PA was kept), also
-    the new beam, before it is compared with the old one (BMAJ 15 BMIN 25 against 20 x 10 was 'smaller')."""
+    the new beam, before it is compared with the old one (NEWBEAM 15 25 against 20 x 10 was 'smaller')."""
     hdu = emptyfits([32, 32, 3], [-5. / 3600., 5. / 3600., 10.], bunit="JY/BEAM", obj="ELL")
     hdu.header["BMAJ"], hdu.header["BMIN"], hdu.header["BPA"] = 20. / 3600., 10. / 3600., 30.
     fn = str(tmp_path / "ell.fits")
     hdu.writeto(fn)
-    sm = _smooth_run(tmp_path, fn, "SMOOTH true\nBMAJ 15\nBMIN 25\nBPA -60\n")
+    sm = _smooth_run(tmp_path, fn, "SMOOTH true\nNEWBEAM 15 25 -60\n")
     assert sm.newbeam == (25., 15., 30.) and sm.oldbeam == (20., 10., 30.)
-    sm = _smooth_run(tmp_path, fn, "SMOOTH true\nOBMAJ 10\nOBMIN 20\nOBPA 30\nFACTOR 2\n")
+    sm = _smooth_run(tmp_path, fn, "SMOOTH true\nBEAM 10 20 30\nFACTOR 2\n")
     assert sm.oldbeam == (20., 10., 120.) and sm.newbeam == (40., 20., 120.)
 
 
@@ -3222,3 +3224,98 @@ def test_ellprof_deconvolved_clipped_map_errors():
                     pa=30, z0=5, mask="NONE", verbose=False).run()
         err[name] = np.asarray(e.profile_deconvolved["e_sdens_fo_hi"])
     assert np.all(err["clipped"][:6] > 0.6 * err["full"][:6])
+
+
+def test_beam_keyword(tmp_path):
+    """BEAM: 'BMAJ BMIN BPA' in arcsec and degrees, or the axes in degrees with a final d; one value is a circular
+    beam. It replaces the beam of the header (also in Python, beam=...). The keywords of BBarolo 1.8 BMAJ, BMIN,
+    BPA, BEAMFWHM, OBMAJ, OBMIN and OBPA are errors that name BEAM, in parameter files and in Python."""
+    from bbarolo import FitMod3D
+    from bbarolo.bbutils import BBaroloError
+    from bbarolo.keywords import readbeam
+    assert readbeam("30") == [30., 30., None]
+    assert readbeam("0.01d 0.005d 15") == [36., 18., 15.]
+    assert readbeam("30, 20, -45") == [30., 20., -45.]
+    for bad in ("30 20 10 5", "30x20", "-30", "0 20"):
+        with pytest.raises(BBaroloError):
+            readbeam(bad)
+    hdu = emptyfits([32, 32, 10], [-10. / 3600., 10. / 3600., 10.], beam=30. / 3600., bunit="JY/BEAM", obj="BM")
+    fn = str(tmp_path / "bm.fits")
+    hdu.writeto(fn)
+    for beam in ("40 20 30", "0.0111111d 0.0055556d 30", (40, 20, 30), ("40", "20", 30)):
+        p = Param()
+        p.verbose = False
+        p.set("FITSFILE", fn)
+        p.set("BEAM", beam)
+        h = Cube(fn, par=p).Head()
+        assert abs(h.Bmaj() * 3600 - 40) < 1e-3 and abs(h.Bmin() * 3600 - 20) < 1e-3 and h.Bpa() == 30, beam
+    p = Param()
+    p.verbose = False
+    p.readParamString(f"FITSFILE {fn}\nBEAM 50\n")
+    h = Cube(fn, par=p).Head()
+    assert abs(h.Bmaj() * 3600 - 50) < 1e-6 and abs(h.Bmin() * 3600 - 50) < 1e-6 and h.Bpa() == 0
+    for k in ("BMAJ", "BMIN", "BPA", "BEAMFWHM", "OBMAJ", "OBMIN", "OBPA"):
+        p = Param()
+        with pytest.raises(BBaroloError, match="BEAM"):
+            p.readParamString(f"FITSFILE {fn}\n{k} 30\n")
+        with pytest.raises(BBaroloError, match="BEAM"):
+            FitMod3D(fn, **{k.lower(): 30})
+    with pytest.raises(ValueError, match="BEAM"):
+        FitMod3D(fn, beam="30 x")
+
+
+def test_3dfit_deconvolved_profile(tmp_path):
+    """3DFIT computes the density profile deconvolved from the beam at the final geometry: in the Result
+    (densprof_deconvolved), in <prefix>_densprof_deconvolved.txt and in the panel of the surface density of
+    <prefix>_parameters.pdf, with the observed profile. The final models are built with its densities: they
+    are close to those of the mock (beam 30", rings 40" apart), and the AZIM model has the flux of the data."""
+    from bbarolo import FitMod3D
+    from astropy.io import fits
+    fn = _mock_cube(tmp_path)
+    data = fits.getdata(fn)
+    true = 2. * np.exp(-np.array([20., 60., 100., 140.]) / 60.)
+    f = FitMod3D(fn, radii=[20, 60, 100, 140], xpos=31.5, ypos=31.5, vsys=0, vrot=120, vdisp=10, z0=0, inc=60,
+                 pa=45, free="VROT", mask="SEARCH", norm="AZIM", twostage=False, verbose=False, threads=4)
+    r = f.run()
+    t = r.densprof_deconvolved
+    assert np.allclose(t["dens"], true, rtol=0.12), (t["dens"], true)
+    assert np.all(t["e_sdens_fo_lo"] > 0) and np.all(np.isfinite(t["sdens_fo_obs"]))
+    mask = np.asarray(r.mask.data if hasattr(r.mask, "data") else r.mask) > 0
+    assert abs((r.model.data * mask).sum() / (data * mask).sum() - 1) < 0.03
+    files = f.write(outfolder=str(tmp_path / "out"), plots=1)
+    names = [os.path.basename(x) for x in files]
+    assert "MOCK_densprof_deconvolved.txt" in names and "MOCK_parameters.pdf" in names
+    txt = (tmp_path / "out" / "MOCK_densprof_deconvolved.txt").read_text()
+    assert txt.startswith("# 3DFIT deconvolved profile") and "SDENS_FO_OBS" in txt
+    script = (tmp_path / "out" / "plotscripts" / "plot_parameters.py").read_text()
+    assert "_densprof_deconvolved.txt" in script and "label='observed'" in script
+
+
+def test_bayesian_radmax_default_prior(tmp_path):
+    """The default prior of RADMAX goes from the estimated outer radius (the last initial radius) minus one beam
+    to twice it. With RADMAX free as the edge of the disk and the number of rings estimated, the rings are
+    extended out to twice that radius (same separation, the values of the last ring); without RADMAX, or with
+    the rings given, they are not (the prior then ends at the edge of the rings)."""
+    pytest.importorskip("dynesty")
+    f = _bayes_mock(tmp_path)                                # rings given: 20-140 arcsec, beam 30 arcsec
+    f._setup(['vrot_single', 'radmax'])
+    assert f._inri.nr == 4
+    kw = f._prior_kwargs('radmax')
+    assert np.isclose(kw['loc'], 110.) and np.isclose(kw['loc'] + kw['scale'], 160.)    # (the edge of the rings)
+    assert np.isclose(f.priors['radmax']['loc'] + f.priors['radmax']['scale'], 280.)
+    g = _bayes_mock(tmp_path, radii=None, radsep=20, outfolder=str(tmp_path / "g"))
+    base = g._inri.copy()
+    guess = float(base.r['radii'][-1])
+    g._setup(['vrot_single', 'radmax'])
+    R = np.asarray(g._inri.r['radii'], float)
+    assert g._inri.nr > base.nr and R[-1] >= 2 * guess - 1e-3 and np.allclose(np.diff(R), 20.)
+    assert np.allclose(R[:base.nr], base.r['radii']) and np.allclose(g._inri.r['vrot'][base.nr:], base.r['vrot'][-1])
+    kw = g._prior_kwargs('radmax')
+    assert np.isclose(kw['loc'], guess - 30.) and np.isclose(kw['loc'] + kw['scale'], 2 * guess)
+    assert len(g.freepar_names) == 2
+    g._setup(['vrot'])                                       # RADMAX not free: the estimated rings
+    assert g._inri.nr == base.nr and g.ndim == base.nr
+    g2 = _bayes_mock(tmp_path, radii=None, radsep=20, outfolder=str(tmp_path / "g2"))
+    g2._set_like_options(dict(radmax='ring'))
+    g2._setup(['vrot_single', 'radmax'])                     # the last ring moves: no extension
+    assert g2._inri.nr == base.nr

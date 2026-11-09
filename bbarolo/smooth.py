@@ -266,17 +266,14 @@ class Smooth3D:
         p = c.pars()
         h = c.Head()
         unittoarc = arcsconv(h.Cunit(0))
-        OB = [p.obmaj, p.obmin, p.obpa]
-        if OB[0] == -1: OB[0] = h.Bmaj() * unittoarc
-        if OB[1] == -1: OB[1] = h.Bmin() * unittoarc
-        if OB[2] is None: OB[2] = h.Bpa()
+        # the old beam: that of the cube (BEAM, if given, replaced the beam of the header when it was read)
+        OB = [h.Bmaj() * unittoarc, h.Bmin() * unittoarc, h.Bpa()]
         if OB[0] == 0 or OB[1] == 0:
-            print("SMOOTH warning: BMAJ, BMIN keywords are not in the FITS header."
-                  f"Assuming a {p.beamFWHM * 3600} arcsec beam.Change this value with beamFWHM parameter.")
-            OB[0] = OB[1] = p.beamFWHM * 3600
-        npa = OB[2] if p.bpa is None else p.bpa
-        NB = [p.factor * OB[0] if p.bmaj == -1 else p.bmaj,
-              p.factor * OB[1] if p.bmin == -1 else p.bmin, npa]
+            raise BBaroloError("SMOOTH: the cube has no beam: give it with BEAM (BMAJ BMIN BPA, in arcsec and "
+                               "degrees).")
+        nb = p.newbeam
+        NB = [p.factor * OB[0], p.factor * OB[1], OB[2]] if nb is None else \
+            [nb[0], nb[1], OB[2] if nb[2] is None else nb[2]]
         dims = [c.DimX(), c.DimY(), c.DimZ()]
         Blo, Bhi = [0, 0, 0], list(dims)
         for j in range(3):

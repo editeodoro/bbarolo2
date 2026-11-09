@@ -115,10 +115,15 @@ Three priors are part of the algorithm:
   is the measured noise (below). The prior is scale-invariant, and wide because the misfit of real
   galaxies can be large (65 times the noise for NGC 2403);
 - FRACERR: log-uniform between $10^{-3}$ and 1;
-- RADMAX: uniform within ±1 beam FWHM of the last radius $R_{N_\mathrm r}$, within the rings. With `radmax`
-  `edge` or `taper` (below), the edge of the disk, it stops at the outer edge of the last ring (the last
-  radius with {ref}`RINGMODE <par-bayesian3dfit-ringmode>` NODES), beyond which the edge has no effect; with
-  `radmax=ring`, the last ring itself, it stays beyond the middle of the last two radii.
+- RADMAX: uniform from the estimated outer radius minus 1 beam FWHM to twice the estimated outer radius, where
+  the estimated outer radius is the last radius of the initial rings (given or estimated). It is kept within
+  the rings: with `radmax` `edge` or `taper` (below), the edge of the disk, it stops at the outer edge of the
+  last ring (the last radius with {ref}`RINGMODE <par-bayesian3dfit-ringmode>` NODES), beyond which the edge
+  has no effect; with `radmax=ring`, the last ring itself, it stays beyond the middle of the last two radii.
+  When RADMAX is free as the edge of the disk (`radmax=edge` or `taper`, the default being `edge`) and the
+  number of rings is estimated (RADII and NRADII not given), the rings are extended, with the same separation
+  and the values of the last ring, out to twice the estimated radius, so that the edge can be anywhere up to
+  there. With RADMAX not free, with `radmax=ring`, or with the rings given, they are not extended.
 
 The bounds of the priors also set the region of the likelihood (below): a prior wider than needed makes the
 region, and the computation, larger.
@@ -419,7 +424,7 @@ The free parameter RADMAX, $R_\mathrm e$ (arcsec), is chosen with `radmax` of LI
   the last ring moves with its annulus.
 
 The edge applies to the maps $K_j$ of the density profile too, which is recomputed at every evaluation.
-With the default prior (above) the edge lies within the last ring. The values of a ring beyond the edge,
+With rings that are not extended, the edge lies within the last ring. The values of a ring beyond the edge,
 $R_j > \hat R_\mathrm e$, are not measurements: the model has no gas there, and they are extrapolations of
 the profiles inside the edge (the ring only sets their slope inside it). Such rings have INDISK = 0 in
 `<prefix>_rings_final1.txt` (the column is written only with `edge` or `taper`), the region beyond the edge

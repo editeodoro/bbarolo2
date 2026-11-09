@@ -9,6 +9,7 @@ those of a new :class:`~bbarolo.params.Param` (``bbarolo.help('free')`` shows th
 """
 
 import re
+import math
 import difflib
 
 
@@ -72,6 +73,32 @@ def readflagorint(s):
     return readint(tok)
 
 
+def readbeam(s):
+    """A beam, 'BMAJ BMIN BPA' (BEAM, NEWBEAM): BMAJ and BMIN in arcsec, or in degrees with a final d
+    (0.03d), BPA in degrees. One value is a circular beam, two values have no BPA. Returns
+    [bmaj, bmin, bpa] in arcsec and degrees (bpa None if not given), or None for an empty string."""
+    from .bbutils import BBaroloError
+    toks = str(s).replace(",", " ").split()
+    if not toks:
+        return None
+    if len(toks) > 3:
+        raise BBaroloError(f"a beam is 'BMAJ BMIN BPA' (or one value, a circular beam), not {s!r}")
+    vals = []
+    for i, t in enumerate(toks):
+        deg = i < 2 and t[-1:] in ("d", "D")
+        try:
+            x = float(t[:-1] if deg else t)
+        except ValueError:
+            raise BBaroloError(f"a beam is 'BMAJ BMIN BPA' (arcsec, or degrees with a final d, e.g. 0.03d; "
+                               f"BPA in degrees), not {s!r}") from None
+        if not math.isfinite(x) or (i < 2 and x <= 0):
+            raise BBaroloError(f"the axes of a beam must be positive numbers, not {s!r}")
+        vals.append(x * 3600. if deg else x)
+    bmaj = vals[0]
+    bmin = vals[1] if len(vals) > 1 else bmaj
+    return [bmaj, bmin, vals[2] if len(vals) > 2 else None]
+
+
 def readstr(s):
     """readFilename: the rest of the line, stripped."""
     return str(s).strip()
@@ -119,12 +146,13 @@ READERS = {
     "fvec3": lambda s: (readvec(s, float) + [0, 0, 0])[:3],
     "ivec6": lambda s: (readvec(s, int) + [-1] * 6)[:6],
     "fvec2": lambda s: (readvec(s, float) + [-1, -1])[:2],
+    "beam": readbeam,
 }
 
 # Kinds whose value is one number / flag (a sequence is not accepted in Python)
 SCALAR_KINDS = ("flag", "int", "float", "flagorint", "cdens")
 NUMERIC_KINDS = ("int", "float", "cdens")
-VECTOR_KINDS = ("ivec", "fvec", "fvec3", "ivec6", "fvec2")
+VECTOR_KINDS = ("ivec", "fvec", "fvec3", "ivec6", "fvec2", "beam")
 
 G3 = ("gm", "gf", "gw")     # GALMOD, 3DFIT and GALWIND structures
 G2 = ("gm", "gf")           # GALMOD and 3DFIT structures
@@ -179,6 +207,11 @@ class Keyword:
         return g
 
     def read(self, rest):
+        if self.kind == "beam":
+            try:
+                return readbeam(rest)
+            except ValueError as e:
+                raise type(e)(f"{self.name}: {e}") from None
         return READERS[self.kind](rest)
 
     def apply(self, par, rest):
@@ -235,8 +268,8 @@ KEYWORDS = [
     K("DEBUG", "flag", ["debug"], ALL, "Debugging mode?"),
     K("SHOWBAR", "flag", ["showbar"], ALL, "Showing progress bars?"),
     K("PLOTS", "flagorint", ["plots"], ALL, "Producing output plots?"),
-    K("BEAMFWHM", "float", ["beamFWHM"], ALL, "Circular beam FWHM (arcsec), used if the header has no beam",
-      also={"_beamConverted": False}),
+    K("BEAM", "beam", ["beam"], ALL, "Beam of the data, BMAJ BMIN BPA (arcsec, or degrees with a final d; "
+      "BPA in degrees; one value: a circular beam): replaces the beam of the header"),
     K("CHECKCUBE", "int", ["checkCube"], ALL, "Check cube for bad channels/rows/columns (0-5)?"),
     K("AUTO", "flag", ["AUTO"], ALL, "Automated 3DFIT (same as BBarolo -f)"),
     K("FLUXCONVERT", "flag", ["fluxConvert"], ALL, "Whether to convert flux to Jy?"),
@@ -435,12 +468,9 @@ KEYWORDS = [
     # ---------------------------------------------------------------- SMOOTH / SMOOTHSPEC
     K("SMOOTH", "flag", ["flagSmooth"], ("SMOOTH",), "Smoothing the datacube?", flag=True),
     K("BOX", "ivec6", ["BOX"], ("SMOOTH",), "Sub-region to be used (xmin xmax ymin ymax zmin zmax)"),
-    K("BMAJ", "float", ["bmaj"], ("SMOOTH", "ALL"), "New major beam (arcsec); also the beam if not in header"),
-    K("BMIN", "float", ["bmin"], ("SMOOTH", "ALL"), "New minor beam (arcsec); also the beam if not in header"),
-    K("BPA", "float", ["bpa"], ("SMOOTH", "ALL"), "New beam position angle (degree)"),
-    K("OBMAJ", "float", ["obmaj"], ("SMOOTH",), "Old major beam (arcsec)"),
-    K("OBMIN", "float", ["obmin"], ("SMOOTH",), "Old minor beam (arcsec)"),
-    K("OBPA", "float", ["obpa"], ("SMOOTH",), "Old beam position angle (degree)"),
+    K("NEWBEAM", "beam", ["newbeam"], ("SMOOTH", "MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "SPACEPAR", "2DFIT",
+                                       "ELLPROF", "REND3D") + MAPSM,
+      "New beam of SMOOTH and of the SMOOTH masks, BMAJ BMIN BPA (as BEAM; BPA not given: that of the data)"),
     K("LINEAR", "float", ["linear"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR"),
       "Spectral resolution of the models (sigma, channels) when SPECRES is not given (as in C++)"),
     K("SPECRES", "float", ["specres"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR"),
@@ -489,6 +519,20 @@ for _k in KEYWORDS:
         LOOKUP[_n.lower()] = _k
 
 TASK_FLAGS = [k for k in KEYWORDS if k.flag]
+
+# Keywords removed in BBarolo 2: an error that names the replacement
+_BEAM_MSG = ("{} is no longer a parameter: give the beam of the data with BEAM (BMAJ BMIN BPA, e.g. BEAM 30 20 45; "
+             "BMAJ and BMIN in arcsec, or in degrees with a final d, e.g. BEAM 0.01d 0.01d 45; one value is a "
+             "circular beam), and the new beam of SMOOTH with NEWBEAM.")
+REMOVED = {n.lower(): _BEAM_MSG.format(n) for n in ("BMAJ", "BMIN", "BPA", "BEAMFWHM", "OBMAJ", "OBMIN", "OBPA")}
+
+
+def check_removed(name):
+    """Raise BBaroloError if name is a keyword removed in BBarolo 2 (the message names its replacement)."""
+    msg = REMOVED.get(str(name).strip().lower())
+    if msg:
+        from .bbutils import BBaroloError
+        raise BBaroloError(msg)
 
 # The full descriptions of the keywords (doc, group, default_text)
 from .keywords_doc import DOCS as _DOCS, GROUPS  # noqa: E402

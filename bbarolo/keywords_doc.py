@@ -8,7 +8,7 @@ of GROUPS.
 
 # The sections of the parameter pages, in page order
 GROUPS = ("Task", "Input", "Rings", "Free parameters and fit", "Bayesian sampling", "Model", "Spectral lines",
-          "Mask", "Wind", "Parameter space", "Thresholds", "Merging", "Detections", "New beam", "Old beam",
+          "Mask", "Wind", "Parameter space", "Thresholds", "Merging", "Detections", "New beam",
           "Window", "Maps", "Slice", "Outputs", "Options", "Messages and computation")
 
 DOCS = {
@@ -120,18 +120,23 @@ Whether plots are made (with matplotlib), and how many:
 
 In Python, the plots are made by `write()` (its `plots` argument changes PLOTS).
 """),
-    'BEAMFWHM': dict(
+    'BEAM': dict(
         group='Input',
-        default='none (the beam of the header)',
+        default='the beam of the header',
         doc="""\
-The FWHM of a circular beam, in arcsec, for a cube without the beam in its header. The beam is
-taken, in order of priority, from the header (BMAJ, BMIN and BPA, or HISTORY cards such as those of
-AIPS), from `BMAJ`, `BMIN` and `BPA`, and last from BEAMFWHM.
+The beam of the data, `BMAJ BMIN BPA`: the major and minor axes (FWHM) in arcsec, or in degrees with a
+final `d` (`BEAM 0.01d 0.008d 30`), and the position angle of the major axis in degrees (anticlockwise
+from North; 0 if not given). One value is a circular beam: `BEAM 30`. Commas may separate the values.
 
-The tasks that need the beam (e.g. 3DFIT, GALMOD, SMOOTH, MAKEMASK, SEARCH with the default
-`MINPIX`) stop with an error if none is available (BBarolo 1.8 assumed 30 arcsec). A beam smaller
-than a quarter of a pixel is an error (the value is in arcsec, not degrees). In Python,
-`beam=(bmaj, bmin, bpa)` replaces the beam of the header.
+When given, it replaces the beam of the header (BMAJ, BMIN and BPA, or HISTORY cards such as those of
+AIPS) for all the tasks, including the old beam of `SMOOTH`; otherwise the beam of the header is used.
+The tasks that need the beam (e.g. 3DFIT, GALMOD, SMOOTH, MAKEMASK, SEARCH with the default `MINPIX`)
+stop with an error if neither is available (BBarolo 1.8 assumed 30 arcsec). A beam smaller than a
+quarter of a pixel is an error (the axes are in arcsec unless they end with `d`).
+
+`BEAM` replaces the keywords `BMAJ`, `BMIN`, `BPA`, `BEAMFWHM`, `OBMAJ`, `OBMIN` and `OBPA` of BBarolo
+1.8, which are now errors; the new beam of `SMOOTH` is `NEWBEAM`. In Python, `beam=(bmaj, bmin, bpa)`
+(numbers in arcsec and degrees, or a string such as `'0.01d 0.01d 30'`).
 """),
     'CHECKCUBE': dict(
         group='Input',
@@ -231,8 +236,7 @@ BAYESIAN3DFIT, GALMOD, SPACEPAR) compare model and data within it; the maps (not
 
 - `SEARCH` (default): the detections of the source finder, with the parameters of the SEARCH task
   (`SNRCUT`, `GROWTHCUT`, `MINPIX`, ...);
-- `SMOOTH&SEARCH`: as `SEARCH`, on the cube smoothed to `FACTOR` times the beam (or to `BMAJ`, `BMIN`,
-  `BPA`);
+- `SMOOTH&SEARCH`: as `SEARCH`, on the cube smoothed to `FACTOR` times the beam (or to `NEWBEAM`);
 - `SMOOTHSPEC&SEARCH`: as `SEARCH`, on the cube smoothed spectrally (`WINDOW_TYPE`, `WINDOW_SIZE`);
 - `SMOOTH`: the voxels of the smoothed cube (as above) above `BLANKCUT` times its noise;
 - `NEGATIVE`: in each channel, the voxels above `BLANKCUT` times the noise measured from the negative
@@ -324,8 +328,8 @@ How the objects are found:
 - `spatial` (default): in each channel map (pixels connected also diagonally), then merged across
   the channels;
 - `spectral`: as runs of consecutive channels along each spectrum, then merged;
-- `spatialsmooth`: as `spatial`, on a cube smoothed with the parameters of the SMOOTH task (`BMAJ`,
-  `BMIN`, `BPA` or `FACTOR`); the noise and the thresholds are those of the smoothed cube, the fluxes
+- `spatialsmooth`: as `spatial`, on a cube smoothed with the parameters of the SMOOTH task (`NEWBEAM`
+  or `FACTOR`); the noise and the thresholds are those of the smoothed cube, the fluxes
   are measured on the original cube.
 
 Case-insensitive. Another value is replaced by `spatial`, with a message (also when the source finder
@@ -383,8 +387,8 @@ The minimum number of voxels of a detection. Default: `MINPIX` times `MINCHANNEL
         default='the beam area (pixels)',
         doc="""\
 The minimum number of pixels of a detection on the sky (the pixels it covers in any channel).
-Default: the area of the beam in pixels, rounded up; this needs the beam (from the header, `BMAJ` and
-`BMIN`, or `BEAMFWHM`).
+Default: the area of the beam in pixels, rounded up; this needs the beam (from the header, or
+`BEAM`).
 """),
     'MAXCHANNELS': dict(
         group='Detections',
@@ -1028,8 +1032,8 @@ also took 1 as 20).
     'SM': dict(
         group='Model',
         doc="""\
-Whether the models are convolved with the beam of the cube (that of the header, or `BMAJ`, `BMIN`,
-`BPA`, `BEAMFWHM`), to the spatial resolution of the data. With `false`, no model is smoothed: also the
+Whether the models are convolved with the beam of the cube (that of the header, or `BEAM`), to the
+spatial resolution of the data. With `false`, no model is smoothed: also the
 models of single rings in the fits of 3DFIT and SPACEPAR. If no convolution kernel can be built from the
 beam, the models are not smoothed, with a warning. GALWIND convolves its final cube (the shells, in Jy
 per pixel, are then scaled to Jy/beam; the cylinders keep their flux, as the models of GALMOD).
@@ -1629,8 +1633,8 @@ minimum and has int((maximum − minimum)/step) + 1 values: `0 100 2` gives 0, 2
         group='Task',
         doc="""\
 Smooths the datacube spatially: each channel map is convolved with the elliptical Gaussian that turns
-the beam of the data (that of the header, or `OBMAJ`, `OBMIN`, `OBPA`) into a larger beam, given by
-`BMAJ`, `BMIN` and `BPA` or by `FACTOR` times the old beam. `true` runs the task. The new beam must be
+the beam of the data (that of the header, or `BEAM`) into a larger beam, given by `NEWBEAM` or by
+`FACTOR` times the old beam. `true` runs the task. The new beam must be
 at least as large as the old one along both axes (an error otherwise), and the data are multiplied by
 `SCALEFACTOR` to keep the values in Jy/beam.
 
@@ -1650,68 +1654,17 @@ The sub-region of the cube that `SMOOTH` smooths and writes, as six integers
 axis for a maximum); missing values are −1. The output cube has the size of the box, with its
 reference pixels shifted accordingly.
 """),
-    'BMAJ': dict(
-        group={'SMOOTH': 'New beam', '*': 'Input'},
-        default='the beam of the header (SMOOTH: FACTOR times the old beam)',
+    'NEWBEAM': dict(
+        group={'SMOOTH': 'New beam', '*': 'Mask'},
+        default='FACTOR times the beam of the data',
         doc="""\
-The major axis (FWHM, arcsec) of a beam, with two uses:
+The new beam of `SMOOTH`, `BMAJ BMIN BPA` as `BEAM` (axes in arcsec, or in degrees with a final `d`;
+one value is a circular beam). If BPA is not given, the new beam has the position angle of the beam of
+the data. Without `NEWBEAM`, the new beam is `FACTOR` times the beam of the data, at the same angle.
 
-- for every task except `SMOOTH`, the beam of the data when the FITS header has none (no BMAJ/BMIN
-  keywords and no beam in the HISTORY). With only one of `BMAJ` and `BMIN` the beam is circular; they
-  take precedence over `BEAMFWHM`. When the header has a beam, they do not change it.
-- for `SMOOTH`, the major axis of the new beam (by default `FACTOR` times the old one; if only `BMAJ` is
-  given, `BMIN` is the same). It is also the beam to which the SMOOTH mask (`MASK SMOOTH` or
-  `SMOOTH&SEARCH`) smooths the cube before building the mask, unless BMAJ is the beam of the data (a
-  header without a beam): the mask then uses `FACTOR` times it.
-
-With `SMOOTH` and a header without a beam, the beam of the data is given by `OBMAJ`, `OBMIN` and `OBPA`
-(or `BEAMFWHM`), never by `BMAJ` and `BMIN`. In Python, the beam of the data can also be given as
-`beam=(bmaj, bmin, bpa)`.
-"""),
-    'BMIN': dict(
-        group={'SMOOTH': 'New beam', '*': 'Input'},
-        default='the beam of the header (SMOOTH: FACTOR times the old beam)',
-        doc="""\
-The minor axis (FWHM, arcsec) of a beam, with the two uses of `BMAJ`: the beam of the data when the
-FITS header has none (equal to `BMAJ` if only that is given), and for `SMOOTH` and the SMOOTH mask the
-minor axis of the new beam (by default `FACTOR` times the old one, or `BMAJ` if only that is given to
-`SMOOTH`).
-"""),
-    'BPA': dict(
-        group={'SMOOTH': 'New beam', '*': 'Input'},
-        default='0 (SMOOTH: the angle of the old beam)',
-        doc="""\
-The position angle of the major axis of a beam (degrees, anticlockwise from North), with the two uses
-of `BMAJ`: the beam of the data when the FITS header has none, and for `SMOOTH` and the SMOOTH mask
-the position angle of the new beam.
-
-If not given, the beam of the data has a position angle of 0°, and the new beam of `SMOOTH` and of the
-SMOOTH mask that of the old beam. Any value given is an angle (in BBarolo 1.8 the default was 0° also
-for the new beam, and −1 kept the old angle).
-"""),
-    'OBMAJ': dict(
-        group='Old beam',
-        default='the beam of the header',
-        doc="""\
-The major axis (FWHM, arcsec) of the beam of the input cube, for `SMOOTH`: it replaces that of the
-header. If not given, the beam of the header. When the header has no beam, `OBMAJ` and `OBMIN` (or
-`BEAMFWHM`) give it, for `SMOOTH` and for the other tasks of the same run; without them BBarolo stops
-with an error (`BMAJ` and `BMIN` are the new beam of `SMOOTH`).
-"""),
-    'OBMIN': dict(
-        group='Old beam',
-        default='the beam of the header',
-        doc="""\
-The minor axis (FWHM, arcsec) of the beam of the input cube, for `SMOOTH`: it replaces that of the
-header, as `OBMAJ`. If not given, the minor axis of the beam of the header.
-"""),
-    'OBPA': dict(
-        group='Old beam',
-        default='the BPA of the header (0 if the header has no beam)',
-        doc="""\
-The position angle (degrees, anticlockwise from North) of the beam of the input cube, for `SMOOTH`: it
-replaces that of the header. Any value given is an angle, also 0 (in BBarolo 1.8, 0 meant the angle of
-the header).
+It is also the beam to which the SMOOTH mask (`MASK SMOOTH` or `SMOOTH&SEARCH`) smooths the cube
+before building the mask (by default `FACTOR` times the beam of the data). It must be at least as large
+as the beam of the data along both axes. It replaces `BMAJ`, `BMIN` and `BPA` of `SMOOTH` in BBarolo 1.8.
 """),
     'LINEAR': dict(
         group='Model',
@@ -1734,16 +1687,15 @@ profile, which the models add in quadrature to `VDISP`: the lines of the models 
     'FACTOR': dict(
         group={'SMOOTH': 'New beam', '*': 'Mask'},
         doc="""\
-The factor by which the beam is enlarged when no new beam is given with `BMAJ` and `BMIN`:
+The factor by which the beam is enlarged when no new beam is given with `NEWBEAM`:
 
-- `SMOOTH`: the new beam is `FACTOR` times the old one along both axes, at the angle of the old beam
-  (or `BPA`); an axis given with `BMAJ` or `BMIN` takes that value instead. `SMOOTH` needs either the
-  new beam or `FACTOR`.
+- `SMOOTH`: the new beam is `FACTOR` times the old one along both axes, at the angle of the old beam.
+  `SMOOTH` needs either `NEWBEAM` or `FACTOR`.
 - the SMOOTH mask (`MASK SMOOTH` or `SMOOTH&SEARCH`, used by `3DFIT`, `BAYESIAN3DFIT`, `2DFIT`,
   `ELLPROF`, the maps and `MAKEMASK`): the cube is smoothed to `FACTOR` times its beam before the mask is
   built (−1 is taken as 2).
 - `REDUCE`, with `SMOOTH` or on its own: the integer part of `FACTOR` is the number of pixels (or
-  channels) averaged along each axis, also when `SMOOTH` has a new beam from `BMAJ` and `BMIN`. `REDUCE`
+  channels) averaged along each axis, also when `SMOOTH` has a new beam from `NEWBEAM`. `REDUCE`
   on its own needs FACTOR ≥ 1.
 """),
     'SCALEFACTOR': dict(

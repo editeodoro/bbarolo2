@@ -525,9 +525,9 @@ class SimulatedGalaxyCube(object):
         prm = _canonical({k: np.asarray(v, dtype=float) if isIterable(v) else v for k, v in opts.items()})
         prm.update(_canonical(kwargs))
         h = self.f.header
-        if 'BMAJ' not in h and not any(k in prm for k in ('BMAJ', 'BEAMFWHM')):
+        if 'BMAJ' not in h and prm.get('BEAM') is None:
             raise ValueError("The template cube has no beam: give it when creating the SimulatedGalaxyCube "
-                             "(beam=...), or pass bmaj=... (arcsec) to run().")
+                             "(beam=..., degrees), or pass beam=... (arcsec) to run().")
         
         with _stdout_to(stdout if stdout is not None or verbose else 'null'):
             gm = GalMod(self.f, **prm)
