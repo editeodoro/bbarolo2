@@ -43,6 +43,9 @@ CONFIGS = {
     "rotation": dict(truth=dict(vrot=50.), mock=dict(kind="clumps"), free=BASE_FREE + ["vrot_single"]),
     "lognormal": dict(truth={}, mock=dict(kind="lognormal", sigma_ln=1.0, corr=20.), free=BASE_FREE),
     "lowsnr": dict(truth={}, mock=dict(kind="clumps", snr=5.), free=BASE_FREE),
+    # emission falling as r^-2 (the clumps and the cone), fitted with EMSLOPE fixed at 0 or free
+    "slope": dict(truth={}, mock=dict(kind="clumps", slope=2., snr=20.), free=BASE_FREE),
+    "slope-free": dict(truth={}, mock=dict(kind="clumps", slope=2., snr=20.), free=BASE_FREE + ["emslope"]),
 }
 BASES = {"cells": dict(emission="cells"), "cells-profile": dict(emission="cells", marginal=False),
          "shells": dict(emission="shells"), "cone": dict(emission="cone"), "spaxel": dict(emission="spaxel"),
@@ -156,21 +159,36 @@ def report(path=RESULTS, out=REPORT):
     L += ["## The configurations (emission cells, marginal likelihood: the defaults)", "",
           "| configuration | seeds | " + " | ".join(PARS) + " |", "|---|---|" + "---|" * len(PARS)]
     for (config, basis), rs in groups.items():
-        if basis != "cells":
+        if basis != "cells" or config.startswith("slope"):
             continue
         cells = []
         for p in PARS:
             st = _stats(rs, p)
             cells.append("" if st is None else f"{st[0]:+.1f} ({st[2]:.1f}, {st[3]:.2f})")
         L.append(f"| {config} | {len(rs)} | " + " | ".join(cells) + " |")
-    allc = [r for (c, b), rs in groups.items() if b == "cells" for r in rs]
+    allc = [r for (c, b), rs in groups.items() if b == "cells" and not c.startswith("slope") for r in rs]
     tot = []
     for p in PARS:
         st = _stats(allc, p)
         if st is not None:
             tot.append(f"{p}: pull rms {st[2]:.2f}, coverage {st[3]:.2f}")
     L += ["", "Each entry: bias (rms pull, coverage). All the configurations: " + "; ".join(tot) + ".", ""]
-    # 2. the bases of the emission
+    # 2. EMSLOPE
+    if any(c.startswith("slope") for c, b in groups):
+        L += ["## Emission falling as r^-2: EMSLOPE fixed at 0 or free", "",
+              "| configuration | seeds | " + " | ".join(PARS[:6]) + " |", "|---|---|" + "---|" * 6]
+        for config in ("slope", "slope-free"):
+            rs = groups.get((config, "cells"))
+            if not rs:
+                continue
+            cells = []
+            for p in PARS[:6]:
+                st = _stats(rs, p)
+                cells.append("" if st is None else f"{st[0]:+.1f} ({st[2]:.1f}, {st[3]:.2f})")
+            L.append(f"| {config} | {len(rs)} | " + " | ".join(cells) + " |")
+        L += ["", "slope: the clump mock with its emission falling as r^-2 (peak S/N 20), EMSLOPE fixed at 0 (the prior "
+              "mean uniform in radius); slope-free: EMSLOPE fitted.", ""]
+    # 3. the bases of the emission
     L += ["## The descriptions of the emission (option emission, marginal or profile)", "",
           "| configuration | basis | seeds | min per fit | " + " | ".join(PARS[:6]) + " |",
           "|---|---|---|---|" + "---|" * 6]
@@ -189,7 +207,7 @@ def report(path=RESULTS, out=REPORT):
     L += ["", "cells-profile: the maximum over the emission (no Occam factor); voxel: the weighting of MoKA-3D (the "
           "model is the data wherever the uniform cone reaches); cells22: cells of 22 arcsec instead of the beam "
           "(30 arcsec); cells-df: the model error datafrac = 0.3.", ""]
-    # 3. the details
+    # 4. the details
     L += ["## Details", ""]
     for (config, basis), rs in sorted(groups.items()):
         L.append(f"### {config}, {basis} ({len(rs)} seeds, {np.mean([r['time'] for r in rs]) / 60:.1f} min per fit)")

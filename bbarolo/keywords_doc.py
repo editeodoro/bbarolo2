@@ -774,9 +774,11 @@ measured outside the mask (`MASK`) and divided by the correlation volume of the 
 The best fit is the median of the posterior. BBarolo writes the free parameters
 (`<prefix>_wind_params.txt`), the shells with their errors and the flux of each cone
 (`<prefix>_wind_shells.txt`), the emissivities of the cells (`<prefix>_wind_cells.txt`), the model
-(`<prefix>_windmod.fits`, its moment maps and position-velocity slices along the axis of the data and of
-the model), the samples (`<prefix>_<sampler>_windresults.npy`) and, with `PLOTS`, a corner plot and the
-maps, slices and shells. In Python: `bbarolo.BayesianWind`.
+(`<prefix>_mod_wind.fits`), the moment maps and position-velocity slices of the data and of the model in the
+layout of 3DFIT (`maps/`, `pvs/`: across and along the axis of the cones), the samples
+(`<prefix>_<sampler>_windresults.npy`) and the plotting scripts, run with `PLOTS`: channel maps, moment maps
+and PV slices of data and model in the style of 3DFIT, a corner plot and the shells. In Python:
+`bbarolo.BayesianWind`.
 """),
     'SPACEPAR': dict(
         group='Task',

@@ -18,6 +18,15 @@ Mocks: performance/wind_mocks.py (GalMod3D, an engine independent of the fit; cl
 
 Each entry: bias (rms pull, coverage). All the configurations: vwind: pull rms 1.84, coverage 0.35; vdisp: pull rms 1.93, coverage 0.33; vrot: pull rms 1.95, coverage 0.75; inc: pull rms 1.43, coverage 0.50; pa: pull rms 1.09, coverage 0.67; openang: pull rms 2.25, coverage 0.31; openin: pull rms 1.84, coverage 0.00.
 
+## Emission falling as r^-2: EMSLOPE fixed at 0 or free
+
+| configuration | seeds | vwind | vdisp | vrot | inc | pa | openang |
+|---|---|---|---|---|---|---|---|
+| slope | 4 | -48.5 (12.2, 0.00) | +18.8 (11.0, 0.00) |  | -11.1 (7.9, 0.00) | -1.4 (1.3, 0.25) | -6.8 (5.2, 0.25) |
+| slope-free | 4 | -12.7 (2.7, 0.00) | +6.2 (2.9, 0.00) |  | -2.1 (1.9, 0.25) | -0.2 (1.3, 0.75) | -3.1 (2.6, 0.00) |
+
+slope: the clump mock with its emission falling as r^-2 (peak S/N 20), EMSLOPE fixed at 0 (the prior mean uniform in radius); slope-free: EMSLOPE fitted.
+
 ## The descriptions of the emission (option emission, marginal or profile)
 
 | configuration | basis | seeds | min per fit | vwind | vdisp | vrot | inc | pa | openang |
@@ -272,4 +281,24 @@ cells-profile: the maximum over the emission (no Occam factor); voxel: the weigh
 | inc | 60 | -1.7 | 0.324 | 1.29 | 0.00 |
 | pa | 30 | -0.659 | 1.16 | 1.16 | 0.50 |
 | openang | 60 | -4.67 | 2.15 | 3.22 | 0.25 |
+
+### slope, cells (4 seeds, 6.1 min per fit)
+
+| parameter | truth | bias | scatter | pull rms | coverage 68% |
+|---|---|---|---|---|---|
+| vwind | 200 | -48.5 | 6.45 | 12.20 | 0.00 |
+| vdisp | 20 | +18.8 | 5.8 | 11.01 | 0.00 |
+| inc | 60 | -11.1 | 3.03 | 7.89 | 0.00 |
+| pa | 30 | -1.4 | 1.45 | 1.29 | 0.25 |
+| openang | 60 | -6.77 | 5.38 | 5.18 | 0.25 |
+
+### slope-free, cells (4 seeds, 6.5 min per fit)
+
+| parameter | truth | bias | scatter | pull rms | coverage 68% |
+|---|---|---|---|---|---|
+| vwind | 200 | -12.7 | 3.59 | 2.72 | 0.00 |
+| vdisp | 20 | +6.19 | 1.57 | 2.88 | 0.00 |
+| inc | 60 | -2.08 | 0.924 | 1.88 | 0.25 |
+| pa | 30 | -0.197 | 1.06 | 1.26 | 0.75 |
+| openang | 60 | -3.08 | 0.843 | 2.59 | 0.00 |
 

@@ -109,11 +109,17 @@ In the output folder, with the prefix of the cube:
 - `_wind_params.txt`: the free parameters, the median and the 1σ interval of their posterior, and the priors;
 - `_wind_shells.txt`: the shells of the best fit with their errors, and the flux of each cone in radial bins;
 - `_wind_cells.txt`: the cells of the emission and their emissivities at the best fit;
-- `_windmod.fits`, `_windmod_0mom.fits`, `_windmod_1mom.fits`, `_windmod_2mom.fits`: the best model and its maps;
-- `_wind_pv.fits`, `_windmod_pv.fits`: position-velocity slices of the data and of the model along the
-  projected axis of the cones;
+- `_mod_wind.fits`: the best model (as the `_mod_<norm>.fits` of 3DFIT), and `_mask.fits`;
+- `maps/`: the total intensity, velocity and dispersion maps of the data, in the mask, and of the model
+  (`_0mom.fits`, ..., `_mod_0mom_wind.fits`, ...), as 3DFIT;
+- `pvs/`: position-velocity slices of the data, the model and the mask through the apex, across the axis of
+  the cones (`_pv_a`, along `PA`) and along it (`_pv_b`, `PA` + 90), as 3DFIT;
 - `_<sampler>_windresults.npy`: the samples, their weights and the setup of the fit;
-- with `PLOTS`: `_wind_corner.pdf`, `_wind_maps.pdf` (maps and slices of data and model), `_wind_shells.pdf`.
+- `plotscripts/`: the plotting scripts (with `PLOTS` ≥ 0), run with `PLOTS` > 0. They produce
+  `_chanmaps_wind.pdf` (channel maps of the data with the contours of the model), `_maps_wind.pdf` (moment
+  maps of the data, the model and the residuals) and `_pv_wind.pdf` (slices along the axis of the cones and
+  across each cone at half its length), in the style of 3DFIT, and the plots `_wind_corner.pdf` and
+  `_wind_shells.pdf`.
 
 ```{toctree}
 :hidden:

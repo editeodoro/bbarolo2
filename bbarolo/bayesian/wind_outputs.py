@@ -7,13 +7,16 @@ the cube (<prefix>):
                                  each cone in the radial bins of the emission (with errors)
   <prefix>_wind_cells.txt        the cells of the emission: cone, ranges of radius, polar angle and azimuth, clipped
                                  volume and emissivity at the best fit
-  <prefix>_windmod.fits          the best model cube
-  <prefix>_windmod_{0,1,2}mom.fits  its total intensity, velocity and dispersion maps
-  <prefix>_wind_pv.fits, <prefix>_windmod_pv.fits   position-velocity slices of the data and of the model along
-                                 the projected axis of the cones (PA - 90, through the apex)
+  <prefix>_mod_wind.fits         the best model cube (as <prefix>_mod_<norm>.fits of 3DFIT), and <prefix>_mask.fits
+  maps/<prefix>_{0,1,2}mom.fits, maps/<prefix>_mod_{0,1,2}mom_wind.fits   the total intensity, velocity and
+                                 dispersion maps of the data (in the mask) and of the model, as 3DFIT
+  pvs/<prefix>_pv_{a,b}.fits, pvs/<prefix>_mod_pv_{a,b}_wind.fits, pvs/<prefix>_mask_pv_{a,b}.fits   position-velocity
+                                 slices of the data, the model and the mask through the apex, across the axis of the
+                                 cones (a: along PA) and along it (b: PA + 90), as 3DFIT
   <prefix>_<sampler>_windresults.npy   the samples, their weights, the free parameters, the priors and the options
-  plots (PLOTS): <prefix>_wind_corner.pdf, <prefix>_wind_maps.pdf (data and model maps and slices),
-                 <prefix>_wind_shells.pdf
+  plotscripts/                   the plotting scripts (PLOTS >= 0; see wind_plots.py), run with PLOTS > 0:
+                                 <prefix>_chanmaps_wind.pdf, <prefix>_maps_wind.pdf, <prefix>_pv_wind.pdf, and
+                                 <prefix>_wind_corner.pdf, <prefix>_wind_shells.pdf
 """
 
 import os
@@ -90,23 +93,31 @@ def write_outputs(f, outfolder=None, plots=None, verbose=True):
                           f"{np.degrees(cc[4]):8.3f} {np.degrees(cc[5]):8.3f} {np.degrees(cc[6]):8.3f} "
                           f"{vol[k]:12.5g} {x[k]:12.5g}\n")
         files.append(fn)
-    # the model, its maps and the slices
+    # the model, its moment maps and PV slices, in the layout of 3DFIT (maps/, pvs/), with the functions of 3DFIT
+    from ..galfit_out import kinematic_maps, pv_slices
+    from ..rings import Rings
+    of, prefix = os.path.dirname(pre) + "/", os.path.basename(pre)
     mod = Cube.fromArray(np.asarray(f.model, np.float32), h.copy(), c.pars())
-    fn = pre + "_windmod.fits"
-    write_hdu(mod.to_hdu(copy=True), fn)
+    mod.Head().setMinMax(0., 0.)
+    mod.Head().setName(prefix + "mod")
+    fn = pre + "_mod_wind.fits"
+    write_hdu(mod.to_hdu(), fn)
     files.append(fn)
-    m = MomentMap()
-    m.input(mod)
-    for i, fun in enumerate((m.ZeroMoment, m.FirstMoment, m.SecondMoment)):
-        fun(False)
-        fn = pre + f"_windmod_{i}mom.fits"
-        write_hdu(m.to_hdu(), fn)
+    mask = _output_mask(c)
+    fn = pre + "_mask.fits"
+    write_hdu(c.mask_hdu(), fn)
+    files.append(fn)
+    os.makedirs(of + "maps", exist_ok=True)
+    os.makedirs(of + "pvs", exist_ok=True)
+    for name, hdu in kinematic_maps(c, mod, mask, "_wind").items():
+        fn = of + "maps/" + prefix + "_" + name + ".fits"
+        write_hdu(hdu, fn)
         files.append(fn)
     b = f.best
-    ang = b.pa - 90.
-    for cube, tag in ((c, "_wind_pv.fits"), (mod, "_windmod_pv.fits")):
-        fn = pre + tag
-        write_hdu(PositionVelocity(cube, b.xpos, b.ypos, ang).to_hdu(), fn)
+    apex = Rings().setRings(radii=[b.htot], xpos=b.xpos, ypos=b.ypos, vsys=b.vsys, phi=b.pa, inc=b.inc)
+    for name, hdu in pv_slices(c, mod, apex, mask, "_wind").items():
+        fn = of + "pvs/" + prefix + "_" + name + ".fits"
+        write_hdu(hdu, fn)
         files.append(fn)
     # the samples
     fn = pre + f"_{f._method}_windresults.npy"
@@ -114,17 +125,50 @@ def write_outputs(f, outfolder=None, plots=None, verbose=True):
                      freepar_idx=f.freepar_idx, quantiles=f.quantiles, priors=f.priors, like_kwargs=f.like_kwargs,
                      init=f._init), allow_pickle=True)
     files.append(fn)
-    if plots and plots > 0:
-        files += _plots(f, pre, mod)
+    if plots is not None and plots >= 0:
+        files += _plots(f, of, prefix, run=plots > 0, verbose=verbose)
     vprint(verbose, f" BAYESIANWIND: written {len(files)} files with the prefix {pre}")
     return files
 
 
-def _plots(f, pre, mod):
+def _output_mask(c):
+    """The mask of the maps of the data: that of the cube (MASK), built if needed (as 3DFIT)."""
+    if not c.MaskAll():
+        from ..galfit_out import _outputs_mode
+        with _outputs_mode(c.pars()):
+            c.BlankMask()
+    return np.asarray(c.Mask(), bool)
+
+
+def _cube_file(f, c, of):
+    """The data cube that the plotting scripts read: the user's file (and its HDU), or a copy of an in-memory cube
+    in the output folder (<OBJECT>_input.fits), as the plots of the other tasks."""
+    from ..tasks import _input_copy
+    from ..header import fits_image_hdu
+    fn = _input_copy(f, c, of)
+    try:
+        return fits_image_hdu(fn)
+    except Exception:
+        return fn, 0
+
+
+def _plots(f, of, prefix, run=True, verbose=True):
+    """The plots: the plotting scripts of wind_plots.py (channel maps, moment maps, PV slices), run if run, and the
+    corner plot and the shells (with matplotlib, if run). Returns the files written."""
+    from .wind_plots import write_scripts, run as run_scripts
+    pre = of + prefix
+    cubefile, cubehdu = _cube_file(f, f._cube_obj, of)
+    paths = write_scripts(f, of, prefix, cubefile, cubehdu)
+    out = list(paths) + [of + "plotscripts/plot_utils.py"]
+    if not run:
+        return out
+    ret = run_scripts(paths)
+    if ret != 0:
+        vprint(verbose, " BAYESIANWIND: something went wrong with the plots: check the scripts in " + of + "plotscripts/")
+    out += [pre + s for s in ("_chanmaps_wind.pdf", "_maps_wind.pdf", "_pv_wind.pdf") if os.path.isfile(pre + s)]
     import matplotlib
     matplotlib.use("Agg", force=False)
     import matplotlib.pyplot as plt
-    out = []
     try:
         fig = f.corner_plot()
         fn = pre + "_wind_corner.pdf"
@@ -132,33 +176,10 @@ def _plots(f, pre, mod):
         plt.close(fig)
         out.append(fn)
     except ImportError:
-        pass
-    # maps and slices
-    d = np.where(f._ok, f._dsafe, np.nan)
-    m = np.where(f._ok, f.model, np.nan)
-    from ..pvslice import PositionVelocity
-    b = f.best
-    pvd = PositionVelocity(f._cube_obj, b.xpos, b.ypos, b.pa - 90.).to_hdu().data
-    pvm = PositionVelocity(mod, b.xpos, b.ypos, b.pa - 90.).to_hdu().data
-    fig, ax = plt.subplots(2, 3, figsize=(13, 8))
-    vaxis = np.arange(d.shape[0])
-    for row, (cube, pv, lab) in enumerate(((d, pvd, "data"), (m, pvm, "model"))):
-        tot = np.nansum(cube, axis=0)
-        with np.errstate(invalid="ignore", divide="ignore"):
-            v1 = np.nansum(cube * vaxis[:, None, None], axis=0) / tot
-        v1[tot <= 3 * f.noiserms * np.sqrt(3.)] = np.nan
-        ax[row, 0].imshow(tot, origin="lower", cmap="afmhot")
-        ax[row, 0].set_title(f"{lab}: total intensity")
-        ax[row, 1].imshow(v1, origin="lower", cmap="RdBu_r")
-        ax[row, 1].set_title(f"{lab}: velocity (channel)")
-        ax[row, 2].imshow(pv, origin="lower", aspect="auto", cmap="Greys")
-        ax[row, 2].contour(pvm, levels=np.nanmax(pvm) * np.array([0.05, 0.2, 0.5]), colors="firebrick", linewidths=0.7)
-        ax[row, 2].set_title(f"{lab}: PV along the axis")
-    fn = pre + "_wind_maps.pdf"
-    fig.savefig(fn, bbox_inches="tight")
-    plt.close(fig)
-    out.append(fn)
-    # shells
+        vprint(verbose, " BAYESIANWIND: no corner plot (it needs the package corner)")
+    except ValueError as e:                   # (e.g. a parameter without dynamic range in the samples)
+        vprint(verbose, f" BAYESIANWIND: no corner plot ({e})")
+    # the shells
     tab = f.shells_table()
     em = f.emission_errors()
     fig, ax = plt.subplots(1, 4, figsize=(16, 3.6))

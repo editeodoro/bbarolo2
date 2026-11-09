@@ -197,6 +197,13 @@ def _pv_utils_source():
             "  return pv_sample(array, x, y, width=width, order=order, zoversample=oversampling)\n")
 
 
+def _plot_utils_text():
+    """The source of plot_utils.py, the helpers of the plotting scripts (3DFIT, BAYESIAN3DFIT, BAYESIANWIND)."""
+    return ("###############################################################\n#### This script contains some utilities for plotting      ####\n###############################################################\nimport math \nimport numpy as np \nimport matplotlib.pyplot as plt \n\ndef defineaxis(nrows,ncols,xlen,ylen,xsep=0,ysep=0,fig_width=8.27,fig_heigth=11.69, fig=None):\n\n  if not fig: fig = plt.figure(figsize=(fig_width, fig_heigth)) \n  fig_width, fig_heigth = fig.get_size_inches() \n  fig_ratio = fig_width / fig_heigth \n\n  ax = [] \n  for i in range(nrows):\n    row = []\n    y = -(i * (ylen + ysep) * fig_ratio)\n    for j in range(ncols):\n      x = j * (xlen + xsep)\n      row.append(fig.add_axes([x, y, xlen, ylen * fig_ratio])) \n    ax.append(row)\n  return fig, np.squeeze(ax)\n\n"
+            + "def calculate_padding(xsize,ysize):\n  n = max(ysize, xsize) \n  pad_y = ((n - ysize) // 2, n - ysize - (n - ysize) // 2) \n  pad_x = ((n - xsize) // 2, n - xsize - (n - xsize) // 2) \n  return (pad_x,pad_y)\n\n"
+            + _pv_utils_source())
+
+
 def writeScripts_Python(gf):
     c = gf.cin
     h = c.Head()
@@ -289,9 +296,7 @@ def writeScripts_Python(gf):
         buf.clear()
 
     # ---------------------------------------------------------------- plot_utils.py
-    w("###############################################################\n#### This script contains some utilities for plotting      ####\n###############################################################\nimport math \nimport numpy as np \nimport matplotlib.pyplot as plt \n\ndef defineaxis(nrows,ncols,xlen,ylen,xsep=0,ysep=0,fig_width=8.27,fig_heigth=11.69, fig=None):\n\n  if not fig: fig = plt.figure(figsize=(fig_width, fig_heigth)) \n  fig_width, fig_heigth = fig.get_size_inches() \n  fig_ratio = fig_width / fig_heigth \n\n  ax = [] \n  for i in range(nrows):\n    row = []\n    y = -(i * (ylen + ysep) * fig_ratio)\n    for j in range(ncols):\n      x = j * (xlen + xsep)\n      row.append(fig.add_axes([x, y, xlen, ylen * fig_ratio])) \n    ax.append(row)\n  return fig, np.squeeze(ax)\n\n")
-    w("def calculate_padding(xsize,ysize):\n  n = max(ysize, xsize) \n  pad_y = ((n - ysize) // 2, n - ysize - (n - ysize) // 2) \n  pad_x = ((n - xsize) // 2, n - xsize - (n - xsize) // 2) \n  return (pad_x,pad_y)\n\n")
-    w(_pv_utils_source())
+    w(_plot_utils_text())
     flush("plot_utils.py")
 
     # ---------------------------------------------------------------- plot_parameters.py

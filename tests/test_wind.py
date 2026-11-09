@@ -249,7 +249,8 @@ def test_bayesian_wind_quick(tmp_path):
     """BAYESIANWIND on a tiny mock wind (GalMod3D clumps): the marginal likelihood prefers the true geometry to wider or
     narrower cones and slower or faster winds, EMSCALE, EMCLUMP and EMRATIO are added to the free parameters, a short
     sampling runs (dynesty, few live points: only the pipeline, not the accuracy, which is that of
-    performance/wind_recovery.py) and the outputs are written."""
+    performance/wind_recovery.py) and the outputs are written: the model, the maps and PV slices of data and model in
+    the layout of 3DFIT (maps/, pvs/), and the plots (the scripts in plotscripts/ run)."""
     pytest.importorskip("dynesty")
     from wind_mocks import mock_wind
     from bbarolo import BayesianWind
@@ -270,9 +271,17 @@ def test_bayesian_wind_quick(tmp_path):
     f.run(freepar=["vwind_single", "openang"], method="dynesty", sampler_kwargs=dict(nlive=10, seed=1),
           run_kwargs=dict(maxiter=40), like_kwargs=dict(cellsize=40.), verbose=False)
     assert f.ndim == 5 and np.all(np.isfinite(f.params)) and f.model.shape == hdu.data.shape
-    files = f.write(plots=0, verbose=False)
+    files = f.write(plots=1, verbose=False)
     assert all(os.path.isfile(x) for x in files)
-    assert any(x.endswith("_wind_shells.txt") for x in files) and any(x.endswith("_windmod.fits") for x in files)
+    names = {os.path.relpath(x, str(tmp_path)) for x in files}
+    pre = f._cube_obj.pars().outPrefix
+    for n in ("_wind_shells.txt", "_mod_wind.fits", "_mask.fits", "_chanmaps_wind.pdf", "_maps_wind.pdf",
+              "_pv_wind.pdf"):
+        assert pre + n in names, n
+    for n in ("0mom", "1mom", "2mom", "mod_0mom_wind", "mod_1mom_wind", "mod_2mom_wind"):
+        assert f"maps/{pre}_{n}.fits" in names, n
+    for n in ("pv_a", "pv_b", "mod_pv_a_wind", "mod_pv_b_wind", "mask_pv_a", "mask_pv_b"):
+        assert f"pvs/{pre}_{n}.fits" in names, n
 
 
 def test_emission_gauss_exact():
