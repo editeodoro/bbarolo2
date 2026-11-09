@@ -126,7 +126,11 @@ class OutputsMixin(object):
             c = self._cube_obj
             mod = Cube.fromArray(np.asarray(model, dtype=np.float32), c.Head(), c.pars())
             with self._errors_in_outputs():
-                self._galfit.writeOutputs(mod, ell, plots)
+                self._galfit._model_dens_profile = self._model_dens_profile() if plots else None
+                try:
+                    self._galfit.writeOutputs(mod, ell, plots)
+                finally:
+                    self._galfit._model_dens_profile = None
             if self.useNorm:
                 self._write_deconvolved_profile()
         vprint(verbose, "Done!")
@@ -159,6 +163,26 @@ class OutputsMixin(object):
                 vals = (r['dens'][i], e['err_lo'][i], e['err_hi'][i], abs(self._ellprof.getSurfDensFaceOn(i)),
                         e['err_geom_lo'][i], e['err_geom_hi'][i], e['err_noise_lo'][i], e['err_noise_hi'][i])
                 f.write(f"{r['radii'][i]:<12.3f}" + "".join(f"{v:>14.6e}" for v in vals) + "\n")
+
+    def _model_dens_profile(self):
+        """ The density profile of the best model as a face-on surface density (map units per arcsec^2, as the
+        observed one, SDENS_FO of <prefix>_densprof.txt), for the plot of the parameters: a dict with radii, sdens,
+        lo, hi (1-sigma errors) and label, 'deconvolved' (DENS not fitted: the deconvolved profile, with the
+        errors of deconvolved_profile_errors) or 'fitted' (the posterior errors, ring_errors). """
+        from ..profile import sdens_unit
+        r = self.outri.r
+        unit = sdens_unit(self._cube_obj, self._galfit.model, float(np.median(r['vsys'])))
+        nr = self.outri.nr
+        if self.useNorm:
+            dp = getattr(self, 'dens_profile', None)
+            lo, hi = (dp['err_lo'], dp['err_hi']) if dp is not None else (np.zeros(nr), np.zeros(nr))
+            label = 'deconvolved'
+        else:
+            lo, hi = self.ring_errors('dens')
+            label = 'fitted'
+        e = lambda v: np.clip(np.nan_to_num(np.asarray(v, float)), 0, None) * unit
+        return dict(radii=np.asarray(r['radii'], float), sdens=np.asarray(r['dens'], float) * unit, lo=e(lo),
+                    hi=e(hi), label=label)
 
     # Ring parameters in the order of the 3DFIT tables and error columns
     _RING_NAMES = ('vrot', 'vdisp', 'dens', 'z0', 'inc', 'phi', 'xpos', 'ypos', 'vsys', 'vrad')

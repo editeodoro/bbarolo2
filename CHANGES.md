@@ -363,6 +363,10 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   accept `key=value` pairs in brackets as a value. A key of `lambdas` that is not a ring parameter is now an
   error (it was ignored), also in Python.
 - **BAYESIAN3DFIT: the radii of the rings** (arcsec) are printed before the free parameters.
+- **BAYESIAN3DFIT: the density of the model in the plot of the parameters.** The surface-density panel of
+  `<prefix>_parameters.pdf` showed only the observed profile; it now shows, as in 3DFIT, the observed face-on
+  surface density and that of the model with its errors, in the same units (map units per arcsec²): the
+  profile deconvolved from the beam when DENS is not fitted, the fitted DENS otherwise.
 - **BAYESIANWIND: Bayesian fits of bi-conical winds** (`bbarolo.BayesianWind`, the task `BAYESIANWIND`): the
   geometry and kinematics of the wind of GALWIND (INC, PA, OPENANG, the new inner opening angle OPENIN, HTOT,
   VWIND, VDISP and VROT per shell, the centre and VSYS) sampled with nautilus or dynesty, with the emission of the

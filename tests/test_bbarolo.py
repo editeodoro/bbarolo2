@@ -2136,6 +2136,36 @@ def test_galmod3d_mc_flux_errors():
         GalMod3D(hdu, vrot=10., **kw)
 
 
+def test_bayesian_parameters_plot_density(tmp_path):
+    """The panel of the surface density in the plot of the parameters of BAYESIAN3DFIT shows the observed profile
+    (SDENS_FO of _densprof.txt) and that of the model as a face-on surface density: deconvolved (DENS not fitted)
+    or fitted (DENS free), at full precision (it showed only the observed profile)."""
+    pytest.importorskip("dynesty")
+    from bbarolo.plotscripts import writeScripts_Python
+    run = dict(threads=1, verbose=False, dynamic=False, sampler_kwargs=dict(nlive=15, seed=1),
+               run_kwargs=dict(maxiter=60))
+    script = tmp_path / "bbb" / "plotscripts" / "plot_parameters.py"
+    f = _bayes_mock(tmp_path)
+    f.run(freepar=['vrot_single'], **run)
+    f.write_bestmodel(plots=True, verbose=False)
+    txt = script.read_text()
+    assert "usecols=(0,9)" in txt and "label='observed'" in txt and "label='deconvolved'" in txt
+    assert (tmp_path / "bbb" / "MOCK_parameters.pdf").is_file()
+    assert getattr(f._galfit, "_model_dens_profile", None) is None
+    mp = f._model_dens_profile()
+    obs = np.genfromtxt(str(tmp_path / "bbb" / "MOCK_densprof.txt"), usecols=(9,))
+    assert mp["label"] == "deconvolved" and np.all(mp["sdens"] > 0) and np.all(mp["hi"] > 0)
+    assert np.allclose(mp["sdens"][1:], obs[1:], rtol=0.5)            # (the same units as the observed profile)
+    f.run(freepar=['vrot_single', 'dens'], **run)
+    mp = f._model_dens_profile()
+    unit = mp["sdens"] / np.asarray(f.outri.r['dens'], float)
+    assert mp["label"] == "fitted" and np.allclose(unit, unit[0])
+    with f._errors_in_outputs():
+        f._galfit._model_dens_profile = mp
+        writeScripts_Python(f._galfit)
+    assert "label='fitted'" in script.read_text()
+
+
 def test_bayesian_rings_beyond_radmax(tmp_path, capsys):
     """With RADMAX as the edge of the disk, the rings beyond it are marked: in_disk, INDISK = 0 in
     rings_final1.txt, a note of print_stats and the region beyond RADMAX shaded in the plots of the

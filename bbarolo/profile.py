@@ -177,6 +177,33 @@ class MapRingModel:
         return out
 
 
+def sdens_unit(c, model, vsys):
+    """The face-on surface density, in the units of the total intensity map of ELLPROF per arcsec^2 (its column
+    SDENS_FO), of a disk of unit density (DENS) of the DiskModel model of the cube c; vsys: a systemic velocity
+    within the cube (km/s). Multiplies the densities of the model to compare them with the observed profile."""
+    from .galmod import model_rings
+    from .rings import Rings
+    from .bbutils import arcsconv, DeltaVel, FluxtoJyBeam
+    h = c.Head()
+    arcs = h.PixScale() * arcsconv(h.Cunit(0))
+    nx, ny = c.DimX(), c.DimY()
+    # the face-on surface brightness of unit density (per pixel, in the units of the sum of the channels):
+    # the flux of a face-on uniform disk of unit density divided by its area (the clouds of the model sit on
+    # sub-rings, so single pixels are not uniform), at the centre of the cube. The area is that of the
+    # sub-rings of the model (pi redge^2 included the empty centre of the disk: 2% low)
+    xm, ym = nx // 2, ny // 2
+    w = max(min(nx, ny) / 8., 2.) * arcs
+    uni = Rings().setRings(radii=np.array([w, 2 * w, 3 * w]), xpos=xm, ypos=ym, vsys=float(vsys),
+                           vrot=0., vdisp=8., z0=0., inc=0., phi=0., dens=1., radsep=w)
+    su = model.setup
+    sub = su.subrings(model_rings(uni, "CENTRED", su.radsep))[0][0]           # (arcmin)
+    area = float(np.sum(2. * math.pi * sub * su.radsep)) / (arcs / 60.) ** 2   # (pixels)
+    k = float(model.ring_maps(uni, ringmode="CENTRED").sum()) / area
+    dv = abs(DeltaVel(h)) if c.HeadDef() else 1.
+    conv = (FluxtoJyBeam(1., h) if c.pars().fluxConvert else 1.) * dv
+    return k * conv / (arcs * arcs)                 # (u/arcsec^2 of the map of ELLPROF per unit of DENS)
+
+
 def ellprof_deconvolved(c, rings, side="B", smooth=0.1, nmc=200, seed=0, model=None):
     """The deconvolved radial profile of the ELLPROF task: the face-on surface densities of the rings whose
     beam-convolved model reproduces the total intensity map of the cube c (or the 2D map c), as in
@@ -206,7 +233,7 @@ def ellprof_deconvolved(c, rings, side="B", smooth=0.1, nmc=200, seed=0, model=N
     import copy
     from .galmod import DiskModel
     from .rings import Rings
-    from .bbutils import arcsconv, DeltaVel, FluxtoJyBeam
+    from .bbutils import arcsconv
     from .bayesian.noise import dilate_mask, noise_correlation
     h = c.Head()
     if not h.Bmaj() or not h.Cdelt(0):
@@ -317,22 +344,7 @@ def ellprof_deconvolved(c, rings, side="B", smooth=0.1, nmc=200, seed=0, model=N
     if is2d:
         unit = 1. / (arcs * arcs)                       # (the densities: face-on, in map units per pixel)
     else:
-        # the face-on surface brightness of unit density (per pixel, in the units of the sum of the channels):
-        # the flux of a face-on uniform disk of unit density divided by its area (the clouds of the model sit on
-        # sub-rings, so single pixels are not uniform), at the centre of the cube. The area is that of the
-        # sub-rings of the model (pi redge^2 included the empty centre of the disk: 2% low)
-        from .galmod import model_rings
-        xm, ym = nx // 2, ny // 2
-        w = max(min(nx, ny) / 8., 2.) * arcs
-        uni = Rings().setRings(radii=np.array([w, 2 * w, 3 * w]), xpos=xm, ypos=ym, vsys=float(rings.vsys[0]),
-                               vrot=0., vdisp=8., z0=0., inc=0., phi=0., dens=1., radsep=w)
-        su = dm.setup
-        sub = su.subrings(model_rings(uni, "CENTRED", su.radsep))[0][0]           # (arcmin)
-        area = float(np.sum(2. * math.pi * sub * su.radsep)) / (arcs / 60.) ** 2   # (pixels)
-        k = float(dm.ring_maps(uni, ringmode="CENTRED").sum()) / area
-        dv = abs(DeltaVel(h)) if c.HeadDef() else 1.
-        conv = (FluxtoJyBeam(1., h) if c.pars().fluxConvert else 1.) * dv
-        unit = k * conv / (arcs * arcs)                 # (u/arcsec^2 of the map of ELLPROF per unit of DENS)
+        unit = sdens_unit(c, dm, float(rings.vsys[0]))
     return dict(radii=np.asarray(rings.radii, float), dens=dens, sdens_fo=dens * unit, err_lo=lo * unit,
                 err_hi=hi * unit, dens_err_lo=lo, dens_err_hi=hi, nmc=int(nmc), beam=abs(h.Bmaj()) * 3600.,
                 map2d=is2d)

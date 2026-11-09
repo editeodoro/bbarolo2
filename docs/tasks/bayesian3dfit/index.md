@@ -137,7 +137,7 @@ outputs, and `f.save_results(file)` only the samples.
 | `maps/`, `pvs/` | `write_bestmodel()` | moment maps and position–velocity slices of the data and of the model |
 | `_corner.pdf` | `corner_plot()` | the corner plot (in Python it returns the figure) |
 | `_profiles.pdf` | `plot_profiles()` | the parameters of the rings against radius, with their errors (in Python it returns the figure) |
-| `_maps_none.pdf`, `_parameters.pdf`, `plotscripts/` | `write_bestmodel()` | the plots of 3DFIT: moment maps, parameters, and the scripts that make them |
+| `_maps_none.pdf`, `_parameters.pdf`, `plotscripts/` | `write_bestmodel()` | the plots of 3DFIT: moment maps, parameters, and the scripts that make them. The surface-density panel shows the observed face-on profile and that of the model (deconvolved, or the fitted DENS), with its errors |
 | `_params.par` | | all the parameters of the run, defaults included (parameter files only) |
 
 The rings file has the columns of the 3DFIT rings file (radius in arcsec, VROT and VDISP in km/s, INC and PA
