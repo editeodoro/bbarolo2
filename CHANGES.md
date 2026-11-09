@@ -7,6 +7,10 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **MAPTYPE in 3DFIT, BAYESIAN3DFIT and GALMOD**: their maps of the data and of the models (`maps/`, the
+  maps page of the plots) were always moments, whatever MAPTYPE (as in C++). With MAPTYPE GAUSSIAN they
+  are now Gaussian fits, for both data and models, and the rows of the maps plot are labelled
+  accordingly. The default (MOMENT) gives the same outputs as before.
 - **(C++) Maps of cubes with several lines** (RESTWAVE or RESTFREQ with more than one value). The moment maps
   of MAPS, of 3DFIT and BAYESIAN3DFIT (data and models), of the detections of SEARCH and those used by ELLPROF
   and 2DFIT summed all the channels, so every line entered the moments of the first:

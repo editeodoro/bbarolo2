@@ -562,16 +562,19 @@ fewer than 5 channels, the noise of all of them). The noise is the MADFM/0.6745 
 standard deviation (`FLAGROBUSTSTATS`). `true` runs it.
 """),
     'MAPTYPE': dict(
-        group='Maps',
+        group={'3DFIT': 'Outputs', 'BAYESIAN3DFIT': 'Outputs', 'GALMOD': 'Outputs', '*': 'Maps'},
         doc="""\
 How the maps are derived: `MOMENT` (default), the moments of the spectra, or `GAUSSIAN`, a Gaussian
 fitted to each spectrum within the mask, starting from its peak and a dispersion of 10 km/s. With
 `GAUSSIAN` the total map is the integral of the Gaussian, the velocity map its centre and the
 dispersion map its dispersion; the pixels where the fit does not converge, or cannot be done (3
 channels or fewer), are blank. Spectra without emission give meaningless values, so use a mask.
+With several lines (`RESTWAVE`, `RESTFREQ`) the maps are those of the first line: `MOMENT` uses only
+its channels, `GAUSSIAN` fits all the lines with one velocity and one dispersion.
 Case-insensitive; another value is replaced by `MOMENT`, with a warning.
 
-Only for `TOTALMAP`, `VELOCITYMAP` and `DISPERSIONMAP`.
+For `TOTALMAP`, `VELOCITYMAP` and `DISPERSIONMAP`, and for the maps of the data and of the models
+written by 3DFIT, BAYESIAN3DFIT and GALMOD (`maps/`, and the maps page of the plots).
 """),
     'SNMAP': dict(
         group={'SEARCH': 'Outputs', '*': 'Maps'},

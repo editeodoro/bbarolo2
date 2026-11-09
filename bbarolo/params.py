@@ -723,7 +723,7 @@ class Param:
             out(f"REDUCE error: FACTOR (the pixels or channels averaged) must be at least 1, not {self.factor:g}.")
             good = False
 
-        if self.getMaps() and self.ma.maptype not in ("GAUSSIAN", "MOMENT"):
+        if self.ma.maptype not in ("GAUSSIAN", "MOMENT"):     # (MAPS and the maps of 3DFIT, BAYESIAN3DFIT, GALMOD)
             out("MAP warning: MAPTYPE is either MOMENT or GAUSSIAN. Reverting to MOMENT.")
             self.ma.maptype = "MOMENT"
 

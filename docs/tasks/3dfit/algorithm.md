@@ -213,7 +213,8 @@ of the run built it. It enters the fit in five places:
   with fewer than 20 such pixels, and either none or fewer than 70% of its pixels, is skipped (not in
   REVERSE mode);
 - the final model: the `LOCAL` normalisation, the radial profile of the `AZIM` normalisation and the
-  moment maps of the data use the data within the mask.
+  maps of the data use the data within the mask. The maps are moments, or Gaussian fits with
+  {ref}`MAPTYPE <par-maps-maptype>` `GAUSSIAN`, for the data and the model alike.
 
 The noise of the cube $\sigma_D$, used in the residuals where the data are not positive, is the spread of
 all the voxels of the cube: MADFM/0.6745 or the standard deviation (see
@@ -520,7 +521,7 @@ rescaled to that rms) is also written. The outputs, in the output folder:
 | `<prefix>_densprof.txt` | the radial profile of the data in the final rings |
 | `<prefix>_densprof_deconvolved.txt` | the density profile deconvolved from the beam, in the final rings |
 | `<prefix>_mod_<norm>.fits` | the final model (`azim`, `local` or `none`), and `_mod_noise.fits` |
-| `maps/` | moment maps 0, 1, 2 of the data (in the mask) and of the model |
+| `maps/` | maps 0, 1, 2 (moments, or Gaussian fits with MAPTYPE GAUSSIAN) of the data (in the mask) and of the model |
 | `pvs/` | position–velocity slices of data, model and mask along the major and minor axes |
 | `<prefix>_asymdrift.txt` | the asymmetric drift correction (ADRIFT) |
 | plots | channel maps, position–velocity diagrams and ring parameters ({ref}`PLOTS <par-all-plots>`) |

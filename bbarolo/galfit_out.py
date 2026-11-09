@@ -24,16 +24,18 @@ FLT_MAX = float(np.finfo(np.float32).max)
 
 
 def kinematic_maps(c, mod, mask=None, suffix=""):
-    """The moment maps of the data (within the mask: mask, or that of the cube) and of the model mod, as HDUs:
-    {'0mom', '1mom', '2mom', 'mod_0mom<suffix>', ...} (the files of the maps/ folder without the prefix)."""
+    """The maps of the data (within the mask: mask, or that of the cube) and of the model mod, as HDUs:
+    {'0mom', '1mom', '2mom', 'mod_0mom<suffix>', ...} (the files of the maps/ folder without the prefix).
+    Moments or Gaussian fits, as MAPTYPE (C++ always used moments)."""
     p = c.pars()
+    mtype = "GAUSSIAN" if p.ma.maptype == "GAUSSIAN" else "MOMENT"
     v = p.verbose
     p.verbose = False
     try:
-        allmaps = getAllMoments(c, True, mask, "MOMENT")
+        allmaps = getAllMoments(c, True, mask, mtype)
         out = {s: allmaps[i].to_hdu() for i, s in enumerate(("0mom", "1mom", "2mom"))}
         mod.pars().verbose = False
-        modmaps = getAllMoments(mod, False, None, "MOMENT")
+        modmaps = getAllMoments(mod, False, None, mtype)
         out.update({s + suffix: modmaps[i].to_hdu() for i, s in enumerate(("mod_0mom", "mod_1mom", "mod_2mom"))})
     finally:
         p.verbose = v
@@ -247,7 +249,8 @@ class ModelOutputs:
         return contextlib.nullcontext() if self._fluxconv else _outputs_mode(self.c.pars())
 
     def maps(self):
-        """The moment maps of the data and of each model: {'0mom', ..., 'mod_0mom_<norm>', ...} of HDUs."""
+        """The maps of the data and of each model (moments or Gaussian fits, as MAPTYPE): {'0mom', ...,
+        'mod_0mom_<norm>', ...} of HDUs."""
         if self._maps is None:
             with self._context():
                 self._maps = {}

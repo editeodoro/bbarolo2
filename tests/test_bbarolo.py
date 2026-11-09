@@ -2884,6 +2884,23 @@ def test_maps_several_lines(tmp_path):
     assert np.allclose(V[0] - V[1], 300., atol=1.)
 
 
+def test_fit_maps_follow_maptype(tmp_path):
+    """The maps of 3DFIT, BAYESIAN3DFIT and GALMOD (data and models) follow MAPTYPE: Gaussian fits with
+    MAPTYPE GAUSSIAN (C++ and before: always moments)."""
+    from bbarolo.galfit_out import kinematic_maps
+    from bbarolo.moments import compute_moments, gaussian_moments
+    c, vel = _lines_cube(tmp_path / "ha.fits", [6564.61, 6549.86, 6585.27], [1., 0.1, 0.3], sig=60.)
+    mask = np.ones(c.array.shape, bool)
+    for mtype, fun in (("MOMENT", compute_moments), ("GAUSSIAN", gaussian_moments)):
+        c.pars().ma.maptype = mtype
+        maps = kinematic_maps(c, c, mask, "_azim")
+        ref = fun(c, mask)
+        for i in range(3):
+            assert np.allclose(maps[f"{i}mom"].data, ref[i], equal_nan=True, rtol=1e-6)
+            assert np.allclose(maps[f"mod_{i}mom_azim"].data, ref[i], equal_nan=True, rtol=1e-6)
+    assert np.allclose(maps["1mom"].data, vel[None], atol=0.1)
+
+
 def test_maps_gaussian_rms_and_massdens(synthetic_cube):
     """MAPS: MAPTYPE GAUSSIAN gives NaN where the fit cannot be done (here, 3 channels: the fit was kept as
     it was after 50 iterations); the RMS of fewer than 5 channels is their rms (1E10); MASSDENSMAP uses
