@@ -36,11 +36,14 @@ def _geometry(f):
     def sky(x, yd, z):
         ys = yd * ci - z * si
         return b.xpos + (x * spa - ys * cpa) / cd0, b.ypos + (x * cpa + ys * spa) / cd1
-    axis = [sky(0., 0., c * b.htot) for c in (1, -1)]
+    cones = f._wm.cells.cones
+    axis = [sky(0., 0., c * b.htot) for c in cones]
+    if len(axis) == 1:
+        axis.insert(0, sky(0., 0., 0.))                 # (one cone: the axis from the apex)
     th = math.radians(0.5 * b.openang)
     phi = np.linspace(0., 2 * math.pi, 73)
     rims = []
-    for c in (1, -1):
+    for c in cones:
         R, z = b.htot * math.sin(th), c * b.htot * math.cos(th)
         gx, gy = sky(R * np.cos(phi), R * np.sin(phi), z)
         rims.append((np.round(gx, 2).tolist(), np.round(gy, 2).tolist()))
@@ -51,10 +54,11 @@ def _geometry(f):
     h = f._cube_obj.Head()
     half = 1.3 * (0.5 * b.htot * math.tan(th) + h.Bmaj() * 3600.)           # (arcsec)
     cuts = []
-    for c in (1, -1):
+    for c in cones:
         cx, cy = sky(0., 0., 0.5 * c * b.htot)
         cuts.append(((cx - half * ux, cy - half * uy), (cx + half * ux, cy + half * uy)))
-    return axis, rims, [[[float(v) for v in p] for p in cut] for cut in cuts]
+    labels = ["across the %s cone, at HTOT/2 (PA)" % ("receding" if c > 0 else "approaching") for c in cones]
+    return axis, rims, [[[float(v) for v in p] for p in cut] for cut in cuts], labels
 
 
 def _box(f, mod):
@@ -176,7 +180,8 @@ ax_x = np.array(axis_x)-xmin+pad_x[0]
 ax_y = np.array(axis_y)-ymin+pad_y[0]
 to_plot = [[mom[0],mom[1]-vsys_m,mom[2]],[mod[0],mod[1]-vsys_m,mod[2]],[mom[0]-mod[0],mom[1]-mod[1],mom[2]-mod[2]]]
 cmaps = [plt.get_cmap('Spectral_r'),plt.get_cmap('coolwarm'),plt.get_cmap('PuOr_r')]
-barlab = ['Intensity ('+bunit_map+')', r'V$_\\mathrm{LOS}$ - V$_\\mathrm{sys}$ (km/s)', r'$\\sigma_\\mathrm{obs}$ (km/s)']
+barlab = ['Intensity ('+bunit_map+')', r'V$_\\mathrm{LOS}$ - V$_\\mathrm{sys}$ (km/s)',
+          r'$\\sigma_\\mathrm{obs}$ (km/s)']
 titles = ['DATA', 'MODEL','RESIDUALS']
 ext = [0,xsize+pad_x[0]+pad_x[1],0,ysize+pad_y[0]+pad_y[1]]
 interval = PercentileInterval(99.5)
@@ -224,10 +229,12 @@ cube = image[cubehdu].data
 while cube.ndim > 3: cube = cube[0]
 cube_mod = fits.open(outfolder+outprefix+'_mod_wind.fits')[0].data
 cube_mas = fits.open(outfolder+outprefix+'_mask.fits')[0].data
-fig, ax = defineaxis(3,1,0.6,0.32,xsep=0.00,ysep=0.08,fig_width=10,fig_heigth=13)
-labels = ('along the axis of the cones (PA+90)', 'across the receding cone, at HTOT/2 (PA)',
-          'across the approaching cone, at HTOT/2 (PA)')
-for i in range(3):
+npan = 1 + len(cuts)
+fig, ax = defineaxis(npan,1,0.6,0.32,xsep=0.00,ysep=0.08,fig_width=10,
+                     fig_heigth=4.5*npan)
+ax = np.atleast_1d(ax)
+labels = ['along the axis of the cones (PA+90)'] + list(cut_labels)
+for i in range(npan):
   if i == 0:
     img = fits.open(outfolder+'pvs/'+outprefix+'_pv_b.fits')
     hd = img[0].header
@@ -286,7 +293,7 @@ def write_scripts(f, outfolder, prefix, cubefile, cubehdu=0):
     os.makedirs(folder, exist_ok=True)
     with open(folder + "plot_utils.py", "w") as fh:
         fh.write(_plot_utils_text())
-    axis, rims, cuts = _geometry(f)
+    axis, rims, cuts, cut_labels = _geometry(f)
     xmin, xmax, ymin, ymax, zmin, zmax = _box(f, f.model)
     pixscale = abs(h.Cdelt(0)) * 3600.
     b = f.best
@@ -301,7 +308,7 @@ def write_scripts(f, outfolder, prefix, cubefile, cubehdu=0):
                 zmax_wcs=float(AlltoVel(c.getZphys(zmax + 0.5), h)), bmaj=float(h.Bmaj() / h.PixScale()),
                 bmin=float(h.Bmin() / h.PixScale()), bpa=float(h.Bpa()), bunit=h.Bunit(), arcconv=3600.,
                 halfsize=float(halfsize), axis_x=[float(a[0]) for a in axis], axis_y=[float(a[1]) for a in axis],
-                rims=rims, cuts=cuts, cdeltsp=float(pixscale))
+                rims=rims, cuts=cuts, cut_labels=cut_labels, cdeltsp=float(pixscale))
     if vals["zmax_wcs"] < vals["zmin_wcs"]:
         vals["zmin_wcs"], vals["zmax_wcs"] = vals["zmax_wcs"], vals["zmin_wcs"]
     header = "".join(f"{k} = {v!r}\n" for k, v in vals.items())

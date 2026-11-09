@@ -54,6 +54,8 @@ Options of the likelihood (LIKEOPTS, run(like_kwargs=...)):
              likelihood at each evaluation, about 20 times slower); default: free
   emclump    a fixed EMCLUMP (prior 'gauss'); default: free
   emratio    a fixed EMRATIO (e.g. 1: the cones have the same mean emissivity); default: free
+  cones      the cones of the model: 'both' (default), 'approaching' or 'receding' (only one: e.g. a wind whose far
+             side is hidden; faster, and without EMRATIO). With both cones, an empty one is found by EMRATIO.
   emslope    a fixed EMSLOPE (e.g. 0: a mean emissivity uniform in radius); default: free
 
 The likelihood uses all the voxels of its region (no mask: the empty voxels are what tell a cone that is too
@@ -87,7 +89,9 @@ DEFAULT_WIND_FUNCS = dict(vwind=lambda R, p1, p2: 2. / np.pi * p1 * np.arctan(R 
 
 WIND_LIKE_OPTIONS = dict(emission="cells", cellsize=None, marginal=True, prior="gauss", noisecorr="measured",
                          sigma=None, datafrac=0., grow=1., emscale=None, emclump=None, emratio=None, emslope=None,
-                         prune=1e-3)
+                         prune=1e-3, cones="both")
+# the cones of the model (option cones): +1 the cone along +z, receding for INC < 90; -1 the other, approaching
+CONES = {"both": (1, -1), "receding": (1,), "approaching": (-1,)}
 # the hyperparameters of the prior of the emission, free unless fixed (LIKEOPTS emscale, emclump, emratio, emslope)
 HYPER = dict(gauss=("emscale", "emclump", "emratio", "emslope"), exp=("emscale", "emratio", "emslope"))
 
@@ -105,6 +109,11 @@ def wind_like_option(name, value):
         v = str(value).strip().lower()
         if v not in EMISSION_BASES:
             raise ValueError(f"emission: {', '.join(EMISSION_BASES)}, not {value!r}")
+        return key, v
+    if key == "cones":
+        v = str(value).strip().lower()
+        if v not in CONES:
+            raise ValueError(f"cones: {', '.join(CONES)}, not {value!r}")
         return key, v
     if key == "prior":
         v = str(value).strip().lower()
@@ -486,15 +495,16 @@ class BayesianWind(Task):
         sigmin = max(0., min(self._shell_range("vdisp")))
         size = float(lk.get("cellsize") or self._beam)
         basis = lk["emission"]
+        cones = CONES[lk.get("cones", "both")]
         if basis == "cells":
-            cells = WindCells.resolved(rmax, thmax, size)
+            cells = WindCells.resolved(rmax, thmax, size, cones=cones)
         elif basis == "shells":
             r = ini["radii"]
             edges = np.concatenate([[0.], 0.5 * (r[1:] + r[:-1]), [max(rmax, r[-1] + 0.5 * (r[-1] - (r[-2] if r.size > 1
                                                                                                   else 0.)))]])
-            cells = WindCells(edges, 1, 1, thmax=thmax)
+            cells = WindCells(edges, 1, 1, thmax=thmax, cones=cones)
         else:
-            cells = WindCells([0., rmax], 1, 1, thmax=thmax)
+            cells = WindCells([0., rmax], 1, 1, thmax=thmax, cones=cones)
         self._wm = WindModel(self._cube_obj, cells).quadrature(vmax=vw + vr, sigmin=sigmin)
         self._r0 = float(np.median(0.5 * (cells.cells[:, 1] + cells.cells[:, 2])))
         self._setup_region()
@@ -832,12 +842,18 @@ class BayesianWind(Task):
         names = wind_freepar(" ".join(freepar) if not isinstance(freepar, str) else freepar,
                              funcs=set(WIND_FUNC_PARS) | set(self.funcs))
         lk = self.like_kwargs
+        one = lk.get("cones", "both") != "both"
+        if one and "emratio" in names:
+            raise ValueError(f"BAYESIANWIND: EMRATIO (the ratio of the two cones) is not a parameter with one cone "
+                             f"(LIKEOPTS cones={lk['cones']})")
         if lk["emission"] == "voxel" or not lk.get("marginal", True):
             return names
         added = []
         for h in HYPER[lk.get("prior", "gauss")]:
             if h in ("emratio", "emslope") and lk["emission"] == "spaxel":
                 continue                                # (the uniform cone of each spaxel: no cones, no radial law)
+            if h == "emratio" and one:
+                continue
             if h not in names and lk.get(h) is None:
                 names.append(h)
                 added.append(h.upper())

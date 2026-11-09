@@ -36,6 +36,10 @@ CONFIGS = {
     "filled": dict(truth={}, mock=dict(kind="clumps"), free=BASE_FREE),
     "hollow": dict(truth=dict(openin=30., openang=70.), mock=dict(kind="clumps"), free=BASE_FREE + ["openin"]),
     "single": dict(truth={}, mock=dict(kind="clumps", cones=(-1,)), free=BASE_FREE),
+    # the same mocks with the current defaults (EMSLOPE fitted), and fitted with one cone only (cones=approaching)
+    "single-both": dict(truth={}, mock=dict(kind="clumps", cones=(-1,)), free=BASE_FREE),
+    "single-cone": dict(truth={}, mock=dict(kind="clumps", cones=(-1,)), free=BASE_FREE,
+                        like=dict(cones="approaching")),
     "lowinc": dict(truth=dict(inc=30.), mock=dict(kind="clumps"), free=BASE_FREE),
     "edgeon": dict(truth=dict(inc=85.), mock=dict(kind="clumps"), free=BASE_FREE),
     "accel": dict(truth=dict(vwind=[100., 160., 220., 280.]), mock=dict(kind="clumps"),
@@ -161,14 +165,15 @@ def report(path=RESULTS, out=REPORT):
     L += ["## The configurations (emission cells, marginal likelihood: the defaults)", "",
           "| configuration | seeds | " + " | ".join(PARS) + " |", "|---|---|" + "---|" * len(PARS)]
     for (config, basis), rs in groups.items():
-        if basis != "cells" or config.startswith("slope"):
+        if basis != "cells" or config.startswith("slope") or config in ("single-cone", "single-both"):
             continue
         cells = []
         for p in PARS:
             st = _stats(rs, p)
             cells.append("" if st is None else f"{st[0]:+.1f} ({st[2]:.1f}, {st[3]:.2f})")
         L.append(f"| {config} | {len(rs)} | " + " | ".join(cells) + " |")
-    allc = [r for (c, b), rs in groups.items() if b == "cells" and not c.startswith("slope") for r in rs]
+    allc = [r for (c, b), rs in groups.items()
+            if b == "cells" and not c.startswith("slope") and c not in ("single-cone", "single-both") for r in rs]
     tot = []
     for p in PARS:
         st = _stats(allc, p)
@@ -190,7 +195,24 @@ def report(path=RESULTS, out=REPORT):
             L.append(f"| {config} | {len(rs)} | " + " | ".join(cells) + " |")
         L += ["", "slope: the clump mock with its emission falling as r^-2 (peak S/N 20), EMSLOPE fixed at 0 (the "
               "prior mean uniform in radius); slope-free: EMSLOPE fitted (the default since).", ""]
-    # 3. the bases of the emission
+    # 3. one cone
+    if ("single-cone", "cells") in groups:
+        L += ["## A wind with one cone: both cones in the model (EMRATIO) or one (cones=approaching)", "",
+              "| configuration | seeds | min per fit | " + " | ".join(PARS[:6]) + " |", "|---|---|---|" + "---|" * 6]
+        for config in ("single", "single-both", "single-cone"):
+            rs = groups.get((config, "cells"))
+            if not rs:
+                continue
+            cells = []
+            for p in PARS[:6]:
+                st = _stats(rs, p)
+                cells.append("" if st is None else f"{st[0]:+.1f} ({st[2]:.1f}, {st[3]:.2f})")
+            mins = np.mean([r['time'] for r in rs]) / 60
+            L.append(f"| {config} | {len(rs)} | {mins:.1f} | " + " | ".join(cells) + " |")
+        L += ["", "The same mocks (only the approaching cone emits): single and single-both fit both cones with "
+              "EMRATIO free (single with EMSLOPE fixed at 0, single-both with the current defaults: EMSLOPE fitted); "
+              "single-cone only the approaching cone (LIKEOPTS cones=approaching, EMSLOPE fitted).", ""]
+    # 4. the bases of the emission
     L += ["## The descriptions of the emission (option emission, marginal or profile)", "",
           "| configuration | basis | seeds | min per fit | " + " | ".join(PARS[:6]) + " |",
           "|---|---|---|---|" + "---|" * 6]
@@ -209,7 +231,7 @@ def report(path=RESULTS, out=REPORT):
     L += ["", "cells-profile: the maximum over the emission (no Occam factor); voxel: the weighting of MoKA-3D (the "
           "model is the data wherever the uniform cone reaches); cells22: cells of 22 arcsec instead of the beam "
           "(30 arcsec); cells-df: the model error datafrac = 0.3.", ""]
-    # 4. the details
+    # 5. the details
     L += ["## Details", ""]
     for (config, basis), rs in sorted(groups.items()):
         L.append(f"### {config}, {basis} ({len(rs)} seeds, {np.mean([r['time'] for r in rs]) / 60:.1f} min per fit)")

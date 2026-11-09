@@ -362,3 +362,40 @@ def test_bayesian_wind_fixed_disk(tmp_path):
                 assert np.all(np.abs(x / dens - 1) < 0.3), x / dens
     assert res[True][60.] > res[True][80.]
     assert res[False][80.] > res[False][60.]
+
+
+def test_bayesian_wind_one_cone(tmp_path):
+    """LIKEOPTS cones: a mock wind with only its approaching cone (GalMod3D clumps), fitted with cones=approaching. The
+    model has the cells of that cone only and no EMRATIO (an error if given); the likelihood prefers the true opening
+    angle and velocity; the outputs and the plots (one cone: one slice across it) are written."""
+    pytest.importorskip("dynesty")
+    from wind_mocks import mock_wind
+    from bbarolo import BayesianWind
+    from bbarolo.bayesian.wind import wind_likeopts
+    assert wind_likeopts("cones=approaching") == dict(cones="approaching")
+    with pytest.raises(ValueError):
+        wind_likeopts("cones=near")
+    hdu, tr = mock_wind(kind="clumps", seed=3, snr=15, shape=(24, 24, 20), pix=12., chan=25., beam=36., cones=(-1,),
+                        truth=dict(xpos=11.5, ypos=11.5, htot=110., radii=[55., 110.], vwind=200.), nclumps=40,
+                        clump=20.)
+    f = BayesianWind(hdu, xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, htot=110, vwind=180, vdisp=20,
+                     ntot=2, outfolder=str(tmp_path) + "/")
+    f.like_kwargs = dict(f.like_kwargs, cellsize=40., cones="approaching")
+    with pytest.raises(ValueError):
+        f._with_hyper(["openang", "emratio"], verbose=False)
+    names = f._with_hyper(["vwind_single", "openang"], verbose=False)
+    assert names == ["vwind_single", "openang", "emscale", "emclump", "emslope"]
+    f._setup(names, verbose=False)
+    assert f._wm.cells.cones == (-1,) and set(f._wm.cells.cells[:, 0]) == {-1.}
+    ll = lambda vw, oa: max(f.log_likelihood([vw, oa, s, k, 0.]) for s in np.exp(np.linspace(-3, 3, 7)) * f._s0
+                            for k in (0.5, 1., 2.))
+    best = ll(200., 60.)
+    for vw, oa in ((200., 85.), (200., 35.), (130., 60.), (270., 60.)):
+        assert ll(vw, oa) < best - 3, (vw, oa)
+    f.run(freepar=["vwind_single", "openang"], method="dynesty", sampler_kwargs=dict(nlive=10, seed=1),
+          run_kwargs=dict(maxiter=40), like_kwargs=dict(cellsize=40., cones="approaching"), verbose=False)
+    assert f.ndim == 5
+    files = f.write(plots=1, verbose=False)
+    pre = f._cube_obj.pars().outPrefix
+    for n in ("_pv_wind.pdf", "_maps_wind.pdf", "_chanmaps_wind.pdf", "_wind_shells.txt"):
+        assert os.path.isfile(str(tmp_path) + "/" + pre + n), n

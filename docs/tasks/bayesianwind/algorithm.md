@@ -59,7 +59,9 @@ and INC 5° too low: the empty cone penalised every larger cone. With EMRATIO fi
 VDISP and INC were recovered, and OPENANG was 6° low: the 100 clumps of that mock did not reach the walls
 of its single cone (the opening angle of a patchy wind is that of its emission). EMSLOPE is fitted too: with
 an emission falling as r^-2, EMSLOPE fixed at 0 gave VWIND 24% low, VDISP 19 km/s high and INC 11° low; fitted
-(it came out at 1.4–1.8), the biases were those of the mocks of uniform emission.
+(it came out at 1.4–1.8), the biases were those of the mocks of uniform emission. A wind whose other side is
+not seen can also be fitted with one cone only (LIKEOPTS `cones=approaching` or `receding`): on the mocks with only
+the approaching cone it gave the same results as both cones with EMRATIO free, 2.4 times faster.
 
 The emissivities are not forced to be positive: their posterior means can be slightly negative in empty
 cells, within the noise. The alternative prior `exp` (non-negative exponential emissivities, the

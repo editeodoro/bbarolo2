@@ -378,7 +378,9 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   `bbarolo/bayesian/emission.py`. The mocks are in `performance/wind_mocks.py` (GalMod3D: clumps or a log-normal
   field in the cones), and the recovery study (bias, pulls, coverage) is `performance/wind_recovery.py`. New
   keywords: BAYESIANWIND, OPENIN, DISKRINGS; FREE, PRIORS, SAMPLER, SAMPLEROPTS, RUNOPTS, LIKEOPTS, NTOT, RADII and
-  the geometry of the wind are shared with BAYESIAN3DFIT and GALWIND. The outputs follow those of 3DFIT and use its
+  the geometry of the wind are shared with BAYESIAN3DFIT and GALWIND. LIKEOPTS `cones=approaching|receding` fits
+  only one cone, for winds whose other side is not seen (with both cones, the default, an empty one is found by
+  EMRATIO). The outputs follow those of 3DFIT and use its
   code (`galfit_out.kinematic_maps`, `pv_slices`, the helpers of plot_utils.py): `<prefix>_mod_wind.fits`, `maps/`
   and `pvs/` (slices across and along the axis of the cones), and plotting scripts in `plotscripts/` for channel maps
   with the model contours, data/model/residual moment maps, and PV slices along the axis and across each cone.

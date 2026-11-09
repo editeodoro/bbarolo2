@@ -27,6 +27,16 @@ Each entry: bias (rms pull, coverage). All the configurations: vwind: pull rms 1
 
 slope: the clump mock with its emission falling as r^-2 (peak S/N 20), EMSLOPE fixed at 0 (the prior mean uniform in radius); slope-free: EMSLOPE fitted (the default since).
 
+## A wind with one cone: both cones in the model (EMRATIO) or one (cones=approaching)
+
+| configuration | seeds | min per fit | vwind | vdisp | vrot | inc | pa | openang |
+|---|---|---|---|---|---|---|---|---|
+| single | 4 | 4.2 | -5.5 (1.8, 0.00) | +3.5 (1.2, 0.25) |  | -1.7 (1.3, 0.00) | -0.7 (1.2, 0.50) | -4.7 (3.2, 0.25) |
+| single-both | 4 | 5.5 | -10.5 (2.1, 0.25) | +5.4 (1.7, 0.00) |  | -2.7 (1.8, 0.00) | -0.7 (1.1, 0.50) | -4.7 (3.2, 0.25) |
+| single-cone | 4 | 2.3 | -10.3 (2.2, 0.25) | +5.4 (1.7, 0.00) |  | -2.7 (1.8, 0.00) | -0.7 (1.2, 0.50) | -4.7 (3.2, 0.25) |
+
+The same mocks (only the approaching cone emits): single and single-both fit both cones with EMRATIO free (single with EMSLOPE fixed at 0, single-both with the current defaults: EMSLOPE fitted); single-cone only the approaching cone (LIKEOPTS cones=approaching, EMSLOPE fitted).
+
 ## The descriptions of the emission (option emission, marginal or profile)
 
 | configuration | basis | seeds | min per fit | vwind | vdisp | vrot | inc | pa | openang |
@@ -281,6 +291,26 @@ cells-profile: the maximum over the emission (no Occam factor); voxel: the weigh
 | inc | 60 | -1.7 | 0.324 | 1.29 | 0.00 |
 | pa | 30 | -0.659 | 1.16 | 1.16 | 0.50 |
 | openang | 60 | -4.67 | 2.15 | 3.22 | 0.25 |
+
+### single-both, cells (4 seeds, 5.5 min per fit)
+
+| parameter | truth | bias | scatter | pull rms | coverage 68% |
+|---|---|---|---|---|---|
+| vwind | 200 | -10.5 | 7.49 | 2.15 | 0.25 |
+| vdisp | 20 | +5.4 | 1.42 | 1.71 | 0.00 |
+| inc | 60 | -2.73 | 0.445 | 1.82 | 0.00 |
+| pa | 30 | -0.687 | 1.18 | 1.13 | 0.50 |
+| openang | 60 | -4.73 | 2.12 | 3.18 | 0.25 |
+
+### single-cone, cells (4 seeds, 2.3 min per fit)
+
+| parameter | truth | bias | scatter | pull rms | coverage 68% |
+|---|---|---|---|---|---|
+| vwind | 200 | -10.3 | 7.4 | 2.18 | 0.25 |
+| vdisp | 20 | +5.4 | 1.46 | 1.67 | 0.00 |
+| inc | 60 | -2.72 | 0.48 | 1.81 | 0.00 |
+| pa | 30 | -0.707 | 1.19 | 1.17 | 0.50 |
+| openang | 60 | -4.74 | 2.19 | 3.16 | 0.25 |
 
 ### slope, cells (4 seeds, 6.1 min per fit)
 

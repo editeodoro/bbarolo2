@@ -92,6 +92,7 @@ initial value, ...); `PRIORS` changes them, e.g. `PRIORS OPENANG=(uniform,20,100
 | `marginal` | `true` (default): the likelihood marginalised over the emission; `false`: its maximum (the profile likelihood) |
 | `prior` | `gauss` (default: Gaussian emissivities, exact marginal likelihood) or `exp` (non-negative exponential emissivities, approximate) |
 | `emscale`, `emclump`, `emratio`, `emslope` | fixed values of EMSCALE, EMCLUMP, EMRATIO and EMSLOPE (default: fitted) |
+| `cones` | `both` (default), `approaching` or `receding`: only one cone in the model, for a wind whose other side is not seen (half the cells, no EMRATIO). With both cones, an empty one is found by EMRATIO |
 | `noisecorr`, `sigma` | the correlation and the value of the noise, as BAYESIAN3DFIT |
 | `datafrac` | a model error proportional to the data (default 0) |
 | `grow` | the region of the likelihood: the projected cones of the priors grown by `grow` beams (default 1) |

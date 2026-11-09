@@ -1587,7 +1587,7 @@ The smoothness penalties of the ring parameters (`lambdas`) are available only i
 
 BAYESIANWIND has its own options: `emission` (cells, shells, cone, spaxel or voxel), `cellsize`,
 `marginal`, `prior` (gauss or exp), `noisecorr`, `sigma`, `datafrac`, `grow`, `emscale`, `emclump`,
-`emratio`, `emslope` and `prune` (see the BAYESIANWIND page).
+`emratio`, `emslope`, `prune` and `cones` (both, approaching or receding; see the BAYESIANWIND page).
 """),
     'HTOT': dict(
         group='Wind',
