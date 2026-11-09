@@ -349,7 +349,11 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   velocities larger than the data need are penalised, unlike the voxel weighting of MoKA-3D (Marconcini et al. 2023)
   and the profile likelihood. On a mock wind with half of its cells empty (log-normal clumps) and noise smoothed by
   the beam, VWIND, INC and OPENANG came out within one sigma of the truth; the profile likelihood was flat over 25
-  degrees of opening angle. Other descriptions of the emission (LIKEOPTS emission: shells, one per cone, per spaxel,
+  degrees of opening angle. The recovery study of 9 configurations of clumpy mocks
+  (`performance/report/wind_recovery.md`) found PA and INC right, and the opening angle right where the emission
+  reaches the walls of the cone. VWIND came out a few per cent low (14% edge-on) and VDISP 2-9 km/s high, with 68%
+  intervals about twice too narrow: a limitation of smooth descriptions of clumpy emission, the same with finer
+  cells, shells or spaxels. Other descriptions of the emission (LIKEOPTS emission: shells, one per cone, per spaxel,
   the voxel weighting) are there for comparison. A fixed disk can be added (DISKRINGS: its ring densities fitted
   with the emission). The engine is the new `bbarolo/windmodel.py` (WindModel: noise-free analytic cones, the beam
   at the exact positions of the points); the emission and the marginal likelihoods are in

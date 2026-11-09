@@ -90,7 +90,7 @@ def truth_of(res, name):
     """The true value of the free parameter name of a result (None if it has none: EMSCALE)."""
     tr = res["truth"]
     base = name.rstrip("0123456789")
-    if base in ("emscale", "emslope", "sigma"):
+    if base in ("emscale", "emclump", "emratio", "emslope", "sigma"):
         return None
     if base in ("vwind", "vdisp", "vrot"):
         v = np.broadcast_to(np.asarray(tr.get(base, 0.), float), np.asarray(tr["radii"]).shape)
@@ -100,44 +100,119 @@ def truth_of(res, name):
     return float(tr.get(name, 0.))
 
 
+def _stats(rs, name):
+    """(mean bias, scatter of the bias, rms pull, coverage of the 68% interval) of a parameter over the results rs,
+    the parameters per shell (vwind1, vwind2, ...) pooled under their base name; None if no result has it."""
+    b, pulls, cov = [], [], []
+    for r in rs:
+        for i, n in enumerate(r["names"]):
+            if n.rstrip("0123456789") != name:
+                continue
+            t = truth_of(r, n)
+            if t is None:
+                continue
+            lo, med, hi = r["quantiles"][i]
+            b.append(med - t)
+            pulls.append((med - t) / max(0.5 * (hi - lo), 1e-12))
+            cov.append(lo <= t <= hi)
+    if not b:
+        return None
+    return np.mean(b), np.std(b), math.sqrt(np.mean(np.square(pulls))), np.mean(cov)
+
+
+PARS = ("vwind", "vdisp", "vrot", "inc", "pa", "openang", "openin")
+
+
+def _load(paths):
+    rows = []
+    for p in paths:
+        if os.path.isfile(p):
+            rows += [json.loads(x) for x in open(p) if x.strip()]
+    return rows
+
+
 def report(path=RESULTS, out=REPORT):
-    rows = [json.loads(x) for x in open(path)] if os.path.isfile(path) else []
+    """The report of the results (path, and the other results files wind_recovery*.jsonl of its folder: the tests of
+    the cell size and of the model error), in Markdown (out)."""
+    import glob
+    paths = [path] + sorted(p for p in glob.glob(os.path.join(os.path.dirname(path), "wind_recovery*.jsonl"))
+                            if os.path.abspath(p) != os.path.abspath(path))
+    rows = _load(paths)
     if not rows:
         print("No results.")
         return
     groups = {}
     for r in rows:
         groups.setdefault((r["config"], r["basis"]), []).append(r)
-    lines = ["# BAYESIANWIND: recovery of patchy mock winds", "",
-             "Mocks: performance/wind_mocks.py (GalMod3D, clumps or log-normal emission, smoothed noise); fits: "
-             "BayesianWind with nautilus. For each parameter: the mean bias (posterior median - truth) and its "
-             "scatter over the seeds, the rms of the pulls (bias / half-width of the 68% interval: 1 if the errors are "
-             "right) and the coverage of the 68% intervals (the fraction of seeds whose interval contains the truth).",
-             ""]
+    L = ["# BAYESIANWIND: recovery of patchy mock winds", "",
+         "Mocks: performance/wind_mocks.py (GalMod3D, an engine independent of the fit; clumps or a log-normal field "
+         "in the cones; noise smoothed by the beam, peak S/N 10 unless noted). Fits: BayesianWind with nautilus "
+         "(300 live points, 2000 effective samples), the initial wind offset from the truth (INC -5, PA +5, OPENANG "
+         "-5, VWIND -20 km/s, VDISP +5 km/s) and the default priors around it. For each parameter: the mean bias "
+         "(posterior median - truth), the rms of the pulls (bias / half-width of the 68% interval: 1 if the "
+         "intervals are right) and the coverage of the 68% intervals over the seeds. EMSCALE, EMCLUMP and EMRATIO "
+         "have no true value and are left out.", ""]
+    # 1. the configurations with the default basis
+    L += ["## The configurations (emission cells, marginal likelihood: the defaults)", "",
+          "| configuration | seeds | " + " | ".join(PARS) + " |", "|---|---|" + "---|" * len(PARS)]
+    for (config, basis), rs in groups.items():
+        if basis != "cells":
+            continue
+        cells = []
+        for p in PARS:
+            st = _stats(rs, p)
+            cells.append("" if st is None else f"{st[0]:+.1f} ({st[2]:.1f}, {st[3]:.2f})")
+        L.append(f"| {config} | {len(rs)} | " + " | ".join(cells) + " |")
+    allc = [r for (c, b), rs in groups.items() if b == "cells" for r in rs]
+    tot = []
+    for p in PARS:
+        st = _stats(allc, p)
+        if st is not None:
+            tot.append(f"{p}: pull rms {st[2]:.2f}, coverage {st[3]:.2f}")
+    L += ["", "Each entry: bias (rms pull, coverage). All the configurations: " + "; ".join(tot) + ".", ""]
+    # 2. the bases of the emission
+    L += ["## The descriptions of the emission (option emission, marginal or profile)", "",
+          "| configuration | basis | seeds | min per fit | " + " | ".join(PARS[:6]) + " |",
+          "|---|---|---|---|" + "---|" * 6]
+    order = ["cells", "cells-profile", "shells", "spaxel", "voxel", "cells22", "cells-df"]
+    for config in ("filled", "hollow", "lognormal", "edgeon"):
+        for basis in order:
+            rs = groups.get((config, basis))
+            if not rs:
+                continue
+            cells = []
+            for p in PARS[:6]:
+                st = _stats(rs, p)
+                cells.append("" if st is None else f"{st[0]:+.1f} ({st[2]:.1f}, {st[3]:.2f})")
+            L.append(f"| {config} | {basis} | {len(rs)} | {np.mean([r['time'] for r in rs]) / 60:.1f} | "
+                     + " | ".join(cells) + " |")
+    L += ["", "cells-profile: the maximum over the emission (no Occam factor); voxel: the weighting of MoKA-3D (the "
+          "model is the data wherever the uniform cone reaches); cells22: cells of 22 arcsec instead of the beam "
+          "(30 arcsec); cells-df: the model error datafrac = 0.3.", ""]
+    # 3. the details
+    L += ["## Details", ""]
     for (config, basis), rs in sorted(groups.items()):
-        lines.append(f"## {config}, {basis} ({len(rs)} seeds, {np.mean([r['time'] for r in rs]) / 60:.1f} min per fit)")
-        lines.append("")
-        lines.append("| parameter | truth | bias | scatter | pull rms | coverage 68% |")
-        lines.append("|---|---|---|---|---|---|")
-        for i, name in enumerate(rs[0]["names"]):
+        L.append(f"### {config}, {basis} ({len(rs)} seeds, {np.mean([r['time'] for r in rs]) / 60:.1f} min per fit)")
+        L += ["", "| parameter | truth | bias | scatter | pull rms | coverage 68% |", "|---|---|---|---|---|---|"]
+        for name in rs[0]["names"]:
             tv = truth_of(rs[0], name)
             if tv is None:
                 continue
             b, pulls, cov = [], [], []
             for r in rs:
+                i = r["names"].index(name)
                 lo, med, hi = r["quantiles"][i]
                 t = truth_of(r, name)
                 b.append(med - t)
-                hw = max(0.5 * (hi - lo), 1e-12)
-                pulls.append((med - t) / hw)
+                pulls.append((med - t) / max(0.5 * (hi - lo), 1e-12))
                 cov.append(lo <= t <= hi)
-            lines.append(f"| {name} | {tv:.4g} | {np.mean(b):+.3g} | {np.std(b):.3g} | "
-                         f"{math.sqrt(np.mean(np.square(pulls))):.2f} | {np.mean(cov):.2f} |")
-        lines.append("")
+            L.append(f"| {name} | {tv:.4g} | {np.mean(b):+.3g} | {np.std(b):.3g} | "
+                     f"{math.sqrt(np.mean(np.square(pulls))):.2f} | {np.mean(cov):.2f} |")
+        L.append("")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as fh:
-        fh.write("\n".join(lines) + "\n")
-    print("\n".join(lines))
+        fh.write("\n".join(L) + "\n")
+    print(f"Report written to {out} ({len(rows)} fits).")
 
 
 def main():

@@ -81,9 +81,27 @@ The sampling runs on `THREADS` processes, as BAYESIAN3DFIT. A likelihood evaluat
 
 ## Validation
 
-`performance/wind_recovery.py` fits mocks of `performance/wind_mocks.py`: GalMod3D, an engine independent of the
-fit, with random Gaussian clumps (as the mocks of MoKA-3D) or a log-normal field in the cones, and noise smoothed
-by the beam. It covers filled and hollow cones, one or two cones, inclinations of 30–85°, accelerating and
-rotating winds and S/N of 5–10. For each configuration and emission basis it reports the bias, the pulls and
-the coverage of the 68% intervals over several realisations of the patchiness (`performance/report/
-wind_recovery.md`).
+`performance/wind_recovery.py` fits mocks of `performance/wind_mocks.py`. They are made with GalMod3D, an engine
+independent of the fit, with 100 Gaussian clumps (as the mocks of MoKA-3D) or a log-normal field in the cones,
+noise smoothed by the beam and a peak S/N of 10 (5 for `lowsnr`). The configurations are filled and hollow cones,
+a single cone, inclinations of 30° and 85°, an accelerating and a rotating wind, and a log-normal field, with 4
+realisations of the patchiness each. `performance/report/wind_recovery.md` has the bias, the pulls and the coverage
+of the 68% intervals of every case. With the defaults:
+
+- PA is recovered with the right errors (rms pull 1.1, coverage 0.67), INC within about 1° (rms pull 1.4), the
+  opening angle of a hollow cone and the acceleration and rotation of the wind within a few per cent.
+- The opening angle of the clumpy mocks comes out 2.5–4.7° narrow: the clumps are cut at the walls of the cone,
+  so their emission ends inside them, and the fit measures the extent of the emission. With the log-normal field,
+  which fills the cone up to its walls, the opening angle is unbiased (−0.8°, coverage 1). Edge-on, where the
+  width of the cones is seen on the sky, it is too (−1.1°).
+- VWIND is a few per cent low and VDISP 2–9 km/s high, with the intervals about twice too narrow (rms pulls
+  about 1.9, coverage 0.35 instead of 0.68). Edge-on, VWIND is 14% low. A narrower, slower wind with broader lines
+  gives the same velocity spread. Clumps make lumpier spectra than any smooth description of the emission, which
+  pushes the fit that way. The bias is the same with cells of 22 arcsec, with one emissivity per shell and with a
+  normalisation in each spaxel, and a model error proportional to the data (`datafrac` 0.3) widens the intervals
+  by only 30–40%. With the log-normal field VWIND is unbiased and VDISP 4 km/s high.
+
+The profile likelihood (the best-fit emission, no marginalisation) has the degeneracy of the free emission. On the
+filled cone it found cones 20° too wide, winds 11% too fast and almost no dispersion (rms pulls up to 10). The
+voxel weighting of MoKA-3D ran every parameter to the edge of its prior. On the same mocks, one emissivity per shell
+(`shells`) or per spaxel (`spaxel`) gave about the same results as the cells, four to six times faster.
