@@ -1,4 +1,4 @@
-"""The rings of BayesianBBarolo: a dictionary of arrays with the Rings object of the model engine."""
+"""The rings of Bayesian3DFIT: a dictionary of arrays with the Rings object of the model engine."""
 
 import numpy as np
 

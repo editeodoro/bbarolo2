@@ -109,7 +109,7 @@ def test_bayesian_deconvolved_profile(tmp_path):
     profile of the original module, now an output) does not."""
     from astropy.io import fits
     from bbarolo.galmod import DiskModel
-    from bbarolo.bayesian import BayesianBBarolo
+    from bbarolo.bayesian import Bayesian3DFIT
     hdu = emptyfits([64, 64, 40], [-10. / 3600., 10. / 3600., 10.], beam=30. / 3600., bunit="JY/BEAM", obj="MOCK")
     hdu.writeto(str(tmp_path / "empty.fits"))
     p = Param()
@@ -122,7 +122,7 @@ def test_bayesian_deconvolved_profile(tmp_path):
     noise = np.random.default_rng(2).normal(0., m.max() / 300., m.shape)
     fn = str(tmp_path / "mock.fits")
     fits.PrimaryHDU((m + noise).astype(np.float32), header=hdu.header).writeto(fn)
-    f = BayesianBBarolo(fn, **kw, pa=45., mask="SEARCH", galmodtype="ANALYTIC", outfolder=str(tmp_path) + "/")
+    f = Bayesian3DFIT(fn, **kw, pa=45., mask="SEARCH", galmodtype="ANALYTIC", outfolder=str(tmp_path) + "/")
     f.like_kwargs['likemask'] = 'none'
     # the observed profile (outputs only): too faint in the inner rings, and a model with it
     # does not fit the data
@@ -142,7 +142,7 @@ def test_bayesian_deconvolved_profile(tmp_path):
     # saved and loaded
     f._set_sampling_stats(np.full((3, 1), 150.), np.ones(3))
     f.save_results(str(tmp_path / "res.npy"))
-    g = BayesianBBarolo(fn, outfolder=str(tmp_path) + "/")
+    g = Bayesian3DFIT(fn, outfolder=str(tmp_path) + "/")
     g.load_results(str(tmp_path / "res.npy"), sampler='nautilus')
     assert g.like_kwargs['densprof_smooth'] == 0.1 and np.allclose(g._fit0.r['dens'], f._fit0.r['dens'])
     # outputs: the profile of the model in rings_final1.txt (2 digits) and, at full precision
@@ -163,7 +163,7 @@ def test_bayesian_deconvolved_profile(tmp_path):
     with pytest.raises(ValueError):
         g.ring_errors('radii')
     with pytest.raises(ValueError):
-        BayesianBBarolo(fn, **kw, pa=45., outfolder=str(tmp_path) + "/").ring_errors('vrot')
+        Bayesian3DFIT(fn, **kw, pa=45., outfolder=str(tmp_path) + "/").ring_errors('vrot')
     g.write_bestmodel(plots=False, verbose=False)
     ring_dens = np.loadtxt(str(tmp_path / "MOCK_rings_final1.txt"), usecols=6)
     assert np.allclose(ring_dens, g.outri.r['dens'], rtol=0.06)
@@ -506,13 +506,13 @@ def test_analytic_residuals_match_mc(tmp_path):
 @needs_data
 def test_bayesian_quick(tmp_path):
     pytest.importorskip("dynesty")
-    from bbarolo.bayesian import BayesianBBarolo
-    f = BayesianBBarolo(N2403, radii=np.arange(60, 400, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
-                        inc=60, pa=123.7, z0=10, mask="SEARCH", outfolder=str(tmp_path) + "/", ringmode="SHIFTED")
+    from bbarolo.bayesian import Bayesian3DFIT
+    f = Bayesian3DFIT(N2403, radii=np.arange(60, 400, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
+                      inc=60, pa=123.7, z0=10, mask="SEARCH", outfolder=str(tmp_path) + "/", ringmode="SHIFTED")
     assert f.like_kwargs['likemask'] == 'dilated'                 # the default
     f._set_like_options(dict(noisecorr=1))                         # independent voxels
     f._setup(['vrot', 'vdisp_single'])
-    # with sigma=1 and no beam factor (as the original BayesianBBarolo) and the rings of
+    # with sigma=1 and no beam factor (as the original Bayesian3DFIT) and the rings of
     # BBarolo 1.x, the log-likelihood along vrot of ring 2 peaks at ~110 km/s
     scan = [f._log_likelihood(np.array([80., v, 120., 13.]), sigma=1.) for v in (90., 110., 130.)]
     assert scan[1] > scan[0] and scan[1] > scan[2]
@@ -535,7 +535,7 @@ def test_bayesian_quick(tmp_path):
     f.write_bestmodel(plots=False, verbose=False)
     assert os.path.isfile(os.path.join(str(tmp_path), "ngc2403_mod_none.fits"))
     f.save_results(str(tmp_path / "res.npy"))
-    g = BayesianBBarolo(N2403, outfolder=str(tmp_path) + "/")
+    g = Bayesian3DFIT(N2403, outfolder=str(tmp_path) + "/")
     g.load_results(str(tmp_path / "res.npy"))
     assert np.allclose(g.params, f.params)
     assert g.like_kwargs['noisecorr'] == f.like_kwargs['noisecorr'] == 'measured'
@@ -552,9 +552,9 @@ def test_bayesian_quick(tmp_path):
 @needs_data
 def test_bayesian_likelihood_checks(tmp_path, capsys):
     """Warnings: a free sigma not used by user-defined residuals; a collapsed posterior."""
-    from bbarolo.bayesian import BayesianBBarolo
-    f = BayesianBBarolo(N2403, radii=np.arange(60, 400, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
-                        inc=60, pa=123.7, z0=10, mask="SEARCH", outfolder=str(tmp_path) + "/")
+    from bbarolo.bayesian import Bayesian3DFIT
+    f = Bayesian3DFIT(N2403, radii=np.arange(60, 400, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
+                      inc=60, pa=123.7, z0=10, mask="SEARCH", outfolder=str(tmp_path) + "/")
     f._setup(['vrot', 'sigma'])
     f._log_like_func = f._log_likelihood
     f._calculate_residuals = lambda model, data, mask, sigma, **kw: 0.5 * np.nansum((data * mask - model) ** 2)
@@ -572,10 +572,10 @@ def test_bayesian_likelihood_checks(tmp_path, capsys):
 def test_bayesian_likelihood_noise_and_beam(tmp_path):
     """Default likelihood: sigma = measured noise, log-likelihood x 1/(beam area in pixels),
     independent of the box in which the model is computed."""
-    from bbarolo.bayesian import BayesianBBarolo
-    f = BayesianBBarolo(N2403, radii=np.arange(60, 400, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
-                        inc=60, pa=123.7, z0=10, mask="SEARCH", outfolder=str(tmp_path) + "/",
-                        galmodtype="ANALYTIC")
+    from bbarolo.bayesian import Bayesian3DFIT
+    f = Bayesian3DFIT(N2403, radii=np.arange(60, 400, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
+                      inc=60, pa=123.7, z0=10, mask="SEARCH", outfolder=str(tmp_path) + "/",
+                      galmodtype="ANALYTIC")
     f.like_kwargs['noisecorr'] = 'beam'                    # the default is 'measured'
     f._setup(['vrot', 'vdisp_single'])
     out = f.data[(f.mask == 0) & np.isfinite(f.data)]
@@ -628,12 +628,12 @@ def test_noise_correlation():
 def test_bayesian_noisecorr_and_fracerr(tmp_path):
     """The fractional model error ('fracerr', variance sigma^2 + (fracerr*model)^2) and the
     correlation factor of the likelihood (noisecorr = 'beam', 'measured' or a number)."""
-    from bbarolo.bayesian import BayesianBBarolo
+    from bbarolo.bayesian import Bayesian3DFIT
     kw = dict(radii=np.arange(60, 400, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10, inc=60, pa=123.7,
               z0=10, mask="SEARCH", outfolder=str(tmp_path) + "/", galmodtype="ANALYTIC")
-    f = BayesianBBarolo(N2403, **kw)
+    f = Bayesian3DFIT(N2403, **kw)
     f._setup(['vrot', 'vdisp_single', 'fracerr'])
-    g = BayesianBBarolo(N2403, **kw)
+    g = Bayesian3DFIT(N2403, **kw)
     g._setup(['vrot', 'vdisp_single'])
     th = np.array([80., 108., 120., 13.])
     assert np.isclose(f._log_likelihood(np.r_[th, 1e-12]), g._log_likelihood(th), rtol=1e-10)
@@ -691,7 +691,7 @@ def test_bayesian_likemask(tmp_path):
     """The voxels of the likelihood (likemask): 'dilated' (default: data not masked, in the
     dilated mask), 'none' (all the voxels of the region); the map of run_geometry and of the
     observed density profile; the default prior of sigma."""
-    from bbarolo.bayesian import BayesianBBarolo, dilate_mask
+    from bbarolo.bayesian import Bayesian3DFIT, dilate_mask
     from bbarolo.moments import compute_moments
     # dilation by a cylinder: a disk in each channel, then +-n channels
     m = np.zeros((9, 21, 21), bool)
@@ -702,7 +702,7 @@ def test_bayesian_likemask(tmp_path):
     assert not dm[:2].any() and not dm[7:].any()
     kw = dict(radii=np.arange(60, 400, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10, inc=60, pa=123.7,
               z0=10, mask="SEARCH", outfolder=str(tmp_path) + "/", galmodtype="ANALYTIC")
-    f = BayesianBBarolo(N2403, **kw)
+    f = Bayesian3DFIT(N2403, **kw)
     free = ['vrot', 'vdisp_single']
     th = np.array([80., 108., 120., 13.])
     assert f.like_kwargs['likemask'] == 'dilated'                 # the default
@@ -766,7 +766,7 @@ def test_bayesian_likemask(tmp_path):
     f._setup(free)
     f._set_sampling_stats(np.tile(th, (3, 1)), np.ones(3))
     f.save_results(str(tmp_path / "res.npy"))
-    g = BayesianBBarolo(N2403, outfolder=str(tmp_path) + "/")
+    g = Bayesian3DFIT(N2403, outfolder=str(tmp_path) + "/")
     g.load_results(str(tmp_path / "res.npy"), sampler='nautilus')
     assert g.like_kwargs['likemask'] == 'dilated' and g.like_kwargs['dilation'] == (1.5, 4) and g.nvox == f.nvox
     old = np.load(str(tmp_path / "res.npy"), allow_pickle=True).item()
@@ -787,10 +787,10 @@ def test_bayesian_errors_on_mock_data(tmp_path):
     """On mock cubes with noise correlated over the beam, the posterior width of vrot matches
     the scatter of the estimates (it is ~4x too small without the beam factor)."""
     from scipy.ndimage import gaussian_filter
-    from bbarolo.bayesian import BayesianBBarolo
-    f = BayesianBBarolo(N2403, radii=np.arange(60, 400, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
-                        inc=60, pa=123.7, z0=10, mask="SEARCH", outfolder=str(tmp_path) + "/",
-                        galmodtype="ANALYTIC")
+    from bbarolo.bayesian import Bayesian3DFIT
+    f = Bayesian3DFIT(N2403, radii=np.arange(60, 400, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
+                      inc=60, pa=123.7, z0=10, mask="SEARCH", outfolder=str(tmp_path) + "/",
+                      galmodtype="ANALYTIC")
     f._setup(['vrot', 'vdisp_single'])
     truth = np.array([80., 108., 120., 13.])
     model = f._calculate_model(f._update_rings(f._fit0.copy(), truth), fullcube=True)[0]
@@ -914,9 +914,9 @@ def _mock_cube(tmp_path, name="mock"):
 
 def test_bayesian_task(tmp_path, capsys):
     """The BAYESIAN3DFIT task of parameter files: BBarolo -p (the samples, the outputs, the
-    statistics and the plots), bbarolo.run and BayesianBBarolo.from_parfile."""
+    statistics and the plots), bbarolo.run and Bayesian3DFIT.from_parfile."""
     pytest.importorskip("dynesty")
-    from bbarolo import BayesianBBarolo
+    from bbarolo import Bayesian3DFIT
     from bbarolo.bayesian.task import _task_fitter
     from bbarolo.cli import main
     import bbarolo
@@ -952,7 +952,7 @@ def test_bayesian_task(tmp_path, capsys):
         assert (cli / name).is_file(), name
     head = open(cli / "MOCK_rings_final1.txt").readline().split()
     assert head[11:] == ["E_VROT1", "E_VROT2", "E_DISP1", "E_DISP2", "E_DENS1", "E_DENS2"]
-    g = BayesianBBarolo(fn, outfolder=str(tmp_path / "re"))
+    g = Bayesian3DFIT(fn, outfolder=str(tmp_path / "re"))
     g.load_results(str(cli / "MOCK_dynesty_results.npy"))
     assert g.freepar_names == ['vrot', 'vdisp'] and 100 < g.params[0] < 200
     assert g.like_kwargs == dict(likemask='dilated', dilation=(1., 3), noisecorr='measured', densprof_smooth=0.1,
@@ -962,12 +962,12 @@ def test_bayesian_task(tmp_path, capsys):
     # bbarolo.run (the same parameters, quiet, no plots): a Result with the fitter
     res = bbarolo.run(str(par), outfolder=str(tmp_path / "run"), verbose=False, plots=False,
                       runopts="maxiter=40", free="vrot_single Disp_Single")["BAYESIAN3DFIT"]
-    assert isinstance(res.bayes, BayesianBBarolo) and len(res.rings) == 4 and "e_vrot1" in res.rings.colnames
+    assert isinstance(res.bayes, Bayesian3DFIT) and len(res.rings) == 4 and "e_vrot1" in res.rings.colnames
     assert res.bayes.freepar_names == ['vrot', 'vdisp']
     assert res.samples.endswith("MOCK_dynesty_results.npy") and len(res.densprof_deconvolved) == 4
     assert not any(x.endswith(".pdf") for x in res.files) and capsys.readouterr().out.strip() == ""
     # from_parfile: the rings of the file; FREE, SAMPLER, SAMPLEROPTS, RUNOPTS: the defaults of run()
-    h = BayesianBBarolo.from_parfile(str(par), sampler="nautilus")
+    h = Bayesian3DFIT.from_parfile(str(par), sampler="nautilus")
     assert np.allclose(h._inri.r['vrot'], 120) and h._run_defaults()['SAMPLER'] == 'nautilus'
     assert h.get("priors").startswith("vrot=(uniform") and h.priors['vdisp']['scale'] == 30.
     with pytest.raises(ValueError, match="BAYESIAN3DFIT: FREE"):
@@ -1446,7 +1446,7 @@ def test_relative_paths(tmp_path, monkeypatch):
 
 def test_fft_kernel_cache_is_bounded():
     """The cache of kernel transforms keeps the most recent shapes only (it grew with every new box
-    size, e.g. in BayesianBBarolo with a free centre or RADMAX), and gives the same convolutions."""
+    size, e.g. in Bayesian3DFIT with a free centre or RADMAX), and gives the same convolutions."""
     from bbarolo.smooth import FFTConvolver
     rng = np.random.default_rng(2)
     cv = FFTConvolver(rng.random((7, 7)))
@@ -1459,21 +1459,21 @@ def test_fft_kernel_cache_is_bounded():
 
 @needs_data
 def test_bayesian_default_analytic(tmp_path):
-    """BayesianBBarolo and BAYESIAN3DFIT use ANALYTIC models by default; a GALMODTYPE that is given is
+    """Bayesian3DFIT and BAYESIAN3DFIT use ANALYTIC models by default; a GALMODTYPE that is given is
     kept. 3DFIT keeps MC."""
     from bbarolo import FitMod3D
-    from bbarolo.bayesian import BayesianBBarolo
+    from bbarolo.bayesian import Bayesian3DFIT
     kw = dict(radii=[100, 200], xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10, inc=60, pa=123.7, z0=10,
               outfolder=str(tmp_path) + "/")
-    assert BayesianBBarolo(N2403, **kw)._make_par().galmodtype == "ANALYTIC"
-    assert BayesianBBarolo(N2403, galmodtype="MC", **kw)._make_par().galmodtype == "MC"
+    assert Bayesian3DFIT(N2403, **kw)._make_par().galmodtype == "ANALYTIC"
+    assert Bayesian3DFIT(N2403, galmodtype="MC", **kw)._make_par().galmodtype == "MC"
     assert FitMod3D(N2403, **kw).par.galmodtype == "MC"
     par = tmp_path / "b.par"
     par.write_text(f"FITSFILE {N2403}\nBAYESIAN3DFIT true\nFREE VROT\nRADII 100 200\nXPOS 77\nYPOS 77\nVSYS 132.8\n"
                    "VROT 100\nVDISP 10\nINC 60\nPA 123.7\nZ0 10\n")
-    assert BayesianBBarolo.from_parfile(str(par))._make_par().galmodtype == "ANALYTIC"
+    assert Bayesian3DFIT.from_parfile(str(par))._make_par().galmodtype == "ANALYTIC"
     par.write_text(par.read_text() + "GALMODTYPE MC\n")
-    assert BayesianBBarolo.from_parfile(str(par))._make_par().galmodtype == "MC"
+    assert Bayesian3DFIT.from_parfile(str(par))._make_par().galmodtype == "MC"
 
 
 def test_errors_and_exit_codes(tmp_path):
@@ -1659,7 +1659,7 @@ def test_spatial_axes_in_arcsec(tmp_path):
     width (0.008 arcsec: 3DFIT stopped), the region of the Bayesian likelihood)."""
     from astropy.io import fits
     import bbarolo
-    from bbarolo.bayesian import BayesianBBarolo
+    from bbarolo.bayesian import Bayesian3DFIT
     fn = _mock_cube(tmp_path, "deg")
     h, d = fits.getheader(fn), fits.getdata(fn)
     for name, f, u in (("arcs", 3600., "arcsec"), ("arcm", 60., "arcmin")):
@@ -1676,8 +1676,8 @@ def test_spatial_axes_in_arcsec(tmp_path):
                              verbose=0, plots=0, twostage=False, threads=1).run()
         r.write()
         mh = fits.getheader(str(tmp_path / name / "MOCK_mod_azim.fits"))
-        f = BayesianBBarolo(fn, radii=[20, 60, 100, 140], xpos=31.5, ypos=31.5, vsys=0, vrot=120, vdisp=15, z0=0, inc=60,
-                            pa=45, mask="SEARCH", outfolder=str(tmp_path / ("b" + name)))
+        f = Bayesian3DFIT(fn, radii=[20, 60, 100, 140], xpos=31.5, ypos=31.5, vsys=0, vrot=120, vdisp=15, z0=0, inc=60,
+                          pa=45, mask="SEARCH", outfolder=str(tmp_path / ("b" + name)))
         f._setup(['vrot', 'vdisp_single'])
         out[name] = (hd.Cdelt(0), hd.Crval(0), hd.BeamArea(), mh["CUNIT1"], mh["CDELT1"], f.beam_area, f.nvox,
                      f._log_likelihood(np.array([140., 150, 150, 150, 10.])), np.asarray(r.rings["radii"]),
@@ -1688,13 +1688,13 @@ def test_spatial_axes_in_arcsec(tmp_path):
 
 
 def _bayes_mock(tmp_path, **kw):
-    from bbarolo.bayesian import BayesianBBarolo
+    from bbarolo.bayesian import Bayesian3DFIT
     fn = str(tmp_path / "mock.fits")
     if not os.path.isfile(fn):
         _mock_cube(tmp_path)
     prm = dict(radii=[20, 60, 100, 140], xpos=31.5, ypos=31.5, vsys=0, vrot=120, vdisp=15, z0=0, inc=60, pa=45,
                mask="SEARCH", sampler="DYNESTY", outfolder=str(tmp_path / "bbb"))
-    return BayesianBBarolo(fn, **{**prm, **kw})
+    return Bayesian3DFIT(fn, **{**prm, **kw})
 
 
 def test_bayesian_rings_do_not_carry_over(tmp_path):
@@ -1893,11 +1893,11 @@ def test_bayesian_flux_beyond_rings(tmp_path, capsys):
 
 
 def test_bayesian_initial_rings_as_3dfit(tmp_path):
-    """BayesianBBarolo starts from the initial rings of 3DFIT (galfit.initial_rings) for the same parameters,
+    """Bayesian3DFIT starts from the initial rings of 3DFIT (galfit.initial_rings) for the same parameters,
     also those estimated: with GUESSTYPE FIT, VDISP is the estimate from the second moment (it was 8 km/s),
     and the default priors are centred on the estimates."""
     pytest.importorskip("dynesty")
-    from bbarolo import BayesianBBarolo
+    from bbarolo import Bayesian3DFIT
     from bbarolo.galfit import Galfit
     fn = _mock_cube(tmp_path)
     for given in ("", "INC 55\nVSYS 0\n"):
@@ -1907,7 +1907,7 @@ def test_bayesian_initial_rings_as_3dfit(tmp_path):
         assert p.checkPars(quiet=True)
         r = Galfit(Cube(fn, par=p)).rings_initial
         prm = dict(inc=55, vsys=0) if given else {}
-        f = BayesianBBarolo(fn, mask="SEARCH", guesstype="FIT", outfolder=str(tmp_path / "bbb"), **prm)
+        f = Bayesian3DFIT(fn, mask="SEARCH", guesstype="FIT", outfolder=str(tmp_path / "bbb"), **prm)
         b = f._inri.object
         assert b.nr == r.nr > 3
         for k in ("radii", "xpos", "ypos", "vsys", "vrot", "vdisp", "vrad", "dens", "z0", "inc", "phi"):
@@ -1954,7 +1954,7 @@ def test_bayesian_default_priors_follow_rings(tmp_path):
 
 
 def test_z0_default_one_pixel(tmp_path):
-    """Z0 not given: the fits (3DFIT and BayesianBBarolo) use a thin disk, one pixel (10" here), not a disk
+    """Z0 not given: the fits (3DFIT and Bayesian3DFIT) use a thin disk, one pixel (10" here), not a disk
     with no thickness; GALMOD needs Z0."""
     pytest.importorskip("dynesty")
     import copy
@@ -2655,9 +2655,9 @@ def test_bayesian_smoothness_penalty_spacing(tmp_path):
     """The smoothness penalties (lambdas) are second derivatives on the radii of the rings, with VROT 0 at
     R = 0: a rotation curve rising linearly from the centre has no penalty, also with uneven rings (the first
     separation was used for all the rings, and the zero of VROT put one separation inside the first ring)."""
-    from bbarolo.bayesian import BayesianBBarolo
-    f = BayesianBBarolo(N2403, radii=[60., 120., 240., 300.], xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
-                        inc=60, pa=123.7, z0=10, mask="SEARCH", outfolder=str(tmp_path) + "/")
+    from bbarolo.bayesian import Bayesian3DFIT
+    f = Bayesian3DFIT(N2403, radii=[60., 120., 240., 300.], xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
+                      inc=60, pa=123.7, z0=10, mask="SEARCH", outfolder=str(tmp_path) + "/")
     f._setup(['vrot', 'vdisp_single'])
     th = np.array([30., 60., 120., 150., 10.])
     L0 = f._log_likelihood(th, sigma=1.)
@@ -3242,7 +3242,7 @@ def test_bayesian_noisecorr_conservative(tmp_path):
 
 
 def test_ellprof_deconvolved_profile(tmp_path):
-    """ELLPROF also gives the profile deconvolved from the beam (as BayesianBBarolo): on a simulated disk it
+    """ELLPROF also gives the profile deconvolved from the beam (as Bayesian3DFIT): on a simulated disk it
     recovers the profile of the model without the beam (the observed one is 30% low at the centre), in the units
     of the column SDENS_FO; written in <prefix>_ellprof_deconvolved.txt (cubes only)."""
     from astropy.io import fits
@@ -3561,7 +3561,7 @@ def test_ellprof_deconvolved_rings_inside_emission(tmp_path):
 
 
 def test_bayesian_one_ring_and_side_across_north(tmp_path):
-    """BayesianBBarolo with one ring keeps RADSEP (as 3DFIT; it was dropped, so the ring was always R/2 to 3R/2) and
+    """Bayesian3DFIT with one ring keeps RADSEP (as 3DFIT; it was dropped, so the ring was always R/2 to 3R/2) and
     its likelihood region covers the whole ring (it ended at R + 1/2 beam: 24% of the flux of the model outside).
     SIDE with the PAs of the rings across 0/360: the median PA unwrapped (PA 355-5 gave 180: SIDE R took the
     approaching half). The same for the SIDE of the deconvolved profile of ELLPROF."""
@@ -3675,7 +3675,7 @@ def test_python_write_paths_and_parameter_files(tmp_path, monkeypatch):
 
 
 def test_bayesian_python_values_and_saved_functions(tmp_path):
-    """BayesianBBarolo takes Python values for FREE (a list), PRIORS and the options (dicts) (only strings as in a
+    """Bayesian3DFIT takes Python values for FREE (a list), PRIORS and the options (dicts) (only strings as in a
     parameter file were accepted); run(freepar=[]) is an error (it sampled zero dimensions); load_results takes the
     sampler of the file (write() of a loaded fit wrote _None_results.npy) and stops if the fit used a function of
     radius of its own that is not in funcs (it became the default arctan)."""

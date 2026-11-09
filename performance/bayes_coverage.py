@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Coverage test of the credible intervals of BayesianBBarolo on simulated galaxies.
+Coverage test of the credible intervals of Bayesian3DFIT on simulated galaxies.
 
 Flat disks of the geometry experiment (run_suite.py, 30 <= INC < 75 deg) are simulated with
 GALMOD (ANALYTIC) and noise convolved with the beam, optionally Hanning-smoothed along the
-spectral axis (noise only), and fitted with BayesianBBarolo (nautilus), free parameters VROT
+spectral axis (noise only), and fitted with Bayesian3DFIT (nautilus), free parameters VROT
 per ring, VDISP, INC and PA (centre, VSYS and Z0 fixed at the true values), with several
 likelihood options ("configurations"):
 
@@ -148,7 +148,7 @@ def simulate(g, cg, snr, seed, wd, hanning, kind="flat", noisekind="beam"):
 def fit(job):
     """One Bayesian fit; returns the record (quantiles and true values)."""
     warnings.simplefilter("ignore")
-    from bbarolo.bayesian import BayesianBBarolo
+    from bbarolo.bayesian import Bayesian3DFIT
     g, cg, cfg = job["galaxy"], job["cube"], CONFIGS[job["config"]]
     kind, gtype = job.get("kind", "flat"), job.get("galmodtype", "ANALYTIC")
     noisekind = job.get("noise", "beam")
@@ -161,9 +161,9 @@ def fit(job):
             R = rs.fit_radii(cg["beam"])
             t = rs.profiles(g, R)
             z0, dvdz = vertical(g, kind)
-            f = BayesianBBarolo(fn, radii=list(R), xpos=xc, ypos=xc, vsys=0., vrot=120., vdisp=15., inc=g["inc"],
-                                pa=g["pa"], z0=z0, dvdz=dvdz, ltype=1, mask="SEARCH", galmodtype=gtype,
-                                outfolder=os.path.join(wd, "out"), verbose=False)
+            f = Bayesian3DFIT(fn, radii=list(R), xpos=xc, ypos=xc, vsys=0., vrot=120., vdisp=15., inc=g["inc"],
+                              pa=g["pa"], z0=z0, dvdz=dvdz, ltype=1, mask="SEARCH", galmodtype=gtype,
+                              outfolder=os.path.join(wd, "out"), verbose=False)
             f.priors['vrot'] = dict(name='uniform', loc=0., scale=400.)
             f.priors['vdisp'] = dict(name='uniform', loc=0., scale=60.)
             ilo, ihi = min(t["inc"]), max(t["inc"])

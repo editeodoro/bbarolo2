@@ -7,7 +7,7 @@ parameters with nested sampling. The inputs are the cube, its mask, the rings (g
 ({ref}`PRIORS <par-bayesian3dfit-priors>`). The outputs are the posterior samples, the median and the 68%
 credible interval of each free parameter, the best-fit rings with these errors, the best model with its
 maps and position–velocity slices, and the plots. In Python the same fit is
-{class}`bbarolo.BayesianBBarolo` (method `run`), which also offers a fit of the geometry on the total
+{class}`bbarolo.Bayesian3DFIT` (method `run`), which also offers a fit of the geometry on the total
 intensity map (`run_geometry`).
 
 ## The idea
@@ -528,7 +528,7 @@ nothing, and `write(outfolder=None, plots=None)` writes these files as the task 
 writes only the best model with its outputs and the rings; `corner_plot` and `plot_profiles` return the
 figures; `print_stats`,
 `ring_errors` and `chi2_reduced` give the statistics; `save_results` writes the samples, and `load_results`
-reads them back into an object made with the same cube (`BayesianBBarolo(cube)`, since the cube is
+reads them back into an object made with the same cube (`Bayesian3DFIT(cube)`, since the cube is
 not saved): it takes the saved parameters, repeats the setup with the saved options of the
 likelihood and recomputes the best-fit rings, the density profile and its errors, without sampling again.
 
@@ -627,7 +627,7 @@ on top of the C++ library. With respect to it:
 
 ## In the code
 
-- `bbarolo/bayesian/fitter.py`: `BayesianBBarolo` (`run`, `run_geometry`, the setup `_setup`, the initial
+- `bbarolo/bayesian/fitter.py`: `Bayesian3DFIT` (`run`, `run_geometry`, the setup `_setup`, the initial
   rings and default priors `_init_rings`, `_set_default_priors`, the free parameters `_parse_freepar`,
   `_prior_transform`, `_update_rings`, `_setup_radmax`).
 - `bbarolo/bayesian/likelihood.py`: `_log_likelihood`, `_log_likelihood_geometry`, `_calculate_residuals`,

@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-RADMAX in BayesianBBarolo: four ways of fitting the outer edge of a disk, compared on simulated
+RADMAX in Bayesian3DFIT: four ways of fitting the outer edge of a disk, compared on simulated
 disks with a known sharp edge.
 
 The disks have a rising rotation curve (arctan, turnover radius 0.3-0.6 RMAX, so that VROT changes
 across the last ring), constant VDISP, an exponential surface density and a sharp edge at a radius
 Rt drawn within the last ring of the fit (RMAX - 0.9 w to RMAX - 0.1 w, rings of width w = half a
 beam from the centre to RMAX). They are simulated with GALMOD (ANALYTIC, nodes up to Rt) plus noise
-convolved with the beam, and fitted with BayesianBBarolo (nautilus): VROT in each ring, VDISP, INC
+convolved with the beam, and fitted with Bayesian3DFIT (nautilus): VROT in each ring, VDISP, INC
 and PA (centre, VSYS and Z0 fixed at the true values), and
 
   ring     RADMAX free, the radius of the last ring (like_kwargs radmax='ring', the RADMAX of the
            original module): the last ring moves, and its annulus with it
-  edge     RADMAX free, the outer edge of the disk (radmax='edge', the default of BayesianBBarolo
+  edge     RADMAX free, the outer edge of the disk (radmax='edge', the default of Bayesian3DFIT
            since these tests): the rings stay, and the model has no emission beyond RADMAX
   taper    as edge, with a Gaussian edge a quarter of a beam wide (radmax='taper')
   evid     no RADMAX: N-1, N and N+1 rings (N: those up to RMAX), compared by their evidence
@@ -96,7 +96,7 @@ def simulate(g, spatial, snr, wd):
 
 def fit(job):
     warnings.simplefilter("ignore")
-    from bbarolo.bayesian import BayesianBBarolo
+    from bbarolo.bayesian import Bayesian3DFIT
     g, method, nr = job["galaxy"], job["method"], job["nrings"]
     beam, w, n = geometry(job["spatial"])
     rec = dict(key=job["key"], gid=g["id"], method=method, nrings=nr, n=n, w=w, spatial=job["spatial"],
@@ -106,9 +106,9 @@ def fit(job):
         with tempfile.TemporaryDirectory(prefix="bbedge_") as wd:
             fn, xc, rt = simulate(g, job["spatial"], job["snr"], wd)
             R = (np.arange(nr) + 0.5) * w
-            f = BayesianBBarolo(fn, radii=list(R), xpos=xc, ypos=xc, vsys=0., vrot=120., vdisp=15., inc=g["inc"],
-                                pa=g["pa"], z0=rs.Z0, ltype=1, mask="SEARCH", galmodtype="ANALYTIC",
-                                outfolder=os.path.join(wd, "out"), verbose=False)
+            f = Bayesian3DFIT(fn, radii=list(R), xpos=xc, ypos=xc, vsys=0., vrot=120., vdisp=15., inc=g["inc"],
+                              pa=g["pa"], z0=rs.Z0, ltype=1, mask="SEARCH", galmodtype="ANALYTIC",
+                              outfolder=os.path.join(wd, "out"), verbose=False)
             f.priors['vrot'] = dict(name='uniform', loc=0., scale=400.)
             f.priors['vdisp'] = dict(name='uniform', loc=0., scale=60.)
             lo, hi = max(5., g["inc"] - 20.), min(89., g["inc"] + 20.)

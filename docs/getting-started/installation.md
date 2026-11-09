@@ -14,7 +14,7 @@ scipy, astropy, numba and matplotlib. Optional extras:
 
 | Extra | Adds | For |
 |---|---|---|
-| `bayesian` | dynesty, nautilus-sampler, corner, threadpoolctl | BAYESIAN3DFIT and `BayesianBBarolo` |
+| `bayesian` | dynesty, nautilus-sampler, corner, threadpoolctl | BAYESIAN3DFIT and `Bayesian3DFIT` |
 | `mpi` | mpi4py, schwimmbad | Bayesian samplings on several nodes with MPI |
 | `test` | pytest | the tests |
 

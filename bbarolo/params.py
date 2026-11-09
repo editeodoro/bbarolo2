@@ -191,7 +191,7 @@ class GalfitPar(GalmodPar):
     flagBADOUT: bool = False
     PLOTMASK: bool = False
     PLOTMINCON: float = -1.0
-    # BAYESIAN3DFIT (BayesianBBarolo)
+    # BAYESIAN3DFIT (Bayesian3DFIT)
     flagBAYESIAN: bool = False
     SAMPLER: str = "NAUTILUS"
     PRIORS: str = ""
@@ -1013,7 +1013,7 @@ def _numstr(v):
 # SAMPLEROPTS and RUNOPTS, as written in parameter files)
 # --------------------------------------------------------------------------
 # ring parameters that can be fitted, the other free parameters, and the parameters with a
-# function of radius (BayesianBBarolo.funcs: VROT arctan, VDISP linear, DENS exponential)
+# function of radius (Bayesian3DFIT.funcs: VROT arctan, VDISP linear, DENS exponential)
 BAYES_RING_PARS = ("vrot", "vdisp", "dens", "z0", "inc", "phi", "xpos", "ypos", "vsys", "vrad", "vvert", "dvdz",
                    "zcyl")
 BAYES_OTHER_PARS = ("sigma", "fracerr", "radmax")
@@ -1022,7 +1022,7 @@ _BAYES_ALIASES = {"pa": "phi", "disp": "vdisp"}
 
 
 def bayes_name(name, aliases=None):
-    """The name of a free parameter (or of a prior) as BayesianBBarolo uses it: lower case,
+    """The name of a free parameter (or of a prior) as Bayesian3DFIT uses it: lower case,
     PA -> phi and DISP -> vdisp, e.g. 'PA_SINGLE' -> 'phi_single', 'VROT' -> 'vrot' (aliases: other
     aliases, e.g. those of BayesianWind)."""
     al = _BAYES_ALIASES if aliases is None else aliases
@@ -1032,7 +1032,7 @@ def bayes_name(name, aliases=None):
 
 def bayes_freepar(free, funcs=BAYES_FUNC_PARS, ring_pars=BAYES_RING_PARS, other_pars=BAYES_OTHER_PARS, aliases=None):
     """The free parameters of BAYESIAN3DFIT from FREE (as in a parameter file), as a list for
-    BayesianBBarolo.run: 'VROT VDISP PA_SINGLE INC_SINGLE RADMAX' -> ['vrot', 'vdisp',
+    Bayesian3DFIT.run: 'VROT VDISP PA_SINGLE INC_SINGLE RADMAX' -> ['vrot', 'vdisp',
     'phi_single', 'inc_single', 'radmax']. A ring parameter (VROT, VDISP, DENS, Z0, INC, PA,
     XPOS, YPOS, VSYS, VRAD, VVERT, DVDZ, ZCYL) has one value per ring, NAME_SINGLE one value
     for all the rings, NAME_FUNC a function of radius (funcs: the parameters with a function,
@@ -1089,7 +1089,7 @@ def _number(v, where):
 def bayes_priors(priors, ring_pars=BAYES_RING_PARS, other_pars=BAYES_OTHER_PARS, func_pars=BAYES_FUNC_PARS,
                  aliases=None):
     """The priors of BAYESIAN3DFIT from PRIORS (as in a parameter file), as entries of
-    BayesianBBarolo.priors:
+    Bayesian3DFIT.priors:
 
         'VROT=(uniform,loc=0,scale=300) INC=(norm,60,5)'  ->
         {'vrot': {'name': 'uniform', 'loc': 0.0, 'scale': 300.0},
@@ -1101,7 +1101,7 @@ def bayes_priors(priors, ring_pars=BAYES_RING_PARS, other_pars=BAYES_OTHER_PARS,
     NAME is a free parameter (as in FREE; NAME_SINGLE is the same as NAME), or a parameter
     of a function of radius (VROT_P1, VROT_P2, VDISP_P1, ...). Entries are separated by
     spaces (or commas); names are case-insensitive. For SIGMA, a or b = none are 0.5 and
-    1000 times the noise (see BayesianBBarolo._prior_kwargs). Raises ValueError."""
+    1000 times the noise (see Bayesian3DFIT._prior_kwargs). Raises ValueError."""
     import numpy as np
     from scipy import stats
     s = str(priors).strip()
@@ -1168,7 +1168,7 @@ def bayes_priors(priors, ring_pars=BAYES_RING_PARS, other_pars=BAYES_OTHER_PARS,
 def bayes_value_string(name, value):
     """A Python value of FREE, PRIORS, SAMPLER, SAMPLEROPTS, RUNOPTS or LIKEOPTS (BAYESIAN3DFIT) as it is written in a
     parameter file: FREE a list of names (['vrot', 'inc_single'] -> 'vrot inc_single'); PRIORS a dict as
-    BayesianBBarolo.priors, {name: {'name': distribution, argument: value}} or {name: (distribution, values by
+    Bayesian3DFIT.priors, {name: {'name': distribution, argument: value}} or {name: (distribution, values by
     position)}; the options a dict {key: value} (a tuple: values separated by commas). A string is returned as it
     is. Raises TypeError."""
     import numpy as np
@@ -1259,7 +1259,7 @@ def bayes_options(opts, none=True):
     return out
 
 
-# Options of the likelihood (BayesianBBarolo.run(like_kwargs=...), LIKEOPTS) and their defaults.
+# Options of the likelihood (Bayesian3DFIT.run(like_kwargs=...), LIKEOPTS) and their defaults.
 # Those of LIKE_SETUP set up the likelihood; sigma, fracerr and lambdas are passed to the
 # log-likelihood at each call (None: not given).
 LIKE_OPTIONS = dict(likemask="dilated", dilation=(1., 3), noisecorr="measured", densprof_smooth=0.1, bbres=False,
@@ -1269,7 +1269,7 @@ _LIKE_ALIASES = {"usebbres": "bbres", "likemask_dilation": "dilation"}
 
 
 def bayes_like_option(name, value):
-    """An option of the likelihood of BayesianBBarolo (run(like_kwargs=...), LIKEOPTS), checked:
+    """An option of the likelihood of Bayesian3DFIT (run(like_kwargs=...), LIKEOPTS), checked:
     returns (name, value), the name in lower case; None if name is not an option. Raises
     ValueError for a wrong value. None gives the default.
 

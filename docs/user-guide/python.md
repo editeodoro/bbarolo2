@@ -15,8 +15,8 @@ res.rings                    # the fitted rings: an astropy Table
 res.write()                  # the files of the command line, in output/ngc2403/
 ```
 
-The classes are listed in {doc}`../api/index`. {class}`~bbarolo.BayesianBBarolo` (BAYESIAN3DFIT) works
-a little differently: see [below](#bayesianbbarolo).
+The classes are listed in {doc}`../api/index`. {class}`~bbarolo.Bayesian3DFIT` (BAYESIAN3DFIT) works
+a little differently: see [below](#bayesian3dfit).
 
 ## The cube and the parameters
 
@@ -129,9 +129,9 @@ file, or replace the file: `bbarolo.run(fitsfile="ngc2403.fits", search=True, to
 a dict `{task: Result}` (a list of them when {ref}`FITSLIST <par-all-fitslist>` gives several cubes), with
 the outputs in memory and the files written in `res.files`.
 
-## BayesianBBarolo
+## Bayesian3DFIT
 
-{class}`bbarolo.BayesianBBarolo` (BAYESIAN3DFIT) takes the cube and the parameters as the other tasks,
+{class}`bbarolo.Bayesian3DFIT` (BAYESIAN3DFIT) takes the cube and the parameters as the other tasks,
 but it keeps its results itself: there is no Result. `f.run(freepar=..., ...)` samples the posterior and
 writes nothing. Then `f.print_stats()`, `f.outri` (the best-fit rings), `f.ring_errors()`,
 `f.corner_plot()` and `f.plot_profiles()` give the results in memory, and

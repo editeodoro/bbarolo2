@@ -446,7 +446,7 @@ def _compute_ellprof(c, par):
     if p.verbose:
         sys.stdout.write(text)
     out = Outputs(profile=read_table(io.StringIO(text)), map=ell.im.to_hdu(), ellprof=ell, _text=text)
-    # the profile deconvolved from the beam, as that of BayesianBBarolo
+    # the profile deconvolved from the beam, as that of Bayesian3DFIT
     from .profile import ellprof_deconvolved
     from .rings import readRings
     from .bayesian.common import blas_threads
@@ -1192,7 +1192,7 @@ class Task:
         if ignored:
             print(f" {cls.__name__}: {', '.join(ignored)} in {shortpath(parfile)} ignored "
                   "(bbarolo.run runs all the tasks of a parameter file).")
-        t = cls(cube, **fpar)          # (all the parameters at once: BayesianBBarolo sets its rings here)
+        t = cls(cube, **fpar)          # (all the parameters at once: Bayesian3DFIT sets its rings here)
         t.update(**params)
         return t
 
@@ -1529,7 +1529,7 @@ _doc(FitMod2D, """Fit a 2D tilted-ring model to a velocity field (2DFIT).
 _doc(Ellprof, """Radial profiles in elliptical rings (ELLPROF).
 
     Result: profile (Table), profile_deconvolved (Table: the face-on surface density deconvolved from
-    the beam, as in BayesianBBarolo, with errors from the noise and the observed one; for a 2D map,
+    the beam, as in Bayesian3DFIT, with errors from the noise and the observed one; for a 2D map,
     with the rings projected and convolved with the beam, and errors from the residuals),
     map (HDU of the map used), mask.""")
 _doc(Smooth, """Smooth a datacube spatially to a new beam (SMOOTH): NEWBEAM (bmaj bmin bpa, arcsec and

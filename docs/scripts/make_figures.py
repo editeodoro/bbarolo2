@@ -131,9 +131,9 @@ def fig_galwind():
 
 @figure("bayesian3dfit")
 def fig_bayesian3dfit():
-    from bbarolo import BayesianBBarolo
-    f = BayesianBBarolo(CUBE, radii=[120, 240, 360, 480], xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
-                        inc=60, pa=123.7, z0=10, mask="SEARCH")
+    from bbarolo import Bayesian3DFIT
+    f = Bayesian3DFIT(CUBE, radii=[120, 240, 360, 480], xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
+                      inc=60, pa=123.7, z0=10, mask="SEARCH")
     f.priors["vrot"] = dict(name="uniform", loc=50, scale=200)      # km/s
     f.priors["vdisp"] = dict(name="uniform", loc=0, scale=30)       # km/s
     f.run(freepar="VROT VDISP_SINGLE SIGMA", threads=4, method="dynesty",
@@ -675,10 +675,10 @@ def fig_galmod3d_warp():
 @figure("bayesian")
 def fig_bayesian():
     """The fit of the page examples/bayesian: about 8 minutes on 4 processes."""
-    from bbarolo import BayesianBBarolo, FitMod3D
+    from bbarolo import Bayesian3DFIT, FitMod3D
     rings = dict(radii=[300, 600, 900], xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10, inc=55, pa=123.7,
                  z0=10, mask="SEARCH")
-    f = BayesianBBarolo(CUBE, **rings)
+    f = Bayesian3DFIT(CUBE, **rings)
     f.priors["vrot"] = dict(name="uniform", loc=50, scale=200)      # km/s
     f.priors["vdisp"] = dict(name="uniform", loc=0, scale=30)       # km/s
     f.priors["inc"] = dict(name="uniform", loc=40, scale=25)        # degrees

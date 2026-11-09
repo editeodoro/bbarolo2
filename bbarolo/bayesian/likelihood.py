@@ -1,4 +1,4 @@
-"""The likelihood of BayesianBBarolo: the voxels and the region of the likelihood, the noise and its
+"""The likelihood of Bayesian3DFIT: the voxels and the region of the likelihood, the noise and its
 correlation, the residuals and the log-likelihoods of the cube and of the total intensity map."""
 
 import math
@@ -68,7 +68,7 @@ def _residuals_fracerr(model, data, mask, maskmode, region, sigma2, eps2):
 
 
 class LikelihoodMixin(object):
-    """ The likelihood of BayesianBBarolo (see the documentation of bbarolo.bayesian). """
+    """ The likelihood of Bayesian3DFIT (see the documentation of bbarolo.bayesian). """
 
     def _setup_likelihood(self):
         """ The likelihood of the fit, from like_kwargs and the priors: its voxels (_setup_likemask),

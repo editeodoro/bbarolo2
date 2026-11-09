@@ -87,10 +87,10 @@ BBarolo -p ngc2403_bayes.par
 :sync: py
 
 ```python
-from bbarolo import BayesianBBarolo
+from bbarolo import Bayesian3DFIT
 
-f = BayesianBBarolo("ngc2403.fits", radii=[300, 600, 900], xpos=77, ypos=77, vsys=132.8,
-                    vrot=100, vdisp=10, inc=55, pa=123.7, z0=10, mask="SEARCH")
+f = Bayesian3DFIT("ngc2403.fits", radii=[300, 600, 900], xpos=77, ypos=77, vsys=132.8,
+                  vrot=100, vdisp=10, inc=55, pa=123.7, z0=10, mask="SEARCH")
 f.priors["vrot"] = dict(name="uniform", loc=50, scale=200)      # km/s
 f.priors["vdisp"] = dict(name="uniform", loc=0, scale=30)       # km/s
 f.priors["inc"] = dict(name="uniform", loc=40, scale=25)        # degrees
@@ -224,7 +224,7 @@ given to the new object, as it is not saved. With nautilus, say it in `sampler`:
 ```python
 f.save_results("bayes_results.npy")
 
-g = BayesianBBarolo("ngc2403.fits", outfolder="output/ngc2403/")
+g = Bayesian3DFIT("ngc2403.fits", outfolder="output/ngc2403/")
 g.load_results("bayes_results.npy", sampler="nautilus")      # about 6 seconds
 g.print_stats()                                               # the same statistics
 g.ring_errors("vrot"), g.in_disk, g.disk_edge                 # and the other outputs

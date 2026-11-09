@@ -22,7 +22,7 @@ likelihood. Read the relevant section of it before changing behaviour.
   `bbarolo/params.py`: `Param`, `checkPars()` (port of `Param::checkPars`), BAYESIAN3DFIT parsers.
 - `bbarolo/galmod.py`: `DiskModel`, the only model engine (GALMOD, 3DFIT, SPACEPAR, Bayesian,
   `SimulatedGalaxyCube`), with `GALMODTYPE` MC/ANALYTIC and `RINGMODE` CENTRED/NODES/SHIFTED.
-- `bbarolo/galfit.py` + `galfit_out.py`: 3DFIT. `bbarolo/bayesian/`: `BayesianBBarolo`
+- `bbarolo/galfit.py` + `galfit_out.py`: 3DFIT. `bbarolo/bayesian/`: `Bayesian3DFIT`
   (BAYESIAN3DFIT): `fitter.py` (the class: parameters, rings, priors, `_setup` steps, `run`) with the
   mixins `likelihood.py`, `density.py` (deconvolved profile) and `outputs.py`; `sampling.py`
   (dynesty, nautilus, process pool), `noise.py`, `rings.py`, `task.py`. The other modules map

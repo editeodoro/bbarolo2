@@ -18,7 +18,7 @@ class Rings:
     edge (arcsec, default None): the outer edge of the disk of the model, within the rings: the
     density of the model beyond it is zero (edgewidth = 0: a sharp edge) or falls as
     1/2 erfc((R - edge) / (sqrt(2) edgewidth)) (edgewidth > 0, arcsec: a Gaussian edge). See
-    galmod.edge_weights. Used by BayesianBBarolo for RADMAX."""
+    galmod.edge_weights. Used by Bayesian3DFIT for RADMAX."""
 
     def __init__(self, nr=0):
         self.radsep = 0.            # (as in C++; -1 shrank SHIFTED disks by 0.5)

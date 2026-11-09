@@ -1,5 +1,5 @@
 """
-BayesianBBarolo: the fitter (parameters, rings, priors, free parameters, setup and sampling). The
+Bayesian3DFIT: the fitter (parameters, rings, priors, free parameters, setup and sampling). The
 likelihood, the density profile and the outputs are in the mixins of likelihood.py, density.py and
 outputs.py; the samplers and the pool in sampling.py.
 """
@@ -18,16 +18,16 @@ from .density import DensityMixin
 from .outputs import OutputsMixin
 from .sampling import sample, sampler_options, dyfunc
 
-# the default functions of radius of VROT_FUNC, VDISP_FUNC and DENS_FUNC (BayesianBBarolo.funcs)
+# the default functions of radius of VROT_FUNC, VDISP_FUNC and DENS_FUNC (Bayesian3DFIT.funcs)
 DEFAULT_FUNCS = dict(vrot=lambda R, p1, p2: 2. / np.pi * p1 * np.arctan(R / p2),     # arctan curve
                      vdisp=lambda R, p1, p2: p1 + p2 * R,                            # linear
                      dens=lambda R, p1, p2: p1 * np.exp(-R / p2))                    # exponential
 
 
-class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
+class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
     """ Fit a galaxy model to a 3D datacube in a Bayesian framework (nested sampling).
 
-    BayesianBBarolo(cube, **params): the cube (FITS file, HDU or (data, header)) and any
+    Bayesian3DFIT(cube, **params): the cube (FITS file, HDU or (data, header)) and any
     BBarolo parameter, including the rings (radii or nradii/radsep, xpos, ypos, vsys, vrot,
     vdisp, inc, pa, z0, vrad, dens, vvert, dvdz, zcyl: single values or one value per ring).
     Ring parameters not fitted are kept fixed. The initial rings are those of 3DFIT for the same
@@ -40,7 +40,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
     The parameters of the BAYESIAN3DFIT task of parameter files are accepted too: FREE (the
     free parameters, e.g. 'VROT VDISP_SINGLE INC_SINGLE'; run() needs them, as FREE or as
     freepar), SAMPLER, SAMPLEROPTS and RUNOPTS are the defaults of run(); PRIORS sets entries
-    of priors (e.g. 'VROT=(uniform,loc=0,scale=300)'). BayesianBBarolo.from_parfile(file)
+    of priors (e.g. 'VROT=(uniform,loc=0,scale=300)'). Bayesian3DFIT.from_parfile(file)
     reads a parameter file.
 
     Methods
@@ -87,7 +87,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         self.dens_profile = None
         self.useBBres = False
         self._set_like_options({})              # like_kwargs: the options of the likelihood (defaults)
-        super(BayesianBBarolo, self).__init__(cube, **params)
+        super(Bayesian3DFIT, self).__init__(cube, **params)
         if self._cube is not None:
             self._init_rings()
 
@@ -109,7 +109,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             kw = lookup(k)
             if kw is not None and kw.name in self._KEYWORD_OPTIONS and v is not None:
                 given[kw.name] = self._keyword_option(kw.name, v)
-        super(BayesianBBarolo, self).update(**params)
+        super(Bayesian3DFIT, self).update(**params)
         if not hasattr(self, "priors"):              # called by the base constructor
             return self
         if "PRIORS" in given:
@@ -164,7 +164,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             kv = bayes_like_option(k, v)
             if kv is None:
                 if not custom:
-                    raise ValueError(f"BayesianBBarolo: unknown option of the likelihood '{k}' (options: "
+                    raise ValueError(f"Bayesian3DFIT: unknown option of the likelihood '{k}' (options: "
                                      + ", ".join(LIKE_OPTIONS) + "; any other only with user-defined residuals "
                                      "or log-likelihood)")
                 kv = (k, v)
@@ -185,7 +185,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         # models makes it rough and the sampling slow) and which are about twice faster. A GALMODTYPE
         # that is given (MC) is kept.
         from ..keywords import TASK_DEFAULTS
-        prm = super(BayesianBBarolo, self)._all_params(outfolder=outfolder, fitsfile=fitsfile)
+        prm = super(Bayesian3DFIT, self)._all_params(outfolder=outfolder, fitsfile=fitsfile)
         for k, v in TASK_DEFAULTS[self.TASK].items():
             prm.setdefault(k, v)
         return prm
@@ -589,7 +589,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         """
         moved = [k for k in ('useBBres', 'noisecorr', 'likemask') if k in kwargs]
         if moved:
-            raise TypeError(f"BayesianBBarolo.run: {', '.join(moved)} are options of like_kwargs, e.g. "
+            raise TypeError(f"Bayesian3DFIT.run: {', '.join(moved)} are options of like_kwargs, e.g. "
                             "like_kwargs=dict(likemask='none', noisecorr='beam', bbres=True).")
         params = {k: v for k, v in kwargs.items() if k not in ('verbose', 'dynamic')}
         if params:
@@ -599,7 +599,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         if freepar is None:
             freepar = dflt.get('FREE')
             if freepar is None:
-                raise ValueError("BayesianBBarolo.run: give the free parameters, as run(freepar=[...]) or as the "
+                raise ValueError("Bayesian3DFIT.run: give the free parameters, as run(freepar=[...]) or as the "
                                  "parameter FREE (e.g. free='VROT VDISP_SINGLE INC_SINGLE').")
         elif isinstance(freepar, str):
             freepar = self._keyword_option('FREE', freepar)
@@ -607,7 +607,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             from ..params import bayes_name
             freepar = [bayes_name(p) for p in freepar]
         if len(freepar) == 0:                       # (it sampled zero dimensions)
-            raise BBaroloError("BayesianBBarolo.run: no free parameters (freepar or FREE).")
+            raise BBaroloError("Bayesian3DFIT.run: no free parameters (freepar or FREE).")
         method = str(dflt.get('SAMPLER', 'nautilus') if method is None else method).lower()
         self._method = method
         sampler_kwargs = {**dflt.get('SAMPLEROPTS', {}), **sampler_kwargs}

@@ -444,7 +444,7 @@ KEYWORDS = [
     K("SAMPLER", "ustr", ["gf.SAMPLER"], BAYESW, "Nested sampler: NAUTILUS or DYNESTY"),
     K("PRIORS", "str", ["gf.PRIORS"], BAYESW,
       "Priors of the free parameters, NAME=(distribution,arguments) with the distributions of scipy.stats, "
-      "e.g. VROT=(uniform,loc=0,scale=300) INC=(norm,60,5) (default: see bbarolo.BayesianBBarolo)"),
+      "e.g. VROT=(uniform,loc=0,scale=300) INC=(norm,60,5) (default: see bbarolo.Bayesian3DFIT)"),
     K("SAMPLEROPTS", "str", ["gf.SAMPLEROPTS"], BAYESW,
       "Options of the sampler, key=value, e.g. nlive=200 dynamic=true seed=1 (dynesty; the static sampler unless "
       "dynamic=true) or n_live=1000 "
@@ -590,7 +590,7 @@ _CLASS_TASK = {"fitmod3d": "3DFIT", "galmod": "GALMOD", "galwind": "GALWIND", "s
                "fitmod2d": "2DFIT", "ellprof": "ELLPROF", "smooth": "SMOOTH", "smoothspec": "SMOOTHSPEC",
                "maps": "MAPS", "pvslice": "PVSLICE", "spacepar": "SPACEPAR", "rend3d": "REND3D",
                "contsub": "CONTSUB", "stats": "STATS", "makemask": "MAKEMASK",
-               "bayesianbbarolo": "BAYESIAN3DFIT", "bayesianwind": "BAYESIANWIND"}
+               "bayesian3dfit": "BAYESIAN3DFIT", "bayesianwind": "BAYESIANWIND"}
 
 
 def _fmtval(v):
@@ -619,7 +619,7 @@ def _task_of(name):
     return _CLASS_TASK.get(n.lower())
 
 
-# Defaults that differ for a task (applied by its class, e.g. BayesianBBarolo._all_params)
+# Defaults that differ for a task (applied by its class, e.g. Bayesian3DFIT._all_params)
 TASK_DEFAULTS = {"BAYESIAN3DFIT": {"GALMODTYPE": "ANALYTIC"}}
 
 

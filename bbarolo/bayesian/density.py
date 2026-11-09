@@ -1,4 +1,4 @@
-"""The density profile of BayesianBBarolo when DENS is not fitted: deconvolved from the total intensity
+"""The density profile of Bayesian3DFIT when DENS is not fitted: deconvolved from the total intensity
 map (bbarolo.profile), with its errors, and the observed profile of the outputs."""
 
 import math
@@ -8,7 +8,7 @@ from .common import blas_threads, SIGMA_QUANTILES
 
 
 class DensityMixin(object):
-    """ The density profile of BayesianBBarolo (DENS not fitted). """
+    """ The density profile of Bayesian3DFIT (DENS not fitted). """
 
     def _set_density(self, rings):
         """ Sets the densities of the rings, when DENS is not fitted, to the deconvolved profile:

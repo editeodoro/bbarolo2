@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Example: Bayesian 3D fit of NGC 2403 with the pure-Python BayesianBBarolo.
+Example: Bayesian 3D fit of NGC 2403 with the pure-Python Bayesian3DFIT.
 
 Run from the BBarolo folder (the one containing examples/ngc2403.fits):
 
@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(HERE))                  # the pure-Python bba
 
 import matplotlib                                           # noqa: E402
 matplotlib.use("Agg")
-from bbarolo import BayesianBBarolo                        # noqa: E402
+from bbarolo import Bayesian3DFIT                        # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--cube", default=os.path.join(os.path.dirname(os.path.dirname(HERE)), "examples", "ngc2403.fits"))
@@ -33,9 +33,9 @@ args = ap.parse_args()
 
 # Rings (initial values; the parameters that are not fitted stay fixed) and any other
 # BBarolo parameter. ANALYTIC models give a likelihood without Monte Carlo noise.
-f = BayesianBBarolo(args.cube, radii=np.arange(120, 500, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
-                    inc=60, pa=123.7, z0=10, mask="SEARCH", outfolder=args.outfolder, plots=1,
-                    galmodtype="ANALYTIC")
+f = Bayesian3DFIT(args.cube, radii=np.arange(120, 500, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
+                  inc=60, pa=123.7, z0=10, mask="SEARCH", outfolder=args.outfolder, plots=1,
+                  galmodtype="ANALYTIC")
 
 # Priors: scipy.stats distributions, given by name and parameters...
 f.priors['inc'] = dict(name='uniform', loc=45, scale=30)          # 45-75 deg

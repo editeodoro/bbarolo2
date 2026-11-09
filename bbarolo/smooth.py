@@ -107,7 +107,7 @@ def gaussian_scalefactor(oldbeam_rot, confie, gridspace):
 class FFTConvolver:
     """Convolve stacks of 2D images with a fixed kernel. Kernel FFTs are cached per shape (the
     MAXCACHE most recent shapes: with free centre, thickness or RADMAX, the likelihood of
-    BayesianBBarolo makes models in boxes of many sizes)."""
+    Bayesian3DFIT makes models in boxes of many sizes)."""
 
     MAXCACHE = 32
 

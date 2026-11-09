@@ -11,7 +11,7 @@ the files of the command line (see {doc}`../user-guide/python`).
 .. currentmodule:: bbarolo
 
 .. autoclass:: FitMod3D
-.. autoclass:: BayesianBBarolo
+.. autoclass:: Bayesian3DFIT
 .. autoclass:: BayesianWind
 .. autoclass:: GalMod
 .. autoclass:: GalMod3D

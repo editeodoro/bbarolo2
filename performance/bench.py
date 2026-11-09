@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Benchmark of the model engine as used by BayesianBBarolo: the time of one likelihood call and of
+Benchmark of the model engine as used by Bayesian3DFIT: the time of one likelihood call and of
 one full model, on NGC 2403 (../examples/ngc2403.fits or --cube).
 
     python performance/bench.py -o before.json             # times and log-likelihood values
@@ -41,11 +41,11 @@ CASES = {
 
 
 def likelihood_case(cube, galmodtype, freepar, n, seed=1):
-    from bbarolo.bayesian import BayesianBBarolo
+    from bbarolo.bayesian import Bayesian3DFIT
     with contextlib.redirect_stdout(io.StringIO()):
-        f = BayesianBBarolo(cube, radii=np.arange(60, 700, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
-                            inc=60, pa=123.7, z0=10, mask="SEARCH", galmodtype=galmodtype, threads=1,
-                            outfolder=os.path.join(os.environ.get("TMPDIR", "/tmp"), "bbbench") + "/", verbose=False)
+        f = Bayesian3DFIT(cube, radii=np.arange(60, 700, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
+                          inc=60, pa=123.7, z0=10, mask="SEARCH", galmodtype=galmodtype, threads=1,
+                          outfolder=os.path.join(os.environ.get("TMPDIR", "/tmp"), "bbbench") + "/", verbose=False)
         f._setup(freepar)
     rng = np.random.default_rng(seed)
     thetas = [np.asarray(f._prior_transform(rng.random(f.ndim)), float) for _ in range(n)]
@@ -59,12 +59,12 @@ def likelihood_case(cube, galmodtype, freepar, n, seed=1):
 
 
 def sampling_case(cube, threads, nlive, max_calls, blas_limit=True, seed=1):
-    from bbarolo.bayesian import BayesianBBarolo, common, fitter
+    from bbarolo.bayesian import Bayesian3DFIT, common, fitter
     common.BLAS_THREADS = 1 if blas_limit else None
     with contextlib.redirect_stdout(io.StringIO()):
-        f = BayesianBBarolo(cube, radii=np.arange(60, 700, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
-                            inc=60, pa=123.7, z0=10, mask="SEARCH", galmodtype="ANALYTIC",
-                            outfolder=os.path.join(os.environ.get("TMPDIR", "/tmp"), "bbbench") + "/", verbose=False)
+        f = Bayesian3DFIT(cube, radii=np.arange(60, 700, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
+                          inc=60, pa=123.7, z0=10, mask="SEARCH", galmodtype="ANALYTIC",
+                          outfolder=os.path.join(os.environ.get("TMPDIR", "/tmp"), "bbbench") + "/", verbose=False)
     spent = {}
     sample = fitter.sample
 

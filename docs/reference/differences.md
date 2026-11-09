@@ -79,7 +79,7 @@ see the value and the description of a parameter.
 | VERBOSE | `true` or `false` | also 2; the default (1) prints about 140 lines for the NGC 2403 3DFIT instead of about 400 |
 | Names of the output files | some without the prefix, some with it but with no underscore | every file is `<prefix>_<what>` |
 | A misspelt keyword | ignored | an error if it is very close to a real one (VDSIP), otherwise a warning that proposes the closest keywords |
-| BAYESIAN3DFIT and the Python class `BayesianBBarolo`: GALMODTYPE | (pyBBarolo) MC models | `ANALYTIC`; the other tasks keep `MC` |
+| BAYESIAN3DFIT and the Python class `Bayesian3DFIT`: GALMODTYPE | (pyBBarolo) MC models | `ANALYTIC`; the other tasks keep `MC` |
 | BAYESIAN3DFIT: SAMPLER | (pyBBarolo) dynesty | nautilus (`SAMPLER DYNESTY` or `run(method='dynesty')` selects dynesty) |
 | BAYESIAN3DFIT: dynesty | (pyBBarolo) dynamic sampler | static sampler (`SAMPLEROPTS dynamic=true` selects the dynamic one) |
 | BAYESIAN3DFIT: RADMAX | (pyBBarolo) the radius of the last ring | the outer edge of the disk (`LIKEOPTS radmax=edge`; `ring` is the old meaning) |
@@ -253,7 +253,7 @@ class (below). Old call and new call:
 | `pyBBarolo.wrapper.BBaroloWrapper(params).run()`, `.write_parameterfile()` | `bbarolo.run("file.par", **params)` or `bbarolo.run(fitsfile=..., search=True)`; `task.to_parfile("file.par")`; `bbarolo.read_parfile` reads a file. Python runs in the same process and returns `{task: Result}`; `exe="/path/to/BBarolo"` runs another executable (e.g. the C++ one) in a subprocess |
 | `wrapper.GenericTask` classes (`PVSlice`, `MakeMask`, `SpatialSmoothing`, ...) | `bbarolo.PVSlice`, `MakeMask`, `Smooth`, `Maps`, `SpacePar`, `Rend3D`, `ContSub`, `Stats`, all with `run()` |
 | `pyBBarolo.utils`: `SimulatedGalaxyCube`, `emptyfits`, `build_path`, `extract_pv_path`, `extract_pv` | `bbarolo.SimulatedGalaxyCube` (builds the model in memory, with `run()`, then `write_model(fileout)`; no executable), `bbarolo.emptyfits`; `bbarolo.pv_path`, `pv_sample`, `pv_extract` for the PV slices |
-| `pyBBarolo.bayesian.BayesianBBarolo`: `init`, `set_options`, `compute`, `compute_geometry`, `write_bestmodel`, `save_results`, `load_results` | `bbarolo.BayesianBBarolo(cube, **params)`; `run(freepar=..., method=...)`, `run_geometry`, `write()`; `save_results`, `load_results`, `print_stats`, `corner_plot` and `plot_profiles` are kept. `run()` writes nothing. `useBBres=True` is `like_kwargs={"bbres": True}`. The class also runs from a parameter file: `BayesianBBarolo.from_parfile` |
+| `pyBBarolo.bayesian.BayesianBBarolo`: `init`, `set_options`, `compute`, `compute_geometry`, `write_bestmodel`, `save_results`, `load_results` | `bbarolo.Bayesian3DFIT(cube, **params)`; `run(freepar=..., method=...)`, `run_geometry`, `write()`; `save_results`, `load_results`, `print_stats`, `corner_plot` and `plot_profiles` are kept. `run()` writes nothing. `useBBres=True` is `like_kwargs={"bbres": True}`. The class also runs from a parameter file: `Bayesian3DFIT.from_parfile` |
 
 Defaults of the old `FitMod3D` class, which are not those of a parameter file and have changed to the
 parameter-file ones: LTYPE 2 (now 1), FREE `VROT VDISP` (now `VROT VDISP INC PA`), MASK `SMOOTH` (now

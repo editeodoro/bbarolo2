@@ -1072,7 +1072,7 @@ def outer_edge(rings, mode="CENTRED"):
 # --------------------------------------------------------------------------
 class DiskModel:
     """Models of a rotating disk on the grid of a datacube: the GALMOD engine used by the
-    GALMOD, 3DFIT and SPACEPAR tasks, BayesianBBarolo and SimulatedGalaxyCube.
+    GALMOD, 3DFIT and SPACEPAR tasks, Bayesian3DFIT and SimulatedGalaxyCube.
 
     DiskModel(cube, par=None, ringmode=None, densflux=None, galmodtype=None, smooth=None)
       cube:       a bbarolo Cube; only its header and parameters are used.

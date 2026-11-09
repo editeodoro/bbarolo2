@@ -1,4 +1,4 @@
-"""The noise of the cube for the likelihood of BayesianBBarolo: its correlation, measured where there is
+"""The noise of the cube for the likelihood of Bayesian3DFIT: its correlation, measured where there is
 no emission, and the dilation of the mask."""
 
 import math

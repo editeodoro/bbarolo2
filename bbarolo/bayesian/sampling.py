@@ -1,5 +1,5 @@
 """
-The samplers of BayesianBBarolo (dynesty, nautilus) and the parallel pool.
+The samplers of Bayesian3DFIT (dynesty, nautilus) and the parallel pool.
 
 Parallel sampling (threads > 1) uses a fork-based process pool: the workers inherit the fitter, so
 only the parameter vectors are sent to them (nothing big is pickled), and it also works on macOS.
@@ -99,7 +99,7 @@ def sampler_options(method, dynamic, sampler_kwargs, run_kwargs):
     sampler_kwargs, run_kwargs = dict(sampler_kwargs), dict(run_kwargs)
     if method == 'dynesty':
         if dyn is None:
-            raise ImportError("BayesianBBarolo with method='dynesty' requires the package 'dynesty'.")
+            raise ImportError("Bayesian3DFIT with method='dynesty' requires the package 'dynesty'.")
         Sampler = dyn.DynamicNestedSampler if dynamic else dyn.NestedSampler
         runf, own = Sampler.run_nested, {'loglikelihood', 'prior_transform', 'ndim'}
         if dynamic and 'dlogz' in run_kwargs:
@@ -108,7 +108,7 @@ def sampler_options(method, dynamic, sampler_kwargs, run_kwargs):
         try:
             import nautilus
         except ImportError:
-            raise ImportError("BayesianBBarolo requires the package nautilus when method='nautilus'.")
+            raise ImportError("Bayesian3DFIT requires the package nautilus when method='nautilus'.")
         Sampler, runf, own = nautilus.Sampler, nautilus.Sampler.run, {'prior', 'likelihood', 'n_dim'}
         if 'nlive' in sampler_kwargs:
             sampler_kwargs.setdefault('n_live', sampler_kwargs.pop('nlive'))

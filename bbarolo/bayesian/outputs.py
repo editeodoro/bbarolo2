@@ -1,4 +1,4 @@
-"""The outputs of BayesianBBarolo: the best model and its files, the errors of the rings, the plots, the
+"""The outputs of Bayesian3DFIT: the best model and its files, the errors of the rings, the plots, the
 statistics, and the results saved and loaded."""
 
 import os
@@ -11,7 +11,7 @@ from .common import vprint, SIGMA_QUANTILES
 
 
 class OutputsMixin(object):
-    """ The outputs of BayesianBBarolo. """
+    """ The outputs of Bayesian3DFIT. """
 
     def _normalize_model(self, model, data, mask, norm='AZIM'):
         """ Normalization of the best model (called but not defined in the original module).
@@ -38,7 +38,7 @@ class OutputsMixin(object):
         from ..tasks import _snapshot, _written, _input_copy
         from ..bbutils import shortpath
         if not self.modCalculated:
-            raise RuntimeError("BayesianBBarolo.write: no results to write (run() first).")
+            raise RuntimeError("Bayesian3DFIT.write: no results to write (run() first).")
         c = self._cube_obj
         p = c.pars()
         if outfolder is not None:
@@ -60,7 +60,7 @@ class OutputsMixin(object):
                     pass
             fn = os.path.join(of, f"{pre}_{self._method}_results.npy")
             self.save_results(fn)
-            vprint(verbose, f"Posterior samples written in {shortpath(fn)} (see BayesianBBarolo.load_results)")
+            vprint(verbose, f"Posterior samples written in {shortpath(fn)} (see Bayesian3DFIT.load_results)")
             if plots > 0:
                 self._save_plots(of, pre, verbose)
         finally:
@@ -435,7 +435,7 @@ class OutputsMixin(object):
         if self._params.get("OUTFOLDER") not in (None, ""):
             opts.pop("OUTFOLDER", None)        # (the output folder given to this object, not that of the fit)
         opts.update(rings)
-        FitMod3D.update(self, **opts)     # (not that of BayesianBBarolo)
+        FitMod3D.update(self, **opts)     # (not that of Bayesian3DFIT)
         self._cube_obj = None
         self._init_rings()
         for k in ('priors', 'prior_distr', 'lambdas'):

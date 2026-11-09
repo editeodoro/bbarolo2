@@ -3,11 +3,11 @@
 import numpy as np
 
 from ..tasks import _FromFile
-from .fitter import BayesianBBarolo
+from .fitter import Bayesian3DFIT
 
 
 def _task_fitter(c, par):
-    """ The BayesianBBarolo of the BAYESIAN3DFIT task: the parameters of par as given (but the
+    """ The Bayesian3DFIT of the BAYESIAN3DFIT task: the parameters of par as given (but the
     flags of the tasks and the input files), the output folder of c, and the data of c. """
     from ..keywords import lookup
     p = c.pars()
@@ -18,7 +18,7 @@ def _task_fitter(c, par):
             continue
         prm[k] = _FromFile(v)
     prm["OUTFOLDER"] = p.outFolder
-    f = BayesianBBarolo(None, **prm)
+    f = Bayesian3DFIT(None, **prm)
     f._set_cube(p.imageFile)
     cb = f._load_cube()
     if cb.array.shape == c.array.shape and not np.array_equal(cb.array, c.array, equal_nan=True):
@@ -32,9 +32,9 @@ def run_task(c, par):
     Param; its values as given, see Param._given) on the cube c read by BBarolo (with the
     changes of the tasks run before it, e.g. CONTSUB). The free parameters are FREE (required),
     the sampler SAMPLER, with SAMPLEROPTS and RUNOPTS, and the priors PRIORS (the others: the
-    defaults of BayesianBBarolo); the sampler runs with THREADS processes. With VERBOSE it prints
+    defaults of Bayesian3DFIT); the sampler runs with THREADS processes. With VERBOSE it prints
     the statistics of the posterior (print_stats). Nothing is written (see write_task). Returns the
-    BayesianBBarolo. """
+    Bayesian3DFIT. """
     from ..params import bayes_options
     f = _task_fitter(c, par)
     p = c.pars()
@@ -51,7 +51,7 @@ def run_task(c, par):
 
 
 def write_task(f, c):
-    """ The outputs of the BAYESIAN3DFIT task f (see BayesianBBarolo.write) in the output folder of the cube
+    """ The outputs of the BAYESIAN3DFIT task f (see Bayesian3DFIT.write) in the output folder of the cube
     c, with its PLOTS. """
     p = c.pars()
     f._cube_obj.pars().setOutfolder(p.outFolder)

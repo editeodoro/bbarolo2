@@ -8,10 +8,10 @@ cube and any BBarolo parameter are given to the constructor, the rings with the 
 keywords (radii or nradii/radsep, xpos, ypos, vsys, vrot, vdisp, inc, pa, z0, vrad, dens,
 ...; single values or one value per ring; the values not given are estimated or set as in 3DFIT):
 
-    >>> from bbarolo import BayesianBBarolo
-    >>> f = BayesianBBarolo("ngc2403.fits", radii=np.arange(30,600,60), xpos=77, ypos=77,
-    ...                     vsys=132.8, vrot=120, vdisp=10, inc=60, pa=123.7, z0=10,
-    ...                     mask="SEARCH", outfolder="output/bbb")
+    >>> from bbarolo import Bayesian3DFIT
+    >>> f = Bayesian3DFIT("ngc2403.fits", radii=np.arange(30,600,60), xpos=77, ypos=77,
+    ...                   vsys=132.8, vrot=120, vdisp=10, inc=60, pa=123.7, z0=10,
+    ...                   mask="SEARCH", outfolder="output/bbb")
     >>> f.priors['vrot'] = dict(name='uniform', loc=0, scale=300)      # optional
     >>> f.run(freepar=['vrot','vdisp_single','inc_single'], method='dynesty', threads=4)
     >>> f.print_stats(); f.write_bestmodel(); f.corner_plot()
@@ -20,8 +20,8 @@ Parameter files (``BBarolo -p``, ``bbarolo.run``): the task BAYESIAN3DFIT, with 
 parameters in FREE (required; e.g. VROT VDISP PA_SINGLE INC_SINGLE RADMAX), the priors in PRIORS (e.g.
 VROT=(uniform,loc=0,scale=250) INC=(norm,60,5)), and SAMPLER, SAMPLEROPTS, RUNOPTS and
 THREADS; it samples, writes the outputs and the samples, prints the statistics (VERBOSE)
-and makes the plots (PLOTS): see run_task and BayesianBBarolo.write. These keywords are accepted by BayesianBBarolo
-too (defaults of run()), and BayesianBBarolo.from_parfile reads a parameter file.
+and makes the plots (PLOTS): see run_task and Bayesian3DFIT.write. These keywords are accepted by Bayesian3DFIT
+too (defaults of run()), and Bayesian3DFIT.from_parfile reads a parameter file.
 
 Free parameters are given as names: 'vrot' (one value per ring), 'vrot_single' (one value
 for all rings), 'vrot_func' (parametric function of radius, see ``funcs``), plus
@@ -31,7 +31,7 @@ sigma^2 + (fracerr*model)^2) and 'radmax' (the outer edge of the disk; like_kwar
 moves the last ring instead, as in the original module). Priors are frozen scipy.stats
 distributions (``priors`` dictionary or ``prior_distr``). The default priors follow the initial
 rings, given or estimated as in 3DFIT (e.g. INC +- 10 deg, PA +- 15 deg, VROT 0 to twice the
-largest initial VROT; see BayesianBBarolo._set_default_priors and the keyword PRIORS).
+largest initial VROT; see Bayesian3DFIT._set_default_priors and the keyword PRIORS).
 
 The options of the likelihood are given in run(like_kwargs=...) (LIKEOPTS in parameter files;
 the options of the fit are in f.like_kwargs): likemask, dilation, noisecorr, densprof_smooth,
@@ -58,7 +58,7 @@ the average of the observed map in each ring (Ellprof), which is smoothed by the
 (by the data and by the model); that profile is now only an output (<prefix>_densprof.txt).
 
 Differences from the original module (other than running without the C++ library):
-  * the interface of the bbarolo tasks: BayesianBBarolo(cube, **params), update(**params)
+  * the interface of the bbarolo tasks: Bayesian3DFIT(cube, **params), update(**params)
     and run(freepar=..., ...) replace init(), set_options() and compute();
     run_geometry() replaces compute_geometry(). The model engine always uses one thread
     (and TWOSTAGE is off); run(threads=n) samples with n processes (default 1, or THREADS
@@ -88,7 +88,7 @@ Differences from the original module (other than running without the C++ library
   * the posterior errors are written in <prefix>_rings_final1.txt (as the 3DFIT error columns) and
     shown in the _parameters.pdf plot of write_bestmodel.
 
-The package: fitter.py (BayesianBBarolo: parameters, rings, priors, setup, run), likelihood.py (the
+The package: fitter.py (Bayesian3DFIT: parameters, rings, priors, setup, run), likelihood.py (the
 voxels, the region and the noise of the likelihood, the log-likelihoods), density.py (the deconvolved
 density profile), sampling.py (dynesty, nautilus and the process pool), outputs.py (files, plots,
 statistics, save and load), noise.py (the correlation of the noise), rings.py, task.py (BAYESIAN3DFIT).
@@ -102,9 +102,9 @@ statistics, save and load), noise.py (the correlation of the noise), rings.py, t
 # (at your option) any later version.
 ########################################################################
 
-from .fitter import BayesianBBarolo
+from .fitter import Bayesian3DFIT
 from .wind import BayesianWind
 from .noise import noise_correlation, dilate_mask
 from .task import run_task, write_task
 
-__all__ = ["BayesianBBarolo", "BayesianWind", "noise_correlation", "dilate_mask", "run_task", "write_task"]
+__all__ = ["Bayesian3DFIT", "BayesianWind", "noise_correlation", "dilate_mask", "run_task", "write_task"]

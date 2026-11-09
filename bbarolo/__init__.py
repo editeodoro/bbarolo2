@@ -20,7 +20,7 @@ Tasks: FitMod3D (3DFIT), GalMod (GALMOD), GalWind (GALWIND), Search (SEARCH),
 FitMod2D (2DFIT), Ellprof (ELLPROF), Smooth (SMOOTH), SmoothSpec (SMOOTHSPEC),
 Maps (TOTALMAP, VELOCITYMAP, ...), PVSlice (PVSLICE), SpacePar (SPACEPAR),
 Rend3D (REND3D), ContSub (CONTSUB), Stats (STATS), MakeMask (MAKEMASK),
-BayesianBBarolo (BAYESIAN3DFIT: 3D fit with nested sampling; needs dynesty or nautilus).
+Bayesian3DFIT (BAYESIAN3DFIT: 3D fit with nested sampling; needs dynesty or nautilus).
 
     >>> bbarolo.run("ngc2403.par", threads=8)     # a parameter file, as the command line (writes)
     >>> bbarolo.help("free")                      # one parameter; help("3DFIT"): a task
@@ -30,7 +30,7 @@ param.par``, or the launchers run_bbarolo.py and bin/BBarolo (no install needed)
 
 Other tools: GalMod3D (model cubes from 3D fields of the density and velocity of the gas, as
 functions of (R, z), (R, phi, z) or (x, y, z); Python only), DiskModel (the model engine of
-GALMOD, 3DFIT and BayesianBBarolo: models of a set of Rings on the grid of a Cube, in memory), pv_path, pv_sample, pv_extract (PV
+GALMOD, 3DFIT and Bayesian3DFIT: models of a set of Rings on the grid of a Cube, in memory), pv_path, pv_sample, pv_extract (PV
 slices in memory), SimulatedGalaxyCube and emptyfits (utils), Param (all the parameters),
 Cube, Rings. The modules with the computational engines (galmod, galfit, ringmodel,
 search, ...) can also be used directly.
@@ -50,7 +50,7 @@ from .utils import SimulatedGalaxyCube, emptyfits
 from .bbutils import BBaroloError
 
 __all__ = ['FitMod3D', 'GalMod', 'GalWind', 'Search', 'FitMod2D', 'Ellprof', 'Smooth', 'SmoothSpec', 'Maps',
-           'PVSlice', 'SpacePar', 'Rend3D', 'ContSub', 'Stats', 'MakeMask', 'BayesianBBarolo', 'BayesianWind', 'run',
+           'PVSlice', 'SpacePar', 'Rend3D', 'ContSub', 'Stats', 'MakeMask', 'Bayesian3DFIT', 'BayesianWind', 'run',
            'Result', 'read_parfile', 'Param', 'Cube', 'Rings', 'DiskModel', 'GalMod3D', 'pv_path', 'pv_sample',
            'pv_extract', 'SimulatedGalaxyCube', 'emptyfits', 'BBaroloError', '__version__']
 
@@ -62,10 +62,10 @@ BBBversion = __BBBversion__
 
 
 def __getattr__(name):
-    # BayesianBBarolo and BayesianWind are imported on demand (its samplers are optional dependencies)
-    if name == "BayesianBBarolo":
-        from .bayesian import BayesianBBarolo
-        return BayesianBBarolo
+    # Bayesian3DFIT and BayesianWind are imported on demand (its samplers are optional dependencies)
+    if name == "Bayesian3DFIT":
+        from .bayesian import Bayesian3DFIT
+        return Bayesian3DFIT
     if name == "BayesianWind":
         from .bayesian import BayesianWind
         return BayesianWind

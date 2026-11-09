@@ -50,7 +50,7 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   −23%, now −10%); SIDE A/R with ring PAs across 0/360° took the median PA without unwrapping (the wrong
   half). Its 1σ errors use the quantiles 0.15865 and 0.84135 (16% and 84%), and its linear algebra runs on
   one BLAS thread (all the cores were slower).
-- **BayesianBBarolo**: with one ring RADSEP was dropped (the ring was always R/2 to 3R/2 wide, also when
+- **Bayesian3DFIT**: with one ring RADSEP was dropped (the ring was always R/2 to 3R/2 wide, also when
   3DFIT used RADSEP) and the region of the likelihood ended at R + ½ beam (24% of the flux of the model
   outside); SIDE A/R with ring PAs across 0/360° selected the wrong half. FREE, PRIORS, SAMPLEROPTS, RUNOPTS
   and LIKEOPTS take Python values (a list, dicts), not only strings; `run(freepar=[])` is an error (it
@@ -111,12 +111,12 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   **(C++)**.
 - **The table of the initial parameters** marked the number and width of the rings as estimated `(e)` when
   they were given with RADII; they are `(i)` now **(C++)**.
-- **BayesianBBarolo: the initial rings are those of 3DFIT.** They were built by a copy of the code of 3DFIT
+- **Bayesian3DFIT: the initial rings are those of 3DFIT.** They were built by a copy of the code of 3DFIT
   that set VDISP to 8 km/s also with GUESSTYPE FIT, where 3DFIT takes the estimate from the second moment.
-  BayesianBBarolo now calls the code of 3DFIT (`galfit.initial_rings`): its initial rings are identical to
+  Bayesian3DFIT now calls the code of 3DFIT (`galfit.initial_rings`): its initial rings are identical to
   those of 3DFIT for the same parameters, the estimated ones too. (3DFIT then changes its rings for REVERSE
   and, with PA free, refines PA and VROT with a 2D fit: these are steps of its fit, not taken by
-  BayesianBBarolo.)
+  Bayesian3DFIT.)
 
 - **ELLPROF: SIDE A and R were swapped** when the mean PA of the rings is at most 180°, i.e. for most
   galaxies: `A` gave the receding half (`R` the approaching one). They are right at any PA now; this also
@@ -185,10 +185,10 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   the edge of the field): those clouds did not draw their velocity deviates, so the rest of the ring was
   another realisation, and the residuals jumped by the MC noise as the fit moved clouds across the edge of
   the box **(C++)**. Models of disks inside the field with LTYPE 1–3 do not change.
-- **BayesianBBarolo: the exterior annulus of the deconvolved density profile** started at the outer edge
+- **Bayesian3DFIT: the exterior annulus of the deconvolved density profile** started at the outer edge
   of the rings also when RADMAX (edge or taper) puts the edge of the disk inside the last ring, so the
   truncated last ring took the emission between the two; it starts at RADMAX now.
-- **BayesianBBarolo: the smoothness penalties (`lambdas`)** used the separation of the first two rings for
+- **Bayesian3DFIT: the smoothness penalties (`lambdas`)** used the separation of the first two rings for
   all the rings, and put the zero of VROT one separation inside the first ring instead of at R = 0, so a
   rotation curve rising linearly from the centre was penalised **(C++)**. They are second derivatives on
   the radii of the rings now.
@@ -245,16 +245,16 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 - **REDUCE on its own with FACTOR < 1** raised ZeroDivisionError or a reshape error: it is an error of the
   checks now.
 
-- **BayesianBBarolo: `load_results` replaced the output folder** given to the object with that of the
+- **Bayesian3DFIT: `load_results` replaced the output folder** given to the object with that of the
   saved fit, so `write_bestmodel` after `load_results` overwrote the outputs of the original fit. The
   folder given is kept now. Also, `rings_final1.txt` had a FITOK column in the header, without values,
   when BADOUT was set.
-- **BayesianBBarolo: the rings of a run carried over (C++).** Every evaluation of the likelihood
+- **Bayesian3DFIT: the rings of a run carried over (C++).** Every evaluation of the likelihood
   wrote the sampled values (and RADMAX and the density profile) into the initial rings. A second
   run on the same object then kept the parameters that were free in the first one at the last
   sampled values, not at the initial ones, and `save_results` saved those rings. The initial rings
   no longer change.
-- **BayesianBBarolo: other bugs.**
+- **Bayesian3DFIT: other bugs.**
   - `update()` discarded the priors given as distributions in `prior_distr` **(C++)**.
   - A negative parameter of a function of radius had zero likelihood, e.g. the slope of
     `vdisp_func`: half of its default prior **(C++)**. Only the values in the rings must now be
@@ -461,7 +461,7 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   processes). With `sigma` free (it scales the noise of all the pixels) the fit converges in
   81 s on 16 processes: INC 50.9 ± 0.5°, PA 122.4 ± 0.7°, σ = 17.5 times the noise. `fracerr`
   does not suit the map: it weights the faint outer disk, and drove INC to 0.
-- **Warning when the rings do not cover the disk** (BayesianBBarolo): more than 5% of the flux of
+- **Warning when the rings do not cover the disk** (Bayesian3DFIT): more than 5% of the flux of
   the total intensity map beyond the outermost ring (+ half a beam). The region of the likelihood
   is that of the lowest INC allowed by the prior, so with a wide prior that emission biases INC
   low: on NGC 2403, with rings to 720" (8% of the flux beyond), the map gave INC 30–45° instead
@@ -487,7 +487,7 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   SPACEPAR, BAYESIAN3DFIT). For now the default is LEGACY, the C++ algorithm.
   - **FIT**: starts from the ELLIPSE estimates and refines them. (1) A beam-convolved disk is fitted
     to the total intensity map (centre, INC, PA). The densities of its rings are deconvolved for each
-    geometry (the new `bbarolo.profile`, shared with BayesianBBarolo), the map is the cube summed over
+    geometry (the new `bbarolo.profile`, shared with Bayesian3DFIT), the map is the cube summed over
     the channels of the detection (not masked), and Z0 is used if given. (2) A 2D tilted-ring fit of
     the velocity field on rings one beam wide gives the kinematic PA and VSYS (and radial profiles of
     INC and PA, `rad_profile`, `inc_profile`, `pa_profile` of the estimates). (3) VDISP comes from the
@@ -535,6 +535,8 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **`BayesianBBarolo` is now `Bayesian3DFIT`**, the name of its task (BAYESIAN3DFIT), as `BayesianWind` is
+  that of BAYESIANWIND.
 - **BEAM replaces BMAJ, BMIN, BPA, BEAMFWHM, OBMAJ, OBMIN and OBPA**, which are now errors that name it.
   `BEAM bmaj bmin bpa` gives the beam of the data: the axes in arcsec, or in degrees with a final `d`
   (`BEAM 0.01d 0.01d 30`), BPA in degrees (0 if not given); one value is a circular beam (`BEAM 30`). It
@@ -576,10 +578,10 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   rings left out unless BADOUT): every ring is there, with a column `fitok` (False: the fit of the ring
   failed), and `rotation_curve` and `plot_rings()` use the rings fitted. The 2DFIT table has NaN for the
   rings not fitted, the GALMOD one also has VRAD. The text files are unchanged.
-- **BayesianBBarolo.run() writes nothing** (it wrote `<prefix>_rings_final1.txt`, and `<OBJECT>_input.fits`
-  for an in-memory cube); the new `BayesianBBarolo.write(outfolder=None, plots=None)` writes what the
+- **Bayesian3DFIT.run() writes nothing** (it wrote `<prefix>_rings_final1.txt`, and `<OBJECT>_input.fits`
+  for an in-memory cube); the new `Bayesian3DFIT.write(outfolder=None, plots=None)` writes what the
   BAYESIAN3DFIT task writes (best model and its outputs, rings with the posterior errors, samples, plots).
-- **BayesianBBarolo: the default priors follow the initial rings** (given or estimated), instead of fixed
+- **Bayesian3DFIT: the default priors follow the initial rings** (given or estimated), instead of fixed
   wide ranges: INC ±10° around the initial values, within 0–90° (was 0–90°); PA ±15° (was 0–360°, which
   allowed both senses of rotation); VROT 0 to twice the largest initial VROT (was 0–350 km/s); XPOS and
   YPOS ±2 beam FWHM (was ±5 pixels); VSYS ±5 channels, at least ±20 km/s (was ±20 km/s); VDISP 0 to twice
@@ -612,9 +614,9 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 - **BAYESIAN3DFIT uses nautilus by default** (SAMPLER `NAUTILUS`, `run(method='nautilus')`; it was dynesty):
   `SAMPLER DYNESTY` or `run(method='dynesty')` selects dynesty. The samples file is then
   `<prefix>_nautilus_results.npy`.
-- **BayesianBBarolo uses dynesty's static sampler by default** (`dynamic=False`; the dynamic sampler
+- **Bayesian3DFIT uses dynesty's static sampler by default** (`dynamic=False`; the dynamic sampler
   was the default): `run(dynamic=True)` or SAMPLEROPTS `dynamic=true` selects the dynamic one.
-- **BayesianBBarolo: the rings beyond RADMAX are marked.** With RADMAX as the edge of the disk, the
+- **Bayesian3DFIT: the rings beyond RADMAX are marked.** With RADMAX as the edge of the disk, the
   model has no gas beyond it, and the values of a ring whose radius lies beyond it are extrapolations of
   the profiles inside the edge (the model interpolates the ring values between the radii), not
   measurements. Such rings now have INDISK = 0 in `rings_final1.txt` (1 within the edge; the column is
@@ -652,7 +654,7 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   must come from its own column: e.g. `VROT file(rings_final1.txt,3)` on a file of bbarolo2 (column 3
   is DISP) is an error that gives the right column, so the column numbers of the C++ files cannot read
   another quantity without notice.
-- **BayesianBBarolo: RADMAX is the outer edge of the disk.** In the original module RADMAX moved the
+- **Bayesian3DFIT: RADMAX is the outer edge of the disk.** In the original module RADMAX moved the
   radius of the last ring, so the posterior of that ring mixed different annuli and the model
   extended half a ring beyond RADMAX. Now the rings stay, and the model has no emission beyond
   RADMAX (a sharp edge, continuous in RADMAX: each sub-ring of the model is weighted by its fraction
@@ -677,7 +679,7 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   half a ring beyond RADMAX and the last ring's VROT refers to a radius that changes from sample
   to sample. `taper` brings nothing for sharp edges, and the evidence is coarse (it chose an
   empty extra ring in 5 of 12 disks at 5 beams). Times are the same.
-- **BayesianBBarolo: faster sampling on machines with many cores.** BLAS (e.g. MKL with 112
+- **Bayesian3DFIT: faster sampling on machines with many cores.** BLAS (e.g. MKL with 112
   threads on a 224-core server) gave many threads to the small matrices of the density profile in
   each likelihood call, and the processes of a parallel sampling competed for the cores. The
   sampling and the errors of the density profile now run with one BLAS thread per process
@@ -686,10 +688,10 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   sampling makes 202 likelihood calls per second instead of 76 with 8 processes, 491 instead of
   155 with 32. The values do not change. `performance/bench.py --sampling 1,8,32` times a
   sampling.
-- **BayesianBBarolo is a package**, `bbarolo.bayesian` (it was a 2200-line module): the fitter,
+- **Bayesian3DFIT is a package**, `bbarolo.bayesian` (it was a 2200-line module): the fitter,
   the likelihood, the density profile, the samplers and the pool, the outputs, the noise and the
   task in separate modules, and the setup of a fit in explicit steps (`_setup`). The imports
-  (`from bbarolo.bayesian import BayesianBBarolo, noise_correlation, dilate_mask`) and the
+  (`from bbarolo.bayesian import Bayesian3DFIT, noise_correlation, dilate_mask`) and the
   results do not change.
 - **Output file names**: every output is now `<prefix>_<what>` (the prefix is OUTPREFIX, by default
   the OBJECT of the header). Before, some names had no prefix and others had it without the
@@ -724,7 +726,7 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 - **Help**: `-d TASK` lists the beam keywords; `bbarolo.help('dist')` prints the close
   matches instead of raising; clearer help for FREE; the FitMod3D docstring lists the columns of the
   results and the convention of the errors.
-- **BayesianBBarolo and BAYESIAN3DFIT use ANALYTIC models by default** (GALMODTYPE; 3DFIT, GALMOD
+- **Bayesian3DFIT and BAYESIAN3DFIT use ANALYTIC models by default** (GALMODTYPE; 3DFIT, GALMOD
   and the other tasks keep MC). Their likelihood has no Monte-Carlo noise: with sigma equal to the
   noise, the noise of MC models made it rough and the sampling slow. A likelihood call is also about
   twice faster (NGC 2403, 6 rings: 18 ms against 33 ms). `GALMODTYPE MC` gives the previous models;

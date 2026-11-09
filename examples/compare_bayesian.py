@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Run the same Bayesian fit (BayesianBBarolo, nautilus) with the original C++-based
+Run the same Bayesian fit (Bayesian3DFIT, nautilus) with the original C++-based
 pyBBarolo (ctypes + libBBarolo) and with the pure-Python bbarolo, and compare the
 likelihood, the posteriors and the run times.
 
@@ -47,15 +47,15 @@ ring = dict(xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10, inc=60, z0=10)
 
 def make():
     if cfg["label"] == "C++":                 # original module: old interface
-        from pyBBarolo.bayesian import BayesianBBarolo
-        f = BayesianBBarolo(cfg["cube"])
+        from pyBBarolo.bayesian import Bayesian3DFIT
+        f = Bayesian3DFIT(cfg["cube"])
         f.init(radii=np.array(cfg["radii"]), phi=123.7, **ring)
         f.set_options(mask="SEARCH", outfolder=cfg["outfolder"], plots=0)
     else:                                     # pure-Python bbarolo
-        from bbarolo import BayesianBBarolo
-        f = BayesianBBarolo(cfg["cube"], radii=np.array(cfg["radii"]), pa=123.7, mask="SEARCH",
-                            outfolder=cfg["outfolder"], plots=0, ringmode="SHIFTED",   # C++ rings
-                            galmodtype="MC", **ring)                  # C++ models (default: ANALYTIC)
+        from bbarolo import Bayesian3DFIT
+        f = Bayesian3DFIT(cfg["cube"], radii=np.array(cfg["radii"]), pa=123.7, mask="SEARCH",
+                          outfolder=cfg["outfolder"], plots=0, ringmode="SHIFTED",   # C++ rings
+                          galmodtype="MC", **ring)                  # C++ models (default: ANALYTIC)
     return f
 
 
@@ -67,7 +67,7 @@ def sample(f, **kw):
 
 # likelihood scan through the vrot of the second ring
 f = make()
-LK = dict(sigma=1.)                     # sigma = 1 and no beam factor, as the original BayesianBBarolo
+LK = dict(sigma=1.)                     # sigma = 1 and no beam factor, as the original Bayesian3DFIT
 PY = dict(LK, noisecorr=1) if cfg["label"] != "C++" else LK     # (noisecorr=1: independent voxels)
 if cfg["label"] != "C++":
     f._set_like_options(PY)
@@ -103,7 +103,7 @@ def run(label, path, cfg):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="C++ vs Python BayesianBBarolo",
+    ap = argparse.ArgumentParser(description="C++ vs Python Bayesian3DFIT",
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     ap.add_argument("--cube", default=os.path.join(BBDIR, "examples", "ngc2403.fits"))
     ap.add_argument("--cpp-dir", default=BBDIR, help="folder that contains the original pyBBarolo/ package")

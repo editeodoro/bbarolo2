@@ -1,5 +1,5 @@
 """
-Density profiles corrected for the beam (deconvolved), shared by BayesianBBarolo and the initial
+Density profiles corrected for the beam (deconvolved), shared by Bayesian3DFIT and the initial
 estimates (GUESSTYPE FIT).
 
 The total intensity map of a disk model is linear in the densities of its rings, sum_r dens_r K_r,
@@ -180,7 +180,7 @@ class MapRingModel:
 def ellprof_deconvolved(c, rings, side="B", smooth=0.1, nmc=200, seed=0, model=None):
     """The deconvolved radial profile of the ELLPROF task: the face-on surface densities of the rings whose
     beam-convolved model reproduces the total intensity map of the cube c (or the 2D map c), as in
-    BayesianBBarolo (see the module docstring), at the fixed geometry of the rings (a Rings object: radii,
+    Bayesian3DFIT (see the module docstring), at the fixed geometry of the rings (a Rings object: radii,
     centre, INC, PA, Z0).
 
     A 2D map is the data itself, with the model of MapRingModel (the rings projected and convolved with the
@@ -190,7 +190,7 @@ def ellprof_deconvolved(c, rings, side="B", smooth=0.1, nmc=200, seed=0, model=N
     The data map is the sum of the data, not clipped, in the mask of the cube dilated by one beam and +-3
     channels (the mask cuts the faint outer emission, which the model cannot reproduce); its noise is the rms
     of the data outside the mask times the square root of the number of channels summed and of the spectral
-    correlation of the noise. The correlation of the noise is the conservative measure of BayesianBBarolo (at
+    correlation of the noise. The correlation of the noise is the conservative measure of Bayesian3DFIT (at
     least one beam area spatially). With side 'A' or 'R', only the pixels of that half of the galaxy are used
     (divided by the minor axis of the rings: their median centre and PA). The errors come from nmc refits of the
     best-fit map plus noise with that rms and spatial correlation (the geometry is fixed: no errors from it).

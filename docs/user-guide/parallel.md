@@ -100,7 +100,7 @@ parameter vectors. dynesty evaluates four proposals per process at a time. Two c
 - do not edit the package while a long run is going, since a new worker imports the modules from disk.
 
 The default of `THREADS` in the task is the number of cores (at most 16). The Python class
-{class}`bbarolo.BayesianBBarolo` has `threads=1` by default: give `run(threads=n)`. When the script is
+{class}`bbarolo.Bayesian3DFIT` has `threads=1` by default: give `run(threads=n)`. When the script is
 launched with `mpirun` or `mpiexec`, the sampler uses an MPI pool (needs `mpi4py` and `schwimmbad`) instead
 of the process pool, so a fit can use several nodes.
 

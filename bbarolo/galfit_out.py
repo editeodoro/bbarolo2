@@ -429,7 +429,7 @@ def writeModel(c, model, rings, normtype, mask, par=None, makeplots=False, fit=N
 
 
 def writeOutputs(c, mod, ell, rings, mask, makeplots=True, fit=None):
-    """Write a model computed elsewhere (a Cube, e.g. the best model of BayesianBBarolo)
+    """Write a model computed elsewhere (a Cube, e.g. the best model of Bayesian3DFIT)
     with its outputs: densprof.txt (from the Ellprof ell), the model, its moment maps and
     PV slices, and the plots of the fit. Returns the ModelOutputs."""
     p = c.pars()

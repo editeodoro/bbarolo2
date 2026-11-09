@@ -722,7 +722,7 @@ maps, PV diagrams, `<prefix>_rings_final1.txt` with the errors from the 16th and
 `<prefix>_densprof.txt` and, when `DENS` is not free, `<prefix>_densprof_deconvolved.txt`), the samples
 in `<prefix>_<sampler>_results.npy`, with `PLOTS` the corner plot `<prefix>_corner.pdf` and the radial
 profiles `<prefix>_profiles.pdf`, and with `VERBOSE` the statistics of the posterior. `3DFIT` and
-`GALMOD` cannot run with it and are turned off. In Python the same fit is `bbarolo.BayesianBBarolo`.
+`GALMOD` cannot run with it and are turned off. In Python the same fit is `bbarolo.Bayesian3DFIT`.
 """),
     'GALMOD': dict(
         group='Task',

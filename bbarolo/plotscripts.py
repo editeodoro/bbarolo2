@@ -28,7 +28,7 @@ _RING_KEYS = ("rad", "vrot", "disp", "inc", "pa", "z0", "dens", "xpos", "ypos", 
 
 def _edge_marks(gf):
     """Code of plot_parameters.py that shades the radii beyond the outer edge of the disk (RADMAX of
-    BayesianBBarolo, gf._disk_edge; nothing without it): the rings there are not measurements."""
+    Bayesian3DFIT, gf._disk_edge; nothing without it): the rings there are not measurements."""
     edge = getattr(gf, "_disk_edge", None)
     if edge is None:
         return ""

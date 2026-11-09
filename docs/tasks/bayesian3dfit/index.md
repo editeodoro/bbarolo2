@@ -9,7 +9,7 @@ by all the rings and should be constrained by the whole disk. It also allows pri
 slower than 3DFIT (minutes to hours instead of seconds), and it needs the package
 [dynesty](https://dynesty.readthedocs.io) or [nautilus](https://nautilus-sampler.readthedocs.io).
 
-In Python: {class}`bbarolo.BayesianBBarolo`.
+In Python: {class}`bbarolo.Bayesian3DFIT`.
 
 ## Example
 
@@ -62,10 +62,10 @@ BBarolo -p ngc2403_bayes.par
 :sync: py
 
 ```python
-from bbarolo import BayesianBBarolo
+from bbarolo import Bayesian3DFIT
 
-f = BayesianBBarolo("ngc2403.fits", radii=[120, 240, 360, 480], xpos=77, ypos=77, vsys=132.8,
-                    vrot=100, vdisp=10, inc=60, pa=123.7, z0=10, mask="SEARCH")
+f = Bayesian3DFIT("ngc2403.fits", radii=[120, 240, 360, 480], xpos=77, ypos=77, vsys=132.8,
+                  vrot=100, vdisp=10, inc=60, pa=123.7, z0=10, mask="SEARCH")
 f.priors["vrot"] = dict(name="uniform", loc=50, scale=200)      # km/s
 f.priors["vdisp"] = dict(name="uniform", loc=0, scale=30)       # km/s
 f.run(freepar="VROT VDISP_SINGLE SIGMA", threads=4, method="dynesty",
@@ -122,7 +122,7 @@ conservative (the true value is inside the 68% interval more often than 68% of t
 
 The files are written in the output folder ({ref}`OUTFOLDER <par-all-outfolder>`, by default
 `output/<object>/`) with the prefix `<object>`, the OBJECT of the FITS header. The class
-{class}`~bbarolo.BayesianBBarolo` does not return a {class}`~bbarolo.Result`: `run()` writes nothing, and
+{class}`~bbarolo.Bayesian3DFIT` does not return a {class}`~bbarolo.Result`: `run()` writes nothing, and
 the results are attributes and methods of the object. `f.write()` writes all the files of the task (with
 {ref}`PLOTS <par-all-plots>`, or `write(plots=...)`), `f.write_bestmodel()` only the best model with its
 outputs, and `f.save_results(file)` only the samples.

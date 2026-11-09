@@ -1,4 +1,4 @@
-"""Small helpers of BayesianBBarolo."""
+"""Small helpers of Bayesian3DFIT."""
 
 import contextlib
 import numpy as np

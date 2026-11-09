@@ -420,7 +420,7 @@ class Galfit:
         if cube is None:
             return
         if inrings is not None:
-            # constructor with Cube + Rings + Param (used by BayesianBBarolo)
+            # constructor with Cube + Rings + Param (used by Bayesian3DFIT)
             p = par if par is not None else cube.pars()
             if p.outPrefix == "":
                 p.outPrefix = cube.Head().Name()
@@ -1320,7 +1320,7 @@ class Galfit:
     def writeRingFile(self, filename, r, errors=None, extra=None):
         """<prefix>_<filename> in the output folder: the rings r (and the errors of the free parameters).
         extra: {NAME: integer value of each ring}, written as the last columns (e.g. INDISK of
-        BayesianBBarolo)."""
+        Bayesian3DFIT)."""
         fileo = self.cin.pars().outFolder + self.cin.pars().outPrefix + "_" + filename
         extra = extra or {}
         with open(fileo, "w") as fout:
