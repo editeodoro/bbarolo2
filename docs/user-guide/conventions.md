@@ -153,7 +153,8 @@ The zero of the velocities, and so the meaning of `VSYS`, is set by the rest fre
 - With `REDSHIFT` right, `VSYS` is close to 0.
 
 Several lines can be modelled together by giving several values of `RESTFREQ` or `RESTWAVE` and the
-relative intensities `RELINT`. The example cube of NGC 2403 has a heliocentric radio velocity axis in m/s,
+relative intensities `RELINT`. The velocities refer to the first line, and the moment maps (of MAPS, 3DFIT and
+the other tasks) are those of the first line ({doc}`../tasks/maps/algorithm`). The example cube of NGC 2403 has a heliocentric radio velocity axis in m/s,
 `CRVAL3` 289.6 km/s and a channel of −5.15 km/s: the channel width is negative, as in many cubes, and BBarolo
 handles both orders. The cube information printed at the start of every run lists the axis, the channel
 width and the rest frequency.

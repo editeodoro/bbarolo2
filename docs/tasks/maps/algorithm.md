@@ -43,7 +43,7 @@ GLOBALPROFILE never uses the mask.
 ## Moment maps
 
 With {ref}`MAPTYPE <par-maps-maptype>` `MOMENT` (the default), the maps are the moments of the masked
-spectrum. Let
+spectrum (of its first line, with several lines: see [Several lines](#several-lines)). Let
 
 $$
 S = \sum_{k} m_k I_k
@@ -120,8 +120,34 @@ constrains the shape of the line.
 
 Spectra whose maximum is 0 (e.g. no voxel in the mask) are blank, as are those whose fit does not
 converge, or has a parameter with no effect on $\chi^2$ (a zero diagonal of $J^{\rm T}J$), and all the
-spectra of a cube with 3 channels or fewer. Every other spectrum gets a fit, even without emission, and
-its values are then meaningless: use a mask.
+spectra of a cube with as many channels as free parameters or fewer (3 with one line). Every other spectrum
+gets a fit, even without emission, and its values are then meaningless: use a mask.
+
+## Several lines
+
+With several values of {ref}`RESTWAVE <par-galmod-restwave>` on a wavelength axis, or of
+{ref}`RESTFREQ <par-galmod-restfreq>` on a frequency axis, the maps are those of the first line, the one the
+velocities refer to. Let $v^{(\ell)}_k$ be the velocity of channel $k$ in the frame of line $\ell$ (its rest
+value at {ref}`REDSHIFT <par-galmod-redshift>`); $v^{(1)}_k = v_k$.
+
+- **Moment maps:** the sums above run only over the channels of the first line, those nearer to it than to
+  any other line: $|v^{(1)}_k - v_c| < |v^{(\ell)}_k - v_c|$ for every $\ell > 1$, so the window ends halfway
+  to the next lines. $v_c$ is the flux-weighted velocity of the first line in the total spectrum (the sum
+  of the masked cube over the pixels): it starts from the mean velocity of all the lines corrected for their
+  offsets, weighted with {ref}`RELINT <par-galmod-relint>`, and is iterated with the window until the window
+  no longer changes. $M_0$ is then the flux of the first line only. When the lines are blended (an edge of
+  the window is within $2\sigma$ of $v_c$, $\sigma$ the dispersion of the total spectrum in the window), the
+  window cuts the wings of the line: a warning says so, and `MAPTYPE GAUSSIAN` is the better choice.
+- **Gaussian maps:** each spectrum is fitted with one Gaussian per line,
+  $\sum_\ell A_\ell \exp[-(v^{(\ell)} - v_0)^2 / 2\sigma^2]$, with one velocity $v_0$ and one dispersion
+  $\sigma$ for all the lines and a free amplitude $A_\ell$ each, so the observed line ratios can differ from
+  RELINT. Lines whose centre at $v_c$ is outside the cube are left out. The fit starts from the channel of
+  the first line where the lines, weighted with RELINT, line up best (the largest
+  $\sum_\ell {\rm RELINT}_\ell\, m I$ at the channel of each line), with each $A_\ell$ the masked spectrum
+  at its line and $\sigma$ the larger of 10 km/s and one channel. $M_0 = \sqrt{2\pi}\,|\sigma|\, f A_1$ is
+  the flux of the first line.
+
+The global profile and the PV slices keep all the lines.
 
 ## Noise and S/N of the total map
 

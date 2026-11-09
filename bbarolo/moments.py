@@ -9,7 +9,8 @@ import warnings
 import numba as nb
 
 from .image import Image2D
-from .bbutils import (AlltoVel, DeltaVel, FluxtoJyBeam, arcsconv)
+from .bbutils import (AlltoVel, DeltaVel, FluxtoJyBeam, arcsconv, Wave2Vel, Freq2Vel, _spec_unit, _WAVE_UNITS,
+                      _FREQ_UNITS)
 
 
 def _velocities(c, nz=None):
@@ -19,11 +20,79 @@ def _velocities(c, nz=None):
     return np.arange(nz, dtype=np.float64)
 
 
+_WARNED_BLEND = set()        # (the cubes already warned about blended lines)
+
+
+def line_velocities(c):
+    """Several lines in the cube (more than one RESTWAVE on a wavelength axis, or RESTFREQ on a frequency axis):
+    (V, relint), with V (nlines, nz) the velocity of the channels in the frame of each line (rest value at
+    REDSHIFT) and relint the relative intensities (RELINT; equal if they do not match the lines). The first line
+    is the main one: V[0] is _velocities(c), the velocities of the maps. None with one line."""
+    if not c.HeadDef():
+        return None
+    h, gf = c.Head(), c.pars().gf
+    sp, unit, z = h.SpectralType(), _spec_unit(h), h.Redshift()
+    x = np.asarray(c.getZphys(np.arange(c.DimZ(), dtype=float)), dtype=np.float64)
+    if sp == "wave" and unit in _WAVE_UNITS and len(gf.RESTWAVE) > 1:
+        rest = [Wave2Vel(x, w * (1 + z), h.VelDef()) for w in gf.RESTWAVE[1:]]
+    elif sp == "freq" and unit in _FREQ_UNITS and len(gf.RESTFREQ) > 1:
+        rest = [Freq2Vel(x * _FREQ_UNITS[unit], f / (1 + z), h.VelDef()) for f in gf.RESTFREQ[1:]]
+    else:
+        return None
+    V = np.array([_velocities(c)] + rest, dtype=np.float64)
+    relint = np.asarray(gf.RELINT, float) if len(gf.RELINT) == len(V) else np.ones(len(V))
+    return V, relint
+
+
+def line_window(c, mask=None, lv=None, warn=True):
+    """Several lines (line_velocities): the channels of the main line, (nz,) bool, and its velocity vc. A channel
+    belongs to the line whose centre (at vc, in the frame of each line) is the nearest in velocity, so the window
+    ends halfway to the next lines. vc is the flux-weighted velocity of the main line in the total spectrum
+    (within mask), starting from that of all the lines corrected for their offsets (with RELINT) and iterated
+    with the window. Warns (warn) once per cube when the lines are blended (the window cuts the main line: the total
+    spectrum reaches within 2 sigma of its edges). None with one line."""
+    lv = line_velocities(c) if lv is None else lv
+    if lv is None:
+        return None
+    V, relint = lv
+    a = np.nan_to_num(c.array.astype(np.float64))
+    T = (a if mask is None else a * mask).sum(axis=(1, 2))
+    # offset of each line in the frame of the main line, for gas at velocity 0
+    off = np.array([np.interp(0., Vk[np.argsort(Vk)], V[0][np.argsort(Vk)]) for Vk in V])
+    tot = T.sum()
+    vc = (T * V[0]).sum() / tot - (relint * off).sum() / relint.sum() if tot > 0 else 0.
+    win = None
+    for _ in range(20):
+        new = np.argmin(np.abs(V - vc), axis=0) == 0
+        if not new.any():
+            return np.zeros(len(T), bool), vc
+        Tw = np.where(new, T, 0.)
+        if Tw.sum() > 0:
+            vc = (Tw * V[0]).sum() / Tw.sum()
+        if win is not None and np.array_equal(new, win):
+            break
+        win = new
+    Tw = np.clip(np.where(win, T, 0.), 0, None)
+    if warn and Tw.sum() > 0 and c.Head().fitsname not in _WARNED_BLEND:
+        sig = np.sqrt((Tw * (V[0] - vc) ** 2).sum() / Tw.sum())
+        vw = V[0][win]
+        if min(vc - vw.min(), vw.max() - vc) < 2 * sig:
+            _WARNED_BLEND.add(c.Head().fitsname)
+            warnings.warn("MOMENT MAPS: the lines (RESTWAVE/RESTFREQ) are blended: the moment maps of the main line "
+                          f"use the channels from {vw.min():.0f} to {vw.max():.0f} km/s, which cut its wings. "
+                          "MAPTYPE=GAUSSIAN fits all the lines together.", stacklevel=2)
+    return win, vc
+
+
 def compute_moments(c, mask=None):
-    """Moment 0,1,2 for all pixels (port of MomentMap::calculateMoments). Returns 3 arrays."""
+    """Moment 0,1,2 for all pixels (port of MomentMap::calculateMoments). Returns 3 arrays. With several lines
+    (RESTWAVE/RESTFREQ), the moments of the main line (the first): only the channels of line_window()."""
     a = c.array.astype(np.float64)
     vels = _velocities(c)[:, None, None]
     I = a if mask is None else a * mask
+    lw = line_window(c, mask)
+    if lw is not None:
+        I = I * lw[0][:, None, None]
     denom = I.sum(axis=0)
     num = (I * vels).sum(axis=0)
     with np.errstate(invalid="ignore", divide="ignore"):
@@ -45,65 +114,97 @@ def gaussian_moments(c, mask=None, niter=50, maxiter=1000, tol=1e-3):
     """Gaussian fit of all spectra (vectorised Levenberg-Marquardt): niter iterations for all the spectra,
     then up to maxiter for those not converged (as C++ Lsqfit: the chi^2 decreased by less than tol in
     relative terms, or the damping exceeded 1E10). Returns integrated intensity, central velocity,
-    dispersion: NaN where the fit did not converge, where a column of the Jacobian is 0, with 3 channels or
-    fewer, and for empty spectra (C++ flagged these failures as well)."""
+    dispersion: NaN where the fit did not converge, where a column of the Jacobian is 0, with as many channels
+    as parameters or fewer, and for empty spectra (C++ flagged these failures as well).
+    With several lines (RESTWAVE/RESTFREQ), one Gaussian per line with one velocity and one dispersion for all
+    (in the frame of each line) and free amplitudes, starting from a dispersion of at least one channel; the lines
+    with no centre in the cube are left out. The intensity is that of the main line (the first)."""
     a = c.array.astype(np.float64)
     if mask is not None:
         a = a * mask
     nz, ny, nx = a.shape
     S = a.reshape(nz, -1).T
-    v = _velocities(c)
-    imax = np.argmax(S, axis=1)
-    smax = S[np.arange(S.shape[0]), imax]
-    p = np.stack([smax, v[imax], np.full(S.shape[0], 10.)], 1)
+    lv = line_velocities(c)
+    if lv is None:
+        V = _velocities(c)[None]
+        imax = np.argmax(S, axis=1)
+        smax = S[np.arange(S.shape[0]), imax]
+        amp = [smax]
+    else:
+        vc = line_window(c, mask, lv, warn=False)[1]
+        keep = [0] + [k for k in range(1, len(lv[0])) if lv[0][k].min() <= vc <= lv[0][k].max()]
+        V, relint = lv[0][keep], lv[1][keep]
+        # the channel of each line for gas at the velocity of each channel of the main line (-1: out of the cube)
+        ich = []
+        for Vk in V:
+            o = np.argsort(Vk)
+            i = np.rint(np.interp(V[0], Vk[o], np.arange(nz, dtype=float)[o])).astype(int)
+            ich.append(np.where((V[0] < Vk.min()) | (V[0] > Vk.max()), -1, i))
+        # starting velocity: where the lines (weighted with RELINT) line up best
+        score = sum(r * np.where(i >= 0, S[:, i], 0.) for r, i in zip(relint, ich))
+        imax = np.argmax(score, axis=1)
+        smax = S[np.arange(S.shape[0]), imax]
+        amp = [smax] + [np.where(i[imax] >= 0, S[np.arange(S.shape[0]), i[imax]], 0.) for i in ich[1:]]
+    nl = len(V)
+    npar = nl + 2
+    v0 = V[0][imax]
+    # starting dispersion: 10 km/s (as C++); several lines: at least a channel (a narrower start ends in spikes
+    # on one channel with the wide channels of optical cubes)
+    sig0 = 10.
+    if lv is not None and nz > 1:
+        sig0 = max(sig0, float(np.abs(np.diff(V[0])).max()))
+    p = np.stack(amp + [v0, np.full(S.shape[0], sig0)], 1)
     lam = np.full(S.shape[0], 1e-3)
 
-    def model(p):
-        arg = (v[None] - p[:, 1:2]) / p[:, 2:3]
-        return p[:, 0:1] * np.exp(-arg * arg / 2.)
+    def gauss(p):
+        arg = (V[None] - p[:, nl, None, None]) / p[:, nl + 1, None, None]
+        return arg, np.exp(-arg * arg / 2.)
 
-    def chi2(p):
-        return np.sum((S - model(p)) ** 2, axis=1)
-    chi = chi2(p)
-    ok = (smax != 0) & (nz > 3)
+    def model(p):
+        return (p[:, :nl, None] * gauss(p)[1]).sum(axis=1)
+
+    chi = np.sum((S - model(p)) ** 2, axis=1)
+    ok = (smax != 0) & (nz > npar)
     conv = np.zeros(S.shape[0], bool)
     fail = np.zeros(S.shape[0], bool)
     act = np.arange(S.shape[0])                 # (all the spectra for niter iterations, as before)
+    eye = np.eye(npar)[None]
     for it in range(maxiter):
         if it == niter:
             act = np.flatnonzero(ok & ~conv & ~fail)
         if act.size == 0:
             break
         pa, Sa, la, ca = p[act], S[act], lam[act], chi[act]
-        arg = (v[None] - pa[:, 1:2]) / pa[:, 2:3]
-        ex = np.exp(-arg * arg / 2.)
-        J = np.stack([ex, pa[:, 0:1] * ex * arg / pa[:, 2:3], pa[:, 0:1] * ex * arg * arg / pa[:, 2:3]], 2)
-        r = Sa - pa[:, 0:1] * ex
+        arg, ex = gauss(pa)
+        Aex = pa[:, :nl, None] * ex
+        sg = pa[:, nl + 1, None, None]
+        J = np.concatenate([ex.transpose(0, 2, 1), (Aex * arg / sg).sum(axis=1)[..., None],
+                            (Aex * arg * arg / sg).sum(axis=1)[..., None]], 2)
+        r = Sa - Aex.sum(axis=1)
         JTJ = np.einsum("nki,nkj->nij", J, J)
         JTr = np.einsum("nki,nk->ni", J, r)
         fail[act] |= ~np.all(np.diagonal(JTJ, axis1=1, axis2=2) > 0, 1)
-        A = JTJ + la[:, None, None] * JTJ * np.eye(3)[None]
-        A += 1e-30 * np.eye(3)[None]
+        A = JTJ + la[:, None, None] * JTJ * eye
+        A += 1e-30 * eye
         try:
             dp = np.linalg.solve(A, JTr[..., None])[..., 0]
         except np.linalg.LinAlgError:
             break
         pn = pa + dp
-        arg = (v[None] - pn[:, 1:2]) / pn[:, 2:3]
-        cn = np.sum((Sa - pn[:, 0:1] * np.exp(-arg * arg / 2.)) ** 2, axis=1)
+        cn = np.sum((Sa - model(pn)) ** 2, axis=1)
         better = (cn < ca) & np.all(np.isfinite(pn), 1)
         p[act] = np.where(better[:, None], pn, pa)
         chi[act] = np.where(better, cn, ca)
         lam[act] = np.where(better, la / 10, la * 10)
         conv[act] |= (better & (ca - cn <= tol * ca)) | (lam[act] > 1e10)
     ok &= conv & ~fail & np.all(np.isfinite(p), 1)
-    integ = np.sqrt(2 * np.pi) * np.abs(p[:, 2]) * p[:, 0]
+    sig = p[:, nl + 1]
+    integ = np.sqrt(2 * np.pi) * np.abs(sig) * p[:, 0]
     if c.pars().fluxConvert:
-        integ = np.sqrt(2 * np.pi) * np.abs(p[:, 2]) * FluxtoJyBeam(p[:, 0], c.Head())
-    out = [integ, p[:, 1], p[:, 2]]
+        integ = np.sqrt(2 * np.pi) * np.abs(sig) * FluxtoJyBeam(p[:, 0], c.Head())
+    out = [integ, p[:, nl], sig]
     out = [np.where(ok, o, np.nan).reshape(ny, nx) for o in out]
     return out
-
 
 
 @nb.njit(cache=True, error_model="numpy")
@@ -319,7 +420,9 @@ class MomentMap(Image2D):
         else:
             a = 0.25 * (1. / Nright + 1. / Nleft); b = 0.; cf = 1.
             sigmaBC = sigma / math.sqrt(1. + a)
-        nchan = m.sum(axis=0) if msk else np.full(self.array.shape, c.DimZ())
+        lw = line_window(c, m if msk else None)       # (several lines: the channels of the main line)
+        chans = np.ones(c.DimZ(), bool) if lw is None else lw[0]
+        nchan = (m * chans[:, None, None]).sum(axis=0) if msk else np.full(self.array.shape, chans.sum())
         noise = np.sqrt(nchan - b + a * nchan * nchan) * cf * sigmaBC
         if c.pars().fluxConvert:
             noise = FluxtoJyBeam(noise, c.Head())
