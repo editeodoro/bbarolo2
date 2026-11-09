@@ -150,12 +150,12 @@ The gas of each sub-ring is spread in height with the density profile $\rho(z)$ 
 | 1 (default) | Gaussian | $\exp[-z^2/(2z_0^2)]$ | $\sqrt2\,\mathrm{erf}^{-1}(x)$ |
 | 2 | sech² | $\mathrm{sech}^2(z/z_0)$ | $\operatorname{artanh} x$ |
 | 3 | exponential | $\exp(-\lvert z\rvert/z_0)$ | $-\ln(1-x)$ for $x \ge 0$, $\ln(1+x)$ for $x < 0$ |
-| 4 | Lorentzian | $[1 + (z/z_0)^2]^{-1}$ | $\tan(\pi x f_L/2)$ |
+| 4 | Lorentzian | $[1 + (z/z_0)^2]^{-1}$ | $\tan(\pi x/2)$ |
 | 5 | box | 1 for $\lvert z\rvert \le z_0$ | $x$ |
 
-The MC models draw random heights $z = z_0\, Q(p)$ with $p$ uniform in $[0, 1)$ and $f_L = 1$ (the
-Gaussian layer: $z = z_0\, g$, with $g$ a standard normal deviate); the ANALYTIC models use fixed
-quantiles (below). $z_0 = 0$ gives a disk with no thickness.
+The MC models draw random heights $z = z_0\, Q(p)$ with $p$ uniform in $[0, 1)$ (the Gaussian layer:
+$z = z_0\, g$, with $g$ a standard normal deviate); the ANALYTIC models use evenly spaced heights, each
+weighted with the fraction of the layer around it (below). $z_0 = 0$ gives a disk with no thickness.
 
 (galmod-mc)=
 ## The Monte Carlo model (`GALMODTYPE MC`)
@@ -224,25 +224,30 @@ on a stratified grid and each deposits its line profile integrated over the chan
   $p = \sqrt{|\Delta x\Delta y|}$, at $\theta_m = 2\pi (m + 3/4)/n_\theta$ for the inner radius and
   $2\pi (m + 1/4)/n_\theta$ for the outer one (staggered by half a step). With $\delta = 0.75\,p$ this
   is about 8 samples per pixel of face-on area.
-- **Height**: $n_z$ samples at the quantiles $z_q = z_0\, Q\big((q + 1/2)/n_z\big)$, $q = 0, \dots,
-  n_z - 1$, of the layer (table above). $n_z = 1$ ($z = 0$) when $z_0 = 0$; otherwise
+- **Height**: one sample ($z = 0$, weight 1) when $z_0 = 0$ or the disk is face-on; otherwise heights
+  evenly spaced by
 
   $$
-  n_z = \min\!\left[\max\!\left(4,\ \left\lfloor \frac{6 z_0 |\sin i|}{p} \right\rfloor + 1,\
-  \left\lfloor \frac{12\, |\partial V/\partial z|\, z_0 |\sin i|}{\sigma} \right\rfloor + 1\right),\
-  n_{\max}\right],
+  \Delta z = \min\!\left(\frac{p}{4\,|\sin i|},\ \frac{\sigma}{2\,|\partial V/\partial z|\,|\sin i|}\right)
   $$
 
-  so that consecutive samples are less than about half a pixel apart once projected and, with a
-  vertical gradient, less than about $\sigma/2$ apart in velocity. $n_{\max} = 64$, or 256 when
-  $\partial V/\partial z \ne 0$ in some ring; the last term is 1 when $\partial V/\partial z = 0$. For
-  the Lorentzian layer only the heights that can fall in the cube are sampled: those below
-  $z_{\max} = (r_j + \delta + d)/|\sin i|$, with $d$ the distance (arcsec) from the centre to the
-  farthest corner of the cube, which hold the fraction $f_L = (2/\pi)\arctan(z_{\max}/z_0)$ of the
-  flux; $f_L = 1$ for the other layers.
+  (a quarter of a pixel once projected and, with a vertical gradient, half a dispersion in velocity; the
+  second term only when $\partial V/\partial z \ne 0$), symmetric about the plane and offset from it by
+  half a step, $z_q = \pm(q + 1/2)\,\Delta z$ (a sample in the plane would fall on the edges of the
+  pixels when the centre is at a pixel edge). Where the density of the layer is below $10^{-3}$ of its
+  peak the bins are $4\Delta z$ wide. Each sample carries the fraction of the layer in its bin,
+  $w_q = F(z_q + \Delta z/2) - F(z_q - \Delta z/2)$, with $F$ the cumulative distribution of the layer. The
+  samples reach the height beyond which the layer has less than $10^{-6}$ of its flux ($5\,z_0$ Gaussian,
+  $7.6\,z_0$ sech², $14\,z_0$ exponential, $z_0$ box), or $z_{\max} = (r_j + \delta + d)/|\sin i|$, with
+  $d$ the distance (arcsec) from the centre to the farthest corner of the box of the model, beyond which
+  no cloud can fall in it: the only limit of the Lorentzian layer, whose flux beyond it is not deposited,
+  as the MC clouds outside the field. At most 1024 samples ($\Delta z$ grows if needed). The heights do
+  not depend on the box, so a model in a box is the crop of the full model. (BBarolo 2.0.0 used
+  equal-weight samples at the quantiles of the layer, several pixels apart in its tails at any number of
+  samples.)
 
 Each sample is projected on its nearest pixel, as a MC cloud, and carries the flux
-$\Sigma_j A_j f_L/(2 n_\theta n_z)$. Its line is a Gaussian of dispersion
+$\Sigma_j A_j w_q/(2 n_\theta)$; consecutive heights that fall in the same pixel are deposited together. Its line is a Gaussian of dispersion
 $\sigma = \sqrt{\sigma_{\rm gas}^2 + \sigma_{\rm instr}^2}$ centred on its velocity $v$, integrated over each
 channel:
 
@@ -254,7 +259,7 @@ $$
 where $\Phi$ is the standard normal cumulative distribution and $u_{k\pm1/2}$ are the velocities of the
 edges of channel $k$ (the spectral coordinate at pixel $k \pm 1/2$ converted to velocity, in the frame of line
 $\ell$ with several lines, below; so the channels need not be uniform in velocity). The channel $k$ receives
-$\Sigma_j A_j f_L/(2 n_\theta n_z) \, f_k \, \kappa_k\, I_\ell$. The profile is computed for the channels
+$\Sigma_j A_j w_q/(2 n_\theta) \, f_k \, \kappa_k\, I_\ell$. The profile is computed for the channels
 within $K = \lfloor 5\sigma/\Delta v_{\min} \rfloor + 2$ of the central one ($\Delta v_{\min}$: the narrowest
 channel); beyond $5\sigma$ the line holds less than $3\times10^{-7}$ of its flux. $\Phi$ is tabulated in
 steps of $1/512$ for $|t| \le 6$ and interpolated linearly (error below $5\times10^{-7}$). A line with
@@ -349,7 +354,7 @@ Jy/beam, whatever the units of the cube (Jy per pixel with SM false).
 ## Convolution with the beam
 
 With {ref}`SM <par-galmod-sm>` true (the default) every channel is convolved with the beam of the cube:
-BMAJ, BMIN, BPA of the header, or {ref}`BEAMFWHM <par-all-beamfwhm>`. The kernel is the beam, a 2D
+the beam of the header (BMAJ, BMIN, BPA), or {ref}`BEAM <par-all-beam>` when given. The kernel is the beam, a 2D
 Gaussian
 
 $$
@@ -477,7 +482,8 @@ The full list is in {doc}`../../reference/changes`.
 - `bbarolo/galmod.py`: `DiskModel` (the engine: `array`, `cube`, `hdu`, `addnoise`, `ring_maps`);
   `model_rings` and `outer_edge` (RINGMODE); `GalmodSetup` (header quantities, `subrings`, `build`,
   `_NHItoRAD`, `_velocity_edges`); `edge_weights`; the numba kernels `_galmod_mc`, `_galmod_analytic`,
-  `_line_profile`, `_zquantiles`, `_lorentz_frac`; `_conv_sparse` (convolution of single-ring models).
+  `_line_profile`, `_zgrid` (the vertical samples), `_layer_cdf`; `_conv_sparse` (convolution of single-ring
+  models).
 - `bbarolo/_rng.py`: the random generator. `bbarolo/smooth.py`: the kernel (`fillgauss2d`,
   `Smooth3D.defineBeam_Gaussian`) and `FFTConvolver`.
 - `bbarolo/galfit_out.py`: `writeModel`, `finalModel`, `radialProfile` (AZIM), `_local` (LOCAL).

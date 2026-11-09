@@ -246,8 +246,7 @@ rounded up to whole pixels on each axis and cut at the edges of the cube; in REV
 the rings ($e = R_N + \Delta R/2 + 3z_{0,N}$). All the channels of the cube are modelled.
 
 **The convolution.** Each channel of the model is convolved with the beam, a 2D Gaussian with the FWHM
-BMAJ × BMIN at the angle BPA (from the header, or from the keywords BMAJ, BMIN, BPA or
-{ref}`BEAMFWHM <par-all-beamfwhm>`), sampled on the
+BMAJ × BMIN at the angle BPA (from the header, or from the keyword {ref}`BEAM <par-all-beam>`), sampled on the
 pixels down to $10^{-4}$ of its peak and normalised to a unit sum, so that the flux is conserved. Values
 below $10^{-12}$ are then set to zero, which decides where the model "has emission". With
 {ref}`SM <par-3dfit-sm>` `false` the models are not convolved. In the fits, $\Sigma$ is always a flux per
@@ -481,16 +480,34 @@ one parameter moves. BAYESIAN3DFIT gives posterior distributions instead.
 The final rings are those of the second stage (of the first without it). The model of all the rings is built
 with the ring convention RINGMODE, convolved with the beam and normalised with the last value of NORM:
 
-- `AZIM`: the face-on surface density of each ring is taken from the radial profile of the data, measured
-  in the final rings on the total intensity map within the mask (as ELLPROF):
-  $\Sigma_k = \cos i_k\, S_k/A_k$, where $S_k$ is the sum of the map over the ring and $A_k$ its area on the
-  sky (arcsec²). The rings with DENS = 0 stay empty. (Internally the densities are multiplied by a power of
+- `AZIM`: the model built with the densities DENS of the deconvolved profile (below), as it is. It is no
+  longer rescaled to the observed profile of `_densprof.txt`, $\Sigma_k = \cos i_k\, S_k/A_k$, where $S_k$
+  is the sum of the total intensity map within the mask over the ring and $A_k$ its area on the sky (arcsec²),
+  as in ELLPROF. If the deconvolved profile cannot be computed (no beam, too few pixels), the observed profile
+  is used. The rings with DENS = 0 stay empty. (Internally the densities are multiplied by a power of
   ten that brings the smallest one between 0.1 and 10, so that Monte Carlo models have a sensible number of
   clouds, and the model is divided by it afterwards.)
 - `LOCAL`: each spectrum of the model is scaled to the flux of the data in the mask in the same pixel,
-  $\sum_z M_{xyz} D_{xyz} / \sum_z m_{xyz}$.
-- `NONE`: the model with the DENS of the rings.
+  $\sum_z M_{xyz} D_{xyz} / \sum_z m_{xyz}$, starting from the model of `AZIM` (the deconvolved densities).
+- `NONE`: the model with the DENS of the rings, which are the deconvolved densities (the fitted ones with
+  FREE ALL, below).
 - `BOTH` (or {ref}`DEBUG <par-all-debug>`): the `AZIM` and the `LOCAL` models.
+
+**The deconvolved profile.** At the end of the run, 3DFIT computes the density profile deconvolved from the
+beam at the geometry of the final rings, by the same method as the deconvolved profile of
+{doc}`ELLPROF <../ellprof/algorithm>` and of {doc}`BAYESIAN3DFIT <../bayesian3dfit/algorithm>`: the densities
+whose beam-convolved model reproduces the total intensity map of the data in the mask dilated by one beam,
+with a smoothness prior on the profile. The errors come from 200 noise realisations. With SIDE `A` or `R`
+only one half of the galaxy is used. It is written to `<prefix>_densprof_deconvolved.txt`, in the format of
+`_ellprof_deconvolved.txt`: RADIUS, SDENS_FO, E_LO, E_HI, SDENS_FO_OBS (the observed face-on profile), DENS
+and, for HI data in Jy, HIMASSDENS, E_LO, E_HI and HIMASSDENS_OBS. In Python it is
+`res.densprof_deconvolved`, an astropy Table (`radii`, `sdens_fo`, `e_sdens_fo_lo`, `e_sdens_fo_hi`,
+`sdens_fo_obs`, `dens`, ...). With `FREE ALL` (DENS fitted) the profile is computed and written, but not
+used. The densities DENS of the profile are those of the final models; the ring normalisation inside the
+fit is unchanged. On NGC 2403 the `AZIM` model holds 96% of the flux of the data in the mask, against 90%
+with the observed profile. GALMOD is unchanged: it still uses the observed profile for `AZIM`. The
+surface-density panel of `<prefix>_parameters.pdf` shows the face-on deconvolved profile, with its errors,
+and the observed face-on profile (open grey circles), in map units per arcsec².
 
 With {ref}`NOISERMS <par-3dfit-noiserms>`, a copy with Gaussian noise (convolved with the beam, then
 rescaled to that rms) is also written. The outputs, in the output folder:
@@ -501,6 +518,7 @@ rescaled to that rms) is also written. The outputs, in the output folder:
 | `<prefix>_2drings.txt` | the 2D fits of the initial estimates and of the PA refinement |
 | `<prefix>_rings_final1.txt`, `_rings_final2.txt` | the fitted rings of the two stages, with the errors |
 | `<prefix>_densprof.txt` | the radial profile of the data in the final rings |
+| `<prefix>_densprof_deconvolved.txt` | the density profile deconvolved from the beam, in the final rings |
 | `<prefix>_mod_<norm>.fits` | the final model (`azim`, `local` or `none`), and `_mod_noise.fits` |
 | `maps/` | moment maps 0, 1, 2 of the data (in the mask) and of the model |
 | `pvs/` | position–velocity slices of data, model and mask along the major and minor axes |
@@ -537,7 +555,9 @@ Tests on simulated disks (3304 fits; the report is in `performance/report` of th
   40. At low S/N the mask cuts the line wings, which biases $\sigma$ low and $i$ high.
 - $i$ stays close to its initial value (DELTAINC); $\phi$ is recovered to about 2°.
 - At high S/N, `NORM AZIM` scales a model that lacks the beam-smeared emission of the neighbouring rings:
-  $i$ is biased low (−7° at S/N 200) and $\sigma$ high. `NORM LOCAL` removes this bias.
+  $i$ is biased low (−7° at S/N 200) and $\sigma$ high. `NORM LOCAL` removes this bias. (The deconvolved
+  profile addresses this for the final model, whose densities now account for the beam smearing; the
+  normalisation of the rings in the fit itself is unchanged, and these tests do not use it.)
 
 These are properties of the algorithm, shared by BBarolo 1.8.
 

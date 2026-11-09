@@ -91,7 +91,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         if self._cube is not None:
             self._init_rings()
 
-    def update(self, beam=None, **params):
+    def update(self, **params):
         """ Change BBarolo parameters (None restores the default). Changing the rings
         resets them (and the default priors that depend on them). FREE, SAMPLER, SAMPLEROPTS
         and RUNOPTS set the defaults of run(); PRIORS sets entries of self.priors (see
@@ -109,7 +109,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             kw = lookup(k)
             if kw is not None and kw.name in self._KEYWORD_OPTIONS and v is not None:
                 given[kw.name] = self._keyword_option(kw.name, v)
-        super(BayesianBBarolo, self).update(beam=beam, **params)
+        super(BayesianBBarolo, self).update(**params)
         if not hasattr(self, "priors"):              # called by the base constructor
             return self
         if "PRIORS" in given:
@@ -117,7 +117,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             if self.prior_distr is not None:
                 for k in given["PRIORS"]:
                     self.prior_distr[k] = None       # frozen again by the next run
-        if params or beam is not None:
+        if params:
             self._galfit = self._ellprof = None
             self._cube_obj = None
             if self._inri is not None:
@@ -246,7 +246,47 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                          ("phi", "PA")):
                 print(f"  {n:5s} = {np.median(getattr(inR, k)):.3f}")
         self._inri = _RingDict.from_rings(inR)
+        self._inri_base = None                   # (the rings before their extension for RADMAX, see _rings_for_radmax)
+        self._nradii_estimated = bool(ini.estimated.get('NRADII', False))
+        self._radmax_guess = float(self._inri.r['radii'][-1])
         self._set_default_priors()
+
+    def _rings_for_radmax(self, verbose=True):
+        """ With RADMAX free as the edge of the disk (like_kwargs radmax 'edge' or 'taper') and the number of
+        rings estimated (NRADII and RADII not given), the rings are extended, with the same separation and the
+        values of the last ring, out to twice the estimated outer radius (_radmax_guess, the last radius of
+        the estimated rings), the upper end of the default prior of RADMAX: the edge can then be anywhere up
+        to there. Otherwise the estimated rings are used. Returns True if the rings changed (the default
+        priors, the engine and the free parameters must then be set again). """
+        mode = str(self.like_kwargs.get('radmax') or 'edge')
+        want = 'radmax' in self.freepar_idx and mode != 'ring' and getattr(self, '_nradii_estimated', False)
+        if want == (getattr(self, '_inri_base', None) is not None):
+            return False
+        if want:
+            base = self._inri
+            r = {k: np.asarray(v, float) for k, v in base.r.items()}
+            R = r['radii']
+            sep = float(R[-1] - R[-2]) if base.nr > 1 else float(R[-1])
+            if not sep > 0:
+                return False
+            nadd = int(np.ceil((2. * self._radmax_guess - R[-1]) / sep - 1e-6))
+            if nadd < 1:
+                return False
+            ext = _RingDict(base.nr + nadd)
+            for k, v in r.items():
+                new = R[-1] + sep * np.arange(1, nadd + 1) if k == 'radii' else np.full(nadd, v[-1])
+                ext.modify_parameter(k, np.r_[v, new])
+            ext.edge, ext.edgewidth = base.edge, base.edgewidth
+            ext.make_object()
+            self._inri, self._inri_base = ext, base
+            vprint(verbose, f"\n{self.taskname}: RADMAX free: the {base.nr} estimated rings are extended to {ext.nr} (out to "
+                   f"{float(ext.r['radii'][-1]):.4g} arcsec, twice the estimated radius {self._radmax_guess:.4g} "
+                   "arcsec)")
+        else:
+            self._inri, self._inri_base = self._inri_base, None
+        self._galfit = self._ellprof = None
+        self._set_default_priors()
+        return True
 
     def _set_default_priors(self):
         """ Default priors (uniform), parametric functions and smoothness penalties.
@@ -264,7 +304,8 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
           VSYS    initial +- 5 channels, at least +- 20 km/s;
           VDISP   0 to 2 x the largest initial VDISP, at least 0-50 km/s;
           Z0      0 to one beam FWHM (arcsec);
-          RADMAX  the last radius +- one beam FWHM, within the rings (see _prior_kwargs);
+          RADMAX  the estimated outer radius (_radmax_guess, the last initial radius) - one beam FWHM to
+                  twice it, within the rings (see _prior_kwargs and _rings_for_radmax);
           VROT_P1 (the amplitude of the arctan curve) 1 km/s to 2 x the largest initial VROT.
         The others do not depend on the rings: VRAD 0-50 km/s, VVERT 0-30 km/s, DVDZ 0-2 km/s/arcsec,
         ZCYL 0-5 arcsec, DENS 0.1-200.1, SIGMA and FRACERR log-uniform (see _prior_kwargs), and those of
@@ -280,8 +321,8 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             a, b = max(float(np.min(v)) - w, lo), min(float(np.max(v)) + w, hi)
             return dict(name='uniform', loc=a, scale=b - a)
         vtop = 2. * float(rr['vrot'].max()) if rr['vrot'].max() > 0 else 350.
-        last = float(rr['radii'][-1])
-        rlo = max(last - beam, 0.)
+        guess = float(getattr(self, '_radmax_guess', rr['radii'][-1]))
+        rlo = max(guess - beam, 0.)
         new = dict(
             xpos=around(rr['xpos'], 2. * beampix),                           # +- 2 beams
             ypos=around(rr['ypos'], 2. * beampix),
@@ -298,7 +339,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             z0=dict(name='uniform', loc=0., scale=beam),                     # 0 - 1 beam
             sigma=dict(name='loguniform', a=None, b=None),                    # None: 0.5 and 1000 x noise rms
             fracerr=dict(name='loguniform', a=1e-3, b=1.),                    # fractional model error
-            radmax=dict(name='uniform', loc=rlo, scale=last + beam - rlo),   # last radius +- 1 beam
+            radmax=dict(name='uniform', loc=rlo, scale=2. * guess - rlo),    # guess - 1 beam to 2 x guess
             vrot_p1=dict(name='uniform', loc=1., scale=max(vtop, 2.) - 1.),
             vrot_p2=dict(name='uniform', loc=1, scale=1000),
             vdisp_p1=dict(name='uniform', loc=0, scale=10),
@@ -326,7 +367,8 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
 
           1. the parameters given (kwargs) and the initial rings (_init_rings: the estimates of the
              geometry not given, and the default priors);
-          2. the free parameters (_parse_freepar): ndim, freepar_idx, freepar_names;
+          2. the free parameters (_parse_freepar): ndim, freepar_idx, freepar_names; with RADMAX free,
+             the estimated rings extended out to twice their radius (_rings_for_radmax);
           3. the 3DFIT engine of the cube, its data, mask and noise (_setup_engine, once per cube);
           4. the priors, frozen (_freeze_priors): prior_distr (the region of the likelihood depends
              on their bounds);
@@ -340,6 +382,8 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             self._init_rings()
         self.useBBres = bool(self.like_kwargs.get('bbres', False))
         self._parse_freepar(freepar)
+        if self._rings_for_radmax(kwargs.get('verbose', True)):
+            self._parse_freepar(freepar)
         self._setup_engine()
         self._setup_radmax()
         self._freeze_priors()
@@ -403,8 +447,8 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         edge of the disk, with the rings fixed (the model has no emission beyond it: see
         galmod.edge_weights); 'taper', a Gaussian edge of width radmax_width (default a quarter of
         the beam FWHM); 'ring', the radius of the last ring (which moves, with its annulus: the
-        RADMAX of the original module). The default prior is the last radius +- one beam FWHM, within
-        the rings (see _prior_kwargs). """
+        RADMAX of the original module). The default prior is from the estimated outer radius - one beam
+        FWHM to twice it, within the rings (see _prior_kwargs and _rings_for_radmax). """
         self._radmax_mode = str(self.like_kwargs.get('radmax') or 'edge')
         w = self.like_kwargs.get('radmax_width')
         if self._radmax_mode != 'taper':
@@ -458,8 +502,8 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         """ Parameters of the prior of key (self.priors without 'name'). For sigma, None values
         are relative to the measured noise rms: loguniform a = 0.5 rms, b = 1000 rms (the
         default prior: scale-invariant between half and 1000 times the noise); scale = rms
-        (e.g. halfcauchy, the default before November 2026). The default prior of RADMAX, the last
-        radius +- one beam FWHM, is kept within the rings: an edge (radmax 'edge' or 'taper') ends at
+        (e.g. halfcauchy, the default before November 2026). The default prior of RADMAX, from the
+        estimated outer radius - one beam FWHM to twice it, is kept within the rings: an edge (radmax 'edge' or 'taper') ends at
         the outer edge of the disk of the rings (galmod.outer_edge: the last radius with NODES rings,
         half a ring beyond it otherwise), beyond which it has no effect; the last ring (radmax 'ring')
         stays beyond the middle of the last two radii, so that the radii stay in order. """

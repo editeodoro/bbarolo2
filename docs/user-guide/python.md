@@ -21,8 +21,8 @@ a little differently: see [below](#bayesianbbarolo).
 ## The cube and the parameters
 
 The first argument is the cube: the name of a FITS file, an astropy HDU (or an HDUList, of which the first
-HDU with data is used), or a tuple `(data, header)`. `beam=(bmaj, bmin, bpa)`, in arcsec and degrees,
-replaces the beam of the header.
+HDU with data is used), or a tuple `(data, header)`. `beam=(bmaj, bmin, bpa)`, in arcsec and degrees (or `beam=60`, or a string such as
+`beam='0.01d 0.01d 30'`), is the keyword {ref}`BEAM <par-all-beam>` and replaces the beam of the header.
 
 The other arguments are the parameters: the keywords of the parameter files, case-insensitive (`vrot` or
 `VROT`), or their aliases. A ring parameter is one value for all the rings, or one value per ring (a list
@@ -54,6 +54,7 @@ them, and `res.keys()` gives their names. `print(res)` shows them with their typ
    rotation_curve Table (41 rows: radii, vrot)
    model          HDU 62x150x150
    densprof       Table (computed when used)
+   densprof_deconvolved  Table (the density profile deconvolved from the beam)
    maps           dict of HDUs (computed when used)
    pvs            dict of HDUs (computed when used)
    galfit         Galfit

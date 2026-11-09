@@ -122,38 +122,34 @@ class Cube:
     def setBeam(self, a, b, c): self.head.setBeam(a, b, c)
 
     # ------------------------------------------------------------------ I/O
+    def applyBeam(self):
+        """BEAM (par.beam), if given, replaces the beam of the header (BMAJ, BMIN in arcsec, BPA in degrees,
+        0 if not given). Called once, when the cube is read."""
+        h, b = self.head, getattr(self.par, "beam", None)
+        if b is None:
+            return
+        bmaj, bmin, bpa = b[0] / 3600., b[1] / 3600., (0. if b[2] is None else float(b[2]))
+        pix = h.PixScale()
+        if pix and min(bmaj, bmin) < 0.25 * pix:
+            raise BBaroloError(f"BEAM ({b[0]:.4g}x{b[1]:.4g} arcsec) is smaller than a quarter of a pixel "
+                               f"({pix * 3600.:.4g} arcsec): BMAJ and BMIN are in arcsec, or in degrees with a final "
+                               "d (e.g. BEAM 0.01d 0.01d 30).")
+        if h.BeamArea() > 0 and self.par.verbose and (abs(h.Bmaj() - bmaj) > 1e-6 * bmaj
+                                                      or abs(h.Bmin() - bmin) > 1e-6 * bmin
+                                                      or abs(h.Bpa() - bpa) > 1e-6):
+            print(f"\n BEAM: using a {b[0]:.5g}x{b[1]:.5g} arcsec beam (BPA={bpa:.5g}) instead of that of the header "
+                  f"({h.Bmaj() * 3600.:.5g}x{h.Bmin() * 3600.:.5g} arcsec, BPA={h.Bpa():.5g}).")
+        h.setBmaj(bmaj)
+        h.setBmin(bmin)
+        h.setBpa(bpa)
+        h.calcArea()
+
     def checkBeam(self):
-        h, p = self.head, self.par
+        h = self.head
         if h.BeamArea() == 0:
-            # With SMOOTH, BMAJ, BMIN and BPA are the new beam: the beam of the data is OBMAJ, OBMIN, OBPA
-            names = ("OBMAJ/OBMIN/OBPA", "OBMAJ, OBMIN and OBPA") if p.flagSmooth else ("BMAJ/BMIN/BPA",
-                                                                                      "BMAJ, BMIN and BPA")
-            pmaj, pmin, pbpa = (p.obmaj, p.obmin, p.obpa) if p.flagSmooth else (p.bmaj, p.bmin, p.bpa)
-            bmaj, bmin, bpa = pmaj / 3600., pmin / 3600., (0. if pbpa is None else pbpa)
-            if pmaj < 0: bmaj = -1
-            if pmin < 0: bmin = -1
-            if bmaj > 0 and bmin < 0: bmin = bmaj
-            if bmin > 0 and bmaj < 0: bmaj = bmin
-            # (BMAJ and BMIN are then the beam of the data, also for the SMOOTH masks)
-            self._beamFromBmaj = bmaj > 0 and not p.flagSmooth
-            if bmaj < 0 and bmin < 0 and p.beamFWHM > 0:
-                bmaj = bmin = p.beamFWHM
-            if bmaj < 0 and bmin < 0:
-                raise BBaroloError(f"No beam information available for the data: set the beam with {names[1]}, or "
-                                   "BEAMFWHM (in arcsec), or beam=(bmaj, bmin, bpa) in Python."
-                                   + (" BMAJ, BMIN and BPA are the new beam of SMOOTH." if p.flagSmooth else ""))
-            print(f"\n WARNING: Beam not available in the header: using a {bmaj * 3600.:.5g}x{bmin * 3600.:.5g}"
-                  f" arcsec (BPA={bpa:.5g}).\n"
-                  f"          You can set the beam with {names[0]} or BeamFWHM params (in arcsec).\n")
-            pix = h.PixScale()
-            if min(bmaj, bmin) < 0.25 * pix:
-                raise BBaroloError(f"The beam ({bmaj * 3600.:.4g}x{bmin * 3600.:.4g} arcsec) is smaller than a "
-                                   f"quarter of a pixel ({pix * 3600.:.4g} arcsec): BMAJ, BMIN and BEAMFWHM are in "
-                                   "arcsec.")
-            h.setBmaj(bmaj)
-            h.setBmin(bmin)
-            h.setBpa(bpa)
-            h.calcArea()
+            raise BBaroloError("No beam information available for the data: set it with BEAM (BMAJ BMIN BPA, "
+                               "e.g. BEAM 30 20 45; BMAJ and BMIN in arcsec, or in degrees with a final d; one "
+                               "value is a circular beam), or beam=(bmaj, bmin, bpa) in Python.")
         elif min(h.Bmaj(), h.Bmin()) < h.PixScale() and not getattr(self, "_beamwarned", False):
             self._beamwarned = True
             print(f"\n WARNING: the beam ({h.Bmaj() * 3600.:.4g}x{h.Bmin() * 3600.:.4g} arcsec) is smaller than a "
@@ -188,6 +184,7 @@ class Cube:
             print("\nBBAROLO WARNING: Something seems wrong with the header. Fix it before going on. ")
         beamNeeded = (p.flagSmooth or p.makeMask or p.gf.flagGALFIT or p.gm.flagGALMOD or p.flagSpace
                       or (p.se.flagSearch and p.se.minPix == -1))
+        self.applyBeam()
         if beamNeeded:
             self.checkBeam()
         self.headDefined = True
@@ -555,16 +552,15 @@ class Cube:
         return arr * self.mask
 
     def _maskBeam(self, bmaj, bmin, bpa):
-        """FACTOR and the new beam (arcsec, deg) of the SMOOTH masks, from the beam of the data: BMAJ, BMIN
-        and BPA if given, otherwise FACTOR (default 2) times the beam, at the same angle. BMAJ and BMIN taken
-        as the beam of the data (not in the header) do not count."""
+        """FACTOR and the new beam (arcsec, deg) of the SMOOTH masks, from the beam of the data: NEWBEAM if
+        given (its BPA, if not given, that of the data), otherwise FACTOR (default 2) times the beam, at the
+        same angle."""
         p = self.par
         factor = 2 if p.factor == -1 else p.factor
-        given = not getattr(self, "_beamFromBmaj", False)
-        nbmaj = p.bmaj if (given and p.bmaj != -1) else factor * bmaj
-        nbmin = p.bmin if (given and p.bmin != -1) else factor * bmin
-        nbpa = p.bpa if (given and p.bpa is not None) else bpa
-        return factor, nbmaj, nbmin, nbpa
+        nb = getattr(p, "newbeam", None)
+        if nb is not None:
+            return factor, nb[0], nb[1], (bpa if nb[2] is None else nb[2])
+        return factor, factor * bmaj, factor * bmin, bpa
 
     def BlankMask(self, channel_noise=None, onlyLargest=True):
         """Build the mask (self.mask) according to the MASK parameter."""

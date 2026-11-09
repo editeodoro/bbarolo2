@@ -304,7 +304,7 @@ def fig_smooth():
     from matplotlib.patches import Ellipse
     h0 = fits.getheader(CUBE)
     d0 = fits.getdata(CUBE)
-    res = Smooth(CUBE, bmaj=150, bmin=150, bpa=0, reduce=True).run(threads=4)
+    res = Smooth(CUBE, newbeam=150, reduce=True).run(threads=4)
     h1, d1 = res.cube.header, res.cube.data
     z = 30
     fig, ax = plt.subplots(1, 2, figsize=(9.5, 4.3), sharex=True, sharey=True)

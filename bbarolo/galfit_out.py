@@ -107,6 +107,15 @@ def radialProfile(c, rings, normtype):
     return ell, scaling_factor
 
 
+def _pow10_scale(dens):
+    """The power of ten that brings the smallest positive value of dens between 0.1 and 10 (1 if none)."""
+    pos = np.asarray(dens, float)
+    pos = pos[np.isfinite(pos) & (pos > 0)]
+    if pos.size == 0 or 0.1 <= pos.min() <= 10.:
+        return 1.
+    return float(10. ** -np.floor(np.log10(pos.min()) + 1.))
+
+
 def _model(c, model, rings):
     """The final model (a Cube named <name>mod) and its values as float64."""
     mod = model.cube(rings.copy(), final=True)
@@ -154,11 +163,13 @@ class ModelOutputs:
     both can be None, and are then computed when needed (the mask of the cube, built if needed, and the
     radial profile in the rings); models: {norm: model Cube} (azim, local or none, in the order they are
     written); noise: the noisy model (a Cube, NOISERMS) or None; adrift: the text of <prefix>_asymdrift.txt
-    (ADRIFT) or None. The moment maps (maps()) and the PV slices (pvs()) of the data, the models and the
+    (ADRIFT) or None; deconv: the profile deconvolved from the beam of 3DFIT (see deconvolved_profile;
+    densprof_deconvolved() as a Table, <prefix>_densprof_deconvolved.txt) or None. The moment maps (maps()) and the PV slices (pvs()) of the data, the models and the
     mask are computed when first asked for. write() writes them all, as the command line does."""
 
-    def __init__(self, c, rings, mask, ell, models, noise=None, adrift=None, fluxconv=False):
+    def __init__(self, c, rings, mask, ell, models, noise=None, adrift=None, fluxconv=False, deconv=None):
         self.c = c
+        self.deconv = deconv
         self.rings = rings.copy()
         self._mask = mask
         self._ell = ell
@@ -202,6 +213,22 @@ class ModelOutputs:
         import io
         from .tasks import read_table
         return read_table(io.StringIO(self.densprof_text()))
+
+    def densprof_deconvolved_text(self):
+        """<prefix>_densprof_deconvolved.txt (3DFIT), or None."""
+        if self.deconv is None:
+            return None
+        note = ("# The profile at the geometry of the final rings: its densities DENS are those of the final model"
+                + ("" if self.deconv.get("used", True) else " (not used: DENS is fitted)") + ".\n#\n")
+        return self.ell.deconvolvedText(self.deconv, self.ell.getNseg() - 1, task="3DFIT", obsfile="_densprof.txt",
+                                        note=note)
+
+    def densprof_deconvolved(self):
+        """The profile deconvolved from the beam (<prefix>_densprof_deconvolved.txt) as an astropy Table at full
+        precision (see Ellprof.deconvolvedTable), or None."""
+        if self.deconv is None:
+            return None
+        return self.ell.deconvolvedTable(self.deconv, self.ell.getNseg() - 1)
 
     def asymdrift(self):
         """The asymmetric drift correction (<prefix>_asymdrift.txt) as an astropy Table, or None."""
@@ -252,6 +279,11 @@ class ModelOutputs:
             self.c.writeMask()                # (the plots read it; the mask may have been built only now)
         with open(of + pre + "_densprof.txt", "w") as f:
             f.write(self.densprof_text())
+        if self.deconv is not None:
+            with open(of + pre + "_densprof_deconvolved.txt", "w") as f:
+                f.write(self.densprof_deconvolved_text())
+        if fit is not None:
+            fit._densprof_deconvolved = self.deconv is not None      # (plot_parameters.py plots it)
         if verb:
             print(f"    Writing {randomAdjective(1)} models, kinematic maps and PV slices...", end="", flush=True)
         maps, pvs = self.maps(), self.pvs()
@@ -276,29 +308,72 @@ class ModelOutputs:
                 print(" Done." if ret == 0 else " Something went wrong! Check plotting scripts in the output folder.")
 
 
+def deconvolved_profile(c, model, rings, par):
+    """The density profile of 3DFIT deconvolved from the beam: the densities of the final rings whose
+    beam-convolved model (the engine of the fit, model) reproduces the total intensity map of the data, at the
+    geometry of the rings, as for ELLPROF and BAYESIAN3DFIT (see profile.ellprof_deconvolved: the data map in
+    the mask dilated by one beam, a smoothness prior, errors from 200 realisations of the noise; only one half
+    of the galaxy with SIDE A or R). Returns its dict (with 'used': whether the final model uses it, i.e. DENS
+    is not fitted), or None (no beam, or too few pixels with data)."""
+    from .profile import ellprof_deconvolved
+    from .bayesian.common import blas_threads
+    with blas_threads():                # (small matrices: all the BLAS threads were slower)
+        dp = ellprof_deconvolved(c, rings, side=par.SIDE, model=model)
+    if dp is not None:
+        dp["used"] = not (getattr(par, "FREE", "") and "all" in str(par.FREE).lower())
+        if not np.all(np.isfinite(dp["dens"])):
+            return None
+    return dp
+
+
 def model_outputs(c, model, rings, normtype, mask, par=None, fit=None, seed=None):
     """The final model and the outputs of 3DFIT and GALMOD, in memory (a ModelOutputs; nothing is written).
 
-    c: the data cube; model: the model engine (DiskModel); rings: the final rings (AZIM changes their DENS in
-    place); normtype: AZIM, LOCAL, NONE or BOTH (AZIM and LOCAL); mask: the mask (bool array; None: built
-    when needed, NONE only); par: the
-    GALMOD/3DFIT parameters (NOISERMS, ADRIFT, ...; default c.pars().gf); fit: the Galfit object of a 3DFIT
-    (its rings fitted, for the asymmetric drift); seed: the seed of the noise of the noisy model (NOISERMS)."""
+    c: the data cube; model: the model engine (DiskModel); rings: the final rings (GALMOD with AZIM changes
+    their DENS in place); normtype: AZIM, LOCAL, NONE or BOTH (AZIM and LOCAL); mask: the mask (bool array;
+    None: built when needed, NONE only); par: the GALMOD/3DFIT parameters (NOISERMS, ADRIFT, ...; default
+    c.pars().gf); fit: the Galfit object of a 3DFIT (its rings fitted, for the asymmetric drift); seed: the
+    seed of the noise of the noisy model (NOISERMS).
+
+    3DFIT (fit given) also computes the density profile deconvolved from the beam (deconvolved_profile), and
+    the final models are built with its densities (unless DENS is fitted, FREE ALL): AZIM is then that model
+    as it is (no rescaling to the observed profile), LOCAL and NONE start from it. Without a deconvolved
+    profile (no beam, too few pixels), the observed profile is used as before."""
     p = c.pars()
     par = p.gf if par is None else par
     with _outputs_mode(p) as verb:
         if verb:
             print(" Preparing a bunch of cool outputs...")
+        deconv = None
+        if fit is not None:
+            if verb:
+                print(f"    Deconvolving {randomAdjective(1)} density profile...", end="", flush=True)
+            deconv = deconvolved_profile(c, model, rings, par)
+            if verb:
+                print(" Done." if deconv is not None else " Failed (no beam, or too few pixels with data).")
+        usedec = deconv is not None and deconv["used"]
         ell, scaling_factor = None, 1.
-        if normtype != "NONE" or mask is not None or par.flagADRIFT:
+        if normtype != "NONE" or mask is not None or par.flagADRIFT or deconv is not None:
             if verb:
                 print(f"    Deriving {randomAdjective(1)} radial profile...", end="", flush=True)
-            ell, scaling_factor = radialProfile(c, rings, normtype)
+            ell, scaling_factor = radialProfile(c, rings, "NONE" if usedec else normtype)
             if verb:
                 print(" Done.")
         if verb:
             print("    Calculating the very last model...", end="", flush=True)
-        mod, out = _model(c, model, rings)
+        mrings = rings
+        if usedec:
+            # the deconvolved densities, multiplied by a power of ten that brings the smallest positive one
+            # between 0.1 and 10 (as the observed profile of AZIM: a sensible number of clouds for the MC
+            # models); the model is divided by it
+            dens = np.asarray(deconv["dens"], float)
+            sf = _pow10_scale(dens)
+            mrings = rings.copy()
+            mrings.dens = dens * sf
+        mod, out = _model(c, model, mrings)
+        if usedec:
+            out = out / sf
+            mod.array = out.astype(np.float32)
         models = {}
         if normtype in ("AZIM", "BOTH"):
             mod.array = (out / scaling_factor).astype(np.float32)
@@ -331,7 +406,7 @@ def model_outputs(c, model, rings, normtype, mask, par=None, fit=None, seed=None
                                          rings.inc[sel])
             if verb:
                 print(" Done." if adrift else " Failed.")
-    return ModelOutputs(c, rings, mask, ell, models, noise, adrift or None)
+    return ModelOutputs(c, rings, mask, ell, models, noise, adrift or None, deconv=deconv)
 
 
 def writeModel(c, model, rings, normtype, mask, par=None, makeplots=False, fit=None):

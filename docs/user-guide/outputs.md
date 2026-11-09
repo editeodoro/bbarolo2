@@ -101,7 +101,7 @@ defaults. It runs the same tasks again with `BBarolo -p`. See {doc}`parameter-fi
 
 | Task | Files | Described in |
 |---|---|---|
-| 3DFIT | rings (initial, final), `_densprof.txt`, `_mod_<norm>.fits`, mask, `maps/`, `pvs/`, plots, `_asymdrift.txt` | {doc}`../tasks/3dfit/index` |
+| 3DFIT | rings (initial, final), `_densprof.txt`, `_densprof_deconvolved.txt`, `_mod_<norm>.fits`, mask, `maps/`, `pvs/`, plots, `_asymdrift.txt` | {doc}`../tasks/3dfit/index` |
 | BAYESIAN3DFIT | `_rings_final1.txt` with errors, best model, `maps/`, `pvs/`, samples (`_dynesty_results.npy`), `_corner.pdf`, `_profiles.pdf` | {doc}`../tasks/bayesian3dfit/index` |
 | GALMOD | `_rings_model.txt`, `_mod_<norm>.fits`, mask, `_densprof.txt`, `maps/`, `pvs/` | {doc}`../tasks/galmod/index` |
 | GalMod3D | no files: `model()` returns an HDU | {doc}`../tasks/galmod3d/index` |

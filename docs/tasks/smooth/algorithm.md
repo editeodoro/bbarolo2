@@ -18,17 +18,15 @@ A beam is an elliptical Gaussian given by its major and minor axes $a \ge b$ (FW
 position angle $\theta$ of its major axis (degrees, anticlockwise from North). Subscripts $\rm o$, $\rm n$
 and $\rm k$ denote the old beam, the new beam and the convolution kernel.
 
-- **Old beam** $(a_{\rm o}, b_{\rm o}, \theta_{\rm o})$: the beam of the header (BMAJ, BMIN, BPA), each
-  value replaced by {ref}`OBMAJ <par-smooth-obmaj>`, {ref}`OBMIN <par-smooth-obmin>` and
-  {ref}`OBPA <par-smooth-obpa>` when given. A header without a beam needs OBMAJ and OBMIN, or
-  {ref}`BEAMFWHM <par-all-beamfwhm>`; without them the task stops with an error.
-- **New beam** $(a_{\rm n}, b_{\rm n}, \theta_{\rm n})$: {ref}`BMAJ <par-smooth-bmaj>`,
-  {ref}`BMIN <par-smooth-bmin>` and {ref}`BPA <par-smooth-bpa>`. An axis not given is
-  $f$ times the old one, with $f$ = {ref}`FACTOR <par-smooth-factor>` (default 2); BMIN not given with
-  BMAJ given is equal to BMAJ; $\theta_{\rm n} = \theta_{\rm o}$ when BPA is not given.
+- **Old beam** $(a_{\rm o}, b_{\rm o}, \theta_{\rm o})$: the {ref}`BEAM <par-all-beam>` when given, else the
+  beam of the header. Without either, the task stops with an error.
+- **New beam** $(a_{\rm n}, b_{\rm n}, \theta_{\rm n})$: {ref}`NEWBEAM <par-smooth-newbeam>` (`NEWBEAM bmaj bmin
+  bpa`; one value is a circular beam), with $\theta_{\rm n} = \theta_{\rm o}$ when its BPA is not given.
+  Without NEWBEAM it is $f$ times the old beam at the same angle, with $f$ = {ref}`FACTOR <par-smooth-factor>`
+  (default 2).
 
 If $a < b$ for either beam, the two axes are swapped and the position angle is increased by 90°: the
-angle given is that of the axis given as BMAJ. Then the new beam must be at least as large as the old
+angle given is that of the axis given first. Then the new beam must be at least as large as the old
 one along both axes, $a_{\rm n} \ge a_{\rm o}$ and $b_{\rm n} \ge b_{\rm o}$, otherwise the task stops
 with an error.
 
@@ -147,7 +145,7 @@ and an input pixel that is exactly 0 is treated as blank.
 ## REDUCE and the output
 
 With {ref}`REDUCE <par-smooth-reduce>` on and $N = \lfloor f \rfloor > 1$ ($f$ = FACTOR, also when the new
-beam is given by BMAJ and BMIN), the smoothed cube is averaged over blocks of $N \times N$ pixels:
+beam is given by NEWBEAM), the smoothed cube is averaged over blocks of $N \times N$ pixels:
 
 $$
 S''(X', Y', z) = \frac{1}{N^2} \sum_{p=0}^{N-1} \sum_{q=0}^{N-1} S'(N X' + p,\, N Y' + q,\, z),
@@ -162,7 +160,7 @@ pixels per beam as in the input.
 
 The cube is written in {ref}`OUTFOLDER <par-all-outfolder>` as `<prefix>_s<M>.fits`, $M$ being $a_{\rm n}$
 rounded to an integer arcsec (`<prefix>_s<M>red.fits` with REDUCE), or in
-{ref}`SMOOTHOUTPUT <par-smooth-smoothoutput>`. Its header has BMAJ, BMIN and BPA of the new beam, the size
+{ref}`SMOOTHOUTPUT <par-smooth-smoothoutput>`. Its header has the cards BMAJ, BMIN and BPA of the new beam, the size
 of the box with CRPIX shifted by the lower corner of the box, and two HISTORY cards with the new and the
 old beam.
 
@@ -175,16 +173,19 @@ The same steps smooth the cube for the masks `SMOOTH` and `SMOOTH&SEARCH`
 - The convolution is always computed with FFTs. FFT false no longer selects the direct convolution: it
   only writes the blanks as 0 instead of NaN. (The direct convolution of the C++ code spread the NaN
   blanks over the size of the kernel.)
-- The position angle of the new beam is that of the old beam when BPA is not given (it was 0°, which
-  made the kernel of an elliptical beam skewed or impossible). Any value of BPA and OBPA is an angle:
-  BPA −1 and OBPA 0 no longer mean "the old angle" and "the angle of the header".
+- The position angle of the new beam is that of the old beam when the BPA of NEWBEAM is not given
+  (it was 0°, which made the kernel of an elliptical beam skewed or impossible). Any value of the position
+  angle is an angle: −1 for the new beam and 0 for the old one no longer mean "the old angle" and "the angle
+  of the header".
 - Cubes in mJy/beam, uJy/beam and W.U. are rescaled by $s$, as cubes in Jy/beam (C++ used $s = 1$).
-- With a header without a beam, the beam of the data comes from OBMAJ, OBMIN, OBPA or BEAMFWHM, and it is
-  an error without them (C++ took BMAJ and BMIN, the new beam, so nothing was smoothed).
+- With a header without a beam, the beam of the data comes from BEAM, and it is
+  an error without it (C++ took BMAJ and BMIN, the new beam, so nothing was smoothed).
 - A new beam smaller than the old one is an error.
-- A beam given with BMAJ < BMIN has its major axis at BPA + 90° (C++ kept the angle, so the beam was
+- A beam given with a major axis smaller than the minor one (BMAJ < BMIN in 1.8) has its major axis at BPA + 90° (C++ kept the angle, so the beam was
   rotated by 90°), and the axes of the new beam are put in order before it is compared with the old one
-  (C++ compared first, so BMAJ 15 BMIN 25 against an old beam of 20″ × 10″ was an error).
+  (C++ compared first, so a new beam of 15″ × 25″ against an old beam of 20″ × 10″ was an error).
+- BMAJ, BMIN, BPA, OBMAJ, OBMIN, OBPA and BEAMFWHM are replaced by {ref}`BEAM <par-all-beam>` (the beam of the
+  data) and {ref}`NEWBEAM <par-smooth-newbeam>` (the new beam); the old keywords are errors that name BEAM.
 - LINEAR (a resolution in kpc) no longer sets the new beam.
 - REDUCE: the reference pixel of the reduced cube is exact, $\tfrac12 + ({\rm CRPIX} - \tfrac12)/N$; C++
   rounded it to an integer.

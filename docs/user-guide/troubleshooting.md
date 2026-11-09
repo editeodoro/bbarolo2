@@ -36,12 +36,12 @@ Paths in a parameter file are relative to the folder where you start BBarolo, no
 HEADER WARNING: BMAJ-BMMAJ-CLBMMAJ keywords not found.
 HEADER WARNING: BMIN-BMMIN-CLBMMIN keywords not found.
 HEADER WARNING: BPA-BMPA keywords not found.
- BBAROLO ERROR: No beam information available for the data: set the beam with BMAJ, BMIN and BPA, or BEAMFWHM (in arcsec), or beam=(bmaj, bmin, bpa) in Python.
+ BBAROLO ERROR: No beam information available for the data: set it with BEAM (BMAJ BMIN BPA, e.g. BEAM 30 20 45; BMAJ and BMIN in arcsec, or in degrees with a final d; one value is a circular beam), or beam=(bmaj, bmin, bpa) in Python.
 ```
 
 The fits and models need the beam: the header has none (BBarolo also looks for it in `HISTORY` cards). Give
-it with {ref}`BMAJ, BMIN and BPA <par-all-bmaj>` (arcsec, degrees) or a circular beam with
-{ref}`BEAMFWHM <par-all-beamfwhm>`. BBarolo 1.8 assumed a beam of 30 arcsec instead.
+it with {ref}`BEAM <par-all-beam>`: `BEAM 30 20 45` (BMAJ and BMIN in arcsec, or in degrees with a final `d`;
+BPA in degrees), or `BEAM 30` for a circular beam; in Python, `beam=(30, 20, 45)`. BBarolo 1.8 assumed a beam of 30 arcsec instead.
 
 ### Header without units, or with odd ones
 

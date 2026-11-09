@@ -31,9 +31,8 @@ made of the voxels of the detections:
   B'_{\rm maj} = f\,B_{\rm maj}, \qquad B'_{\rm min} = f\,B_{\rm min}, \qquad B'_{\rm pa} = B_{\rm pa} ,
   $$
   with $f$ = {ref}`FACTOR <par-makemask-factor>` (2 if not given), or to the beam given by
-  {ref}`BMAJ <par-all-bmaj>`, {ref}`BMIN <par-all-bmin>` (arcsec) and {ref}`BPA <par-all-bpa>` (degrees),
-  each replacing its own value. When BMAJ and BMIN are the beam of the data (a header without a beam),
-  $f$ times that beam is used. The noise, the thresholds and the defaults that depend on the beam
+  {ref}`NEWBEAM <par-smooth-newbeam>` (`NEWBEAM bmaj bmin bpa`, arcsec; its BPA, if not given, is that of the
+  beam of the data, which is the header beam or {ref}`BEAM <par-all-beam>`). The noise, the thresholds and the defaults that depend on the beam
   (THRESHSPATIAL, MINPIX, MINVOXELS) are those of the smoothed cube and of its beam $B'$.
 - `SMOOTHSPEC&SEARCH`: the source finder on a copy of the cube smoothed along the spectral axis with
   {ref}`WINDOW_TYPE <par-smoothspec-window-type>` and {ref}`WINDOW_SIZE <par-smoothspec-window-size>`
@@ -53,7 +52,7 @@ only the largest detection in every case. If nothing is detected, BBarolo stops 
 
 ### `SMOOTH`
 
-The cube is smoothed spatially to the beam $B'$ above (FACTOR, or BMAJ, BMIN, BPA). On the smoothed cube
+The cube is smoothed spatially to the beam $B'$ above (FACTOR, or NEWBEAM). On the smoothed cube
 $F_s$, the statistics $m_s$, $\sigma_s$ are measured over the voxels that are not blank (0 or NaN),
 without ITERNOISE, and the mask is
 
@@ -113,11 +112,11 @@ for `THRESHOLD`. A mask built once is used by all the following tasks of the run
 
 ## Differences from BBarolo 1.8
 
-- The **position angle of the new beam** of the smoothed masks is that of the beam of the data when BPA
+- The **position angle of the new beam** of the smoothed masks is that of the beam of the data when the BPA of NEWBEAM
   is not given (it was 0°).
-- With a header without a beam, where BMAJ and BMIN give the beam of the data, the `SMOOTH` and
-  `SMOOTH&SEARCH` masks smooth to FACTOR times that beam (in 1.8 they smoothed to the same beam, i.e. not
-  at all).
+- With a header without a beam, where BEAM gives the beam of the data (in 1.8, BMAJ and BMIN), the `SMOOTH`
+  and `SMOOTH&SEARCH` masks smooth to FACTOR times that beam (in 1.8 they smoothed to the same beam, i.e. not
+  at all). The beam of the smoothed masks is NEWBEAM (in 1.8, BMAJ, BMIN and BPA).
 - The checks of SEARCHTYPE and of the growth threshold now apply also when the source finder only builds
   a mask; the HISTORY card GROWTHTHRESHOLD has the growth threshold (it had the primary threshold).
 - **ITERNOISE**, used by the masks of the source finder, stops at convergence (see

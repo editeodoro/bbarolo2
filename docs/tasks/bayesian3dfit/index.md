@@ -92,7 +92,7 @@ number of free parameters. The result of the run shown here:
 SIGMA is about 36 times the noise of the cube (0.00055 Jy/beam): it is the root mean square of the
 residuals, so it measures how far the tilted-ring model is from the data, and the reduced χ² of the best
 fit is 1 by construction (0.99). The corner plot shows the one- and
-two-dimensional marginal posteriors, with the 16th, 50th and 84th percentiles as dashed lines:
+two-dimensional marginal posteriors, with the 15.87th, 50th and 84.13th percentiles (±1σ) as dashed lines:
 
 ```{figure} /figures/bayesian3dfit_corner.png
 :width: 80%

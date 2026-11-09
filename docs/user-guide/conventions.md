@@ -94,9 +94,9 @@ use `RINGMODE SHIFTED`; this is what the comparison scripts of the repository do
 
 | Quantity | Unit |
 |----------|------|
-| radii (`RADII`, `RADSEP`), `Z0`, `ZCYL`, beams (`BMAJ`, `BMIN`, `BEAMFWHM`) | arcsec |
+| radii (`RADII`, `RADSEP`), `Z0`, `ZCYL`, beams (`BEAM`, `NEWBEAM`) | arcsec, or degrees with a final `d` |
 | `XPOS`, `YPOS` | pixels (counted from 0), or degrees or sexagesimal |
-| `INC`, `PA`, `BPA` | degrees |
+| `INC`, `PA`, the position angle of the beams | degrees |
 | `VSYS`, `VROT`, `VDISP`, `VRAD`, `VVERT` | km/s |
 | `DVDZ` | km/s per arcsec |
 | `DENS` | flux units of the cube × km/s per arcsec² (see below) |
@@ -163,8 +163,8 @@ width and the rest frequency.
 - **Spatial axes.** `CDELT1` should be negative (East to the left); a positive one gives the warning
   `HEADER CHECK: BBAROLO expects a negative CDELT1.` Axes in arcsec or arcmin are converted to degrees.
 - **Beam.** Taken from `BMAJ`, `BMIN`, `BPA` (in degrees, as in the FITS standard), or from `HISTORY` cards
-  (AIPS), or from the keywords {ref}`BMAJ <par-all-bmaj>`, `BMIN`, `BPA` or
-  {ref}`BEAMFWHM <par-all-beamfwhm>`; in Python, `beam=(bmaj, bmin, bpa)`, in arcsec.
+  (AIPS), or from the keyword {ref}`BEAM <par-all-beam>` (`BEAM bmaj bmin bpa`, which replaces the beam of the header);
+  in Python, `beam=(bmaj, bmin, bpa)`, in arcsec and degrees.
 - **Flux units.** BBarolo uses `BUNIT` to convert the fluxes of the SEARCH catalogue and of the maps
   to Jy ({ref}`FLUXCONVERT <par-all-fluxconvert>`). It recognises `JY/BEAM` (also `Jy beam-1`, `mJy/beam` and
   `uJy/beam`), `Jy` (divided by the beam area, which needs the beam), `K` and `K (Tmb)` (converted for the

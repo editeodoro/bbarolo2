@@ -97,6 +97,7 @@ them in memory as attributes of the {class}`~bbarolo.Result`, and `res.write()` 
 | `_rings_final1.txt` | `rings_stage1` | the rings of the first stage, with the errors if any |
 | `_rings_final2.txt` | `rings` | the rings of the second stage (TWOSTAGE); without it, `rings` is the first stage |
 | `_densprof.txt` | `densprof` | the radial profile of the data in the final rings |
+| `_densprof_deconvolved.txt` | `densprof_deconvolved` | the density profile deconvolved from the beam, at the geometry of the final rings; its densities build the final model ({ref}`NORM <par-3dfit-norm>`) |
 | `_mod_local.fits` | `model` | the model cube, normalised as the last value of NORM (`azim`, `local`, `none`) |
 | `_mask.fits` | `mask` | the mask of the fit |
 | `maps/` | `maps` | moment maps 0, 1 and 2 of the data and of the model |

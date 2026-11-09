@@ -396,7 +396,7 @@ class OutputsMixin(object):
                                                      for k, v in self.parameters.items()},
                       priors=self.priors,
                       prior_distr=self.prior_distr, lambdas=self.lambdas, like_kwargs=like,
-                      loglike=getattr(self, '_log_like_kind', 'cube'), method=self._method, beam=self.beam,
+                      loglike=getattr(self, '_log_like_kind', 'cube'), method=self._method,
                       funcs=self._funcs_used())
         np.save(outfile, tosave)
 
@@ -410,9 +410,8 @@ class OutputsMixin(object):
 
     def load_results(self, inputfile, sampler=None):
         """ Load results saved with save_results() (dynesty or nautilus: the sampler of the fit, or 'dynesty' for
-        files that do not record it): the samples, the priors, the rings and the parameters of the fit, and its
-        beam if it was given (and this object has none). The output folder is that of the fit unless this object has
-        one (outfolder given). A fit with functions of radius of its own (funcs) needs the same functions in funcs
+        files that do not record it): the samples, the priors, the rings and the parameters of the fit (BEAM
+        included). The output folder is that of the fit unless this object has one (outfolder given). A fit with functions of radius of its own (funcs) needs the same functions in funcs
         (functions are not saved): BBaroloError otherwise. """
         from ..bbutils import BBaroloError
         from .fitter import DEFAULT_FUNCS
@@ -423,8 +422,6 @@ class OutputsMixin(object):
             if name != 'default' and self.funcs.get(k, DEFAULT_FUNCS.get(k)) is DEFAULT_FUNCS.get(k):
                 raise BBaroloError(f"load_results: the fit used its own function of radius for {k.upper()}_FUNC "
                                    f"({name}): set it in funcs['{k}'] before loading (functions are not saved).")
-        if r.get('beam') is not None and self.beam is None:
-            self.beam = tuple(r['beam'])
         rr = r['inrings']
         self._galfit = self._ellprof = None
         # options of the saved fit (also files written by the original module: lower-case keys)

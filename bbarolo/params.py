@@ -79,8 +79,10 @@ _NUM = r"[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?"
 
 def unknown_keyword(name):
     """An unknown keyword of a parameter file (or KEY=value): an error if it is very close to a known
-    one (a typo, e.g. VDSIP), otherwise a warning (it is ignored, as in C++)."""
+    one (a typo, e.g. VDSIP) or a keyword removed in BBarolo 2 (e.g. BMAJ), otherwise a warning (it is
+    ignored, as in C++)."""
     import difflib
+    _kw.check_removed(name)
     close = difflib.get_close_matches(str(name).lower(), list(_kw.LOOKUP), n=1, cutoff=0.8)
     if close:
         from .bbutils import BBaroloError
@@ -280,7 +282,7 @@ class Param:
         self.verbose = 1             # 0 quiet, 1 normal, 2 everything (VERBOSE)
         self.showbar = True
         self.plots = 1
-        self.beamFWHM = -1.0
+        self.beam = None              # BEAM: [bmaj, bmin, bpa] (arcsec, deg; bpa None: 0), replaces the header beam
         self.checkCube = 0
         self.flagStats = False
         self.flagRobustStats = True
@@ -298,12 +300,7 @@ class Param:
 
         self.flagSmooth = False
         self.flagFFT = True
-        self.bmaj = -1.0
-        self.bmin = -1.0
-        self.bpa = None               # (not given: 0 for the beam of the data, the old angle for SMOOTH)
-        self.obmaj = -1.0
-        self.obmin = -1.0
-        self.obpa = None              # (not given: the BPA of the header)
+        self.newbeam = None           # NEWBEAM: [bmaj, bmin, bpa] of SMOOTH (bpa None: that of the data)
         self.linear = -1.0
         self.specres = -1.0           # spectral resolution of the models (sigma, channels); -1: LINEAR
         self.factor = 2.0
@@ -421,6 +418,7 @@ class Param:
         unknown keyword and ValueError/TypeError for a value of the wrong type."""
         kw = _kw.lookup(key)
         if kw is None:
+            _kw.check_removed(key)
             raise _kw.UnknownParameterError(_kw.unknown_message(key))
         if value is None:
             d = _default_param()
@@ -474,10 +472,6 @@ class Param:
         if len(self.images) == 0:
             out("\n BBAROLO ERROR: no FITSFILE provided.")
             return False
-
-        if not getattr(self, "_beamConverted", False):
-            self.beamFWHM = self.beamFWHM / 3600. if self.beamFWHM != -1 else -1 / 3600.
-            self._beamConverted = True
 
         self.outFolder = checkHome(self.outFolder)
         if self.outFolder != "":
@@ -705,11 +699,9 @@ class Param:
                 out("GALWIND error: HTOT" + msg); good = False
 
         if self.flagSmooth:
-            if self.bmaj == -1 and self.bmin == -1 and self.factor == -1:
-                out("SMOOTH error: you need to specify either the new beam (BMAJ, BMIN, BPA) or FACTOR.")
+            if self.newbeam is None and self.factor == -1:
+                out("SMOOTH error: you need to specify either the new beam (NEWBEAM) or FACTOR.")
                 good = False
-            if self.bmaj != -1 and self.bmin == -1:
-                self.bmin = self.bmaj
 
         if self.flagSmoothSpectral:
             s = self.window_type
@@ -906,6 +898,13 @@ def _hasattr(obj, path):
         return False
 
 
+def _beamstr(b, none):
+    """A beam [bmaj, bmin, bpa] (BEAM, NEWBEAM) as printed in the parameter list; none if not given."""
+    if b is None:
+        return none
+    return f"{b[0]:g} {b[1]:g}" + ("" if b[2] is None else f" {b[2]:g}")
+
+
 def value_to_string(kw, value):
     """Convert a Python value into the parameter-file string for keyword kw, checking its
     type: booleans become true/false (1/0 for integer keywords), sequences become
@@ -918,6 +917,19 @@ def value_to_string(kw, value):
         if kw.kind in ("float",) or kw.kind in _kw.VECTOR_KINDS:
             raise TypeError(f"{name}: expected a number, not {value!r}")
         return stringize(bool(value))
+    if kw.kind == "beam":           # (numbers, or strings such as '0.03d'; a None BPA is not given)
+        items = list(np.ravel(np.asarray(value, dtype=object))) if not isinstance(value, str) else [value]
+        if items and items[-1] is None:
+            items = items[:-1]
+        for v in items:
+            if isinstance(v, (bool, np.bool_)) or not isinstance(v, (str, int, float, np.integer, np.floating)):
+                raise TypeError(f"{name}: expected (bmaj, bmin, bpa), not {value!r}")
+        out = " ".join(v.strip() if isinstance(v, str) else _numstr(v) for v in items)
+        try:
+            _kw.readbeam(out)
+        except ValueError as e:
+            raise BBaroloError(f"{name}: {e}") from None
+        return out
     if isinstance(value, (list, tuple, np.ndarray)):
         flat = np.asarray(value, dtype=object).ravel().tolist() if isinstance(value, np.ndarray) else list(value)
         if kw.kind in _kw.SCALAR_KINDS:
@@ -1338,13 +1350,8 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
     R("[flagRobustStats]", "Using robust statistics?", stringize(p.flagRobustStats))
     R("[FLUXCONVERT]", "Whether to convert flux to Jy?", stringize(p.fluxConvert))
     if p.checkCube or (defaults and isAll): R("[checkCube]", "Check cube for bad channels/rows/columns?", p.checkCube)
-    if defaults or p.beamFWHM != -1:
-        fwhm = p.beamFWHM * 3600. if getattr(p, "_beamConverted", False) and p.beamFWHM != -1 / 3600. else p.beamFWHM
-        R("[BEAMFWHM]", "Beam FWHM (arcsec) if not in the header", fwhm)
-        if defaults and whichtask not in ("SMOOTH", "ALL"):
-            R("[BMAJ]", "Beam major axis (arcsec) if not in the header", p.bmaj)
-            R("[BMIN]", "Beam minor axis (arcsec) if not in the header", p.bmin)
-            R("[BPA]", "Beam position angle (deg) if not in the header", 0. if p.bpa is None else p.bpa)
+    if defaults or p.beam is not None:
+        R("[BEAM]", "Beam of the data (arcsec, arcsec, deg)", _beamstr(p.beam, "header"))
     if p.debug: R("[DEBUG]", "Debugging mode?", stringize(p.debug))
     Str.write("-----------------\n")
 
@@ -1395,21 +1402,10 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
         R("[SMOOTH]", "Smoothing the datacube?", stringize(p.flagSmooth))
         box = " ".join(str(b) for b in p.BOX if b != -1) or "NONE"
         R("[BOX]", "   Sub-region to be used?", box)
-        if (p.obmaj != -1 and p.obmin != -1) or defaults:
-            R("[OBMAJ]", "   Old major beam (arcsec)", p.obmaj)
-            R("[OBMIN]", "   Old minor beam (arcsec)", p.obmin)
-            R("[OBPA]", "   Old beam position angle (degree)", "header" if p.obpa is None else p.obpa)
-        if defaults:
-            R("[BMAJ]", "   New major beam (arcsec)", p.bmaj)
-            R("[BMIN]", "   New minor beam (arcsec)", p.bmin)
-            R("[BPA]", "   New beam position angle (degree)", "old" if p.bpa is None else p.bpa)
+        if defaults or p.newbeam is not None:
+            R("[NEWBEAM]", "   New beam (arcsec, arcsec, deg)", _beamstr(p.newbeam, "FACTOR x old"))
+        if defaults or p.newbeam is None:
             R("[FACTOR]", "   New beam factor (times old beam)", p.factor)
-        else:
-            if p.bmaj != -1 and p.bmin != -1:
-                R("[BMAJ]", "   New major beam (arcsec)", p.bmaj)
-                R("[BMIN]", "   New minor beam (arcsec)", p.bmin)
-                R("[BPA]", "   New beam position angle (degree)", "old" if p.bpa is None else p.bpa)
-            else: R("[FACTOR]", "   New beam factor (times old beam)", p.factor)
         R("[FFT]", "   Using FFT for convolution?", stringize(p.flagFFT))
         R("[REDUCE]", "   Averaging pixels to reduce datacube?", p.reduce)
     if isAll or p.flagSmoothSpectral or (defaults and whichtask == "SMOOTHSPEC"):

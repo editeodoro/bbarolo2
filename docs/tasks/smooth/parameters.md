@@ -21,12 +21,6 @@ The parameters of SMOOTH: the keywords of the parameter files (case-insensitive;
 :group: New beam
 ```
 
-## Old beam
-
-```{bbparams} SMOOTH
-:group: Old beam
-```
-
 ## Outputs
 
 ```{bbparams} SMOOTH

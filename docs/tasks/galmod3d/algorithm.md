@@ -215,7 +215,7 @@ and {ref}`VERBOSE <par-all-verbose>`.
 With `model(smooth=True)` (the default) every channel is convolved with the beam, by the
 {ref}`convolution of GALMOD <galmod-convolution>`: a 2D Gaussian kernel normalised to unit sum, applied
 with zero padding, so the flux is conserved apart from the emission spread outside the cube. The beam
-is that of the header of the cube, or `beam=(bmaj, bmin, bpa)` (arcsec, arcsec, degrees). After the
+is that of the header of the cube, or `beam=(bmaj, bmin, bpa)` (arcsec, arcsec, degrees; the keyword {ref}`BEAM <par-all-beam>`). After the
 convolution, values below $10^{-12}$ of the peak are set to 0.
 
 With `model(noise=σn)`, Gaussian noise of rms $\sigma_n$ per voxel (in the units of the final model)

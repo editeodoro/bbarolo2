@@ -222,11 +222,15 @@ radii. At least $2N$ pixels are needed. The data map $D$, the maps $K_j$ and the
   $1/\cos i$ in each pixel. For the same rings it gives the profile of the cube (within 4% on simulated
   disks).
 
-With {ref}`SIDE <par-ellprof-side>` A or R only the pixels on that side of the minor axis (through the median
-centre, at the median position angle of the rings) are used.
+In both cases only the pixels within the outer edge of the exterior annulus are fitted: an ellipse with the
+centre, PA and INC of the last ring, its minor axis widened by twice Z0 projected. The emission beyond, which
+the model does not describe, pulled the solution (BBarolo 2.0.0: NGC 2403 with one ring 60" wide was 11 times
+too low). With {ref}`SIDE <par-ellprof-side>` A or R only the pixels on that side of the minor axis (through
+the median centre, at the median position angle of the rings, unwrapped across 0/360°) are used.
 
 The errors are those of the noise: the profile is refitted to 200 realisations of the best-fit map plus
-Gaussian noise, and E_LO and E_HI are the distances of the 16th and 84th percentiles from the median. The
+Gaussian noise, and E_LO and E_HI are the distances of the 15.87th and 84.13th percentiles (±1σ) from the
+median. The
 noise is correlated as that of the data: white noise smoothed by a Gaussian of standard deviation
 $\sqrt{A_{xy}/4\pi}$ pixels, with $A_{xy}$ the spatial correlation area measured as in BAYESIAN3DFIT (at
 least one beam area; the beam area for a 2D map). Its rms is $s(\mathbf x)$ for a cube, and for a 2D map the
@@ -235,7 +239,10 @@ asymmetries), so that the errors are conservative. The geometry is fixed: the er
 uncertainty of the centre, INC and PA.
 
 The densities are converted to face-on surface densities in the units of the observed profile
-($u$/arcsec², as SDENS_FO), and to HI mass surface densities for maps in Jy, as above. On a simulated disk a
+($u$/arcsec², as SDENS_FO), and to HI mass surface densities for maps in Jy, as above. For a cube the factor
+is the mean surface brightness of a face-on uniform disk of unit density: the channel sum of its model divided by
+the area of its sub-rings (BBarolo 2.0.0 divided by a disk that included its empty centre: 2% low). On a
+simulated disk a
 few beams across, the deconvolved profile is within 2% of the true one in the centre, where the observed one
 is 30% too low. Without a beam in the header, or with too few pixels, there is no deconvolved profile (a
 message says so).

@@ -111,7 +111,7 @@ gone, and so is what it gave.
   ring files of both versions. A parameter read with `file(name,n)` from a ring file of BBarolo 2 must
   come from its own column: asking for another quantity is an error that gives the right column.
 - The tables of the results (`res.rings`) have no `rad_kpc` and `z0_pc`.
-- SMOOTH has no LINEAR (a resolution in kpc). The new beam is BMAJ, BMIN, BPA or FACTOR. LINEAR is still
+- SMOOTH has no LINEAR (a resolution in kpc). The new beam is NEWBEAM or FACTOR. LINEAR is still
   the spectral resolution of the models when SPECRES is not given.
 
 ### Other changes of meaning
@@ -120,8 +120,9 @@ gone, and so is what it gave.
   is not given, as in 1.8.
 - **FREEANGLE** is new. 2DFIT read the angle left out around the minor axis from DVDZ; it now reads FREEANGLE
   (default 15°), and DVDZ is no longer used by 2DFIT.
-- **BPA and OBPA** of SMOOTH are always angles: `BPA -1` is −1°, and `OBPA 0` is 0°, not "the angle of the
-  old beam" and "the angle of the header". When BPA is not given the new beam has the angle of the old one.
+- The position angles of the beams are always angles: `NEWBEAM 150 100 -1` is −1°, and a BEAM angle of 0 is
+  0°, not "the angle of the old beam" and "the angle of the header". When the BPA of NEWBEAM is not given
+  the new beam has the angle of the old one.
 - **CHECKCUBE** writes the cleaned cube in the output folder as `<prefix>_clean.fits`, not next to the
   input file.
 - **A velocity axis without CUNIT3** is taken as m/s if its channels are wider than 100, otherwise as km/s.
@@ -151,6 +152,7 @@ RINGMODE, GUESSTYPE, FREEANGLE and SPECRES.
 |---|---|
 | DISTANCE | removed (above) |
 | LINEAR of SMOOTH | removed (above); LINEAR of the models stays |
+| BMAJ, BMIN, BPA, BEAMFWHM, OBMAJ, OBMIN, OBPA | replaced by {ref}`BEAM <par-all-beam>` (the beam of the data, which replaces that of the header) and {ref}`NEWBEAM <par-smooth-newbeam>` (the new beam of SMOOTH and of the SMOOTH masks); the old keywords are errors that name BEAM. In Python, `beam=` is the keyword BEAM, and `Smooth(cube, newbeam=150)` replaces `bmaj=150, bmin=150, bpa=0` |
 | DVDZ of 2DFIT | no longer read; use FREEANGLE |
 | SLITFIT, SLITWIDTH, ... | the keywords are accepted, but the task is not ported |
 | NORM `AZIMUTHAL` | accepted before, but used as LOCAL; it is AZIM now |
@@ -286,7 +288,7 @@ summary: {doc}`changes` has the details and the size of each change.
 | 2DFIT | The model velocity field: radius of the pixels between the rings computed with the geometry of the ring of the previous pixel; RADII cut to the estimated number of rings; a ring not fitted stopped the run |
 | ELLPROF | The ring-overlap correction was applied to blank pixels only; SIDE A and R swapped for most galaxies; blank pixels of a 2D map read as 0 |
 | Maps | `derv_gauss` for MAPTYPE GAUSSIAN used $e^{-x^2}$ instead of $e^{-x^2/2}$; the HI mass constant (8794 against 8846) differed between MASSDENSMAP and ELLPROF; MASSDENSMAP and RMSMAP used a different mask; RMSMAP of spectra with fewer than 5 channels was 1E10 |
-| SMOOTH | A beam with BMAJ < BMIN was rotated by 90°; cubes in mJy/beam, uJy/beam and W.U. were not rescaled; a cube without a beam was not smoothed |
+| SMOOTH | A beam with major axis smaller than the minor one was rotated by 90°; cubes in mJy/beam, uJy/beam and W.U. were not rescaled; a cube without a beam was not smoothed |
 | SMOOTHSPEC | A window of one channel (HANNING2, BARTLETT, WELCH, BLACKMAN, FLATTOP) gave a cube of NaN |
 | SEARCH, MAKEMASK | ITERNOISE always ran 20 iterations; the checks of SEARCHTYPE and of the growth threshold ran only with SEARCH true; the HISTORY card GROWTHTHRESHOLD had the wrong value; with SNMAP the S/N maps overwrote those of TOTALMAP |
 | Statistics | min and max initialised with `array[0]` even when that pixel was masked |
