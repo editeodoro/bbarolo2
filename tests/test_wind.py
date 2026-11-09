@@ -309,3 +309,47 @@ def test_emission_gauss_exact():
     g, bb, mm = np.array([2., 3.]), np.array([1., -1.]), np.array([1., 2.])
     ld = log_marginal_gauss_diag(g, bb, 4., mm, 0.7)[0]
     assert abs(ld - log_marginal_gauss(np.diag(g), bb, 4., mm, 0.7)["logz"]) < 1e-12
+
+
+def test_bayesian_wind_fixed_disk(tmp_path):
+    """DISKRINGS: a mock wind on top of a rotating disk (GALMOD rings written to a rings file). With the disk the
+    likelihood is higher at the true opening angle than with wider cones, and the densities of the rings are recovered
+    within 30%; without the disk, wider cones absorb its emission."""
+    from wind_mocks import mock_wind
+    from bbarolo import BayesianWind, GalMod
+    from astropy.io import fits
+    from bbarolo.bayesian import common
+    hdu, tr = mock_wind(kind="clumps", seed=4, snr=15, noise=False, shape=(28, 28, 24), pix=12., chan=25., beam=36.,
+                        truth=dict(xpos=13.5, ypos=13.5, htot=130., radii=[65., 130.], vwind=200.), nclumps=50,
+                        clump=20.)
+    radii = np.arange(15., 151., 30.)
+    vrot = 150 * np.tanh(radii / 40.)
+    dens = 3e3 * np.exp(-radii / 60.)
+    rf = str(tmp_path / "disk_rings.txt")
+    with open(rf, "w") as fh:
+        fh.write("#  RAD(arcs)  RAD(arcs)  VROT(km/s)  DISP(km/s)  INC(deg)  P.A.(deg)  Z0(pc)  Z0(arcs)  SIG(E20)  "
+                 "XPOS(pix)  YPOS(pix)  VSYS(km/s)  VRAD(km/s)\n")
+        for r, v in zip(radii, vrot):
+            fh.write(f" {r:8.2f} {r:8.2f} {v:8.2f} 10.0 {tr['inc']:6.1f} {tr['pa']:6.1f} 0 10 1.0 13.5 13.5 0.0 0.0\n")
+    disk = GalMod(hdu, radii=" ".join(map(str, radii)), xpos=13.5, ypos=13.5, vsys=0,
+                  vrot=" ".join(f"{v:.3f}" for v in vrot), vdisp=10, inc=tr["inc"], pa=tr["pa"], z0=10,
+                  dens=" ".join(f"{d:.3f}" for d in dens),
+                  galmodtype="ANALYTIC", norm="NONE", mask="NONE", verbose=False).run().model.data
+    data = hdu.data + disk + np.random.default_rng(1).normal(0, 0.05 * hdu.data.max(), hdu.data.shape)
+    mock = fits.PrimaryHDU(data.astype(np.float32), hdu.header)
+    with common.blas_threads():
+        res = {}
+        for with_disk in (True, False):
+            f = BayesianWind(mock, xpos=13.5, ypos=13.5, vsys=0, inc=tr["inc"], pa=tr["pa"], openang=60, htot=130,
+                             vwind=200, vdisp=20, ntot=2, outfolder=str(tmp_path) + "/",
+                             **({"diskrings": rf} if with_disk else {}))
+            f.like_kwargs = dict(f.like_kwargs, cellsize=40., noisecorr=1.)
+            f._setup(f._with_hyper(["openang"], verbose=False), verbose=False)
+            ss = np.exp(np.linspace(-2, 1, 7)) * f._s0
+            res[with_disk] = {oa: max(f.log_likelihood([oa, s, 1., 1.]) for s in ss) for oa in (60., 80.)}
+            if with_disk:
+                s = max(ss, key=lambda s: f.log_likelihood([60., s, 1., 1.]))
+                x = f.log_likelihood([60., s, 1., 1.], details=True)[1]["x"][-f._disk.n:]
+                assert np.all(np.abs(x / dens - 1) < 0.3), x / dens
+    assert res[True][60.] > res[True][80.]
+    assert res[False][80.] > res[False][60.]
