@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """
-Run the same Bayesian fit (BayesianBBarolo, dynesty) with the original C++-based
+Run the same Bayesian fit (BayesianBBarolo, nautilus) with the original C++-based
 pyBBarolo (ctypes + libBBarolo) and with the pure-Python bbarolo, and compare the
 likelihood, the posteriors and the run times.
 
 Run from the BBarolo folder (the one with pyBBarolo/libBBarolo.* and examples/):
 
-    python pyBBarolo_pure/examples/compare_bayesian.py [--threads 2] [--nlive 100]
+    python pyBBarolo_pure/examples/compare_bayesian.py [--threads 2] [--nlive 500]
 
 Each version runs in its own process. The original module has the old interface
 (init/set_options/compute), the pure-Python one the interface of the bbarolo tasks.
 Options: --cube, --cpp-dir (folder containing the original pyBBarolo/ package),
---threads, --nlive, --dlogz, --seed, --skip-cpp. See --help.
+--threads, --nlive, --flive, --seed, --skip-cpp. See --help. The stopping criterion is given as
+f_live of nautilus: the original module passes dlogz to it unchanged as f_live.
 
 Both versions are run with sigma = 1 and no beam factor, as the original module (for the
 pure-Python version: like_kwargs=dict(sigma=1, noisecorr=1)); by default it uses instead the
@@ -81,13 +82,12 @@ for i in range(10): f._log_likelihood(th, **LK)
 tcall = (time.time() - t0) / 10
 f2 = make()
 t0 = time.time()
-sample(f2, freepar=cfg["freepar"], method="dynesty", dynamic=False, like_kwargs=PY,
-       sampler_kwargs=dict(nlive=cfg["nlive"], rstate=np.random.default_rng(cfg["seed"])),
-       run_kwargs=dict(dlogz=cfg["dlogz"]))
+sample(f2, freepar=cfg["freepar"], method="nautilus", like_kwargs=PY,
+       sampler_kwargs=dict(n_live=cfg["nlive"], seed=cfg["seed"]), run_kwargs=dict(f_live=cfg["flive"]))
 dt = time.time() - t0
 q = np.quantile(f2.samples_equal, [0.16, 0.5, 0.84], axis=0)
-print("JSON" + json.dumps(dict(names=f2.freepar_names, q=q.tolist(), time=dt, ncall=int(f2.results.ncall.sum()),
-                               tcall=tcall, scan=scan, logz=float(f2.results.logz[-1]))))
+print("JSON" + json.dumps(dict(names=f2.freepar_names, q=q.tolist(), time=dt, ncall=int(f2.sampler.n_like),
+                               tcall=tcall, scan=scan, logz=float(f2.sampler.log_z))))
 '''
 
 
@@ -108,15 +108,15 @@ def main():
     ap.add_argument("--cube", default=os.path.join(BBDIR, "examples", "ngc2403.fits"))
     ap.add_argument("--cpp-dir", default=BBDIR, help="folder that contains the original pyBBarolo/ package")
     ap.add_argument("--threads", type=int, default=1)
-    ap.add_argument("--nlive", type=int, default=100)
-    ap.add_argument("--dlogz", type=float, default=0.5)
+    ap.add_argument("--nlive", type=int, default=500)
+    ap.add_argument("--flive", type=float, default=0.01, help="f_live of nautilus (the stopping criterion)")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--outdir", default="bayes_comparison")
     ap.add_argument("--skip-cpp", action="store_true", help="run only the Python version")
     args = ap.parse_args()
     cfg = dict(cube=os.path.abspath(args.cube), radii=[60., 180., 300.], freepar=['vrot', 'vdisp_single'],
                theta0=[80., 105., 120., 13.], scan=list(np.arange(60., 151., 15.)), threads=args.threads,
-               nlive=args.nlive, dlogz=args.dlogz, seed=args.seed, outdir=os.path.abspath(args.outdir))
+               nlive=args.nlive, flive=args.flive, seed=args.seed, outdir=os.path.abspath(args.outdir))
     res = {}
     if not args.skip_cpp:
         res["C++"] = run("C++", os.path.abspath(args.cpp_dir), cfg)

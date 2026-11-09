@@ -1419,9 +1419,9 @@ and BAYESIAN3DFIT: the contours are at 1, 2, 4, ..., 64 times this value, plus o
         doc="""\
 The nested sampler of `BAYESIAN3DFIT` (case-insensitive):
 
+- `NAUTILUS` (the default): the nautilus package (`nautilus-sampler` on PyPI).
 - `DYNESTY`: the dynesty package, with its static sampler and multi-ellipsoid bounds (`bound=multi`);
   `SAMPLEROPTS dynamic=true` selects its dynamic sampler.
-- `NAUTILUS`: the nautilus package (`nautilus-sampler` on PyPI).
 
 The package must be installed: an unknown sampler, or one that is not installed, is an error before
 the run. The options of the sampler are given with `SAMPLEROPTS` and `RUNOPTS`.

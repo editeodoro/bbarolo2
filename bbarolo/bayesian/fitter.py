@@ -550,7 +550,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                                 ['vrot','vdisp_single','inc_single','sigma'], or a string as FREE in
                                 a parameter file ('VROT VDISP_SINGLE INC_SINGLE SIGMA'). Names are
                                 case-insensitive (PA is phi, DISP is vdisp)
-          method (str):         'dynesty' or 'nautilus' (default: SAMPLER if given, otherwise 'dynesty')
+          method (str):         'nautilus' or 'dynesty' (default: SAMPLER if given, otherwise 'nautilus')
           log_like (callable):  a custom log-likelihood f(theta, **like_kwargs) (default _log_likelihood)
           like_kwargs (dict):   the options of the likelihood, added to LIKEOPTS if given (they are
                                 kept in self.like_kwargs, with the defaults; see
@@ -596,7 +596,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             freepar = [bayes_name(p) for p in freepar]
         if len(freepar) == 0:                       # (it sampled zero dimensions)
             raise BBaroloError("BayesianBBarolo.run: no free parameters (freepar or FREE).")
-        method = str(dflt.get('SAMPLER', 'dynesty') if method is None else method).lower()
+        method = str(dflt.get('SAMPLER', 'nautilus') if method is None else method).lower()
         self._method = method
         sampler_kwargs = {**dflt.get('SAMPLEROPTS', {}), **sampler_kwargs}
         if 'dynamic' in sampler_kwargs:              # dynesty: static (default) or dynamic sampler

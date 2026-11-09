@@ -193,7 +193,7 @@ class GalfitPar(GalmodPar):
     PLOTMINCON: float = -1.0
     # BAYESIAN3DFIT (BayesianBBarolo)
     flagBAYESIAN: bool = False
-    SAMPLER: str = "DYNESTY"
+    SAMPLER: str = "NAUTILUS"
     PRIORS: str = ""
     SAMPLEROPTS: str = ""
     RUNOPTS: str = ""

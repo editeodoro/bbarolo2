@@ -4,7 +4,7 @@ Example: Bayesian 3D fit of NGC 2403 with the pure-Python BayesianBBarolo.
 
 Run from the BBarolo folder (the one containing examples/ngc2403.fits):
 
-    python pyBBarolo_pure/examples/bayesian_example.py [--threads 4] [--method dynesty|nautilus]
+    python pyBBarolo_pure/examples/bayesian_example.py [--threads 4]
 
 It fits the rotation velocity of each of 4 rings, a single velocity dispersion, a
 single inclination and the noise per voxel (7 parameters), then prints the posterior
@@ -28,7 +28,6 @@ from bbarolo import BayesianBBarolo                        # noqa: E402
 ap = argparse.ArgumentParser()
 ap.add_argument("--cube", default=os.path.join(os.path.dirname(os.path.dirname(HERE)), "examples", "ngc2403.fits"))
 ap.add_argument("--threads", type=int, default=os.cpu_count() or 1)
-ap.add_argument("--method", default="dynesty", choices=("dynesty", "nautilus"))
 ap.add_argument("--outfolder", default="./output/bayes_ngc2403/")
 args = ap.parse_args()
 
@@ -56,12 +55,8 @@ f.priors['vdisp'] = dict(name='uniform', loc=0, scale=40)         # 0-40 km/s
 # mock cubes, VDISP and INC are then unbiased (see the README).
 freepar = ['vrot', 'vdisp_single', 'inc_single', 'sigma']
 
-if args.method == "dynesty":
-    f.run(freepar=freepar, threads=args.threads, method='dynesty', dynamic=False,
-          sampler_kwargs=dict(nlive=100), run_kwargs=dict(dlogz=1.0))
-else:
-    f.run(freepar=freepar, threads=args.threads, method='nautilus',
-          sampler_kwargs=dict(n_live=500), run_kwargs=dict(f_live=0.01))
+f.run(freepar=freepar, threads=args.threads, method='nautilus',
+      sampler_kwargs=dict(n_live=500), run_kwargs=dict(f_live=0.01))
 
 f.print_stats()
 f.save_results(os.path.join(args.outfolder, "bayes_results.npy"))

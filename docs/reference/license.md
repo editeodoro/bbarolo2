@@ -3,7 +3,8 @@
 BBarolo 2 is free software. It is distributed under the terms of the
 [GNU General Public License](https://www.gnu.org/licenses/gpl-3.0.html), version 3 or (at your option) any
 later version (SPDX identifier `GPL-3.0-or-later`, as declared in `pyproject.toml`). You can use, copy,
-modify and redistribute it under the conditions of that licence. It comes without any warranty.
+modify and redistribute it under the conditions of that licence, whose full text is in `LICENSE.md` at the top
+of the repository. It comes without any warranty.
 
 Copyright © Enrico Di Teodoro.
 

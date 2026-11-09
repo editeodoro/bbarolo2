@@ -26,5 +26,5 @@ res = f.run()                     # in memory: res.rings (the fitted rings), res
 res.write("output/")              # the files and plots of the command line
 ```
 
-Requires Python 3.9 or later. License: GPL-3.0-or-later. If you use BBarolo, please cite
+Requires Python 3.9 or later. License: GPL-3.0-or-later (see [LICENSE.md](LICENSE.md)). If you use BBarolo, please cite
 [Di Teodoro & Fraternali (2015)](https://ui.adsabs.harvard.edu/abs/2015MNRAS.451.3021D).

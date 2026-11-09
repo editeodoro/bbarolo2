@@ -520,7 +520,7 @@ def test_bayesian_quick(tmp_path):
     f._setup(['vrot', 'vdisp_single'])
     scan = [f._log_likelihood(np.array([80., v, 120., 13.]), sigma=1.) for v in (90., 110., 130.)]
     assert scan[1] > scan[0] and scan[1] > scan[2]
-    f.run(freepar=['vrot_single', 'vdisp_single'], threads=1, dynamic=False, verbose=False,
+    f.run(method='dynesty', freepar=['vrot_single', 'vdisp_single'], threads=1, dynamic=False, verbose=False,
               sampler_kwargs=dict(nlive=30, rstate=np.random.default_rng(1)), run_kwargs=dict(maxiter=150))
     assert f.params.shape == (2,) and np.all(np.isfinite(f.params))
     assert not f._galfit.par.TWOSTAGE                   # the plots then read rings_final1.txt
@@ -672,13 +672,13 @@ def test_bayesian_noisecorr_and_fracerr(tmp_path):
             g._set_likefactor()
     # the options of the likelihood are in like_kwargs (checked)
     with pytest.raises(TypeError, match="like_kwargs"):
-        f.run(freepar=['vrot_single'], noisecorr='beam')
+        f.run(method='dynesty', freepar=['vrot_single'], noisecorr='beam')
     for bad in (dict(factor=1.), dict(likemask='mask'), dict(noisecorr=-1), dict(dilation=1)):
         with pytest.raises(ValueError):
-            f.run(freepar=['vrot_single'], like_kwargs=bad)
+            f.run(method='dynesty', freepar=['vrot_single'], like_kwargs=bad)
     # a short run with both
     pytest.importorskip("dynesty")
-    f.run(freepar=['vrot_single', 'fracerr'], like_kwargs=dict(noisecorr='measured'), threads=1, dynamic=False,
+    f.run(method='dynesty', freepar=['vrot_single', 'fracerr'], like_kwargs=dict(noisecorr='measured'), threads=1, dynamic=False,
           verbose=False, sampler_kwargs=dict(nlive=30, rstate=np.random.default_rng(1)), run_kwargs=dict(maxiter=150))
     assert f.freepar_names == ['vrot', 'fracerr'] and np.all(np.isfinite(f.params))
     nc = f.noise_correlation
@@ -919,7 +919,7 @@ def test_bayesian_task(tmp_path, capsys):
     par.write_text(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/cli\nBAYESIAN3DFIT true\nNRADII 4\nRADSEP 40\nXPOS 31.5\n"
                    "YPOS 31.5\nVSYS 0\nVROT 120\nVDISP 15\nZ0 0\nINC 60\nPA 45\nMASK SEARCH\nGALMODTYPE ANALYTIC\n"
                    "LINEAR 0\nFREE VROT_SINGLE VDISP_SINGLE\nPRIORS vrot=(uniform,100,100) vdisp=(uniform,1,30)\n"
-                   "SAMPLEROPTS nlive=20 dynamic=false seed=2\nRUNOPTS dlogz=1\nTHREADS 1\nPLOTS true\n"
+                   "SAMPLER DYNESTY\nSAMPLEROPTS nlive=20 dynamic=false seed=2\nRUNOPTS dlogz=1\nTHREADS 1\nPLOTS true\n"
                    "LIKEOPTS likemask=dilated dilation=1,3 noisecorr=measured\n")
     # the fitter: the parameters as given, the data of the cube read by BBarolo (here changed in memory)
     p = Param(str(par))
@@ -1685,7 +1685,7 @@ def _bayes_mock(tmp_path, **kw):
     if not os.path.isfile(fn):
         _mock_cube(tmp_path)
     prm = dict(radii=[20, 60, 100, 140], xpos=31.5, ypos=31.5, vsys=0, vrot=120, vdisp=15, z0=0, inc=60, pa=45,
-               mask="SEARCH", outfolder=str(tmp_path / "bbb"))
+               mask="SEARCH", sampler="DYNESTY", outfolder=str(tmp_path / "bbb"))
     return BayesianBBarolo(fn, **{**prm, **kw})
 
 
@@ -1879,7 +1879,7 @@ def test_bayesian_flux_beyond_rings(tmp_path, capsys):
     g = _bayes_mock(tmp_path, radii=[20., 60.], outfolder=str(tmp_path / "g"))
     g._setup(['vrot_single'])
     assert g._flux_beyond_rings() > 0.05
-    g.run(freepar=['vrot_single'], threads=1, dynamic=False, sampler_kwargs=dict(nlive=15, seed=1),
+    g.run(method='dynesty', freepar=['vrot_single'], threads=1, dynamic=False, sampler_kwargs=dict(nlive=15, seed=1),
           run_kwargs=dict(maxiter=20, print_progress=False))
     assert "lies beyond the outermost ring" in capsys.readouterr().out
 
@@ -2137,7 +2137,7 @@ def test_bayesian_rings_beyond_radmax(tmp_path, capsys):
     from bbarolo.tasks import read_table
     f = _bayes_mock(tmp_path)
     f.priors['radmax'] = dict(name='uniform', loc=80., scale=50.)
-    f.run(freepar=['vrot_single', 'radmax'], threads=1, verbose=False, dynamic=False,
+    f.run(method='dynesty', freepar=['vrot_single', 'radmax'], threads=1, verbose=False, dynamic=False,
           sampler_kwargs=dict(nlive=15, seed=1), run_kwargs=dict(maxiter=60))
     assert 80 <= f.disk_edge <= 130 and list(f.in_disk) == [True, True, True, False]
     f.write_bestmodel(plots=False, verbose=False)
@@ -2156,7 +2156,7 @@ def test_bayesian_rings_beyond_radmax(tmp_path, capsys):
     assert g._outfolder() == str(tmp_path / "other") + "/" and list(g.in_disk) == [True, True, True, False]
     h = _bayes_mock(tmp_path, outfolder=str(tmp_path / "ring"))
     h.priors['radmax'] = dict(name='uniform', loc=120., scale=40.)
-    h.run(freepar=['vrot_single', 'radmax'], like_kwargs=dict(radmax='ring'), threads=1, verbose=False,
+    h.run(method='dynesty', freepar=['vrot_single', 'radmax'], like_kwargs=dict(radmax='ring'), threads=1, verbose=False,
           dynamic=False, sampler_kwargs=dict(nlive=15, seed=1), run_kwargs=dict(maxiter=40))
     assert h.disk_edge is None and h.in_disk.all()
 
@@ -3107,7 +3107,7 @@ def test_bayesian_side(tmp_path, capsys):
     assert 0.4 < a.sum() / b.sum() < 0.6 and (a & r).sum() < 0.05 * b.sum()
     assert vmean["R"] > 20 and vmean["A"] < -20 and abs(vmean["B"]) < 10
     f = _bayes_mock(tmp_path, side="R")
-    f.run(freepar=['vrot_single'], threads=1, verbose=True, dynamic=False, sampler_kwargs=dict(nlive=15, seed=1),
+    f.run(method='dynesty', freepar=['vrot_single'], threads=1, verbose=True, dynamic=False, sampler_kwargs=dict(nlive=15, seed=1),
           run_kwargs=dict(maxiter=40, print_progress=False))
     assert "the receding half of the galaxy only (SIDE)" in capsys.readouterr().out
 

@@ -435,7 +435,7 @@ KEYWORDS = [
     K("PLOTMINCON", "float", ["gf.PLOTMINCON"], ("3DFIT", "BAYESIAN3DFIT"), "Minimum flux contour for output plots"),
 
     # ---------------------------------------------------------------- BAYESIAN3DFIT
-    K("SAMPLER", "ustr", ["gf.SAMPLER"], BAYES, "Nested sampler: DYNESTY or NAUTILUS"),
+    K("SAMPLER", "ustr", ["gf.SAMPLER"], BAYES, "Nested sampler: NAUTILUS or DYNESTY"),
     K("PRIORS", "str", ["gf.PRIORS"], BAYES,
       "Priors of the free parameters, NAME=(distribution,arguments) with the distributions of scipy.stats, "
       "e.g. VROT=(uniform,loc=0,scale=300) INC=(norm,60,5) (default: see bbarolo.BayesianBBarolo)"),

@@ -19,7 +19,8 @@ noise per voxel ({ref}`FREE <par-bayesian3dfit-free>`: 6 parameters). The centre
 inclination, the position angle and the thickness stay at the given values. The priors of VROT and VDISP are
 uniform, between 50 and 250 km/s and between 0 and 30 km/s ({ref}`PRIORS <par-bayesian3dfit-priors>`; the
 default ones follow the initial values: VROT from 0 to twice the initial VROT, VDISP from 0 to 50 km/s).
-The sampler is dynesty with 100 live points ({ref}`SAMPLEROPTS <par-bayesian3dfit-sampleropts>`) and
+The sampler is dynesty ({ref}`SAMPLER <par-bayesian3dfit-sampler>`; the default is nautilus) with 100 live
+points ({ref}`SAMPLEROPTS <par-bayesian3dfit-sampleropts>`) and
 stops when the remaining evidence is below
 {ref}`RUNOPTS <par-bayesian3dfit-runopts>` `dlogz=1`. SIGMA is free because a tilted-ring model does not
 reproduce NGC 2403 down to the noise: with SIGMA the credible intervals include this misfit, without it they
@@ -45,6 +46,7 @@ PA              123.7
 Z0              10
 FREE            VROT VDISP_SINGLE SIGMA
 PRIORS          VROT=(uniform,loc=50,scale=200) VDISP=(uniform,loc=0,scale=30)
+SAMPLER         DYNESTY
 SAMPLEROPTS     nlive=100 seed=1
 RUNOPTS         dlogz=1
 MASK            SEARCH
@@ -131,7 +133,7 @@ outputs, and `f.save_results(file)` only the samples.
 | `_mod_none.fits` | `write_bestmodel()` | the best model cube (the median of the posterior) |
 | `_densprof.txt` | `write_bestmodel()` | the observed radial profile of the data in the best-fit rings |
 | `_densprof_deconvolved.txt` | `f.dens_profile` | the density profile used by the model (DENS not free), deconvolved from the total intensity map, with its errors |
-| `_dynesty_results.npy` | `save_results(file)`, `load_results(file)` | the samples and their weights, the free parameters, the rings, the priors and the options |
+| `_<sampler>_results.npy` | `save_results(file)`, `load_results(file)` | the samples and their weights, the free parameters, the rings, the priors and the options |
 | `maps/`, `pvs/` | `write_bestmodel()` | moment maps and position–velocity slices of the data and of the model |
 | `_corner.pdf` | `corner_plot()` | the corner plot (in Python it returns the figure) |
 | `_profiles.pdf` | `plot_profiles()` | the parameters of the rings against radius, with their errors (in Python it returns the figure) |

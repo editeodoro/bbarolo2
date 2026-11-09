@@ -241,9 +241,9 @@ density profile, the samples, and, with `plots=1`, the corner plot and the profi
 
 The sampler is chosen by `method` (`SAMPLER` in a parameter file). Both are nested samplers.
 
-- **dynesty** (the default) stops when the remaining evidence is below `dlogz` (1 in the examples of the
+- **dynesty** stops when the remaining evidence is below `dlogz` (1 in the examples of the
   task page).
-- **nautilus** learns the shape of the posterior with neural networks. It needs more live points (500 here),
+- **nautilus** (the default) learns the shape of the posterior with neural networks. It needs more live points (500 here),
   and it stops when the effective sample size reaches `n_eff`, which is the main control of its run time.
 
 `nlive` (`n_live` in nautilus), `dlogz` and `seed` have the same name in both. As a test, on a different set of

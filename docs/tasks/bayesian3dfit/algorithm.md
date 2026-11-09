@@ -435,10 +435,10 @@ is shaded in the plots of the parameters, `print_stats` names them, and in Pytho
 
 {ref}`SAMPLER <par-bayesian3dfit-sampler>` chooses the sampler:
 
-- `DYNESTY` (the default; Speagle 2020): the static nested sampler, with multi-ellipsoid bounds
-  (`bound=multi`, Feroz et al. 2009) and the other defaults of dynesty; `SAMPLEROPTS dynamic=true` selects
-  the dynamic sampler;
-- `NAUTILUS` (Lange 2023): importance nested sampling with boundaries learnt by neural networks.
+- `NAUTILUS` (the default; Lange 2023): importance nested sampling with boundaries learnt by neural
+  networks;
+- `DYNESTY` (Speagle 2020): the static nested sampler, with multi-ellipsoid bounds (`bound=multi`, Feroz et
+  al. 2009) and the other defaults of dynesty; `SAMPLEROPTS dynamic=true` selects the dynamic sampler.
 
 {ref}`SAMPLEROPTS <par-bayesian3dfit-sampleropts>` and {ref}`RUNOPTS <par-bayesian3dfit-runopts>` pass
 options to the sampler and to its run; they are checked against the arguments of the sampler before the
@@ -600,7 +600,8 @@ on top of the C++ library. With respect to it:
 - the default priors follow the initial rings (they were fixed wide ranges: INC 0–90°, PA 0–360°, VROT
   0–350 km/s, Z0 0–10″, XPOS and YPOS ±5 pixels);
 - `write` writes all the outputs of the task (the module had only `write_bestmodel` and `save_results`);
-- dynesty runs its static sampler by default (it was the dynamic one);
+- the default sampler is nautilus (it was dynesty), and dynesty runs its static sampler by default (it was
+  the dynamic one);
 - the smoothness penalties (`lambdas`) are second derivatives on the radii of the rings, with VROT 0 at
   $R = 0$ (they used the separation of the first two rings for all the rings, and put the zero of VROT one
   separation inside the first ring);

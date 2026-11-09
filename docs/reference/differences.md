@@ -80,6 +80,7 @@ see the value and the description of a parameter.
 | Names of the output files | some without the prefix, some with it but with no underscore | every file is `<prefix>_<what>` |
 | A misspelt keyword | ignored | an error if it is very close to a real one (VDSIP), otherwise a warning that proposes the closest keywords |
 | BAYESIAN3DFIT and the Python class `BayesianBBarolo`: GALMODTYPE | (pyBBarolo) MC models | `ANALYTIC`; the other tasks keep `MC` |
+| BAYESIAN3DFIT: SAMPLER | (pyBBarolo) dynesty | nautilus (`SAMPLER DYNESTY` or `run(method='dynesty')` selects dynesty) |
 | BAYESIAN3DFIT: dynesty | (pyBBarolo) dynamic sampler | static sampler (`SAMPLEROPTS dynamic=true` selects the dynamic one) |
 | BAYESIAN3DFIT: RADMAX | (pyBBarolo) the radius of the last ring | the outer edge of the disk (`LIKEOPTS radmax=edge`; `ring` is the old meaning) |
 | BAYESIAN3DFIT: priors | (pyBBarolo) fixed wide ranges | follow the initial rings (given or estimated) |

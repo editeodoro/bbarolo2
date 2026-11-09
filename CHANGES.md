@@ -550,6 +550,9 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 - **CHECKCUBE** writes the cleaned cube in OUTFOLDER as `<prefix>_clean.fits`, not next to the input file
   as `<input>_clean.fits` (which failed in a read-only data folder).
 
+- **BAYESIAN3DFIT uses nautilus by default** (SAMPLER `NAUTILUS`, `run(method='nautilus')`; it was dynesty):
+  `SAMPLER DYNESTY` or `run(method='dynesty')` selects dynesty. The samples file is then
+  `<prefix>_nautilus_results.npy`.
 - **BayesianBBarolo uses dynesty's static sampler by default** (`dynamic=False`; the dynamic sampler
   was the default): `run(dynamic=True)` or SAMPLEROPTS `dynamic=true` selects the dynamic one.
 - **BayesianBBarolo: the rings beyond RADMAX are marked.** With RADMAX as the edge of the disk, the
