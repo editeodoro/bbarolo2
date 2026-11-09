@@ -358,6 +358,11 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **BAYESIAN3DFIT: smoothness penalties in parameter files**: `LIKEOPTS lambdas=(vrot=3000, vdisp=1000)`, until
+  now only in Python (`like_kwargs=dict(lambdas=...)`). The options of `SAMPLEROPTS`, `RUNOPTS` and `LIKEOPTS`
+  accept `key=value` pairs in brackets as a value. A key of `lambdas` that is not a ring parameter is now an
+  error (it was ignored), also in Python.
+- **BAYESIAN3DFIT: the radii of the rings** (arcsec) are printed before the free parameters.
 - **BAYESIANWIND: Bayesian fits of bi-conical winds** (`bbarolo.BayesianWind`, the task `BAYESIANWIND`): the
   geometry and kinematics of the wind of GALWIND (INC, PA, OPENANG, the new inner opening angle OPENIN, HTOT,
   VWIND, VDISP and VROT per shell, the centre and VSYS) sampled with nautilus or dynesty, with the emission of the

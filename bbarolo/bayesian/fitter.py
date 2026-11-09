@@ -631,7 +631,11 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         self._log_like_func = log_like if log_like is not None else self._log_likelihood
         verbose = kwargs.get('verbose', True)
         if verbose:
-            print(f"\nFitting {self.ndim} parameters: {self.freepar_names}")
+            import textwrap
+            radii = " ".join(f"{r:.6g}" for r in np.asarray(self._inri.r['radii'], float))
+            print("\n" + textwrap.fill(f"Rings: {self._inri.nr}, radii (arcsec): {radii}", width=110,
+                                       subsequent_indent="  "))
+            print(f"Fitting {self.ndim} parameters: {self.freepar_names}")
             if custom and not useBBres and log_like is None:
                 print(f"\nLikelihood: user-defined residuals (_calculate_residuals); log-likelihood x "
                       f"{self._likefactor_note}")

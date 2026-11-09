@@ -382,9 +382,10 @@ of 15, and errors 1.8 times larger than with `beam`.
 The factor is exact for a signal smoother than the beam; for models with structure on the scale of the beam
 it is conservative (see [Validation](#validation)).
 
-### Smoothness penalties (Python only)
+### Smoothness penalties
 
-In Python, `like_kwargs=dict(lambdas={'vrot': λ, ...})` (or `f.lambdas`) adds a penalty on the second
+`LIKEOPTS lambdas=(vrot=λ, ...)` in parameter files, or `like_kwargs=dict(lambdas={'vrot': λ, ...})` (or
+`f.lambdas`) in Python, adds a penalty on the second
 derivative, with respect to radius, of the parameters that are free in each ring:
 
 $$

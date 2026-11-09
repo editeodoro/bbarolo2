@@ -1581,9 +1581,11 @@ run, and `none` gives the default. The options, with their defaults in brackets:
   not free.
 - `fracerr` (0): a fixed fractional model error, when `FRACERR` is not free: the variance of a voxel is
   sigma² + (fracerr × model)².
-
-The smoothness penalties of the ring parameters (`lambdas`) are available only in Python
-(`like_kwargs` of `BayesianBBarolo.run`).
+- `lambdas` (none): smoothness penalties of the ring parameters free in each ring, as `key=value` pairs
+  in brackets, e.g. `lambdas=(vrot=3000, vdisp=1000)`: each adds λ/2 times the sum of the squared second
+  derivatives of the parameter with respect to radius to −log L (see the algorithm page). The keys are
+  the ring parameters (`vrot`, `vdisp`, `dens`, `z0`, `inc`, `pa`, `xpos`, `ypos`, `vsys`, `vrad`,
+  `vvert`, `dvdz`, `zcyl`); in Python, `like_kwargs=dict(lambdas={'vrot': 3000})`.
 
 BAYESIANWIND has its own options: `emission` (cells, shells, cone, spaxel or voxel), `cellsize`,
 `marginal`, `prior` (gauss or exp), `noisecorr`, `sigma`, `datafrac`, `grow`, `emscale`, `emclump`,

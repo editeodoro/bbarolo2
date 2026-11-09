@@ -1178,6 +1178,8 @@ def bayes_value_string(name, value):
             return "none"
         if isinstance(v, (bool, np.bool_)):
             return "true" if v else "false"
+        if isinstance(v, dict):
+            return "(" + ",".join(f"{k}={opt(x)}" for k, x in v.items()) + ")"
         if isinstance(v, (list, tuple, np.ndarray)):
             return ",".join(opt(x) for x in v)
         if isinstance(v, (int, float, np.integer, np.floating)):
@@ -1208,6 +1210,8 @@ def bayes_value_string(name, value):
 def _optvalue(v, none=True):
     if len(v) > 1 and v[0] + v[-1] in ("()", "[]"):
         v = v[1:-1]
+        if "=" in v:                                    # (key=value, ...): a dict
+            return bayes_options(v, none)
     if "," in v:
         return tuple(_optvalue(x, none) for x in v.split(",") if x)
     lv = v.lower()
@@ -1229,10 +1233,21 @@ def bayes_options(opts, none=True):
     (LIKEOPTS) from 'key=value ...' (as in a parameter file): 'nlive=200 bound=multi
     dynamic=false' -> {'nlive': 200, 'bound': 'multi', 'dynamic': False}. Values are
     integers, numbers, true/false, none (None; a string with none=False), strings, or several
-    of them separated by commas (a tuple: 'dilation=1,3' -> (1, 3)). Raises ValueError."""
+    of them separated by commas (a tuple: 'dilation=1,3' -> (1, 3)), or key=value pairs in brackets (a dict:
+    'lambdas=(vrot=3000, vdisp=1000)' -> {'vrot': 3000, 'vdisp': 1000}). Raises ValueError."""
     s = re.sub(r"\s*([=,])\s*", r"\1", str(opts).strip())
+    toks, start, depth = [], 0, 0                    # split at spaces, ';' and ',key=', outside brackets
+    for i, c in enumerate(s):
+        if c in "([":
+            depth += 1
+        elif c in ")]":
+            depth = max(depth - 1, 0)
+        elif depth == 0 and (c.isspace() or c == ";" or (c == "," and re.match(r"[A-Za-z_]\w*=", s[i + 1:]))):
+            toks.append(s[start:i])
+            start = i + 1
+    toks.append(s[start:])
     out = {}
-    for tok in re.split(r"[\s;]+|,(?=[A-Za-z_]\w*=)", s):
+    for tok in toks:
         if not tok:
             continue
         k, eq, v = tok.partition("=")
@@ -1275,7 +1290,8 @@ def bayes_like_option(name, value):
                        quarter of the beam FWHM)
       sigma            fixed noise per voxel (default: the measured noise rms)
       fracerr          fixed fractional model error (default 0)
-      lambdas          dict of smoothness penalties of the ring parameters, e.g. {'vrot': 1}"""
+      lambdas          dict of smoothness penalties of the ring parameters, e.g. {'vrot': 1}
+                       (LIKEOPTS: lambdas=(vrot=1, vdisp=0.5))"""
     import numpy as np
     key = _LIKE_ALIASES.get(str(name).strip().lower(), str(name).strip().lower())
     if key not in LIKE_OPTIONS:
@@ -1325,25 +1341,34 @@ def bayes_like_option(name, value):
             raise ValueError(f"radmax: 'ring', 'edge' or 'taper', not {value!r}")
         return key, v
     if key == "lambdas":
+        if isinstance(value, str):
+            value = _optvalue(value.strip())
         if not isinstance(value, dict):
-            raise ValueError(f"lambdas: a dict of smoothness penalties, e.g. {{'vrot': 1}}, not {value!r}")
-        return key, {bayes_name(k): number(v) for k, v in value.items()}
+            raise ValueError(f"lambdas: smoothness penalties of ring parameters, e.g. (vrot=3000, vdisp=1000) or "
+                             f"{{'vrot': 3000}}, not {value!r}")
+        out = {}
+        for k, v in value.items():
+            name = bayes_name(k)
+            if name not in BAYES_RING_PARS:
+                raise ValueError(f"lambdas: '{k}' is not a ring parameter (" + ", ".join(BAYES_RING_PARS) + ")")
+            try:
+                out[name] = number(v)
+            except ValueError:
+                raise ValueError(f"lambdas: {k}: expected a number >= 0, not {v!r}") from None
+        return key, out
     return key, number(value, positive=(key == "sigma"))         # densprof_smooth, sigma, fracerr, radmax_width
 
 
 def bayes_likeopts(opts):
     """The options of the likelihood of BAYESIAN3DFIT from LIKEOPTS (as in a parameter file):
     'likemask=none noisecorr=beam dilation=1.5,4' -> {'likemask': 'none', 'noisecorr': 'beam',
-    'dilation': (1.5, 4)}. The options are those of bayes_like_option (lambdas only in
-    Python). Raises ValueError."""
+    'dilation': (1.5, 4)}; 'lambdas=(vrot=3000, vdisp=1000)' -> {'lambdas': {'vrot': 3000.,
+    'vdisp': 1000.}}. The options are those of bayes_like_option. Raises ValueError."""
     out = {}
     for k, v in bayes_options(opts, none=False).items():
-        if k == "lambdas":
-            raise ValueError("lambdas: only in Python (like_kwargs=dict(lambdas={...}))")
         kv = bayes_like_option(k, v)
         if kv is None:
-            raise ValueError(f"unknown option '{k}' (options: "
-                             + ", ".join(n for n in LIKE_OPTIONS if n != "lambdas") + ")")
+            raise ValueError(f"unknown option '{k}' (options: " + ", ".join(LIKE_OPTIONS) + ")")
         out[kv[0]] = kv[1]
     return out
 

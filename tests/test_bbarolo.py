@@ -851,9 +851,15 @@ def test_bayesian_keywords(capsys):
     from bbarolo.params import bayes_likeopts
     assert bayes_likeopts("LIKEMASK=None, noisecorr = 2.5 dilation=(1.5, 4) sigma=0.01 usebbres=false") == \
         dict(likemask='none', noisecorr=2.5, dilation=(1.5, 4), sigma=0.01, bbres=False)
-    for bad in ("likemask=mask", "noisecorr=0", "dilation=1", "factor=1", "sigma=0", "lambdas=1", "bbres=2"):
+    for bad in ("likemask=mask", "noisecorr=0", "dilation=1", "factor=1", "sigma=0", "lambdas=1", "bbres=2",
+                "lambdas=(vrot=-1)", "lambdas=(foo=1)", "lambdas=(vrot=1"):
         with pytest.raises(ValueError):
             bayes_likeopts(bad)
+    # the smoothness penalties: key=value pairs in brackets (PA -> phi), written back as they are read
+    from bbarolo.params import bayes_value_string
+    lk = bayes_likeopts("likemask=none lambdas = (vrot=3000, VDISP=1e3,PA=2) dilation=1.5,4")
+    assert lk == dict(likemask='none', lambdas=dict(vrot=3000., vdisp=1000., phi=2.), dilation=(1.5, 4))
+    assert bayes_likeopts(bayes_value_string("LIKEOPTS", lk)) == lk
     # Param: the values as given, the checks, the printing, the task list and the help
     p = Param()
     p.readParamString("FITSFILE m.fits\nBAYESIAN3DFIT true\n3DFIT true\nFREE VROT INC_SINGLE\n"
@@ -920,7 +926,7 @@ def test_bayesian_task(tmp_path, capsys):
                    "YPOS 31.5\nVSYS 0\nVROT 120\nVDISP 15\nZ0 0\nINC 60\nPA 45\nMASK SEARCH\nGALMODTYPE ANALYTIC\n"
                    "LINEAR 0\nFREE VROT_SINGLE VDISP_SINGLE\nPRIORS vrot=(uniform,100,100) vdisp=(uniform,1,30)\n"
                    "SAMPLER DYNESTY\nSAMPLEROPTS nlive=20 dynamic=false seed=2\nRUNOPTS dlogz=1\nTHREADS 1\nPLOTS true\n"
-                   "LIKEOPTS likemask=dilated dilation=1,3 noisecorr=measured\n")
+                   "LIKEOPTS likemask=dilated dilation=1,3 noisecorr=measured lambdas=(vrot=3000, vdisp=1000)\n")
     # the fitter: the parameters as given, the data of the cube read by BBarolo (here changed in memory)
     p = Param(str(par))
     assert p.checkPars(quiet=True)
@@ -932,11 +938,12 @@ def test_bayesian_task(tmp_path, capsys):
     assert not any(k in f._params for k in ("FITSFILE", "BAYESIAN3DFIT", "3DFIT"))
     assert f._par.gf.flagGALFIT and not f._par.gf.flagBAYESIAN and f._par.gf.FREE == "VROT VDISP INC PA"
     assert f._run_defaults()['FREE'] == ['vrot_single', 'vdisp_single']
+    assert f._run_defaults()['LIKEOPTS']['lambdas'] == dict(vrot=3000., vdisp=1000.)
     # the command line
     assert main(["-p", str(par)]) == 0
     out = capsys.readouterr().out
-    assert "Fitting 2 parameters: ['vrot', 'vdisp']" in out and "Best-fit parameters" in out
-    assert "Deconvolved density profile" in out
+    assert "Rings: 4, radii (arcsec): 20 60 100 140\nFitting 2 parameters: ['vrot', 'vdisp']" in out
+    assert "Best-fit parameters" in out and "Deconvolved density profile" in out
     # the cube and the initial parameters, as 3DFIT shows them (rings given: NRADII and RADSEP (i))
     assert "Beam size is" in out and "Initial parameters" in out and "Fitting #4(i) rings of width 40.00(i)" in out
     cli = tmp_path / "cli"
@@ -949,7 +956,8 @@ def test_bayesian_task(tmp_path, capsys):
     g.load_results(str(cli / "MOCK_dynesty_results.npy"))
     assert g.freepar_names == ['vrot', 'vdisp'] and 100 < g.params[0] < 200
     assert g.like_kwargs == dict(likemask='dilated', dilation=(1., 3), noisecorr='measured', densprof_smooth=0.1,
-                                 bbres=False, radmax='edge', radmax_width=None)
+                                 bbres=False, radmax='edge', radmax_width=None,
+                                 lambdas=dict(vrot=3000., vdisp=1000.))
     capsys.readouterr()
     # bbarolo.run (the same parameters, quiet, no plots): a Result with the fitter
     res = bbarolo.run(str(par), outfolder=str(tmp_path / "run"), verbose=False, plots=False,
