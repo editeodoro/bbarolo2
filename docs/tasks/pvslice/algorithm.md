@@ -78,6 +78,10 @@ the weights are renormalised near the edges; a point whose valid neighbours carr
 the total weight is blank. For points inside the field and data without blanks the denominator is 1
 and this is the usual bilinear interpolation.
 
+Note that the blanks of a cube read from a FITS file are set to 0 when it is read, as in all the tasks of
+BBarolo: in the `PVSLICE` task they are sampled as zeros. Only NaNs in an array given directly to the
+Python functions (e.g. `pv_sample`) are skipped as described here.
+
 The same positions are used for all the channels: the spectral axis is not resampled.
 
 ## The slit

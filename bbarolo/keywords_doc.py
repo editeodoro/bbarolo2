@@ -699,7 +699,8 @@ and the Python package of the sampler (`pip install "bbarolo[bayesian]"` install
 
 The rings are given as in `3DFIT`. The parameters that are not free stay fixed, and the geometry that
 is not given (rings, `XPOS`, `YPOS`, `VSYS`, `VROT`, `INC`, `PA`) is estimated as in `3DFIT`
-(`GUESSTYPE`); `VDISP` is 8 km/s, `Z0` one pixel, `VRAD` 0 and `DENS` 1 when not given. The models are
+(`GUESSTYPE`); `VDISP` is 8 km/s (with `GUESSTYPE` `FIT`, estimated from the second moment as in `3DFIT`),
+`Z0` one pixel, `VRAD` 0 and `DENS` 1 when not given. The models are
 ANALYTIC by default (`GALMODTYPE`), with one set of rings (no second stage), and `NORM` is not used:
 unless `DENS` is free, the density profile is deconvolved from the total intensity map.
 
@@ -884,7 +885,7 @@ quadrature the instrumental broadening `SPECRES` (or `LINEAR`). One value, one v
 `file(name,column)` (see `VROT`).
 
 When it is not given, 3DFIT, SPACEPAR and BAYESIAN3DFIT start from 8 km/s; with `GUESSTYPE` `FIT`,
-3DFIT and SPACEPAR use instead an estimate from the second moment of the emission (in the outer half of
+they use instead an estimate from the second moment of the emission (in the outer half of
 the disk, corrected for the channel width). GALMOD and GALWIND need it (in GALWIND: one value, or one
 value per cylinder or shell, as a list or a file column). When `FREE` includes VDISP, 3DFIT fits it between
 `MINVDISP` and `MAXVDISP`.

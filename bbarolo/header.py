@@ -6,6 +6,8 @@ and wraps an ``astropy.wcs.WCS`` object (the C++ version uses WCSLIB directly).
 Axis indices follow the FITS/C++ convention: 0=x (RA), 1=y (DEC), 2=spectral.
 """
 
+import os
+import re
 import copy
 import math
 import warnings
@@ -15,6 +17,51 @@ from astropy.wcs import WCS
 
 from .bbutils import degconv
 
+
+def fits_image_hdu(fname):
+    """The file and the HDU that hold the image of fname: (path, index). fname can name the HDU as CFITSIO
+    does, ``file.fits[n]`` or ``file.fits[EXTNAME]``; otherwise the image is in the primary HDU or, when that
+    has no data, in the first extension with an image (as CFITSIO's fits_open_data, e.g. MUSE cubes)."""
+    path, ext = fname, None
+    if not os.path.isfile(fname):
+        m = re.match(r"^(.+?)\[([^][:,*]+)\]$", str(fname))
+        if m and os.path.isfile(m.group(1)):
+            path, e = m.group(1), m.group(2).strip()
+            ext = int(e) if e.isdigit() else e
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with fits.open(path) as hdul:
+            if ext is not None:
+                return path, hdul.index_of(ext)
+            if hdul[0].header.get("NAXIS", 0) == 0:
+                for i in range(1, len(hdul)):
+                    if hdul[i].is_image and hdul[i].header.get("NAXIS", 0) > 0:
+                        return path, i
+    return path, 0
+
+
+def read_fits_image(fname, data=True):
+    """(header, data) of the image of fname (see fits_image_hdu), in memory; data is None if not asked."""
+    path, ext = fits_image_hdu(fname)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with fits.open(path, memmap=False) as hdul:
+            hdu = hdul[ext]
+            return hdu.header.copy(), (np.array(hdu.data) if data and hdu.data is not None else None)
+
+
+def object_name(obj):
+    """The name of the object as used in the names of the outputs (OBJECT, or NONE): / \\ ( ) become -, spaces _."""
+    obj = str(obj)
+    for a, b in (("/", "-"), ("\\", "-"), ("(", "-"), (")", "-")):
+        obj = obj.replace(a, b)
+    return "".join("_" if ch.isspace() else ch for ch in obj)
+
+
+def _card_value(hdr, kw):
+    """The value of the card kw as written in the header (without the comment)."""
+    img = hdr.cards[kw].image
+    return img[10:].split("/", 1)[0] if img[8:10] == "= " else ""
 
 
 def _lower(s):
@@ -139,8 +186,7 @@ class Header:
     def header_read(self, fname):
         self.fitsname = fname
         try:
-            with fits.open(fname) as hdul:
-                hdr = hdul[0].header.copy()
+            hdr = read_fits_image(fname, data=False)[0]
         except Exception as e:
             print(e)
             return False
@@ -282,6 +328,9 @@ class Header:
         for k in ("FREQ0", "RESTFREQ", "RESTFRQ"):
             if k in hdr:
                 f0 = float(g(k))
+                if not f0 > 0:          # (0 or NaN: as if missing; C++ divided by it, the maps and SEARCH stopped)
+                    self.Warning(f"HEADER WARNING: {k} = {g(k)} is not a rest frequency: ignored.")
+                    f0 = None
                 break
         if f0 is None:
             if self.dunit3 == "NONE" or self.drval3 == 0 or ("hz" in cu2 and "m/s" in cu2):
@@ -299,14 +348,9 @@ class Header:
                 f0 = c3 * math.sqrt((299792458. + d) / (299792458. - d))
         self.freq0 = f0
 
-        if "OBJECT" in hdr:
-            obj = str(g("OBJECT"))
-        else:
+        if "OBJECT" not in hdr:
             self.Warning("HEADER WARNING: OBJECT keyword not found.")
-            obj = "NONE"
-        for a, b in (("/", "-"), ("\\", "-"), ("(", "-"), (")", "-")):
-            obj = obj.replace(a, b)
-        self.object = "".join("_" if ch.isspace() else ch for ch in obj)
+        self.object = object_name(g("OBJECT", "NONE"))
 
         tel = g("TELESCOP", g("INSTRUME"))
         if tel is None:
@@ -346,8 +390,9 @@ class Header:
                       f"  BPA = {self.bpa:.5g} DEGREE\n"
                       " It is heartily recommended to check these values before going on!!\n")
         for kw, attr in (("BMMAJ", "bmaj"), ("BMMIN", "bmin")):
-            v = hdr.get(kw)
-            if isinstance(v, str) and "D" in v:
+            # GIPSY: a beam in arcsec is written with a Fortran exponent, e.g. 3.0000000D+01 (as C++, from the
+            # value as written: astropy reads it as the number 30)
+            if kw in hdr and "D" in _card_value(hdr, kw):
                 setattr(self, attr, getattr(self, attr) / 3600.)
         if clbmaj != 0: self.bmaj = clbmaj / 3600.
         if clbmin != 0: self.bmin = clbmin / 3600.
@@ -617,6 +662,8 @@ class Header:
             h[f"CUNIT{k}"] = self.cunit[i]
         if min(numDim, self.numAxes) >= 2:
             self._pc_cards(h)
+            if self.pc is None and self.crota != 0:     # (as _wcs_header: it was lost in every output)
+                h["CROTA2"] = self.crota
         h["BUNIT"] = self.bunit
         if self.btype != "NONE": h["BTYPE"] = self.btype
         if self.bmaj != 0: h["BMAJ"] = self.bmaj
@@ -631,7 +678,8 @@ class Header:
         if self.datamax != 0: h["DATAMAX"] = self.datamax
         if self.datamin != 0: h["DATAMIN"] = self.datamin
         if fullHead:
-            skip = {"SIMPLE", "BITPIX", "NAXIS", "EXTEND", "BZERO", "BSCALE", "BLANK", "END", "COMMENT", ""}
+            skip = {"SIMPLE", "BITPIX", "NAXIS", "EXTEND", "BZERO", "BSCALE", "BLANK", "END", "COMMENT", "",
+                    "XTENSION", "PCOUNT", "GCOUNT", "EXTNAME", "EXTVER", "EXTLEVEL", "INHERIT"}
             for card in self.keys:
                 if card.startswith("HISTORY"):
                     h.add_history(card[7:].strip() if card[7:8] == " " else card[7:])

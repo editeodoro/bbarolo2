@@ -3174,7 +3174,14 @@ def test_ellprof_deconvolved_profile(tmp_path):
     t, truth = prof["conv"].profile_deconvolved, prof["true"].profile["sdens_fo"]
     assert np.allclose(t["sdens_fo_obs"], prof["conv"].profile["sdens_fo"], rtol=2e-3)
     assert t["sdens_fo_obs"][0] < 0.75 * truth[0] and abs(t["sdens_fo"][0] / truth[0] - 1) < 0.05
-    assert np.all(np.abs(np.asarray(t["sdens_fo"]) / np.asarray(truth) - 1) < 0.15)
+    dev = np.abs(np.asarray(t["sdens_fo"]) / np.asarray(truth) - 1)
+    assert np.all(dev[:-1] < 0.1) and dev[-1] < 0.25           # (the last ring: the edge of the disk)
+    # the unit of SDENS_FO per unit of DENS: that of the observed profile of the model without the beam (the true
+    # DENS at the radii, exp(-R/50), away from the centre); it was 2% low (the area of the empty centre of the disk
+    # that measured it)
+    rr = np.asarray(t["radii"])
+    unit_true = np.median((np.asarray(truth) / np.exp(-rr / 50.))[2:])
+    assert np.allclose(np.asarray(t["sdens_fo"]) / np.asarray(t["dens"]), unit_true, rtol=0.01)
     assert "himassdens" in t.colnames and np.all(t["e_sdens_fo_hi"] >= 0)
     files = e.write(str(tmp_path / "out"))
     assert str(tmp_path / "out" / "SIM_ellprof_deconvolved.txt") in files
@@ -3222,3 +3229,384 @@ def test_ellprof_deconvolved_clipped_map_errors():
                     pa=30, z0=5, mask="NONE", verbose=False).run()
         err[name] = np.asarray(e.profile_deconvolved["e_sdens_fo_hi"])
     assert np.all(err["clipped"][:6] > 0.6 * err["full"][:6])
+
+
+# ==========================================================================
+# Review of 9 Nov 2026 (BBAROLO2_FINDINGS 54-94): crashes and bugs of the port
+# ==========================================================================
+def test_3dfit_twostage_geometry_only_and_negative_dens(tmp_path):
+    """3DFIT with TWOSTAGE and only geometric parameters free (FREE INC PA) stopped with an IndexError after the
+    first stage, which left nothing to fit: the regularised geometry is now the result (C++ read beyond the simplex).
+    With DENS free (FREE ALL) a negative DENS stopped the fit with a ValueError; it goes back to the initial value,
+    as Z0 (C++: no bound)."""
+    import bbarolo
+    from bbarolo.galfit import DENS, MAXPAR
+    fn = _mock_cube(tmp_path)
+    kw = dict(radii=[20, 60, 100, 140], xpos=31.5, ypos=31.5, vsys=0., vrot=150., vdisp=10., z0=0., inc=55., pa=40.,
+              mask="SEARCH", galmodtype="ANALYTIC", verbose=0, threads=1, outfolder=str(tmp_path / "out"))
+    r = bbarolo.FitMod3D(fn, free="INC PA", twostage=True, **kw).run()
+    inc, pa = np.asarray(r.rings["inc"]), np.asarray(r.rings["pa"])
+    assert len(inc) == 4 and np.ptp(inc) < 1e-6 and abs(inc[0] - 60) < 5 and abs(pa[0] - 45) < 5
+    g = r.galfit
+    g.mpar, g.nfree = [False] * MAXPAR, 1
+    g.mpar[DENS] = True
+    d = g._make_dring(1)
+    z = np.array([-0.5])
+    assert np.isfinite(g.func3D(d, z)) and z[0] == g.inr.dens[1] == d.dens[0]
+
+
+def test_fits_extension_and_fitslist(tmp_path):
+    """A cube in an extension (e.g. MUSE: an empty primary HDU) is read, also named file.fits[1] or file.fits[DATA]
+    as in CFITSIO (it stopped with 'CRPIXs keywords not found', or a FileNotFoundError); the cards of the extension
+    are not copied to the outputs. bbarolo.run with FITSLIST: a cube that cannot be read gives None in the list of
+    results (it stopped with a TypeError), BBaroloError if none can."""
+    from astropy.io import fits
+    import bbarolo
+    from bbarolo.bbutils import BBaroloError
+    fn = _mock_cube(tmp_path)
+    d, h = fits.getdata(fn), fits.getheader(fn)
+    ext = str(tmp_path / "ext.fits")
+    fits.HDUList([fits.PrimaryHDU(), fits.ImageHDU(d, h, name="DATA")]).writeto(ext)
+    for name in (ext, ext + "[1]", ext + "[DATA]"):
+        c = Cube(name, par=Param())
+        assert c.array.shape == d.shape and np.allclose(c.array, d) and c.Head().Bmaj() > 0
+        assert "XTENSION" not in c.to_hdu(True).header and "EXTNAME" not in c.to_hdu(True).header
+    lst = tmp_path / "list.txt"
+    lst.write_text(f"{tmp_path / 'missing.fits'}\n{fn}\n")
+    res = bbarolo.run(fitslist=str(lst), totalmap=True, mask="NONE", outfolder=str(tmp_path / "maps"), verbose=0)
+    assert isinstance(res, list) and res[0] is None and "MAPS" in res[1]
+    lst.write_text(f"{tmp_path / 'missing.fits'}\n")
+    with pytest.raises(BBaroloError):
+        bbarolo.run(fitslist=str(lst), totalmap=True, mask="NONE", outfolder=str(tmp_path / "maps"), verbose=0)
+
+
+def test_spacepar_one_ring_and_ranges(tmp_path, capsys):
+    """SPACEPAR: P1PAR/P2PAR with two values keep the default step (it became 0: ZeroDivisionError); a range with
+    min > max or a step <= 0 is an error (min > max explored min to min + |max - min|) (C++); one ring is as wide
+    as RADSEP, as in 3DFIT (IndexError; C++ read beyond the rings)."""
+    from bbarolo.spacepar import Spacepar
+    p = Param()
+    p.readParamString("P1PAR 100 160\nP2PAR 5,25,10\n")
+    assert p.P1p == [100., 160., 2.] and p.P2p == [5., 25., 10.]
+    p.readParamString("FITSFILE x.fits\nSPACEPAR true\nP1PAR 150 60 30\n")
+    assert not p.checkPars() and "P1PAR (150 60 30)" in capsys.readouterr().out
+    fn = _mock_cube(tmp_path)
+    p = Param()
+    p.readParamString(f"FITSFILE {fn}\nSPACEPAR true\nRADII 60\nRADSEP 40\nVSYS 0\nXPOS 31.5\nYPOS 31.5\nVROT 150\n"
+                      f"VDISP 10\nINC 60\nPA 45\nZ0 0\nP1 VROT\nP2 VDISP\nP1PAR 130 170 20\nP2PAR 5 15 5\nTHREADS 1\n"
+                      f"VERBOSE false\nMASK SEARCH\nGALMODTYPE ANALYTIC\nOUTFOLDER {tmp_path}/\n")
+    assert p.checkPars(quiet=True)
+    sp = Spacepar(Cube(fn, par=p))
+    d = sp._dring(0, 150., 10.)
+    assert np.allclose(d.radii, [40., 80.]) and np.isfinite(sp.getFuncValue(d))
+
+
+def test_ellprof_memory(tmp_path):
+    """ELLPROF computes the subpixels of each ring one ring at a time: the arrays of all the rings at once,
+    (pixels, subpixels, rings) floats, took 8.5 GB for a 1024x1024 map with 50 rings."""
+    import tracemalloc
+    from astropy.io import fits
+    from bbarolo.ellprof import Ellprof
+    n = 200
+    h = fits.Header()
+    for k, v in dict(CTYPE1='RA---SIN', CTYPE2='DEC--SIN', CDELT1=-1 / 3600., CDELT2=1 / 3600., CRPIX1=n / 2,
+                     CRPIX2=n / 2, CRVAL1=10., CRVAL2=10., CUNIT1='deg', CUNIT2='deg', BUNIT='JY/BEAM*KM/S',
+                     BMAJ=3 / 3600., BMIN=3 / 3600., BPA=0.).items():
+        h[k] = v
+    yy, xx = np.mgrid[0:n, 0:n]
+    fits.writeto(str(tmp_path / "map.fits"), np.exp(-np.hypot(xx - n / 2, yy - n / 2) / 25.).astype(np.float32), h)
+    p = Param()
+    p.verbose = False
+    p.readParamString(f"ELLPROF true\nNRADII 40\nRADSEP 2.4\nXPOS {n / 2}\nYPOS {n / 2}\nINC 60\nPA 30\nMASK NONE\n")
+    e = Ellprof(Cube(str(tmp_path / "map.fits"), par=p), mask=False)
+    tracemalloc.start()
+    e.RadialProfile()
+    peak = tracemalloc.get_traced_memory()[1]
+    tracemalloc.stop()
+    assert peak < 60e6 and e.Num[:, 0].sum() > 0           # (about 1 GB before)
+
+
+def test_rest_frequency_zero_and_gipsy_beam(tmp_path):
+    """RESTFRQ = 0 in the header is ignored (the rest frequency of HI is assumed, as when it is missing): the maps
+    and SEARCH of a frequency cube divided by it (C++: infinite velocities). BMMAJ/BMMIN of GIPSY headers written
+    with a Fortran exponent (3.0D+01) are in arcsec: astropy reads them as numbers, so the beam was taken in degrees
+    (as C++, which reads the card as written)."""
+    from astropy.io import fits
+    from bbarolo.moments import MomentMap
+    from bbarolo.header import Header
+    h = fits.Header()
+    for k, v in dict(CTYPE1='RA---SIN', CTYPE2='DEC--SIN', CRPIX1=10., CRPIX2=10., CRVAL1=150., CRVAL2=30.,
+                     CDELT1=-5 / 3600., CDELT2=5 / 3600., CUNIT1='deg', CUNIT2='deg', CTYPE3='FREQ', CRPIX3=1.,
+                     CRVAL3=1.415e9, CDELT3=-2e4, CUNIT3='Hz', BUNIT='Jy/beam', BMAJ=15 / 3600., BMIN=15 / 3600.,
+                     BPA=0., RESTFRQ=0.).items():
+        h[k] = v
+    fits.writeto(str(tmp_path / "f.fits"), np.random.default_rng(0).normal(1., 0.1, (10, 20, 20)).astype(np.float32), h)
+    p = Param()
+    p.verbose = 0
+    c = Cube(str(tmp_path / "f.fits"), par=p)
+    assert c.Head().Freq0() == pytest.approx(1.420405751786e9)
+    m = MomentMap()
+    m.input(c)
+    m.FirstMoment(False, 'MOMENT')
+    assert np.all(np.isfinite(m.array)) and 1000 < np.nanmean(m.array) < 1300
+    hdu = emptyfits([16, 16, 8], [-10 / 3600., 10 / 3600., 10.], beam=None)
+    for card, arcs in (("BMMAJ   =        3.0000000D+01 / beam", 30.), ("BMMAJ   =       0.008333333333 / D", 30.)):
+        hd = hdu.header.copy()
+        for k in ("BMAJ", "BMIN", "BPA"):
+            hd.remove(k, ignore_missing=True)
+        hd.append(fits.Card.fromstring(card))
+        hd.append(fits.Card.fromstring(card.replace("BMMAJ", "BMMIN")))
+        hh = Header()
+        hh.warning = False
+        hh.fromAstropy(hd)
+        assert hh.Bmaj() * 3600 == pytest.approx(arcs) and hh.Bmin() * 3600 == pytest.approx(arcs)
+
+
+def test_parameter_values_and_input_errors(tmp_path, capsys):
+    """Flags given in Python as 1.0 or np.float64(1) are true (written as '1.0', read as false); comma-separated lists
+    of the list keywords (RESTWAVE, RELINT, CONTCHANS, P1PAR, ...) are read as the ring parameters (they became empty;
+    C++ read the first value). Input that stopped with a traceback is an error of the parameters: WINDOW_SIZE or
+    ANTIALIAS nan, STARTRAD < 0; the messages of checkPars written to stderr are in the BBaroloError of the Python
+    interface; errors of the Python tasks are BBaroloError."""
+    import bbarolo
+    from bbarolo.bbutils import BBaroloError
+    for v in (1.0, np.float64(1), np.int64(1)):
+        p = Param()
+        p.update(flagerrors=v)
+        assert p.gf.flagERRORS is True
+    p = Param()
+    p.readParamString("RESTWAVE 6562.8,6583.4\nRELINT 1, 0.3\nCONTCHANS 5,5\nBOX 1,2 3,4,5,6\n")
+    assert p.gf.RESTWAVE == [6562.8, 6583.4] and p.gf.RELINT == [1., 0.3] and p.ma.contChans == [5, 5]
+    assert p.BOX == [1, 2, 3, 4, 5, 6]
+    for extra in ("SMOOTHSPEC true\nWINDOW_SIZE nan\n", "3DFIT true\nSTARTRAD -2\n",
+                  "2DFIT true\nFREE VROT VEXPP DISP\n"):
+        p = Param()
+        p.readParamString("FITSFILE a.fits\n" + extra)
+        assert not p.checkPars(quiet=True)
+    p = Param()
+    p.readParamString("FITSFILE a.fits\nPVSLICE true\nXPOS_PV 10\nYPOS_PV 10\nPA_PV 30\nANTIALIAS nan\n")
+    assert p.checkPars(quiet=True) and p.ANTIALIAS == 0.5
+    fn = _mock_cube(tmp_path)
+    with pytest.raises(BBaroloError, match="RELINT must have same size"):
+        bbarolo.FitMod3D(fn, restwave=[6562.8, 6583.4], relint=[1.], outfolder=str(tmp_path)).run()
+    with pytest.raises(BBaroloError, match="beam"):
+        bbarolo.FitMod3D(fn).update(beam=[1, 2, 3, 4])
+    with pytest.raises(BBaroloError, match="FREE"):
+        bbarolo.FitMod2D(fn, free="VROT VDISP")
+    with pytest.raises(BBaroloError, match="not a readable"):
+        bbarolo.Search(str(tmp_path / "missing.fits"), outfolder=str(tmp_path)).run()
+
+
+def test_relint_one_per_line(tmp_path):
+    """Several lines (RESTWAVE) with fewer RELINT values: an error (the numba kernels read the intensities beyond
+    the array: the second line had whatever value lay there; also in C++ for GALWIND)."""
+    from bbarolo.galmod3d import GalMod3D
+    from bbarolo.bbutils import BBaroloError
+    hdu = emptyfits([40, 40, 80], [-1 / 3600., 1 / 3600., 0.5], crvals=[60, 0, 6572.],
+                    ctypes=['RA---SIN', 'DEC--SIN', 'WAVE'], cunits=['deg', 'deg', 'Angstrom'], beam=3 / 3600.,
+                    bunit="JY/BEAM", obj="WAVE")
+    fn = str(tmp_path / "wave.fits")
+    hdu.writeto(fn)
+    kw = dict(coords="Rz", xpos=19.5, ypos=19.5, vsys=300., inc=60, pa=30, dens=lambda R, z: np.exp(-R / 5.), vphi=100.,
+              vdisp=20., rmax=15, zmax=0, restwave=[6562.8, 6583.4])
+    with pytest.raises(BBaroloError, match="RELINT"):
+        GalMod3D(fn, **kw).model(smooth=False)
+    a = GalMod3D(fn, relint=[1., 0.3], **kw).model(smooth=False).data
+    assert np.isfinite(a).all() and a.sum() > 0
+
+
+def test_maps_keep_rotation(tmp_path):
+    """The 2D maps of a cube with a rotated WCS (PC matrix) keep the rotation (they were written unrotated: 9" off
+    at 15 pixels from CRPIX for 30 deg); CROTA is written as CROTA2 in all the outputs."""
+    import warnings
+    from astropy.io import fits
+    from astropy.wcs import WCS
+    from bbarolo.moments import MomentMap
+    t = 0.5
+    base = dict(CTYPE1='RA---TAN', CTYPE2='DEC--TAN', CRPIX1=10., CRPIX2=10., CRVAL1=150., CRVAL2=30.,
+                CDELT1=-1 / 3600., CDELT2=1 / 3600., CUNIT1='deg', CUNIT2='deg', CTYPE3='VRAD', CRPIX3=1.,
+                CRVAL3=1000., CDELT3=10., CUNIT3='km/s', BUNIT='Jy/beam', BMAJ=5 / 3600., BMIN=5 / 3600., BPA=0.)
+    data = np.random.default_rng(1).normal(0, 1, (10, 20, 20)).astype(np.float32)
+    data[3:6, 8:12, 8:12] += 10
+    pix = np.array([[0., 0.], [19., 19.]])
+    for name, extra in (("pc", dict(PC1_1=np.cos(t), PC1_2=-np.sin(t), PC2_1=np.sin(t), PC2_2=np.cos(t))),
+                        ("crota", dict(CROTA=30.))):
+        h = fits.Header()
+        for k, v in {**base, **extra}.items():
+            h[k] = v
+        fn = str(tmp_path / f"{name}.fits")
+        fits.writeto(fn, data, h)
+        p = Param()
+        p.verbose = 0
+        c = Cube(fn, par=p)
+        m = MomentMap()
+        m.input(c)
+        m.ZeroMoment(False, 'MOMENT')
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ref = WCS(h).celestial.wcs_pix2world(pix, 0)
+            if name == "pc":
+                assert np.abs(WCS(m.to_hdu().header).celestial.wcs_pix2world(pix, 0) - ref).max() < 1e-9
+            else:
+                assert c.to_hdu().header["CROTA2"] == 30. and m.to_hdu().header["CROTA2"] == 30.
+
+
+def test_ellprof_deconvolved_rings_inside_emission(tmp_path):
+    """The deconvolved profile of ELLPROF fits only the pixels that its model describes (the rings and the
+    exterior annulus two beams wide): the emission beyond pulled the solution (NGC 2403 with 1 ring: 11 times too
+    low; here 1 ring -12%, 3 rings the last one -10%)."""
+    from astropy.io import fits
+    from bbarolo import GalMod, Ellprof
+    tmpl = emptyfits([96, 96, 48], [-10 / 3600., 10 / 3600., 10.], beam=40 / 3600., bunit="JY/BEAM", obj="WIDE")
+    R = np.arange(5, 460, 10.)
+    kw = dict(radii=R, xpos=47.5, ypos=47.5, vsys=0., vrot=150 * np.tanh(R / 40.), vdisp=10., z0=0., inc=50., pa=30.,
+              dens=np.exp(-R / 300.), norm="NONE", mask="NONE", galmodtype="ANALYTIC", ringmode="NODES", verbose=False,
+              threads=2)
+    mods = {name: np.asarray(GalMod(tmpl, sm=sm, **kw).run().model.data, np.float32)
+            for name, sm in (("conv", True), ("true", False))}
+    for nr, rs in ((1, 60), (3, 40)):
+        prof = {name: Ellprof(fits.PrimaryHDU(mods[name], tmpl.header), nradii=nr, radsep=rs, xpos=47.5, ypos=47.5,
+                              inc=50, pa=30, z0=0, mask="THRESHOLD", threshold=1e-9, verbose=False).run()
+                for name in mods}
+        dev = (np.asarray(prof["conv"].profile_deconvolved["sdens_fo"]) / np.asarray(prof["true"].profile["sdens_fo"])
+               - 1)
+        assert np.all(np.abs(dev) < 0.06)
+
+
+def test_bayesian_one_ring_and_side_across_north(tmp_path):
+    """BayesianBBarolo with one ring keeps RADSEP (as 3DFIT; it was dropped, so the ring was always R/2 to 3R/2) and
+    its likelihood region covers the whole ring (it ended at R + 1/2 beam: 24% of the flux of the model outside).
+    SIDE with the PAs of the rings across 0/360: the median PA unwrapped (PA 355-5 gave 180: SIDE R took the
+    approaching half). The same for the SIDE of the deconvolved profile of ELLPROF."""
+    from bbarolo.galmod import DiskModel
+    f = _bayes_mock(tmp_path, radii=[60])
+    f._setup(['vrot'])
+    m = DiskModel(f._cube_obj, galmodtype="ANALYTIC").array(f._inri.object).sum(axis=0)
+    assert m[~f._region].sum() < 0.08 * m.sum()
+    f = _bayes_mock(tmp_path, radii=None, nradii=1, radsep=80)
+    assert f._inri.object.radsep == 80
+    f = _bayes_mock(tmp_path, pa=[355, 358, 2, 5], side="R")
+    f._setup(['vrot'])
+    assert f._region[40:].sum() > 0 and f._region[:24].sum() == 0          # (PA 0: receding to the north)
+
+
+def test_analytic_vertical_samples(tmp_path):
+    """ANALYTIC models: the vertical samples of the layer are evenly spaced (0.25 pixels once projected), with the
+    flux of the layer between them (they were equal-weight samples at its quantiles, several pixels apart in its
+    tails at any number of samples: a thick edge-on layer was off by 9% of the peak, a Lorentzian layer with DVDZ by
+    10% of the peak of the spectrum, and its box model was not a crop of the full model, 12% off); ring_maps has the
+    same samples, also with DVDZ (it ignored the gradient: 7-19% off)."""
+    import copy
+    from scipy.special import erf
+    from bbarolo.galmod import DiskModel
+    hdu = emptyfits([128, 128, 40], [-1 / 3600., 1 / 3600., 10.], beam=3 / 3600., bunit="JY/BEAM", obj="THICK")
+    hdu.writeto(str(tmp_path / "thick.fits"))
+    p = Param()
+    p.verbose = False
+    c = Cube(str(tmp_path / "thick.fits"), par=p)
+    par = copy.deepcopy(c.pars().gf)
+    par.LTYPE = 1
+    dm = DiskModel(c, par=par, smooth=False, galmodtype="ANALYTIC", ringmode="NODES")
+    r = Rings().setRings(radii=[10., 50.], xpos=63.5, ypos=63.5, vsys=0., vrot=150., vdisp=10., z0=5., dens=1.,
+                         inc=90., phi=0.)
+    prof = dm.array(r).sum(axis=0)[60:68].sum(axis=0)          # (edge-on, PA 0: the layer along x)
+    x = np.arange(128) - 63.5
+    g = erf((x + 0.5) / (5 * np.sqrt(2))) - erf((x - 0.5) / (5 * np.sqrt(2)))
+    assert np.abs(prof / prof.max() - g / g.max()).max() < 0.01
+    hdu = emptyfits([128, 128, 240], [-10 / 3600., 10 / 3600., 5.], beam=30 / 3600., bunit="JY/BEAM", obj="LOR")
+    hdu.writeto(str(tmp_path / "lor.fits"))
+    c = Cube(str(tmp_path / "lor.fits"), par=p)
+    for lt in (1, 4):
+        par = copy.deepcopy(c.pars().gf)
+        par.LTYPE = lt
+        dm = DiskModel(c, par=par, smooth=False, galmodtype="ANALYTIC")
+        r = Rings().setRings(radii=[50., 70.], radsep=20., xpos=63.5, ypos=63.5, vsys=0., vrot=150., vdisp=8., z0=10.,
+                             dens=1., inc=70., phi=45.)
+        blo, bhi = dm.box(r)
+        full = dm.array(r, final=False)
+        box = dm.array(r, blo, bhi, final=False)
+        assert np.abs(box - full[:, blo[1]:bhi[1], blo[0]:bhi[0]]).max() < 1e-9 * full.max()
+        r = Rings().setRings(radii=[30., 50., 70., 90.], xpos=63.5, ypos=63.5, vsys=0., vrot=150., vdisp=8., z0=15.,
+                             dens=[1., 2., 1.5, .5], inc=75., phi=45., dvdz=0.5, zcyl=0.)
+        mod = dm.array(r).sum(axis=0)
+        assert np.abs(np.tensordot(r.dens, dm.ring_maps(r), axes=1) - mod).max() < 1e-6 * mod.max()
+
+
+def test_python_write_paths_and_parameter_files(tmp_path, monkeypatch):
+    """Python write(): the plots and the HISTORY of the mask have the absolute path of a cube given with a relative
+    one (the plotting scripts failed from their folder); an in-memory cube is named as the outputs (OBJECT cleaned,
+    or NONE: output/NGC 2403/HI/ and cube_input.fits). The parameter file of a run: that of BBarolo -f has AUTO
+    (it said AUTO false and had no 3DFIT: run again with -p it did nothing), that of write() the parameters of SEARCH
+    when the mask uses it, Task.to_parfile the beam given with beam=."""
+    import re
+    from astropy.io import fits
+    import bbarolo
+    from bbarolo.tasks import _input_copy
+    from bbarolo.cli import getopts
+    monkeypatch.chdir(tmp_path)
+    _mock_cube(tmp_path)
+    t = bbarolo.FitMod3D("mock.fits")
+    assert _input_copy(t, None, str(tmp_path)) == str(tmp_path / "mock.fits")
+    hdu = fits.open("mock.fits")[0]
+    hdu.header["OBJECT"] = "NGC 2403/HI"
+    t = bbarolo.FitMod3D(hdu, beam=(40, 30, 10))
+    assert t._default_outfolder().endswith("/output/NGC_2403-HI/")
+    assert _input_copy(t, None, str(tmp_path)) == str(tmp_path / "NGC_2403-HI_input.fits")
+    s = t.to_parfile()
+    assert re.search(r"^BMAJ\s+40", s, re.M) and re.search(r"^BPA\s+10", s, re.M)
+    par = getopts(["-f", "mock.fits"])
+    assert re.search(r"^AUTO\s+true$", par.to_parfile(["3DFIT"]), re.M)
+    r = bbarolo.Maps("mock.fits", totalmap=True, mask="SEARCH", outfolder=str(tmp_path / "maps"), verbose=0).run()
+    r.write()
+    s = open(str(tmp_path / "maps" / "MOCK_params.par")).read()
+    assert re.search(r"^SNRCUT\s", s, re.M)
+    hist = "".join(str(x) for x in fits.getheader(str(tmp_path / "maps" / "MOCK_mask.fits")).get("HISTORY", []))
+    assert "FITSFILE=" + str(tmp_path / "mock.fits") in hist                # (cards of 72 characters, joined)
+
+
+def test_bayesian_python_values_and_saved_functions(tmp_path):
+    """BayesianBBarolo takes Python values for FREE (a list), PRIORS and the options (dicts) (only strings as in a
+    parameter file were accepted); run(freepar=[]) is an error (it sampled zero dimensions); load_results takes the
+    sampler of the file (write() of a loaded fit wrote _None_results.npy) and stops if the fit used a function of
+    radius of its own that is not in funcs (it became the default arctan)."""
+    from bbarolo.bbutils import BBaroloError
+    f = _bayes_mock(tmp_path, free=['vrot', 'VDISP_SINGLE'], priors={'inc': dict(name='norm', loc=60., scale=5.)},
+                    likeopts=dict(noisecorr='beam', dilation=(1., 3)))
+    assert f._run_defaults()['FREE'] == ['vrot', 'vdisp_single']
+    assert f.priors['inc'] == dict(name='norm', loc=60., scale=5.)
+    with pytest.raises(BBaroloError, match="no free parameters"):
+        f.run(freepar=[])
+    np.save(str(tmp_path / "fake.npy"), dict(funcs={'vrot': 'mycurve'}, inrings={}))
+    with pytest.raises(BBaroloError, match="VROT_FUNC"):
+        f.load_results(str(tmp_path / "fake.npy"))
+
+
+def test_small_fixes_of_the_review(tmp_path):
+    """SimulatedGalaxyCube.define_galaxy with xpos per ring and one ypos (it tested xpos: the galaxy was centred);
+    Galfit (and a Result with it) can be pickled; BBarolo --paramfile=file.par runs the file (the option was taken as a
+    parameter and ignored: nothing ran, exit code 0); RINGMODE NODES with one radius, or SHIFTED with one ring and no
+    RADSEP: a clear error (an empty model; 'Radius separation too small')."""
+    import pickle
+    import bbarolo
+    from bbarolo.cli import getopts
+    from bbarolo.bbutils import BBaroloError
+    from bbarolo.galmod import DiskModel
+    hdu = emptyfits([32, 32, 20], [-10 / 3600., 10 / 3600., 10.], beam=30 / 3600., bunit="JY/BEAM", obj="S")
+    g = bbarolo.SimulatedGalaxyCube(hdu)
+    g.define_galaxy(radii=np.array([10., 20., 30.]), xpos=np.array([15., 15., 15.]), ypos=10., vsys=0., vrot=100.,
+                    vdisp=10., dens=1., inc=60., pa=30., z0=0., warpinc=False, warppa=False)
+    assert np.all(g.ypos == 10.)
+    fn = _mock_cube(tmp_path)
+    r = bbarolo.FitMod3D(fn, radii=[40, 80], xpos=31.5, ypos=31.5, vsys=0., vrot=150., vdisp=10., z0=0., inc=60.,
+                         pa=45., free="VROT", mask="SEARCH", galmodtype="ANALYTIC", twostage=False, verbose=0,
+                         threads=1, outfolder=str(tmp_path / "o")).run()
+    g2 = pickle.loads(pickle.dumps(r.galfit))
+    assert np.allclose(g2.outr.vrot, r.galfit.outr.vrot)
+    (tmp_path / "p.par").write_text(f"FITSFILE {fn}\nTOTALMAP true\nMASK NONE\nOUTFOLDER {tmp_path}/m\n")
+    assert getopts([f"--paramfile={tmp_path / 'p.par'}"]).imageFile == fn
+    c = Cube(fn, par=Param())
+    one = Rings().setRings(radii=[60.], xpos=31.5, ypos=31.5, vsys=0., vrot=150., vdisp=10., z0=0., dens=1., inc=60.,
+                           phi=45.)
+    for mode in ("NODES", "SHIFTED"):
+        with pytest.raises(BBaroloError, match=mode):
+            DiskModel(c, ringmode=mode, galmodtype="ANALYTIC").array(one)

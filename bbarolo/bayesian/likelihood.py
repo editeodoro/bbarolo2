@@ -6,6 +6,7 @@ import numpy as np
 import numba as nb
 
 from .noise import dilate_mask, noise_correlation
+from ..galmod import _half_widths
 
 
 @nb.njit(cache=True, nogil=True)
@@ -238,6 +239,7 @@ class LikelihoodMixin(object):
         mode = self.like_kwargs['noisecorr']
         A = A2 = max(self.beam_area, 1.)
         self._likefactor_note = f"1/beam area in pixels = 1/{self.beam_area:.2f}"
+        self._corr_below_beam = False                  # (set by 'measured' only: not kept from a previous setup)
         if isinstance(mode, (int, float, np.integer, np.floating)) and not isinstance(mode, (bool, np.bool_)):
             if not (np.isfinite(mode) and mode > 0):
                 raise ValueError(f"ERROR! noisecorr must be 'beam', 'measured' or a number > 0, not {mode!r}.")
@@ -275,7 +277,7 @@ class LikelihoodMixin(object):
         radius (the upper bound of radmax if fitted, for the lowest inclination and all the
         position angles allowed), widened by 3*z0 + 0.5 beam FWHM (+ the allowed shift of
         the centre), within the union of the model boxes (DiskModel.box). The region
-        contains >99.8% of the flux of the (convolved) model.
+        contains about 99% of the flux of the (convolved) model.
 
         The residuals are computed in this fixed region (the model is zero outside its own
         box), so that the likelihood does not depend on the box in which the model is
@@ -342,7 +344,7 @@ class LikelihoodMixin(object):
             return region
         r = self._inri.r
         xc, yc = float(np.median(r['xpos'])), float(np.median(r['ypos']))
-        pa = np.radians(float(np.median(r['phi'])))
+        pa = float(np.median(np.unwrap(np.radians(r['phi']))))        # (PAs across 0/360: unwrapped)
         ys, xs = region.shape
         yy, xx = np.mgrid[0:ys, 0:xs]
         xr = -(xx - xc) * np.sin(pa) + (yy - yc) * np.cos(pa)       # along the major axis: > 0 receding
@@ -355,7 +357,8 @@ class LikelihoodMixin(object):
         pix = 0.5 * (abs(h.Cdelt(0)) + abs(h.Cdelt(1))) * 3600.          # arcsec
         r = self._inri.r
         radii = np.asarray(r['radii'], float)
-        radsep = float(radii[-1] - radii[-2]) if len(radii) > 1 else 0.
+        # (one ring: its whole width, RADSEP, or R/2 to 3R/2 as the model; it was 0, the region ended at R)
+        radsep = float(radii[-1] - radii[-2]) if len(radii) > 1 else 2. * _half_widths(self._inri.object)[1]
         rout = upper('radmax', float(radii[-1])) if self._radmax_mode == 'ring' else float(radii[-1])
         if 'radmax' in self.freepar_idx and len(radii) > 1 and self._radmax_mode == 'ring':
             radsep = rout - float(radii[-2])

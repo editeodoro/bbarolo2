@@ -4,7 +4,7 @@ map (bbarolo.profile), with its errors, and the observed profile of the outputs.
 import math
 import numpy as np
 
-from .common import blas_threads
+from .common import blas_threads, SIGMA_QUANTILES
 
 
 class DensityMixin(object):
@@ -114,7 +114,7 @@ class DensityMixin(object):
         rng = np.random.default_rng(seed)
 
         def spread(prof):
-            p16, p50, p84 = np.percentile(np.asarray(prof), [16, 50, 84], axis=0)
+            p16, p50, p84 = np.quantile(np.asarray(prof), SIGMA_QUANTILES, axis=0)
             return p50 - p16, p84 - p50
         # geometry: the profile for samples of the posterior
         geo_lo = geo_hi = np.zeros(nr)

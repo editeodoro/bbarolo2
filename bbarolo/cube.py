@@ -13,7 +13,7 @@ import warnings
 import numpy as np
 from astropy.io import fits
 
-from .header import Header
+from .header import Header, read_fits_image
 from .params import Param, stringize
 from .stats import Stats, findMADFM
 from .bbutils import (BBaroloError, arcsconv, DeltaVel, FluxtoJy, FluxtoJyBeam, isFluxUnitKnown, AlltoVel,
@@ -167,11 +167,7 @@ class Cube:
         if not h.header_read(fname):
             return False
 
-        def getdata():
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                return fits.getdata(fname, memmap=False)
-        return self._readHeaderData(fname, getdata, printInfo)
+        return self._readHeaderData(fname, lambda: read_fits_image(fname)[1], printInfo)
 
     def readHDU(self, hdu, name="in-memory cube", printInfo=False):
         """Like readCube, but from an astropy HDU (header and data in memory, no file)."""
@@ -650,16 +646,18 @@ class Cube:
             elif "FILE(" in MASK:
                 first, last = MASK.find("("), MASK.rfind(")")
                 if first < 0 or last < 0:
-                    raise ValueError("\n  ERROR: MASK parameter is not correct. Provide file(Maskfitsfile)")
+                    raise BBaroloError("\n  ERROR: MASK parameter is not correct. Provide file(Maskfitsfile)")
                 fname = MASK[first + 1:last]
-                if not os.path.isfile(fname):
-                    raise IOError(f"\n ERROR: Mask {fname} is not a readable FITS image! Exiting ...")
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    md = np.asarray(fits.getdata(fname))
+                try:
+                    md = read_fits_image(fname)[1]
+                except Exception:
+                    md = None
+                if md is None:
+                    raise BBaroloError(f"\n ERROR: Mask {fname} is not a readable FITS image! Exiting ...")
                 md = np.squeeze(md)
                 if md.size != self.array.size:
-                    raise ValueError(f"\n ERROR: Mask file and data file have different dimensions.{fname} Exiting ...")
+                    raise BBaroloError(f"\n ERROR: Mask file and data file have different dimensions.{fname} "
+                                       "Exiting ...")
                 mask = np.nan_to_num(md.reshape(self.array.shape)) != 0
             elif MASK == "NONE":
                 mask[:] = True

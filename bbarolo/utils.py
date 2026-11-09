@@ -295,7 +295,7 @@ class SimulatedGalaxyCube(object):
             if len(ypos)==len(radii): self.ypos = ypos
             else: 
                 raise AttributeError("radii and ypos must have the same size") 
-        elif isNumber(xpos):
+        elif isNumber(ypos):
             self.ypos = np.full(len(radii),ypos)
         else:
             # Centering the galaxy

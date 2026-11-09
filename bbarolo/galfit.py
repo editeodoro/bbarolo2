@@ -591,12 +591,14 @@ class Galfit:
 
     def __getstate__(self):
         st = self.__dict__.copy()
-        st.pop("_tls", None)            # thread-local work arrays are not picklable
+        st.pop("_tls", None)            # thread-local work arrays and the lock are not picklable
+        st.pop("_lock", None)
         return st
 
     def __setstate__(self, st):
         self.__dict__.update(st)
         self._tls = threading.local()
+        self._lock = threading.Lock()
 
     def setFree(self):
         f = self.par.FREE.lower()
@@ -734,7 +736,10 @@ class Galfit:
             else: v = z
             vals["vdisp"] = v; zpar[np_] = v; np_ += 1
         if m[DENS]:
-            vals["dens"] = zpar[np_]; np_ += 1
+            # (a negative DENS goes back to the initial one, as Z0: C++ had no bound and stopped)
+            z = zpar[np_]
+            v = inr.dens[w] if z < 0 else z
+            vals["dens"] = v; zpar[np_] = v; np_ += 1
         if m[Z0]:
             z = zpar[np_]
             v = inr.z0[w] if (z < mins[Z0] or z > maxs[Z0]) else z
@@ -765,6 +770,10 @@ class Galfit:
         TINY = 1.0e-10
         tol = self.par.TOL
         ndim = self.nfree
+        if ndim == 0:
+            # nothing left to fit: the second stage when only INC, PA, Z0, XPOS, YPOS or VSYS were free
+            # (regularised, then fixed). The ring is the model at its values (C++ read beyond the simplex).
+            return True, float(self.func3D(dring, np.empty(0), modsoFar)), np.empty(0)
         NMAX = 200 * ndim
         mpts = ndim + 1
         m = self.mpar

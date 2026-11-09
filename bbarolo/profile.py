@@ -244,7 +244,7 @@ def ellprof_deconvolved(c, rings, side="B", smooth=0.1, nmc=200, seed=0):
     s = str(side).strip().upper()[:1]
     if s in ("A", "R"):
         xc, yc = float(np.median(rings.xpos)), float(np.median(rings.ypos))
-        pa = math.radians(float(np.median(rings.phi)))
+        pa = float(np.median(np.unwrap(np.radians(np.asarray(rings.phi, float)))))     # (PAs across 0/360)
         yy, xx = np.mgrid[0:ny, 0:nx]
         xr = -(xx - xc) * math.sin(pa) + (yy - yc) * math.cos(pa)          # along the major axis: > 0 receding
         ok &= (xr >= 0) if s == "R" else (xr <= 0)
@@ -267,7 +267,20 @@ def ellprof_deconvolved(c, rings, side="B", smooth=0.1, nmc=200, seed=0):
         dm = MapRingModel(h, ltype=getattr(par, "LTYPE", 2) or 2)
     else:
         dm = DiskModel(c, par=par, ringmode="CENTRED", galmodtype="ANALYTIC", smooth=True)
-    sysm = profile_system(dm, r, (blo, bhi), dmap[sl], rms[sl], ok[sl], beam_arcsec=abs(h.Bmaj()) * 3600.)
+    # only the pixels that the model describes: within the outer edge of its exterior annulus (two beams beyond the
+    # edge of the rings), with the geometry of the last ring and its thickness (all the pixels with data were fitted,
+    # so emission beyond the annulus pulled the solution: NGC 2403 with one ring 60" wide was 11 times too low)
+    from .galmod import outer_edge
+    lim = (outer_edge(r, dm.ringmode) + 2. * abs(h.Bmaj()) * 3600.) / arcs           # (pixels)
+    inc = math.radians(min(abs(float(r.inc[-1])), 90.))
+    bmin = min(lim, lim * math.cos(inc) + 2. * float(z0[-1]) / arcs * math.sin(inc))
+    pa = math.radians(float(r.phi[-1]))
+    yy, xx = np.mgrid[blo[1]:bhi[1], blo[0]:bhi[0]]
+    dx, dy = xx - float(r.xpos[-1]), yy - float(r.ypos[-1])
+    x1 = -dx * math.sin(pa) + dy * math.cos(pa)                         # along the major axis
+    y1 = -dx * math.cos(pa) - dy * math.sin(pa)
+    within = (x1 / lim) ** 2 + (y1 / max(bmin, 0.5)) ** 2 <= 1.
+    sysm = profile_system(dm, r, (blo, bhi), dmap[sl], rms[sl], ok[sl] & within, beam_arcsec=abs(h.Bmaj()) * 3600.)
     if sysm is None:
         return None
     A, b, oks, Rc = sysm
@@ -294,21 +307,24 @@ def ellprof_deconvolved(c, rings, side="B", smooth=0.1, nmc=200, seed=0):
                 g = gaussian_filter(g, sk, mode='wrap')
                 g /= g.std()
             prof.append(solve_profile(A, bmod + noise * g[oks], Rc, smooth)[:nr])
-        p16, p50, p84 = np.percentile(np.asarray(prof), [16, 50, 84], axis=0)
+        p16, p50, p84 = np.quantile(np.asarray(prof), (0.15865, 0.50, 0.84135), axis=0)     # (1 sigma)
         lo, hi = p50 - p16, p84 - p50
     if is2d:
         unit = 1. / (arcs * arcs)                       # (the densities: face-on, in map units per pixel)
     else:
         # the face-on surface brightness of unit density (per pixel, in the units of the sum of the channels):
         # the flux of a face-on uniform disk of unit density divided by its area (the clouds of the model sit on
-        # sub-rings, so single pixels are not uniform), at the centre of the cube
-        from .galmod import outer_edge
+        # sub-rings, so single pixels are not uniform), at the centre of the cube. The area is that of the
+        # sub-rings of the model (pi redge^2 included the empty centre of the disk: 2% low)
+        from .galmod import model_rings
         xm, ym = nx // 2, ny // 2
         w = max(min(nx, ny) / 8., 2.) * arcs
         uni = Rings().setRings(radii=np.array([w, 2 * w, 3 * w]), xpos=xm, ypos=ym, vsys=float(rings.vsys[0]),
                                vrot=0., vdisp=8., z0=0., inc=0., phi=0., dens=1., radsep=w)
-        redge = outer_edge(uni, "CENTRED") / arcs
-        k = float(dm.ring_maps(uni).sum()) / (math.pi * redge * redge)
+        su = dm.setup
+        sub = su.subrings(model_rings(uni, "CENTRED", su.radsep))[0][0]           # (arcmin)
+        area = float(np.sum(2. * math.pi * sub * su.radsep)) / (arcs / 60.) ** 2   # (pixels)
+        k = float(dm.ring_maps(uni).sum()) / area
         dv = abs(DeltaVel(h)) if c.HeadDef() else 1.
         conv = (FluxtoJyBeam(1., h) if c.pars().fluxConvert else 1.) * dv
         unit = k * conv / (arcs * arcs)                 # (u/arcsec^2 of the map of ELLPROF per unit of DENS)

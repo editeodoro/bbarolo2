@@ -14,6 +14,7 @@ Task specific parameters are stored in the sub-structures ``gm`` (GALMOD), ``gf`
 import os
 import io
 import re
+import math
 import copy
 import sys
 import importlib.util
@@ -62,6 +63,7 @@ FITSUTILS_LIST = [
 from .keywords import (boolify, stringize, readint, readfloat, readflag, readflagorint,  # noqa: F401
                        readstr, readvec, isNumber, splitString, _tokens, _first)
 from . import keywords as _kw
+from .bbutils import BBaroloError
 
 
 def checkHome(s):
@@ -71,6 +73,7 @@ def checkHome(s):
 
 
 _FREE_NAMES = ("vrot", "disp", "dens", "z0", "inc", "pa", "phi", "xpos", "ypos", "vsys", "vrad", "all")
+_FREE_NAMES_2D = ("vrot", "inc", "pa", "phi", "xpos", "ypos", "vsys", "vrad", "vexp", "all")      # (2DFIT)
 _NUM = r"[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?"
 
 
@@ -107,13 +110,15 @@ def ring_value_problem(key, value):
     return None
 
 
-def free_problem(free):
-    """None if every name of FREE (3DFIT) is known, otherwise a message."""
+def free_problem(free, task="3DFIT"):
+    """None if every name of FREE (of 3DFIT, or of 2DFIT) is known, otherwise a message."""
     import re
-    bad = [t for t in re.split(r"[\s,]+", str(free).strip()) if t and not any(k in t.lower() for k in _FREE_NAMES)]
+    names = _FREE_NAMES_2D if task == "2DFIT" else _FREE_NAMES
+    bad = [t for t in re.split(r"[\s,]+", str(free).strip()) if t and not any(k in t.lower() for k in names)]
     if bad:
-        return (f"unknown free parameter(s) {', '.join(bad)} in FREE (accepted: VROT, VDISP, DENS, Z0, INC, PA, "
-                "XPOS, YPOS, VSYS, VRAD or ALL)")
+        acc = ("VROT, INC, PA, XPOS, YPOS, VSYS, VRAD (or VEXP)" if task == "2DFIT" else
+               "VROT, VDISP, DENS, Z0, INC, PA, XPOS, YPOS, VSYS, VRAD")
+        return f"unknown free parameter(s) {', '.join(bad)} in FREE (accepted: {acc} or ALL)"
     return None
 
 
@@ -586,6 +591,16 @@ class Param:
                 if gf.MINVDISP >= gf.MAXVDISP:
                     out(f"3DFIT error: MINVDISP ({gf.MINVDISP:g}) must be smaller than MAXVDISP ({gf.MAXVDISP:g}).")
                     good = False
+            if (gf.flagGALFIT or self.flagSpace) and gf.STARTRAD < 0:
+                out(f"3DFIT error: STARTRAD ({gf.STARTRAD}) is the index of the first ring to fit: 0 or more.")
+                good = False
+            if self.flagSpace:
+                for name, (lo, hi, step) in (("P1PAR", self.P1p[:3]), ("P2PAR", self.P2p[:3])):
+                    # (C++ explored min to min + |max - min| when min > max, and divided by a step 0)
+                    if not (lo <= hi and step > 0):
+                        out(f"SPACEPAR error: {name} ({lo:g} {hi:g} {step:g}) must be the minimum, the maximum "
+                            "and a positive step.")
+                        good = False
             if gf.flagGALFIT or self.flagSpace:          # (SPACEPAR computes the residuals of 3DFIT)
                 if gf.FTYPE < 1 or gf.FTYPE > 4:
                     out("3DFIT warning: Not valid argument for FTYPE parameter. Assuming 2 (|mod-obs|).")
@@ -633,16 +648,17 @@ class Param:
                 if len(s.RESTFREQ) == 0: s.RESTFREQ = [-1.0]
                 if len(s.RELINT) == 0: s.RELINT = [-1.0]
             if gf.RESTWAVE[0] != -1 and len(gf.RELINT) != len(gf.RESTWAVE):
-                sys.stderr.write("3DFIT ERROR: RESTWAVE and RELINT must have same size.")
+                sys.stderr.write("3DFIT ERROR: RESTWAVE and RELINT must have same size.\n")
                 good = False
             if gf.RESTFREQ[0] != -1 and len(gf.RELINT) != len(gf.RESTFREQ):
-                sys.stderr.write("3DFIT ERROR: RESTFREQ and RELINT must have same size.")
+                sys.stderr.write("3DFIT ERROR: RESTFREQ and RELINT must have same size.\n")
                 good = False
             if not any(k in gf.REVERSE for k in ("auto", "true", "false")):
-                sys.stderr.write("3DFIT ERROR: accepted values for REVERSE are 'true', 'false' or 'auto'. Setting it to 'auto'.")
+                sys.stderr.write("3DFIT ERROR: accepted values for REVERSE are 'true', 'false' or 'auto'. "
+                                 "Setting it to 'auto'.\n")
                 gf.REVERSE = "auto"
             if gf.flagADRIFT and gf.ADRIFTPOL2 < 0:
-                sys.stderr.write("3DFIT ERROR: ADRIFTPOL2 needs to be >0. Defaulting it to 3.")
+                sys.stderr.write("3DFIT ERROR: ADRIFTPOL2 needs to be >0. Defaulting it to 3.\n")
                 gf.ADRIFTPOL2 = 3
 
         if gf.flagGALFIT or gf.flagBAYESIAN or self.flagSpace or self.flagRing or self.flagEllProf:
@@ -667,6 +683,8 @@ class Param:
                     if prob:
                         out("INPUT error: " + prob); good = False
 
+        if self.flagRing and not gf.flagGALFIT and free_problem(gf.FREE, "2DFIT"):    # (3DFIT: checked above)
+            out("2DFIT error: " + free_problem(gf.FREE, "2DFIT")); good = False
         if self.flagRing and not 0 <= gf.FREEANGLE < 90:
             out(f"2DFIT error: FREEANGLE must be between 0 and 90 degrees, not {gf.FREEANGLE:g}."); good = False
 
@@ -695,11 +713,11 @@ class Param:
 
         if self.flagSmoothSpectral:
             s = self.window_type
-            if int(self.window_size) % 2 == 0 and s != "GAUSSIAN":
-                out("SMOOTHSPEC error: smoothing window must be an odd number")
-                good = False
-            if self.window_size <= 0:
+            if not math.isfinite(self.window_size) or self.window_size <= 0:
                 out(f"SMOOTHSPEC error: WINDOW_SIZE must be positive, not {self.window_size:g}")
+                good = False
+            elif int(self.window_size) % 2 == 0 and s != "GAUSSIAN":
+                out("SMOOTHSPEC error: smoothing window must be an odd number")
                 good = False
             if s not in ("HANNING", "HANNING2", "BOXCAR", "TOPHAT", "FLATTOP", "BARTLETT",
                          "WELCH", "BLACKMAN", "GAUSSIAN"):
@@ -733,7 +751,7 @@ class Param:
             if not isSingle and not isDouble:
                 out("PVSLICE error: define slice through either (XPOS_PV,YPOS_PV,PA_PV) or (P1_PV,P2_PV) ")
                 good = False
-            if int(self.ANTIALIAS) != self.ANTIALIAS and self.ANTIALIAS != 0.5:
+            if not math.isfinite(self.ANTIALIAS) or (int(self.ANTIALIAS) != self.ANTIALIAS and self.ANTIALIAS != 0.5):
                 out("PVSLICE error: ANTIALIAS can only be a positive integer or 0.5. Defaulting to 0.5 ")
                 self.ANTIALIAS = 0.5
 
@@ -913,8 +931,10 @@ def value_to_string(kw, value):
             return " ".join(_numstr(v) for v in flat)
         raise TypeError(f"{name}: a list of values is not accepted")
     if isinstance(value, (int, float, np.integer, np.floating)):
-        if kw.kind in ("flag",) and value not in (0, 1):
-            raise ValueError(f"{name}: expected True or False, not {value!r}")
+        if kw.kind in ("flag",):
+            if value not in (0, 1):
+                raise BBaroloError(f"{name}: expected True or False, not {value!r}")
+            return stringize(bool(value))           # (1.0 written as "1.0" was read as false)
         return _numstr(value)
     if isinstance(value, str):
         s = value.strip()
@@ -922,9 +942,9 @@ def value_to_string(kw, value):
             try:
                 float(s)
             except ValueError:
-                raise ValueError(f"{name}: expected a number, not {value!r}") from None
+                raise BBaroloError(f"{name}: expected a number, not {value!r}") from None
         elif kw.kind == "flag" and s.lower() not in ("true", "false", "1", "0"):
-            raise ValueError(f"{name}: expected True or False, not {value!r}")
+            raise BBaroloError(f"{name}: expected True or False, not {value!r}")
         return s
     raise TypeError(f"{name}: unsupported value {value!r}")
 
@@ -1091,6 +1111,46 @@ def bayes_priors(priors):
         out[key] = dict(name=dname, **args)
     _check_gap(s[pos:], fmt)
     return out
+
+
+def bayes_value_string(name, value):
+    """A Python value of FREE, PRIORS, SAMPLER, SAMPLEROPTS, RUNOPTS or LIKEOPTS (BAYESIAN3DFIT) as it is written in a
+    parameter file: FREE a list of names (['vrot', 'inc_single'] -> 'vrot inc_single'); PRIORS a dict as
+    BayesianBBarolo.priors, {name: {'name': distribution, argument: value}} or {name: (distribution, values by
+    position)}; the options a dict {key: value} (a tuple: values separated by commas). A string is returned as it
+    is. Raises TypeError."""
+    import numpy as np
+
+    def opt(v):
+        if v is None:
+            return "none"
+        if isinstance(v, (bool, np.bool_)):
+            return "true" if v else "false"
+        if isinstance(v, (list, tuple, np.ndarray)):
+            return ",".join(opt(x) for x in v)
+        if isinstance(v, (int, float, np.integer, np.floating)):
+            return _numstr(v)
+        return str(v)
+    if isinstance(value, str):
+        return value
+    if name == "FREE" and isinstance(value, (list, tuple, np.ndarray)) and all(isinstance(v, str) for v in value):
+        return " ".join(value)
+    if name in ("PRIORS", "SAMPLEROPTS", "RUNOPTS", "LIKEOPTS") and isinstance(value, dict):
+        if name != "PRIORS":
+            return " ".join(f"{k}={opt(v)}" for k, v in value.items())
+        items = []
+        for k, d in value.items():
+            if isinstance(d, dict) and "name" in d:
+                args = [str(d["name"])] + [f"{a}={opt(v)}" for a, v in d.items() if a != "name"]
+            elif isinstance(d, (list, tuple)) and d and isinstance(d[0], str):
+                args = [d[0]] + [opt(v) for v in d[1:]]
+            else:
+                raise TypeError(f"BAYESIAN3DFIT: PRIORS: {k}: give {{'name': distribution, ...}} or (distribution, "
+                                f"values...), not {d!r}")
+            items.append(f"{k}=({','.join(args)})")
+        return " ".join(items)
+    raise TypeError(f"BAYESIAN3DFIT: {name}: expected a string as in a parameter file" + (
+        ", or a list of names" if name == "FREE" else ", or a dict" if name != "SAMPLER" else "") + f", not {value!r}")
 
 
 def _optvalue(v, none=True):

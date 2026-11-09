@@ -38,3 +38,8 @@ def get_distribution(distr_name, *params, **kwargs):
         return distr(*params, **kwargs)
     except AttributeError:
         raise ValueError(f"ERROR: Distribution '{distr_name}' not found in scipy.stats.")
+
+
+# the quantiles of the median and of the 1-sigma interval (of a Gaussian), of the posteriors and of the errors of
+# the deconvolved profile (the tables used 0.16 and 0.84, print_stats and the corner plot these)
+SIGMA_QUANTILES = (0.15865, 0.50, 0.84135)

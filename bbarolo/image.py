@@ -7,7 +7,7 @@ import warnings
 import numpy as np
 from astropy.io import fits
 
-from .header import Header
+from .header import Header, read_fits_image
 from .params import Param
 from .stats import Stats
 
@@ -64,6 +64,9 @@ class Image2D:
         nh.veldef = h.veldef
         nh.wave0, nh.redshift = h.wave0, h.redshift
         nh.sptype = h.sptype
+        # the rotation of the spatial axes (the maps of a rotated cube were written unrotated)
+        nh.pc = None if h.pc is None else [list(r) for r in h.pc]
+        nh.crota = h.crota
         nh._hdr = getattr(h, "_hdr", None) or fits.Header()
         nh.calcArea()
         self.head = nh
@@ -74,9 +77,7 @@ class Image2D:
         if not self.head.header_read(fname):
             return False
         self.headDefined = True
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            d = np.asarray(fits.getdata(fname))
+        d = read_fits_image(fname)[1]
         nx, ny = self.head.DimAx(0), self.head.DimAx(1)
         self.array = d.reshape(-1)[:nx * ny].reshape(ny, nx).astype(np.float32)
         return True

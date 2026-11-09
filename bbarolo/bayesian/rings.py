@@ -19,19 +19,21 @@ class _RingDict(object):
         self.r = {k: None for k in PARAMS}
         self.object = None
         self.edge, self.edgewidth = None, 0.        # the outer edge of the disk (RADMAX: 'edge', 'taper')
+        self.radsep = 0.                            # the width of a single ring (RADSEP; 0: R/2 to 3R/2)
 
     @classmethod
     def from_rings(cls, rings):
         rd = cls(rings.nr)
         for k in PARAMS:
             rd.modify_parameter(k, getattr(rings, k))
+        rd.radsep = float(rings.radsep) if rings.nr == 1 else 0.
         rd.make_object()
         return rd
 
     def copy(self):
         rd = _RingDict(self.nr)
         rd.r = {k: np.array(v) for k, v in self.r.items()}
-        rd.edge, rd.edgewidth = self.edge, self.edgewidth
+        rd.edge, rd.edgewidth, rd.radsep = self.edge, self.edgewidth, self.radsep
         rd.make_object()
         return rd
 
@@ -57,7 +59,8 @@ class _RingDict(object):
         from ..rings import Rings
         r = Rings()
         r.setRings(**{k: np.asarray(v, dtype=np.float64) for k, v in self.r.items()})
-        r.radsep = float(np.float32(self.r['radii'][-1] - self.r['radii'][-2])) if self.nr > 1 else 0.
+        # (one ring: RADSEP as given, as 3DFIT; it was dropped, so the ring was always R/2 to 3R/2 wide)
+        r.radsep = float(np.float32(self.r['radii'][-1] - self.r['radii'][-2])) if self.nr > 1 else self.radsep
         r.edge, r.edgewidth = self.edge, self.edgewidth
         self.object = r
         return r

@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .galfit import Galfit, VROT, VDISP, Z0, INC, PA, XPOS, YPOS, VSYS, VRAD
 from .header import Header
-from .bbutils import AlltoVel, ProgressBar, randomAdjective, mkdirp
+from .bbutils import AlltoVel, ProgressBar, randomAdjective, mkdirp, BBaroloError
 from .plotscripts import run_scripts
 
 ALLOWED = ("VROT", "VDISP", "Z0", "INC", "PA", "XPOS", "YPOS", "VSYS", "VRAD")
@@ -31,9 +31,9 @@ class Spacepar(Galfit):
         self.p1, self.p2 = p.P1.upper(), p.P2.upper()
         for i, q in enumerate((self.p1, self.p2)):
             if q not in ALLOWED:
-                raise ValueError(f"SPACEPAR ERROR: Unknown parameter {i + 1} {q}")
+                raise BBaroloError(f"SPACEPAR ERROR: Unknown parameter {i + 1} {q}")
         if self.p1 == self.p2:
-            raise ValueError("SPACEPAR ERROR: p1=p2!!")
+            raise BBaroloError("SPACEPAR ERROR: p1=p2!!")
         self.mpar = [False] * len(self.mpar)
         self.minp1, self.maxp1, self.delp1 = (float(v) for v in p.P1p[:3])
         self.minp2, self.maxp2, self.delp2 = (float(v) for v in p.P2p[:3])
@@ -53,7 +53,9 @@ class Spacepar(Galfit):
     # ------------------------------------------------------------------
     def _dring(self, ir, v1, v2):
         inr = self.inr
-        if ir == 0:
+        if inr.nr == 1:     # (as 3DFIT: half RADSEP, or half the radius; C++ read beyond the rings)
+            w1 = w2 = inr.radsep / 2. if inr.radsep > 0 else inr.radii[0] / 2.
+        elif ir == 0:
             w1 = w2 = (inr.radii[1] - inr.radii[0]) / 2.
         elif ir == inr.nr - 1:
             w1 = w2 = (inr.radii[ir] - inr.radii[ir - 1]) / 2.

@@ -7,7 +7,7 @@ import numpy as np
 
 from ..tasks import FitMod3D, _FromFile
 from .rings import PARAMS, RING_PARAMS, isIterable
-from .common import vprint
+from .common import vprint, SIGMA_QUANTILES
 
 
 class OutputsMixin(object):
@@ -219,7 +219,7 @@ class OutputsMixin(object):
         finally:
             gf.mpar, gf.nfree, gf.par.flagERRORS, gf._disk_edge = old
 
-    def corner_plot(self, samples=None, labels=None, truths=None, quantiles=[0.15865, 0.50, 0.84135],
+    def corner_plot(self, samples=None, labels=None, truths=None, quantiles=SIGMA_QUANTILES,
                     plot_dynesty=False, **kwargs):
         """ Corner plot of the posterior distributions (needs 'corner', or dynesty's plotting) """
         if samples is None and not self.modCalculated:
@@ -286,7 +286,7 @@ class OutputsMixin(object):
                 R = self.outri.r['radii']
                 prof = np.array([self.funcs[a](R, *[s[self.freepar_idx[k]] for k in keys])
                                  for s in self.samples_equal])
-                q = np.quantile(prof, [0.16, 0.5, 0.84], axis=0)
+                q = np.quantile(prof, SIGMA_QUANTILES, axis=0)
                 lo, hi = self.outri.r[a] - q[0], q[2] - self.outri.r[a]
             elif a == 'dens' and getattr(self, 'dens_profile', None) is not None:
                 lo, hi = self.dens_profile['err_lo'], self.dens_profile['err_hi']      # deconvolved profile
@@ -328,7 +328,7 @@ class OutputsMixin(object):
                 ax[i].set_ylim(0, None)
         return fig
 
-    def print_stats(self, quantiles=[0.15865, 0.50, 0.84135]):
+    def print_stats(self, quantiles=SIGMA_QUANTILES):
         """ Print the median and 1-sigma errors of the posteriors (and the maximum likelihood) """
         if not self.modCalculated:
             print("Sampler has not been run yet. Please run run() before running this function.")
@@ -396,14 +396,35 @@ class OutputsMixin(object):
                                                      for k, v in self.parameters.items()},
                       priors=self.priors,
                       prior_distr=self.prior_distr, lambdas=self.lambdas, like_kwargs=like,
-                      loglike=getattr(self, '_log_like_kind', 'cube'))
+                      loglike=getattr(self, '_log_like_kind', 'cube'), method=self._method, beam=self.beam,
+                      funcs=self._funcs_used())
         np.save(outfile, tosave)
 
-    def load_results(self, inputfile, sampler='dynesty'):
-        """ Load results saved with save_results() (dynesty or nautilus): the samples, the priors, the rings
-        and the parameters of the fit. The output folder is that of the fit unless this object has one
-        (outfolder given). """
+    def _funcs_used(self):
+        """ The functions of radius of the free parameters NAME_FUNC: 'default', or the name of the function
+        given in funcs (functions are not saved: load_results needs the same ones in funcs). """
+        from .fitter import DEFAULT_FUNCS
+        used = {p.split('_')[0] for p in (self._freepar_inp or []) if p.endswith('_func')}
+        return {k: ('default' if f is DEFAULT_FUNCS.get(k) else getattr(f, '__qualname__', repr(f)))
+                for k, f in self.funcs.items() if k in used}
+
+    def load_results(self, inputfile, sampler=None):
+        """ Load results saved with save_results() (dynesty or nautilus: the sampler of the fit, or 'dynesty' for
+        files that do not record it): the samples, the priors, the rings and the parameters of the fit, and its
+        beam if it was given (and this object has none). The output folder is that of the fit unless this object has
+        one (outfolder given). A fit with functions of radius of its own (funcs) needs the same functions in funcs
+        (functions are not saved): BBaroloError otherwise. """
+        from ..bbutils import BBaroloError
+        from .fitter import DEFAULT_FUNCS
         r = np.load(inputfile, allow_pickle=True).item()
+        if sampler is None:
+            sampler = r.get('method') or 'dynesty'
+        for k, name in dict(r.get('funcs') or {}).items():
+            if name != 'default' and self.funcs.get(k, DEFAULT_FUNCS.get(k)) is DEFAULT_FUNCS.get(k):
+                raise BBaroloError(f"load_results: the fit used its own function of radius for {k.upper()}_FUNC "
+                                   f"({name}): set it in funcs['{k}'] before loading (functions are not saved).")
+        if r.get('beam') is not None and self.beam is None:
+            self.beam = tuple(r['beam'])
         rr = r['inrings']
         self._galfit = self._ellprof = None
         # options of the saved fit (also files written by the original module: lower-case keys)
@@ -448,7 +469,8 @@ class OutputsMixin(object):
             self.results = None
             self._set_sampling_stats(r['samples'], r['weights'])
         else:
-            raise ValueError(f"Error: cannot load results for sampler {sampler} from {inputfile}")
+            raise BBaroloError(f"load_results: cannot load results for sampler {sampler} from {inputfile}")
+        self._method = sampler
         self.outri = self._update_rings(self._fit0.copy(), self.params)
         if self.useNorm and not self.useBBres:
             self._set_density(self.outri)

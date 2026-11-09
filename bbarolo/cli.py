@@ -16,6 +16,7 @@ import sys
 import numpy as np
 
 from .params import Param, TASKS_LIST, FITSUTILS_LIST
+from . import keywords as _kw
 from ._version import __version__, __cpp_reference__
 from .bbutils import randomQuoting, BBaroloError
 
@@ -142,6 +143,10 @@ def getopts(argv):
     ok = False
     i = 0
     rest = []
+    # (--paramfile=file, --fitsfile=file, --defaults=TASK: as --paramfile file; they were taken as KEY=value and
+    # ignored, and BBarolo exited with nothing done)
+    argv = [x for a in argv for x in (a.split("=", 1) if a.startswith("--") and "=" in a
+                                      and a.split("=", 1)[0] in ("--paramfile", "--fitsfile", "--defaults") else [a])]
     while i < len(argv):
         a = argv[i]
         nxt = argv[i + 1] if i + 1 < len(argv) else None
@@ -166,8 +171,9 @@ def getopts(argv):
         if a in ("-f", "--fitsfile"):
             if nxt is None:
                 raise BBaroloError("Option -f requires a FITS file: BBarolo -f fitsfile")
-            par.imageFile = nxt
-            par.AUTO = True
+            # (as keywords: recorded in the parameter file of the run, which then runs the same with -p)
+            _kw.lookup("FITSFILE").apply(par, nxt)
+            _kw.lookup("AUTO").apply(par, "true")
             ok = True
             i += 2
             continue
@@ -198,7 +204,7 @@ def getopts(argv):
             print("BBarolo automated upgrade is not implemented yet! Try again in next versions...")
         elif a in ("-h", "--help"):
             helpscreen()
-        elif "=" in a:
+        elif "=" in a and not a.startswith("-"):
             rest.append(a)
         else:
             raise BBaroloError(f"Option {a} is unacceptable. Try BBarolo -h for help.")

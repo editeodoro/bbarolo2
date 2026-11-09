@@ -17,6 +17,7 @@ import subprocess
 import numpy as np
 
 from .stats import findMedian
+from .header import fits_image_hdu
 from .bbutils import DeltaVel, AlltoVel, FluxtoJy, FluxtoJyBeam, Vel2Spec, mkdirp
 
 MAXPAR = 10
@@ -342,9 +343,14 @@ def writeScripts_Python(gf):
 
     # ---------------------------------------------------------------- plot_chanmaps.py
     scriptnames.append("plot_chanmaps.py")
-    cubefile = p.imageFile
+    cubefile, cubehdu = p.imageFile, 0
     if p.contsub:
         cubefile = outfolder + outprefix + "_contsub.fits"
+    else:
+        try:                                    # (file.fits[ext], or an image in an extension)
+            cubefile, cubehdu = fits_image_hdu(cubefile)
+        except Exception:
+            pass
     w("#####################################################################\n#### This script writes a plot of channel maps of model and data ####\n#####################################################################\nimport numpy as np \nimport os \nimport matplotlib as mpl \nimport matplotlib.pyplot as plt \nimport matplotlib.gridspec as gridspec \nfrom plot_utils import calculate_padding \nfrom astropy.io import fits \nfrom astropy.visualization import PowerStretch \nfrom astropy.visualization.mpl_normalize import ImageNormalize \nfrom astropy.visualization import PercentileInterval \nmpl.rc('xtick',direction='in',top=True,labelbottom=False) \nmpl.rc('ytick',direction='in',right=True,labelleft=False) \nmpl.rcParams['contour.negative_linestyle'] = 'solid' \nplt.rc('font',family='sans-serif',serif='Helvetica',size=10) \nparams = {'text.usetex': False, 'mathtext.fontset': 'cm', 'mathtext.default': 'regular'} \nplt.rcParams.update(params) \n\ngname = '",
       F(gname),
       "' \noutfolder = '",
@@ -369,11 +375,11 @@ def writeScripts_Python(gf):
       F(zmin),
       ", ",
       F(zmax),
-      "\ndata = image[0].data[")
+      "\ndata = image[" + str(cubehdu) + "].data[")
     if h.NumAx() > 3:
         for i in range(h.NumAx() - 3):
             w("0,")
-    w("zmin:zmax+1,ymin:ymax+1,xmin:xmax+1] \ndata_mas = image_mas[0].data[zmin:zmax+1,ymin:ymax+1,xmin:xmax+1] \nhead = image[0].header \nzsize, ysize, xsize = data.shape \npad_x, pad_y = calculate_padding(xsize,ysize) \ncdeltsp=",
+    w("zmin:zmax+1,ymin:ymax+1,xmin:xmax+1] \ndata_mas = image_mas[0].data[zmin:zmax+1,ymin:ymax+1,xmin:xmax+1] \nhead = image[" + str(cubehdu) + "].header \nzsize, ysize, xsize = data.shape \npad_x, pad_y = calculate_padding(xsize,ysize) \ncdeltsp=",
       F(pixscale_arcs),
       "\ncont = ",
       F(cont),
@@ -474,7 +480,7 @@ def writeScripts_Python(gf):
       F(zmin_wcs),
       ", ",
       F(zmax_wcs),
-      "\ndata = image[0].data[")
+      "\ndata = image[" + str(cubehdu) + "].data[")
     if h.NumAx() > 3:
         for i in range(h.NumAx() - 3):
             w("0,")
@@ -515,7 +521,7 @@ def writeScripts_Python(gf):
       F(zmin_wcs),
       ", ",
       F(zmax_wcs),
-      "\ndata = image[0].data[")
+      "\ndata = image[" + str(cubehdu) + "].data[")
     if h.NumAx() > 3:
         for i in range(h.NumAx() - 3):
             w("0,")

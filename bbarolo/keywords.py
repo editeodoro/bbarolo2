@@ -78,8 +78,10 @@ def readstr(s):
 
 
 def readvec(s, typ=float):
+    """The numbers of a list, separated by spaces or commas (C++ read only the first of a comma-separated
+    list), up to the first that is not a number."""
     out = []
-    for t in _tokens(s):
+    for t in str(s).replace(",", " ").split():
         try:
             out.append(typ(float(t)) if typ is int else typ(t))
         except (ValueError, OverflowError):        # (inf, nan: not integers, as for C++ >> int)
@@ -116,7 +118,7 @@ READERS = {
     "ivec": lambda s: readvec(s, int),
     "fvec": lambda s: readvec(s, float),
     "cdens": lambda s: _int_or_zero(readfloat(s)),
-    "fvec3": lambda s: (readvec(s, float) + [0, 0, 0])[:3],
+    "fvec3": lambda s: readvec(s, float)[:3],    # (the values not given keep the current ones: Keyword.apply)
     "ivec6": lambda s: (readvec(s, int) + [-1] * 6)[:6],
     "fvec2": lambda s: (readvec(s, float) + [-1, -1])[:2],
 }
@@ -185,6 +187,9 @@ class Keyword:
         """Set the value read from the string rest (parameter-file semantics). The string is
         also recorded in par._given (the parameters as given, in the order of their last setting)."""
         val = self.read(rest)
+        if self.kind == "fvec3":
+            # the values not given keep the current ones, as C++ readArray (P1PAR 0 100 keeps the step)
+            val = list(val) + list(self.value(par))[len(val):3]
         for t in self.targets:
             _setattr(par, t, val)
         for t, v in self.also.items():

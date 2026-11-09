@@ -201,53 +201,101 @@ def _line_profile(prof, v, sig, vedges, cd2i, ptab, kc, K, nz):
     return k0, k1 - k0
 
 
-@nb.njit(cache=True)
-def _zquantiles(zq, n, ltype, frac=1.0):
-    """Heights (in units of z0) at the quantiles (k+0.5)/n of the vertical layer profile. For the
-    Lorentzian layer (ltype 4), of the part of the layer within the fraction frac of its flux
-    (see _lorentz_frac)."""
-    SQ2 = math.sqrt(2.0)
-    for k in range(n):
-        u = (k + 0.5) / n
-        if ltype == 1:
-            t = 2 * u - 1
-            xg = 0.0
-            for _ in range(40):
-                fx = math.erf(xg / SQ2) - t
-                dfx = math.sqrt(2.0 / math.pi) * math.exp(-xg * xg / 2.0)
-                xg -= fx / dfx
-            zq[k] = xg
-        else:
-            x = 2 * u - 1
-            if ltype == 2:
-                zq[k] = math.atanh(x)
-            elif ltype == 3:
-                # exponential layer: quantiles of the two-sided (Laplace) distribution
-                zq[k] = -math.log(1.0 - x) if x >= 0 else math.log(1.0 + x)
-            elif ltype == 4:
-                zq[k] = math.tan(0.5 * math.pi * x * frac)
-            else:
-                zq[k] = x
-    if n == 1:
-        zq[0] = 0.0
+@nb.njit(inline="always", cache=True)
+def _layer_cdf(ltype, x):
+    """Fraction of the flux of the vertical layer below the height x (in units of z0), for the layers of
+    _fdev: 1 Gaussian, 2 sech2, 3 exponential, 4 Lorentzian, other: box."""
+    if ltype == 1:
+        return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+    if ltype == 2:
+        return 0.5 * (1.0 + math.tanh(x))
+    if ltype == 3:
+        return 1.0 - 0.5 * math.exp(-x) if x >= 0 else 0.5 * math.exp(x)
+    if ltype == 4:
+        return 0.5 + math.atan(x) / math.pi
+    return 0.5 * (min(max(x, -1.0), 1.0) + 1.0)
 
 
 @nb.njit(inline="always", cache=True)
-def _lorentz_frac(ltype, z0, R0, radsep, sinc, xpos, ypos, cdelt0, cdelt1, blo0, blo1, bhi0, bhi1):
-    """Fraction of the flux of a Lorentzian layer (ltype 4) at heights that can fall in the box: a
-    cloud of the ring centred at (xpos, ypos) (pixels) higher than (R0 + radsep + distance to the
-    farthest corner of the box) / |sin i| is outside it. Without this, the far tail would be sampled
-    by the outermost quantiles only, closer to the plane than it is, while MC models lose that flux
-    outside the field. 1 for the other layers."""
-    if ltype != 4 or z0 <= 0:
-        return 1.0
+def _layer_extent(ltype):
+    """The height (units of z0) beyond which the layer has less than 1E-6 of its flux (its edge for the box;
+    none for the Lorentzian layer, limited by the box only)."""
+    if ltype == 1:
+        return 5.0
+    if ltype == 2:
+        return 7.6
+    if ltype == 3:
+        return 14.0
+    if ltype == 4:
+        return 1e30
+    return 1.0
+
+
+@nb.njit(inline="always", cache=True)
+def _layer_core(ltype):
+    """The height (units of z0) beyond which the density of the layer is below 1E-3 of its peak (none for the
+    box)."""
+    if ltype == 1:
+        return 3.717
+    if ltype == 2:
+        return 4.147
+    if ltype == 3:
+        return 6.908
+    if ltype == 4:
+        return 31.61
+    return 1e30
+
+
+ZSAMPLES_MAX = 1024         # (the maximum number of vertical samples of a ring of the ANALYTIC models)
+
+
+@nb.njit(nogil=True, cache=True)
+def _zgrid(zq, wq, nmax, ltype, z0, sinc, pixsize, dvdz, sig, R0, radsep, xpos, ypos, cdelt0, cdelt1,
+           blo0, blo1, bhi0, bhi1):
+    """The vertical samples of a sub-ring of the ANALYTIC models: heights zq[:n] (in units of z0) and weights
+    wq[:n] (the fraction of the flux of the layer around each height). Returns n.
+
+    The heights are evenly spaced, at most 0.25 pixels apart once projected (pixsize) and, with a vertical
+    gradient dvdz, 0.5 sig apart in velocity (or the line profiles form a comb), symmetric about the plane, offset
+    by half a step from it (a sample in the plane, or at multiples of half a pixel from it, would fall on the edges of
+    the pixels when the centre is at a pixel edge, and the rounding would give its flux to either side); each
+    weighs the flux of the layer between the midpoints with its neighbours. They reach the height beyond which the
+    layer has less than 1E-6 of its flux, or no cloud can fall in the box [blo, bhi): a cloud of the ring centred at
+    (xpos, ypos) (pixels) higher than (R0 + radsep + distance to the farthest corner of the box) / |sin i| is outside
+    it; that flux is not deposited, as the clouds of the MC models outside the field. The spacing does not depend
+    on the box, so the samples of a box model are those of the full model in it (up to nmax samples).
+    (Equal-weight samples at the quantiles of the layer were up to several pixels apart in its tails, at any number
+    of samples: models of thick or Lorentzian layers were off by up to 20% of the peak.)
+    A face-on or thin layer has one sample."""
     s = abs(sinc)
-    if s < 1e-6:
-        return 1.0
+    if z0 <= 0 or nmax < 2 or s < 1e-6:
+        zq[0] = 0.0
+        wq[0] = 1.0
+        return 1
     dx = max(abs(blo0 - 0.5 - xpos), abs(bhi0 - 0.5 - xpos)) * abs(cdelt0)
     dy = max(abs(blo1 - 0.5 - ypos), abs(bhi1 - 0.5 - ypos)) * abs(cdelt1)
-    zmax = (R0 + radsep + math.sqrt(dx * dx + dy * dy)) / s
-    return 2.0 / math.pi * math.atan(zmax / z0)
+    zlim = min(_layer_extent(ltype), (R0 + radsep + math.sqrt(dx * dx + dy * dy)) / (s * z0))
+    step = 0.25 * pixsize / (z0 * s)
+    if dvdz != 0:
+        step = min(step, 0.5 * sig / (abs(dvdz) * z0 * s))
+    # the bins of one side, from the plane: step wide up to the core of the layer, 4 steps beyond (the far tail,
+    # where the density is below 1E-3 of the peak: the long tail of the Lorentzian layer); edges at multiples of step
+    zc = _layer_core(ltype)
+    while True:
+        nin = max(int(math.ceil(min(zc, zlim) / step)), 1)
+        nout = max(int(math.ceil((zlim - nin * step) / (4.0 * step))), 0)
+        if 2 * (nin + nout) <= nmax:
+            break
+        step *= 1.01 * (nin + nout) / (nmax // 2)
+    half = nin + nout
+    for j in range(half):
+        lo = j * step if j < nin else (nin + 4 * (j - nin)) * step
+        hi = min(lo + (step if j < nin else 4.0 * step), zlim)
+        w = _layer_cdf(ltype, hi) - _layer_cdf(ltype, lo)
+        zq[half + j], wq[half + j] = 0.5 * (lo + hi), w
+        zq[half - 1 - j], wq[half - 1 - j] = -0.5 * (lo + hi), w
+    n = 2 * half
+    return n
 
 
 @nb.njit(nogil=True, cache=True)
@@ -265,8 +313,7 @@ def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, 
     nlines = lfreq0.shape[0]           # (vedges: the channel edges in the velocity of each line)
     pixsize = math.sqrt(pixarea)
     zq = np.empty(max(nzq, 1))
-    nzcur = -1
-    fcur = 1.0
+    wq = np.empty(max(nzq, 1))
     prof = np.empty(nz + 1)
     gx = np.empty(max(nzq, 1), np.int64)
     gy = np.empty(max(nzq, 1), np.int64)
@@ -289,21 +336,10 @@ def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, 
         spa = math.sin(phi) * math.cos(crota2) + math.cos(phi) * math.sin(crota2)
         cpa = math.cos(phi) * math.cos(crota2) - math.sin(phi) * math.sin(crota2)
         xpos, ypos, vsys0 = sr[11, ir], sr[12, ir], sr[13, ir]
-        # vertical samples: at least 4, and spaced by <~0.5 pixels once projected
-        nzz = 1
-        if z0 > 0 and nzq > 1:
-            nz_pix = max(4, int(6.0 * z0 * abs(sinc) / pixsize) + 1)
-            # with a vertical gradient, consecutive samples (about 6*z0/nzz apart) must also differ
-            # by <~0.5 sigma in velocity, or the line profiles of the samples form a comb
-            nz_vel = int(12.0 * abs(dvdz) * z0 * abs(sinc) / sig) + 1 if dvdz != 0 else 1
-            nzz = min(max(nz_pix, nz_vel), nzq)
-        lfrac = 1.0
-        if nzz > 1:
-            lfrac = _lorentz_frac(ltype, z0, R0, radsep, sinc, xpos, ypos, cdelt0, cdelt1, blo0, blo1, bhi0, bhi1)
-        if nzz != nzcur or lfrac != fcur:
-            _zquantiles(zq, nzz, ltype, lfrac)
-            nzcur, fcur = nzz, lfrac
-        fluxsc = dens * ring_area_pix * pixarea * lfrac / (naz * nrad * nzz)
+        # vertical samples (heights zq, weights wq: see _zgrid)
+        nzz = _zgrid(zq, wq, nzq, ltype, z0, sinc, pixsize, dvdz, sig, R0, radsep, xpos, ypos, cdelt0, cdelt1,
+                     blo0, blo1, bhi0, bhi1)
+        fluxsc = dens * ring_area_pix * pixarea / (naz * nrad)
         # does the velocity depend on height for some vertical sample?
         zdep = False
         if dvdz != 0 and nzz > 1:
@@ -344,13 +380,15 @@ def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, 
                         kz = 0
                         while kz < nzz:
                             g0, g1 = gx[kz], gy[kz]
+                            ws = wq[kz]
                             w = 1
                             while kz + w < nzz and gx[kz + w] == g0 and gy[kz + w] == g1:
+                                ws += wq[kz + w]
                                 w += 1
                             kz += w
                             if g0 < blo0 or g0 >= bhi0 or g1 < blo1 or g1 >= bhi1:
                                 continue
-                            aw = a * w
+                            aw = a * ws
                             o = out[g1 - blo1, g0 - blo0]
                             for j in range(nk):
                                 o[k0 + j] += aw * prof[j]
@@ -374,31 +412,36 @@ def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, 
                                 continue
                             if in1 and in2 and gx[kz] == gx[kz2] and gy[kz] == gy[kz2]:
                                 o = out[gy[kz] - blo1, gx[kz] - blo0]
+                                aw = a * (wq[kz] + wq[kz2])
                                 for j in range(nk):
-                                    o[k0 + j] += 2 * a * prof[j]
+                                    o[k0 + j] += aw * prof[j]
                                 continue
                             if in1:
                                 o = out[gy[kz] - blo1, gx[kz] - blo0]
+                                aw = a * wq[kz]
                                 for j in range(nk):
-                                    o[k0 + j] += a * prof[j]
+                                    o[k0 + j] += aw * prof[j]
                             if in2:
                                 o = out[gy[kz2] - blo1, gx[kz2] - blo0]
+                                aw = a * wq[kz2]
                                 for j in range(nk):
-                                    o[k0 + j] += a * prof[j]
+                                    o[k0 + j] += aw * prof[j]
     return out
 
 
 @nb.njit(nogil=True, cache=True)
 def _ring_maps_analytic(out, sr, widx, wval, radsep, pixarea, cdelt0, cdelt1, crota2, blo0, blo1, bhi0, bhi1,
-                        ltype, nzq):
+                        ltype, nzq, sig_instr, chwidth):
     """Total intensity (before the channel factor cd2i and the convolution) of the ANALYTIC
     GALMOD deposit of the sub-rings sr with unit density, accumulated in out[ring] (nr, ny, nx)
     with the interpolation weights of each sub-ring: wval[s, m] for the ring widx[s, m] (m = 0, 1;
-    -1: none). Same sample positions as _galmod_analytic."""
+    -1: none). Same samples as _galmod_analytic (its vertical samples depend also on the velocity
+    dispersion and the vertical gradient: sig_instr and chwidth as there)."""
     pixsize = math.sqrt(pixarea)
     zq = np.empty(max(nzq, 1))
-    nzcur = -1
-    fcur = 1.0
+    wq = np.empty(max(nzq, 1))
+    gx = np.empty(max(nzq, 1), np.int64)
+    gy = np.empty(max(nzq, 1), np.int64)
     for ir in range(sr.shape[1]):
         if widx[ir, 0] < 0 and widx[ir, 1] < 0:
             continue
@@ -413,16 +456,10 @@ def _ring_maps_analytic(out, sr, widx, wval, radsep, pixarea, cdelt0, cdelt1, cr
         spa = math.sin(phi) * math.cos(crota2) + math.cos(phi) * math.sin(crota2)
         cpa = math.cos(phi) * math.cos(crota2) - math.sin(phi) * math.sin(crota2)
         xpos, ypos = sr[11, ir], sr[12, ir]
-        nzz = 1
-        if z0 > 0 and nzq > 1:
-            nzz = min(max(4, int(6.0 * z0 * abs(sinc) / pixsize) + 1), nzq)
-        lfrac = 1.0
-        if nzz > 1:
-            lfrac = _lorentz_frac(ltype, z0, R0, radsep, sinc, xpos, ypos, cdelt0, cdelt1, blo0, blo1, bhi0, bhi1)
-        if nzz != nzcur or lfrac != fcur:
-            _zquantiles(zq, nzz, ltype, lfrac)
-            nzcur, fcur = nzz, lfrac
-        fluxsc = ring_area_pix * pixarea * lfrac / (naz * nrad * nzz)
+        sig = max(math.sqrt(sr[4, ir] * sr[4, ir] + sig_instr * sig_instr), 1e-6 * abs(chwidth))
+        nzz = _zgrid(zq, wq, nzq, ltype, z0, sinc, pixsize, sr[7, ir], sig, R0, radsep, xpos, ypos, cdelt0,
+                     cdelt1, blo0, blo1, bhi0, bhi1)
+        fluxsc = ring_area_pix * pixarea / (naz * nrad)
         r_inner = R0 - 0.5 * radsep
         daz = 2 * math.pi / naz
         cd, sd = math.cos(daz), math.sin(daz)
@@ -441,14 +478,22 @@ def _ring_maps_analytic(out, sr, widx, wval, radsep, pixarea, cdelt0, cdelt1, cr
                 for kz in range(nzz):
                     z = zq[kz] * z0 if nzz > 1 else 0.0
                     y = yb - z * sinc
-                    g0 = _lround(xpos + (xs - y * cpa) / cdelt0)
-                    g1 = _lround(ypos + (xc + y * spa) / cdelt1)
+                    gx[kz] = _lround(xpos + (xs - y * cpa) / cdelt0)
+                    gy[kz] = _lround(ypos + (xc + y * spa) / cdelt1)
+                kz = 0
+                while kz < nzz:                 # (consecutive samples in the same pixel together)
+                    g0, g1 = gx[kz], gy[kz]
+                    ws = wq[kz]
+                    kz += 1
+                    while kz < nzz and gx[kz] == g0 and gy[kz] == g1:
+                        ws += wq[kz]
+                        kz += 1
                     if g0 < blo0 or g0 >= bhi0 or g1 < blo1 or g1 >= bhi1:
                         continue
                     for m in range(2):
                         r = widx[ir, m]
                         if r >= 0:
-                            out[r, g1 - blo1, g0 - blo0] += fluxsc * wval[ir, m]
+                            out[r, g1 - blo1, g0 - blo0] += fluxsc * ws * wval[ir, m]
     return out
 
 
@@ -513,6 +558,15 @@ def _seed(iseed):
 # --------------------------------------------------------------------------
 # Model setup
 # --------------------------------------------------------------------------
+def _relint(relint, nlines, name):
+    """The relative intensities of nlines lines (RELINT), checked: one per line (the kernels read one per
+    line: a shorter RELINT read beyond the array, in C++ too for GALWIND)."""
+    if len(relint) != nlines:
+        raise BBaroloError(f"GALMOD ERROR: {name} gives {nlines} lines, but RELINT has {len(relint)} values: give "
+                           "one relative intensity per line.")
+    return np.array(relint, float)
+
+
 class GalmodSetup:
     """All the header-derived quantities needed to build models for a given cube.
     Computed once and reused for every model evaluation (port of Galmod::initialize)."""
@@ -564,7 +618,7 @@ class GalmodSetup:
             self.freq0 = C_MS / (restw * (1 + reds) * mconv) if restw != -1 else C_MS / self.crval3
             if len(gm.RESTWAVE) > 1:
                 lfreq0 = C_MS / (np.asarray(gm.RESTWAVE, float) * (1 + reds) * mconv)
-                self.relint = np.array(gm.RELINT, float)
+                self.relint = _relint(gm.RELINT, len(gm.RESTWAVE), "RESTWAVE")
         elif sptype == "freq":
             self.axtyp = 3
             hz = {"hz": 1, "khz": 1E03, "mhz": 1E06, "ghz": 1E09}.get(cunit3)
@@ -578,7 +632,7 @@ class GalmodSetup:
             if len(gm.RESTFREQ) > 1:
                 # observed frequency of each line: f/(1+z) (C++ used f*(1+z))
                 lfreq0 = np.asarray(gm.RESTFREQ, float) / (1 + reds)
-                self.relint = np.array(gm.RELINT, float)
+                self.relint = _relint(gm.RELINT, len(gm.RESTFREQ), "RESTFREQ")
         elif "velo" in sptype:
             self.axtyp = 4
             # the units of AlltoVel and DeltaVel (C++ took any other unit, e.g. kms, as cm/s)
@@ -769,8 +823,7 @@ class GalmodSetup:
         if nsub == 0:
             return out
         if gtype == "ANALYTIC":
-            # maximum number of vertical samples (more with a vertical gradient: see _galmod_analytic)
-            nzq = 1 if not np.any(sr[6] > 0) else (256 if np.any(sr[7] != 0) else 64)
+            nzq = 1 if not np.any(sr[6] > 0) else ZSAMPLES_MAX           # (vertical samples: see _zgrid)
             args = (sr, self.radsep, self.cdens, self.pixarea, self.cdelt[0], self.cdelt[1], self.crota2,
                     blo[0], blo[1], bhi[0], bhi[1], self.ltype, self.sig_instr, self._vedges_lines,
                     self.relint, self.cd2i, nzq, self.axtyp, self.velsys, self.lfreq0,
@@ -948,6 +1001,11 @@ def model_rings(rings, mode="CENTRED", subring=0.):
     builder needs radii further apart than one sub-ring).
     Returns a new Rings object (or rings itself for NODES)."""
     mode = ringmode_name(mode)
+    if mode == "NODES" and rings.nr == 1:
+        raise BBaroloError("RINGMODE NODES needs two radii at least: the disk covers the first to the last radius "
+                           "(one ring gave an empty model).")
+    if mode == "SHIFTED" and rings.nr == 1 and not rings.radsep > 0:
+        raise BBaroloError("RINGMODE SHIFTED with one ring needs RADSEP > 0: the width of the ring.")
     if mode == "NODES" or rings.nr == 0:
         return rings
     r = rings.copy()
@@ -1171,9 +1229,9 @@ class DiskModel:
         widx, wval = self._ring_weights(rings, mode)
         out = np.zeros((rings.nr, bhi[1] - blo[1], bhi[0] - blo[0]))
         if sr.shape[1]:
-            nzq = 1 if not np.any(sr[6] > 0) else 64
+            nzq = 1 if not np.any(sr[6] > 0) else ZSAMPLES_MAX
             _ring_maps_analytic(out, sr, widx, wval, st.radsep, st.pixarea, st.cdelt[0], st.cdelt[1], st.crota2,
-                                blo[0], blo[1], bhi[0], bhi[1], st.ltype, nzq)
+                                blo[0], blo[1], bhi[0], bhi[1], st.ltype, nzq, st.sig_instr, st._chmin)
         # sum of the channel-integrated line profiles: cd2i (almost constant across the
         # channels) times the intensities of the lines
         out *= float(np.mean(st.cd2i)) * float(np.sum(st.relint))

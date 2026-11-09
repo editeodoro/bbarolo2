@@ -32,10 +32,11 @@ import contextlib
 import numpy as np
 from astropy.io import fits
 
-from .params import Param, value_to_string
+from .params import Param, value_to_string, _numstr
 from . import keywords as _kw
 from .bbutils import mkdirp, BBaroloError, shortpath
 from .cube import write_hdu, write_outputs
+from .header import read_fits_image
 
 __all__ = ['FitMod3D', 'GalMod', 'GalWind', 'Search', 'FitMod2D', 'Ellprof', 'Smooth', 'SmoothSpec', 'Maps',
            'PVSlice', 'SpacePar', 'Rend3D', 'ContSub', 'Stats', 'MakeMask', 'run', 'Result', 'Task',
@@ -434,7 +435,9 @@ def _compute_ellprof(c, par):
     # the profile deconvolved from the beam, as that of BayesianBBarolo
     from .profile import ellprof_deconvolved
     from .rings import readRings
-    dp = ellprof_deconvolved(c, readRings(p.gf, c.Head()), side=p.gf.SIDE)
+    from .bayesian.common import blas_threads
+    with blas_threads():                # (small matrices: all the BLAS threads, e.g. 112 cores, were slower)
+        dp = ellprof_deconvolved(c, readRings(p.gf, c.Head()), side=p.gf.SIDE)
     if dp is not None:
         seg = ell.getNseg() - 1
         out["profile_deconvolved"] = ell.deconvolvedTable(dp, seg)
@@ -495,7 +498,12 @@ STEPS = [
 def _run_tasks(par, p):
     """The tasks run with the parameters par (p: the Param of the cube): those requested, and SEARCH and
     MAKEMASK when the mask needs them."""
-    tasks = [name for name, requested, _, _ in STEPS if requested(par, p)]
+    return _with_mask_tasks([name for name, requested, _, _ in STEPS if requested(par, p)], p)
+
+
+def _with_mask_tasks(tasks, p):
+    """The tasks, with SEARCH and MAKEMASK when the mask of one of them needs them (their parameters are used)."""
+    tasks = list(tasks)
     if any(t in tasks for t in ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "MAPS", "ELLPROF")):
         mask = str(p.MaskType).upper()
         tasks += [t for t, k in (("SEARCH", "SEARCH"), ("MAKEMASK", "SMOOTH")) if k in mask and t not in tasks]
@@ -602,7 +610,8 @@ def BBcore(par, collect=False):
 
 def run_par(par, banner=True, collect=False):
     """Run a checked Param on all its images, as the command line does (welcome message,
-    parameters and execution time if verbose). Returns (ok, list of outputs per image)."""
+    parameters and execution time if verbose). Returns (ok, list of outputs per image, None for an image
+    that could not be read)."""
     t0 = time.time()
     from .cli import welcomeMessage
     verbose = par.verbose
@@ -620,11 +629,12 @@ def run_par(par, banner=True, collect=False):
         par.imageFile = img
         r = BBcore(par, collect)
         if not r:
+            allout.append(None)                  # (a cube that could not be read: the others keep their place)
             if len(images) - im > 1:
                 print("Skipping to next file...")
-            else:
-                print("Exiting ...\n")
-                return False, allout
+                continue
+            print("Exiting ...\n")
+            return False, allout
         allout.append(r)
     t = time.time() - t0
     if verbose and banner:
@@ -657,10 +667,19 @@ def _written(folder, before):
 
 
 def load_fits(fname):
-    """The first HDU of a FITS file, with the data in memory (the file is closed)."""
-    with fits.open(fname, memmap=False) as h:
-        return fits.PrimaryHDU(data=None if h[0].data is None else np.array(h[0].data),
-                               header=h[0].header.copy())
+    """The image of a FITS file (``file.fits[ext]``, or the primary HDU, or the first extension with data if
+    the primary is empty) as a PrimaryHDU, with the data in memory (the file is closed)."""
+    hdr, data = read_fits_image(fname)
+    return _primary_hdu(data, hdr)
+
+
+def _primary_hdu(data, hdr):
+    """A PrimaryHDU with the data and the cards of the header hdr (of any HDU: the cards of an extension are
+    dropped)."""
+    hdr = hdr.copy()
+    for k in ("XTENSION", "PCOUNT", "GCOUNT", "EXTNAME", "EXTVER", "EXTLEVEL", "INHERIT"):
+        hdr.remove(k, ignore_missing=True)
+    return fits.PrimaryHDU(data=data, header=hdr)
 
 
 _COLRENAME = {("rad", "kpc"): "rad_kpc", ("rad", "arcs"): "radii", ("radius", "pix"): "rad_pix",
@@ -847,7 +866,8 @@ class Result:
             before = _snapshot(of)
             if self._source is not None:
                 p.imageFile = _input_copy(self._source, c, of)
-            names = [n for n, _ in self._steps]
+            # (as the command line: with the parameters of SEARCH and SMOOTH when the mask uses them)
+            names = _with_mask_tasks([n for n, _ in self._steps], p)
             p.write_parameterfile(of + p.outPrefix + "_params.par", names)
             c.mask_written = False
             for name, out in self._steps:
@@ -1019,11 +1039,12 @@ _MASKED = ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "MAPS", "ELL
 def _input_copy(task, c, outfolder):
     """The FITS file of the data of a task (for the plots, which read it): the user's file, or a copy written
     in outfolder as <OBJECT>_input.fits (an in-memory cube, or a new beam)."""
+    from .header import object_name
     hdu = task._input_hdu() if task is not None else None
-    if hdu is None:
-        return task._cube if task is not None else c.pars().imageFile
-    name = str(hdu.header.get("OBJECT", "cube")).strip() or "cube"
-    fn = os.path.join(outfolder, name.replace("/", "_") + "_input.fits")
+    if hdu is None:                     # (absolute: the plots run from their folder)
+        return os.path.abspath(task._cube if task is not None else c.pars().imageFile)
+    # (named as the other outputs: <OBJECT>, cleaned, or NONE)
+    fn = os.path.abspath(os.path.join(outfolder, object_name(hdu.header.get("OBJECT", "NONE")) + "_input.fits"))
     write_hdu(hdu, fn)
     return fn
 
@@ -1085,7 +1106,7 @@ def _checked(par):
     """par.checkPars(), raising ValueError with BBarolo's messages if the parameters are
     not acceptable."""
     buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):     # (some messages go to stderr)
         ok = par.checkPars()
     msg = buf.getvalue().strip()
     if not ok:
@@ -1172,16 +1193,16 @@ class Task:
             elif len(b) == 2:
                 b.append(0.)
             if len(b) != 3:
-                raise ValueError("beam must be (bmaj, bmin, bpa) in arcsec and degrees")
+                raise BBaroloError("beam must be (bmaj, bmin, bpa) in arcsec and degrees")
             self.beam = tuple(float(x) for x in b)
         new = _canonical(params)
         for k, v in new.items():
             kw = _kw.lookup(k)
             if k in ("FITSFILE", "FITSLIST"):
-                raise ValueError(f"{type(self).__name__}: give the cube as the first argument, not {k}.")
+                raise BBaroloError(f"{type(self).__name__}: give the cube as the first argument, not {k}.")
             if (kw.flag or k == "AUTO") and not self._flag_ok(k):
                 hint = " Did you mean SM (smooth the model)?" if k == "SMOOTH" else ""
-                raise ValueError(f"{type(self).__name__} runs the {self.TASK or 'MAPS'} task: {k} is the flag of "
+                raise BBaroloError(f"{type(self).__name__} runs the {self.TASK or 'MAPS'} task: {k} is the flag of "
                                  f"another task (use its class, or bbarolo.run for several tasks).{hint}")
             if v is None:
                 self._params.pop(k, None)
@@ -1189,7 +1210,7 @@ class Task:
                 from .params import ring_value_problem, _RING_KEYS, free_problem
                 if isinstance(v, str) and not isinstance(v, _FromFile):
                     prob = ring_value_problem(k, v) if k in _RING_KEYS else (
-                        free_problem(v) if k == "FREE" and self.TASK == "3DFIT" else None)
+                        free_problem(v, self.TASK) if k == "FREE" and self.TASK in ("3DFIT", "2DFIT") else None)
                     if prob:
                         raise BBaroloError(f"{type(self).__name__}: {prob}")
                 self._params[k] = v
@@ -1204,11 +1225,11 @@ class Task:
             if k in _RING_KEYS and isinstance(v, (list, tuple, np.ndarray)) and np.size(v) > 1:
                 lens[k] = int(np.size(v))
         if len(set(lens.values())) > 1:
-            raise ValueError("Ring parameters with different numbers of values: "
+            raise BBaroloError("Ring parameters with different numbers of values: "
                              + ", ".join(f"{k}={n}" for k, n in lens.items()))
         nr = self._params.get("NRADII")
         if lens and nr is not None and not isinstance(nr, _FromFile) and int(nr) != list(lens.values())[0]:
-            raise ValueError(f"NRADII={nr} but the ring parameters have {list(lens.values())[0]} values")
+            raise BBaroloError(f"NRADII={nr} but the ring parameters have {list(lens.values())[0]} values")
 
     def get(self, name):
         """Value of a parameter (as set, or the default)."""
@@ -1252,8 +1273,16 @@ class Task:
             lines.append(f"{'FITSFILE':14s}{self._cube}")
         else:
             lines.append("// FITSFILE: an in-memory cube (written in the output folder by write())")
-        for k, v in self._all_params().items():
+        params = self._all_params()
+        for k, v in params.items():
             lines.append(f"{k:14s}{_to_str(_kw.lookup(k), v)}")
+        if self.beam is not None:
+            # (beam= replaces the beam of the header; in a parameter file the beam keywords are used only for a cube
+            # without one: with SMOOTH, OBMAJ, OBMIN and OBPA, as BMAJ, BMIN and BPA are then the new beam)
+            keys = ("OBMAJ", "OBMIN", "OBPA") if self.TASK == "SMOOTH" else ("BMAJ", "BMIN", "BPA")
+            lines.append(f"// beam={self.beam} (arcsec, deg) given in Python, which replaces the beam of the "
+                         f"header: {', '.join(keys)} set it only for a cube without a beam")
+            lines += [f"{k:14s}{_numstr(v)}" for k, v in zip(keys, self.beam) if k not in params]
         s = "\n".join(lines) + "\n"
         if fname:
             with open(fname, "w") as f:
@@ -1302,8 +1331,7 @@ class Task:
         if isinstance(self._cube, str) and self.beam is None:
             return None
         if isinstance(self._cube, str):
-            with fits.open(self._cube, memmap=False) as h:
-                hdu = fits.PrimaryHDU(data=np.array(h[0].data), header=h[0].header.copy())
+            hdu = load_fits(self._cube)
         else:
             hdu = fits.PrimaryHDU(data=self._cube.data, header=self._cube.header.copy())
         if self.beam is not None:
@@ -1313,11 +1341,11 @@ class Task:
         return hdu
 
     def _default_outfolder(self):
-        from .header import Header
+        from .header import Header, object_name
         if isinstance(self._cube, str):
             name = Header(self._cube, warning=False).Name()
-        else:
-            name = str(self._cube.header.get("OBJECT", "NONE")).strip() or "NONE"
+        else:                           # (cleaned as in the files: 'NGC 2403/HI' -> NGC_2403-HI)
+            name = object_name(self._cube.header.get("OBJECT", "NONE")) or "NONE"
         return os.getcwd() + "/output/" + name + "/"
 
     def _read_cube(self, par):
@@ -1326,14 +1354,15 @@ class Task:
         c = Cube(par=par)
         hdu = self._input_hdu()
         try:
-            ok = c.readCube(self._cube) if hdu is None else c.readHDU(hdu, name=par.imageFile)
+            # (an absolute path: it is written in the outputs, e.g. the HISTORY of the mask)
+            ok = c.readCube(os.path.abspath(self._cube)) if hdu is None else c.readHDU(hdu, name=par.imageFile)
         except BBaroloError:
             raise
         except Exception as e:
             print(e)
             ok = False
         if not ok:
-            raise IOError(f"{par.imageFile} is not a readable FITS file!")
+            raise BBaroloError(f"{par.imageFile} is not a readable FITS file!")
         return c
 
     # ------------------------------------------------------------------ running
@@ -1555,7 +1584,7 @@ def run(parfile=None, exe=None, stdout=None, **params):
         >>> bbarolo.run(fitsfile="ngc2403.fits", search=True, totalmap=True)
 
     params override the file. Returns a dict {task: Result} (a list of them if FITSLIST
-    gives several cubes).
+    gives several cubes, with None for a cube that could not be read; BBaroloError if none could).
 
     exe: path of another BBarolo executable (e.g. the C++ one) to run instead, in a
     subprocess; stdout: None (screen), a file name or 'null'. Returns its exit code.
@@ -1571,6 +1600,9 @@ def run(parfile=None, exe=None, stdout=None, **params):
         ok, outs = run_par(par, banner=True, collect=True)
     results = []
     for r in outs:
+        if r is None:                            # (a cube of FITSLIST that could not be read)
+            results.append(None)
+            continue
         out, c = r
         p = c.pars()
         d = {}
@@ -1583,8 +1615,8 @@ def run(parfile=None, exe=None, stdout=None, **params):
                 if dp:
                     d[name]._set("densprof_deconvolved", read_table(dp[0]))
         results.append(d)
-    if not ok and not results:
-        raise RuntimeError("BBarolo could not run (see the messages above).")
+    if all(r is None for r in results):
+        raise BBaroloError("BBarolo could not run (see the messages above).")
     return results[0] if len(results) == 1 else results
 
 

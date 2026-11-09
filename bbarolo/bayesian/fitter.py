@@ -10,12 +10,19 @@ import numpy as np
 from scipy import stats
 
 from ..tasks import FitMod3D, build_param, _checked
-from .common import vprint, get_distribution
+from ..bbutils import BBaroloError
+from .common import vprint, get_distribution, SIGMA_QUANTILES
 from .rings import _RingDict
 from .likelihood import LikelihoodMixin
 from .density import DensityMixin
 from .outputs import OutputsMixin
 from .sampling import sample, sampler_options, dyfunc
+
+# the default functions of radius of VROT_FUNC, VDISP_FUNC and DENS_FUNC (BayesianBBarolo.funcs)
+DEFAULT_FUNCS = dict(vrot=lambda R, p1, p2: 2. / np.pi * p1 * np.arctan(R / p2),     # arctan curve
+                     vdisp=lambda R, p1, p2: p1 + p2 * R,                            # linear
+                     dens=lambda R, p1, p2: p1 * np.exp(-R / p2))                    # exponential
+
 
 class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
     """ Fit a galaxy model to a 3D datacube in a Bayesian framework (nested sampling).
@@ -88,9 +95,16 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         """ Change BBarolo parameters (None restores the default). Changing the rings
         resets them (and the default priors that depend on them). FREE, SAMPLER, SAMPLEROPTS
         and RUNOPTS set the defaults of run(); PRIORS sets entries of self.priors (see
-        bbarolo.params.bayes_priors). Returns self. """
+        bbarolo.params.bayes_priors). These are strings as in a parameter file, or Python values:
+        FREE a list of names, PRIORS a dict as self.priors, the options dicts (see
+        bbarolo.params.bayes_value_string). Returns self. """
         from ..keywords import lookup
+        from ..params import bayes_value_string
         given = {}
+        for k, v in list(params.items()):        # (Python values: as in a parameter file)
+            kw = lookup(k)
+            if kw is not None and kw.name in self._KEYWORD_OPTIONS and v is not None and not isinstance(v, str):
+                params[k] = bayes_value_string(kw.name, v)
         for k, v in params.items():              # checked before they are set
             kw = lookup(k)
             if kw is not None and kw.name in self._KEYWORD_OPTIONS and v is not None:
@@ -206,7 +220,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         hdu = self._input_hdu()
         ok = c.readCube(p.imageFile, printInfo=False) if hdu is None else c.readHDU(hdu, name=p.imageFile)
         if not ok:
-            raise IOError(f"Cannot read {p.imageFile}")
+            raise BBaroloError(f"Cannot read {p.imageFile}")
         self._cube_obj, self._par = c, p
         return c
 
@@ -225,7 +239,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         inR, toEstimate = ini.rings, ini.toEstimate
         if show_initial:
             print(initialParametersText(inR, ini.estimated), end="")
-        elif toEstimate:
+        elif toEstimate and c.pars().verbose:          # (nothing at VERBOSE 0)
             print(f"\n{self.taskname}: initial rings ({inR.nr} rings every {inR.radsep:.2f} arcsec) with "
                   "estimated parameters:")
             for k, n in (("xpos", "XPOS"), ("ypos", "YPOS"), ("vsys", "VSYS"), ("vrot", "VROT"), ("inc", "INC"),
@@ -297,9 +311,8 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         self._default_pri = {k: dict(v) for k, v in new.items()}
 
         # Parametric functions of radius (default only for dens, vrot and vdisp)
-        self.funcs.setdefault('vrot', lambda R, p1, p2: 2. / np.pi * p1 * np.arctan(R / p2))   # arctan curve
-        self.funcs.setdefault('vdisp', lambda R, p1, p2: p1 + p2 * R)                          # linear
-        self.funcs.setdefault('dens', lambda R, p1, p2: p1 * np.exp(-R / p2))                  # exponential
+        for k, f in DEFAULT_FUNCS.items():
+            self.funcs.setdefault(k, f)
 
         if self.prior_distr is None:            # (the distributions given are kept; those frozen by _setup are
             self.prior_distr = {}               # frozen again when their definition in priors changes)
@@ -537,6 +550,8 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         else:
             from ..params import bayes_name
             freepar = [bayes_name(p) for p in freepar]
+        if len(freepar) == 0:                       # (it sampled zero dimensions)
+            raise BBaroloError("BayesianBBarolo.run: no free parameters (freepar or FREE).")
         method = str(dflt.get('SAMPLER', 'dynesty') if method is None else method).lower()
         self._method = method
         sampler_kwargs = {**dflt.get('SAMPLEROPTS', {}), **sampler_kwargs}
@@ -710,7 +725,7 @@ class BayesianBBarolo(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             idx = np.random.default_rng(42).choice(len(samples), size=len(samples), p=self.weights)
             self.samples_equal = samples[idx]
         self.modCalculated = True
-        self.quantiles = np.quantile(self.samples_equal, [0.16, 0.50, 0.84], axis=0)
+        self.quantiles = np.quantile(self.samples_equal, SIGMA_QUANTILES, axis=0)
         self.params = self.quantiles[1]
 
     def _update_rings(self, rings, theta):

@@ -7,6 +7,82 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **ANALYTIC models: the vertical layer.** The heights of a thick layer were equal-weight samples at the
+  quantiles of its profile, which are several pixels apart in its tails at any number of samples (and,
+  with DVDZ, form a comb in velocity). Against converged MC models: a thick edge-on Gaussian layer was off
+  by up to 9% of the peak, a Lorentzian layer (LTYPE 4) with DVDZ by 10% of the peak of the spectrum, and
+  the box model of a ring of 3DFIT was not a crop of the full model (12%). The heights are now evenly
+  spaced, 0.25 pixels apart once projected (and 0.5 σ apart in velocity with DVDZ), each with the flux of
+  the layer around it, out to where the layer has less than 1E-6 of its flux or no cloud can fall in the
+  box (beyond 1E-3 of the peak density, 1 pixel apart): all the layers agree with MC to its noise (0.5%),
+  and box models are crops. This changes the ANALYTIC models with Z0 > 0 (the default of BAYESIAN3DFIT);
+  the time is about the same, longer for the Lorentzian layer (its long tail is now deposited, as MC does).
+  `ring_maps` (the deconvolved profiles, GUESSTYPE FIT) ignored DVDZ: it has the same samples now (it was
+  7-19% off the model).
+- **The deconvolved density profile of ELLPROF**: on cubes it was 2.1% low (the unit of SDENS_FO per unit
+  of DENS divided the flux of a disk by an area that included its empty centre); it fitted all the pixels
+  with data, also beyond the model (the rings and an exterior annulus two beams wide), so emission outside
+  pulled the solution (NGC 2403 with one ring 60" wide: 11 times too low; three rings: the last one
+  −23%, now −10%); SIDE A/R with ring PAs across 0/360° took the median PA without unwrapping (the wrong
+  half). Its 1σ errors use the quantiles 0.15865 and 0.84135 (16% and 84%), and its linear algebra runs on
+  one BLAS thread (all the cores were slower).
+- **BayesianBBarolo**: with one ring RADSEP was dropped (the ring was always R/2 to 3R/2 wide, also when
+  3DFIT used RADSEP) and the region of the likelihood ended at R + ½ beam (24% of the flux of the model
+  outside); SIDE A/R with ring PAs across 0/360° selected the wrong half. FREE, PRIORS, SAMPLEROPTS, RUNOPTS
+  and LIKEOPTS take Python values (a list, dicts), not only strings; `run(freepar=[])` is an error (it
+  sampled zero dimensions); `load_results` takes the sampler of the file (the `write()` of a loaded fit
+  wrote `_None_results.npy`), restores the beam given with `beam=`, and stops if the fit used a function
+  of radius of its own that is not in `funcs` (it silently became the default). The tables of the
+  posteriors use the quantiles 0.15865/0.84135, as `print_stats` (0.16/0.84). The estimated initial rings
+  are not printed at VERBOSE 0.
+- **3DFIT: TWOSTAGE with only geometric parameters free** (e.g. FREE INC PA) stopped with an IndexError
+  after the first stage: the second has nothing to fit, the regularised geometry is the result **(C++**:
+  read beyond the simplex**)**. **FREE ALL**: a negative DENS stopped the fit with a ValueError; it goes
+  back to its initial value, as Z0 **(C++)**.
+- **FITS files with the image in an extension** (e.g. MUSE: an empty primary HDU) stopped with "CRPIXs
+  keywords not found": the first extension with an image is read, as CFITSIO's `fits_open_data`, and
+  `file.fits[1]` or `file.fits[NAME]` choose one (FileNotFoundError), also for masks (`MASK FILE(...)`),
+  2D maps and the plots.
+- **`bbarolo.run` with FITSLIST**: a cube that could not be read stopped the others with a TypeError (and
+  the last one gave partial results with no error); it is None in the list of results, and a BBaroloError
+  if no cube could be read.
+- **SPACEPAR**: one ring stopped with an IndexError **(C++**: read beyond the rings**)**, it is RADSEP wide
+  as in 3DFIT; P1PAR/P2PAR with two values set the step to 0 (ZeroDivisionError; C++ keeps the default 2,
+  as now); a range with min > max explored min to min + |max − min| **(C++)** and a step ≤ 0 divided by
+  zero: both are errors of the parameters.
+- **ELLPROF on large maps** took (pixels × subpixels × rings) floats at once: 8.5 GB for a 1024² map with
+  50 rings, 0.6 GB now (the same results).
+- **RESTFRQ = 0 in the header** stopped the maps and SEARCH of a frequency cube with a ZeroDivisionError
+  **(C++**: infinite velocities**)**: it is ignored, as a missing rest frequency.
+- **Errors of the input** are BBaroloError with the reason (no traceback on the command line):
+  WINDOW_SIZE or ANTIALIAS nan or inf, STARTRAD < 0 (now checked), unknown free parameters of 2DFIT (only
+  those of 3DFIT were checked), the parameters of the Python tasks (ValueError), a cube that cannot be read
+  (IOError), `bbarolo.run` with no cube read (RuntimeError), SPACEPAR's P1/P2, MASK FILE(...). The messages
+  of checkPars written to stderr (RELINT, REVERSE, ...) were missing from the BBaroloError of the Python
+  interface; the four of 3DFIT had no newline.
+- **RELINT with fewer values than RESTWAVE/RESTFREQ**: the numba kernels read the intensities beyond the
+  array (the second line got whatever lay there) in GalMod3D and GALWIND **(C++** for GALWIND**)**, where
+  the size was not checked: it is an error.
+- **GIPSY beams in arcsec**: BMMAJ/BMMIN written with a Fortran exponent (`3.0000000D+01`) are in arcsec,
+  but astropy reads them as numbers, so the test for the "D" never fired and the beam was taken in degrees.
+- **The 2D maps of a rotated cube** (PC matrix: moment, RMS, S/N, mass and detection maps) were written
+  unrotated (9" off at 15 pixels from CRPIX for 30°); CROTA was lost in the outputs: it is written as CROTA2.
+- **Parameters given in Python**: a flag as 1.0 or `np.float64(1)` was written as "1.0" and read as false;
+  comma-separated lists of the list keywords other than the ring parameters (RESTWAVE, RELINT, CONTCHANS,
+  BOX, P1PAR, ...) became empty (C++ reads the first value); `--paramfile=file.par` was taken as a parameter
+  and ignored (nothing ran, exit code 0).
+- **Python `write()`**: the plotting scripts and the HISTORY of the mask had the path of the cube as given,
+  so relative paths failed from the output folder; an in-memory cube was named with OBJECT not cleaned
+  (`output/NGC 2403/HI/`) or, without OBJECT, `cube_input.fits` next to `NONE_*` outputs. The parameter
+  files of the runs: that of `BBarolo -f` said AUTO false and had no 3DFIT (run again with `-p` it did
+  nothing), that of `write()` lacked the parameters of SEARCH or SMOOTH when the mask uses them, and
+  `Task.to_parfile` dropped `beam=`.
+- **Smaller**: `SimulatedGalaxyCube.define_galaxy` tested `xpos` instead of `ypos` (one ypos with xpos per
+  ring centred the galaxy); 3DFIT results could not be pickled or copied (the lock of the threads);
+  RINGMODE NODES with one radius gave an empty model, SHIFTED with one ring and no RADSEP stopped with
+  "Radius separation too small": both are a clear error. The documentation of PVSLICE said that blanks are
+  skipped (they are read as 0), that of VDISP that BAYESIAN3DFIT starts from 8 km/s also with GUESSTYPE FIT.
+
 - **PLOTMASK: the mask in the channel maps of 3DFIT** was drawn on the unpadded channel, while the data and
   the model are padded to a square: it was shifted by the padding when the region plotted is not square
   **(C++)**.

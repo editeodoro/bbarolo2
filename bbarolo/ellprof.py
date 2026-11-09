@@ -163,14 +163,20 @@ class Ellprof:
             valid = (v < rng[1]) | (v > rng[0])
         valid &= ~np.isnan(v)
 
-        # inside each ring (npix, nsub, nrad)
+        # the subpixels inside each ring (npix, nsub), one ring at a time (all the rings at once took
+        # (npix, nsub, nrad) floats: GB for a large map with many rings)
         cp, sp, ci = self.Cosphi, self.Sinphi, self.Cosinc
-        Xx = posX[..., None] * cp - posY[..., None] * sp
-        Yy = (posX[..., None] * sp + posY[..., None] * cp) / ci
-        R2 = (Xx * Xx + Yy * Yy).astype(np.float32)
         A = self.Annuli.astype(np.float32)
-        inside = (A[:, 0] * A[:, 0] <= R2) & (R2 < A[:, 1] * A[:, 1])
-        overcount = inside.sum(axis=2)
+
+        def inside_ring(r):
+            k = slice(r, r + 1)
+            Xx = posX * cp[k] - posY * sp[k]
+            Yy = (posX * sp[k] + posY * cp[k]) / ci[k]
+            R2 = (Xx * Xx + Yy * Yy).astype(np.float32)
+            return (A[k, 0] * A[k, 0] <= R2) & (R2 < A[k, 1] * A[k, 1])
+        overcount = np.zeros((npix, nsub), np.int64)
+        for r in range(Nrad):
+            overcount += inside_ring(r)
         ivo = np.broadcast_to(v[:, None], (npix, nsub)).astype(np.float64)
         if self.Overlap:
             ivo = np.where(overcount > 1, ivo / np.maximum(overcount, 1), ivo)
@@ -183,7 +189,7 @@ class Ellprof:
         validb = np.broadcast_to(valid[:, None], (npix, nsub))
         vb = np.broadcast_to(v[:, None], (npix, nsub))
         for r in range(Nrad):
-            ins = inside[..., r]
+            ins = inside_ring(r)
             if not ins.any():
                 continue
             theta = np.mod(th0 + 270.0 - self.Phi[r] - self.maprotation, 360.0)
