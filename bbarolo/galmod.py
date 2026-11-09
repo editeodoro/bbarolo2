@@ -247,15 +247,27 @@ def _layer_core(ltype):
 
 
 ZSAMPLES_MAX = 1024         # (the maximum number of vertical samples of a ring of the ANALYTIC models)
+# The spacing of the vertical samples of the ANALYTIC models once projected (pixels; see _zgrid and
+# DiskModel.zstep): ZSTEP_FINE, or ZSTEP_COARSE for models convolved with a beam of at least ZSTEP_BEAM pixels
+# (minor axis). Odd multiples of 1/4: the samples, half a step from the plane, are then at odd multiples of 1/8
+# pixel from it, never at the half pixels where a centre at a pixel edge would put them on the edges of the
+# pixels (1 pixel: 2.4% of the peak in the total intensity maps after the beam). With fewer samples per pixel the
+# nearest-pixel deposit aliases on the pixel grid, which the beam smooths out: at 0.75 pixels the model is within
+# 0.8% of the peak of the 0.25-pixel one after a beam of 3 pixels (2% at 2 pixels, 12-48% without a beam), and the
+# model is 1.1 and ring_maps 1.8 times faster (NGC 2403, Z0 = 10" on 16" pixels).
+ZSTEP_FINE = 0.25
+ZSTEP_COARSE = 0.75
+ZSTEP_BEAM = 3.0
 
 
 @nb.njit(nogil=True, cache=True)
 def _zgrid(zq, wq, nmax, ltype, z0, sinc, pixsize, dvdz, sig, R0, radsep, xpos, ypos, cdelt0, cdelt1,
-           blo0, blo1, bhi0, bhi1):
+           blo0, blo1, bhi0, bhi1, zstep):
     """The vertical samples of a sub-ring of the ANALYTIC models: heights zq[:n] (in units of z0) and weights
     wq[:n] (the fraction of the flux of the layer around each height). Returns n.
 
-    The heights are evenly spaced, at most 0.25 pixels apart once projected (pixsize) and, with a vertical
+    The heights are evenly spaced, at most zstep pixels apart once projected (pixsize; ZSTEP_FINE or ZSTEP_COARSE)
+    and, with a vertical
     gradient dvdz, 0.5 sig apart in velocity (or the line profiles form a comb), symmetric about the plane, offset
     by half a step from it (a sample in the plane, or at multiples of half a pixel from it, would fall on the edges of
     the pixels when the centre is at a pixel edge, and the rounding would give its flux to either side); each
@@ -275,7 +287,7 @@ def _zgrid(zq, wq, nmax, ltype, z0, sinc, pixsize, dvdz, sig, R0, radsep, xpos, 
     dx = max(abs(blo0 - 0.5 - xpos), abs(bhi0 - 0.5 - xpos)) * abs(cdelt0)
     dy = max(abs(blo1 - 0.5 - ypos), abs(bhi1 - 0.5 - ypos)) * abs(cdelt1)
     zlim = min(_layer_extent(ltype), (R0 + radsep + math.sqrt(dx * dx + dy * dy)) / (s * z0))
-    step = 0.25 * pixsize / (z0 * s)
+    step = zstep * pixsize / (z0 * s)
     if dvdz != 0:
         step = min(step, 0.5 * sig / (abs(dvdz) * z0 * s))
     # the bins of one side, from the plane: step wide up to the core of the layer, 4 steps beyond (the far tail,
@@ -301,7 +313,7 @@ def _zgrid(zq, wq, nmax, ltype, z0, sinc, pixsize, dvdz, sig, R0, radsep, xpos, 
 @nb.njit(nogil=True, cache=True)
 def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, cdelt1, crota2,
                      blo0, blo1, bhi0, bhi1, ltype, sig_instr, vedges, relint, cd2i, nzq,
-                     axtyp, velsys, lfreq0, crval3, cdelt3, crpix3, chwidth, ptab):
+                     axtyp, velsys, lfreq0, crval3, cdelt3, crpix3, chwidth, ptab, zstep):
     """Deterministic GALMOD: clouds on a regular grid in radius/azimuth/height (nearest-pixel
     deposit, as in the Monte-Carlo GALMOD) with analytic channel-integrated line profiles.
 
@@ -338,7 +350,7 @@ def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, 
         xpos, ypos, vsys0 = sr[11, ir], sr[12, ir], sr[13, ir]
         # vertical samples (heights zq, weights wq: see _zgrid)
         nzz = _zgrid(zq, wq, nzq, ltype, z0, sinc, pixsize, dvdz, sig, R0, radsep, xpos, ypos, cdelt0, cdelt1,
-                     blo0, blo1, bhi0, bhi1)
+                     blo0, blo1, bhi0, bhi1, zstep)
         fluxsc = dens * ring_area_pix * pixarea / (naz * nrad)
         # does the velocity depend on height for some vertical sample?
         zdep = False
@@ -431,7 +443,7 @@ def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, 
 
 @nb.njit(nogil=True, cache=True)
 def _ring_maps_analytic(out, sr, widx, wval, radsep, pixarea, cdelt0, cdelt1, crota2, blo0, blo1, bhi0, bhi1,
-                        ltype, nzq, sig_instr, chwidth):
+                        ltype, nzq, sig_instr, chwidth, zstep):
     """Total intensity (before the channel factor cd2i and the convolution) of the ANALYTIC
     GALMOD deposit of the sub-rings sr with unit density, accumulated in out[ring] (nr, ny, nx)
     with the interpolation weights of each sub-ring: wval[s, m] for the ring widx[s, m] (m = 0, 1;
@@ -458,7 +470,7 @@ def _ring_maps_analytic(out, sr, widx, wval, radsep, pixarea, cdelt0, cdelt1, cr
         xpos, ypos = sr[11, ir], sr[12, ir]
         sig = max(math.sqrt(sr[4, ir] * sr[4, ir] + sig_instr * sig_instr), 1e-6 * abs(chwidth))
         nzz = _zgrid(zq, wq, nzq, ltype, z0, sinc, pixsize, sr[7, ir], sig, R0, radsep, xpos, ypos, cdelt0,
-                     cdelt1, blo0, blo1, bhi0, bhi1)
+                     cdelt1, blo0, blo1, bhi0, bhi1, zstep)
         fluxsc = ring_area_pix * pixarea / (naz * nrad)
         r_inner = R0 - 0.5 * radsep
         daz = 2 * math.pi / naz
@@ -592,6 +604,7 @@ class GalmodSetup:
         self.pixsize = [abs(cdelt[0]), abs(cdelt[1])]
         self.pixarea = self.pixsize[0] * self.pixsize[1]
         self.crota2 = h.Crota() * math.pi / 180.
+        self.zstep = ZSTEP_FINE         # (vertical samples of the ANALYTIC models: see DiskModel.zstep)
         reds = p.getRedshift()
         cunit3 = h.Cunit(2).lower()
         self.cdelt3 = h.Cdelt(2)
@@ -827,7 +840,7 @@ class GalmodSetup:
             args = (sr, self.radsep, self.cdens, self.pixarea, self.cdelt[0], self.cdelt[1], self.crota2,
                     blo[0], blo[1], bhi[0], bhi[1], self.ltype, self.sig_instr, self._vedges_lines,
                     self.relint, self.cd2i, nzq, self.axtyp, self.velsys, self.lfreq0,
-                    self.crval3, self.cdelt3, self.crpix3, self._chmin, _PHI_TAB)
+                    self.crval3, self.cdelt3, self.crpix3, self._chmin, _PHI_TAB, self.zstep)
             if nthreads <= 1 or nsub < 2 * nthreads:
                 _galmod_analytic(out, sr, 0, nsub, *args[1:])
             else:
@@ -1101,6 +1114,19 @@ class DiskModel:
             sys.stderr.write(" WARNING: can not set an appropriate convolution field. "
                              "Turning off the convolution step.\n")
             self.smooth = False
+        self.setup.zstep = self.zstep
+
+    @property
+    def zstep(self):
+        """The spacing (pixels, once projected) of the vertical samples of the ANALYTIC models: ZSTEP_COARSE
+        (0.75) if the model is convolved with a beam whose minor axis is at least ZSTEP_BEAM (3) pixels, which
+        smooths out the aliasing of the samples on the pixel grid, otherwise ZSTEP_FINE (0.25)."""
+        if self.conv is None:
+            return ZSTEP_FINE
+        h = self.cin.Head()
+        pix = max(self.setup.pixsize) / 60.                      # (degrees)
+        bmin = min(abs(h.Bmaj()), abs(h.Bmin()))
+        return ZSTEP_COARSE if pix > 0 and bmin / pix >= ZSTEP_BEAM else ZSTEP_FINE
 
     def _set_kernel(self):
         c = self.cin
@@ -1231,7 +1257,7 @@ class DiskModel:
         if sr.shape[1]:
             nzq = 1 if not np.any(sr[6] > 0) else ZSAMPLES_MAX
             _ring_maps_analytic(out, sr, widx, wval, st.radsep, st.pixarea, st.cdelt[0], st.cdelt[1], st.crota2,
-                                blo[0], blo[1], bhi[0], bhi[1], st.ltype, nzq, st.sig_instr, st._chmin)
+                                blo[0], blo[1], bhi[0], bhi[1], st.ltype, nzq, st.sig_instr, st._chmin, st.zstep)
         # sum of the channel-integrated line profiles: cd2i (almost constant across the
         # channels) times the intensities of the lines
         out *= float(np.mean(st.cd2i)) * float(np.sum(st.relint))

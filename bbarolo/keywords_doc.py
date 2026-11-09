@@ -1452,10 +1452,10 @@ largest + w:
   0–50 km/s;
 - `XPOS` and `YPOS` initial ±2 beam FWHM, `VSYS` initial ±5 channels (at least ±20 km/s);
 - `Z0` 0 to one beam FWHM;
-- `RADMAX` the last radius ±1 beam FWHM, within the rings: with `LIKEOPTS radmax=edge` or `taper` (the
-  edge of the disk) up to the outer edge of the last ring (the last radius with `RINGMODE NODES`), beyond
-  which the edge has no effect; with `radmax=ring` (the last ring moves) beyond the middle of the last two
-  radii;
+- `RADMAX` from the last radius − 1 beam FWHM to the last radius + 2 beam FWHM, within the rings: with
+  `LIKEOPTS radmax=edge` or `taper` (the edge of the disk) up to the outer edge of the last ring (the last
+  radius with `RINGMODE NODES`), beyond which the edge has no effect; with `radmax=ring` (the last ring
+  moves) beyond the middle of the last two radii;
 - `VRAD` 0–50 km/s, `VVERT` 0–30 km/s, `ZCYL` 0–5 arcsec, `DVDZ` 0–2, `DENS` 0.1–200.1 (a flux per unit
   area: the flux units of the cube × km/s per arcsec², see `DENS`; give a prior suited to the units of the
   cube);

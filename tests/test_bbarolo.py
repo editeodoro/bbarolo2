@@ -1820,7 +1820,7 @@ def test_bayesian_radmax_edge(tmp_path):
     """RADMAX as the outer edge of the disk (like_kwargs radmax='edge', the default, or 'taper'): the
     rings do not move, the model has no emission beyond the edge (also with the deconvolved density
     profile), and the likelihood is continuous in RADMAX; radmax='ring' moves the last ring. The
-    default prior is from the last radius - one beam (30" here) to twice it, within the rings: an edge ends at the outer
+    default prior is from the last radius - one beam (30" here) to + two beams, within the rings: an edge ends at the outer
     edge of the disk (half a ring beyond the last radius, or the last radius with NODES rings); the last
     ring stays beyond the middle of the last two radii."""
     pytest.importorskip("dynesty")
@@ -1830,7 +1830,7 @@ def test_bayesian_radmax_edge(tmp_path):
     f = _bayes_mock(tmp_path)
     f._setup(['vrot_single', 'radmax'])
     assert f.like_kwargs['radmax'] == 'edge' and f._radmax_mode == 'edge'
-    assert f.priors['radmax'] == dict(name='uniform', loc=110., scale=170.)
+    assert f.priors['radmax'] == dict(name='uniform', loc=110., scale=90.)
     assert f.prior_distr['radmax'].ppf(0.) == 110. and f.prior_distr['radmax'].ppf(1.) == 160.
     r0 = np.array(f._fit0.r['radii'])
     L = [f._log_likelihood(np.array([150., e])) for e in np.linspace(125., 160., 36)]
@@ -1859,14 +1859,14 @@ def test_bayesian_radmax_edge(tmp_path):
     h = _bayes_mock(tmp_path, outfolder=str(tmp_path / "h"))
     h._set_like_options(dict(radmax='ring'))
     h._setup(['vrot_single', 'radmax'])                       # 'ring': the last ring moves
-    assert h.prior_distr['radmax'].ppf(0.) == 120. and h.prior_distr['radmax'].ppf(1.) == 280.
+    assert h.prior_distr['radmax'].ppf(0.) == 120. and h.prior_distr['radmax'].ppf(1.) == 200.
     assert h._update_rings(h._fit0.copy(), np.array([150., 130.])).r['radii'][-1] == 130.
     n = _bayes_mock(tmp_path, outfolder=str(tmp_path / "n"), ringmode="NODES")
     n._setup(['vrot_single', 'radmax'])
     assert n.prior_distr['radmax'].ppf(0.) == 110. and n.prior_distr['radmax'].ppf(1.) == 140.
     n._set_like_options(dict(radmax='ring'))
     n._setup(['vrot_single', 'radmax'])
-    assert n.prior_distr['radmax'].ppf(0.) == 120. and n.prior_distr['radmax'].ppf(1.) == 280.
+    assert n.prior_distr['radmax'].ppf(0.) == 120. and n.prior_distr['radmax'].ppf(1.) == 200.
 
 
 def test_bayesian_flux_beyond_rings(tmp_path, capsys):
@@ -1914,7 +1914,7 @@ def test_bayesian_default_priors_follow_rings(tmp_path):
     """The default priors follow the initial rings (given or estimated) and change with them: INC +- 10 deg
     (within 0-90), PA +- 15 deg, VROT 0 to 2 x the largest VROT, XPOS/YPOS +- 2 beams, VSYS +- 5 channels
     (at least 20 km/s), VDISP 0 to 2 x VDISP (at least 50 km/s), Z0 0 to one beam, RADMAX the last radius
-    - one beam to twice it; with values per ring, from the smallest - w to the largest + w. The priors given (in priors,
+    - one beam to + two beams; with values per ring, from the smallest - w to the largest + w. The priors given (in priors,
     with PRIORS, or changed in place) are kept when the rings change."""
     pytest.importorskip("dynesty")
     f = _bayes_mock(tmp_path)          # beam 30" = 3 pixels, channels 10 km/s, rings 20-140"
@@ -1922,7 +1922,7 @@ def test_bayesian_default_priors_follow_rings(tmp_path):
     def bounds(k):
         return f.priors[k]['loc'], f.priors[k]['loc'] + f.priors[k]['scale']
     expect = dict(inc=(50., 70.), phi=(30., 60.), vrot=(0., 240.), xpos=(25.5, 37.5), ypos=(25.5, 37.5),
-                  vsys=(-50., 50.), vdisp=(0., 50.), z0=(0., 30.), radmax=(110., 280.), vrot_p1=(1., 240.))
+                  vsys=(-50., 50.), vdisp=(0., 50.), z0=(0., 30.), radmax=(110., 200.), vrot_p1=(1., 240.))
     for k, v in expect.items():
         assert np.allclose(bounds(k), v), k
     assert bounds('vrad') == (0, 50) and bounds('dens') == (0.1, 200.1)
@@ -1939,7 +1939,7 @@ def test_bayesian_default_priors_follow_rings(tmp_path):
     assert f.priors['phi'] == dict(name='uniform', loc=0., scale=180.)
     assert np.allclose(bounds('xpos'), (27., 39.)) and np.allclose(bounds('ypos'), (25.5, 37.5))
     f.update(radii=[20., 60., 100.], vrot=150.)
-    assert np.allclose(bounds('radmax'), (70., 200.)) and np.allclose(bounds('vrot'), (0., 300.))
+    assert np.allclose(bounds('radmax'), (70., 160.)) and np.allclose(bounds('vrot'), (0., 300.))
     f._setup(['vrot_single', 'inc_single', 'phi_single'])
     assert f.prior_distr['inc'].kwds == dict(loc=60., scale=5.)
     assert np.isclose(f.prior_distr['phi'].ppf(1.), 180.)
@@ -3534,6 +3534,30 @@ def test_analytic_vertical_samples(tmp_path):
         assert np.abs(np.tensordot(r.dens, dm.ring_maps(r), axes=1) - mod).max() < 1e-6 * mod.max()
 
 
+
+def test_analytic_vertical_spacing_from_beam(tmp_path):
+    """ANALYTIC models: the vertical samples are 0.75 pixels apart (projected) when the model is convolved with a
+    beam of at least 3 pixels (minor axis), which smooths out their aliasing on the pixel grid, otherwise 0.25
+    pixels (an unsmoothed edge-on layer at 0.75 pixels was off by 48% of the peak); ring_maps uses the same samples
+    as the convolved model."""
+    import copy
+    from bbarolo.galmod import DiskModel, ZSTEP_FINE, ZSTEP_COARSE
+    p = Param()
+    p.verbose = False
+    for beam, smooth, want in ((4., True, ZSTEP_COARSE), (3., True, ZSTEP_COARSE), (2.9, True, ZSTEP_FINE),
+                               (4., False, ZSTEP_FINE)):
+        fn = str(tmp_path / f"b{beam}{smooth}.fits")
+        emptyfits([96, 96, 60], [-1 / 3600., 1 / 3600., 5.], beam=beam / 3600., bunit="JY/BEAM", obj="ZS").writeto(fn)
+        c = Cube(fn, par=p)
+        par = copy.deepcopy(c.pars().gf)
+        dm = DiskModel(c, par=par, smooth=smooth, galmodtype="ANALYTIC")
+        assert dm.zstep == want and dm.setup.zstep == want
+        if beam == 4. and smooth:
+            r = Rings().setRings(radii=[10., 20., 30., 40.], xpos=47.5, ypos=47.5, vsys=0., vrot=100., vdisp=8.,
+                                 z0=4., dens=[1., 2., 1.5, .5], inc=70., phi=30.)
+            mod = dm.array(r).sum(axis=0)
+            assert np.abs(np.tensordot(r.dens, dm.ring_maps(r), axes=1) - mod).max() < 1e-6 * mod.max()
+
 def test_python_write_paths_and_parameter_files(tmp_path, monkeypatch):
     """Python write(): the plots and the HISTORY of the mask have the absolute path of a cube given with a relative
     one (the plotting scripts failed from their folder); an in-memory cube is named as the outputs (OBJECT cleaned,
@@ -3680,8 +3704,9 @@ def test_3dfit_deconvolved_profile(tmp_path):
 
 def test_bayesian_radmax_default_prior(tmp_path):
     """The default prior of RADMAX goes from the estimated outer radius (the last initial radius) minus one beam
-    to twice it. With RADMAX free as the edge of the disk and the number of rings estimated, the rings are
-    extended out to twice that radius (same separation, the values of the last ring); without RADMAX, or with
+    to that radius plus two beams (it was twice the radius). With RADMAX free as the edge of the disk and the number
+    of rings estimated, the rings are extended out to there (same separation, the values of the last ring); without
+    RADMAX, or with
     the rings given, they are not (the prior then ends at the edge of the rings)."""
     pytest.importorskip("dynesty")
     f = _bayes_mock(tmp_path)                                # rings given: 20-140 arcsec, beam 30 arcsec
@@ -3689,16 +3714,16 @@ def test_bayesian_radmax_default_prior(tmp_path):
     assert f._inri.nr == 4
     kw = f._prior_kwargs('radmax')
     assert np.isclose(kw['loc'], 110.) and np.isclose(kw['loc'] + kw['scale'], 160.)    # (the edge of the rings)
-    assert np.isclose(f.priors['radmax']['loc'] + f.priors['radmax']['scale'], 280.)
+    assert np.isclose(f.priors['radmax']['loc'] + f.priors['radmax']['scale'], 200.)
     g = _bayes_mock(tmp_path, radii=None, radsep=20, outfolder=str(tmp_path / "g"))
     base = g._inri.copy()
     guess = float(base.r['radii'][-1])
     g._setup(['vrot_single', 'radmax'])
     R = np.asarray(g._inri.r['radii'], float)
-    assert g._inri.nr > base.nr and R[-1] >= 2 * guess - 1e-3 and np.allclose(np.diff(R), 20.)
+    assert g._inri.nr > base.nr and guess + 60. - 1e-3 <= R[-1] < guess + 80. and np.allclose(np.diff(R), 20.)
     assert np.allclose(R[:base.nr], base.r['radii']) and np.allclose(g._inri.r['vrot'][base.nr:], base.r['vrot'][-1])
     kw = g._prior_kwargs('radmax')
-    assert np.isclose(kw['loc'], guess - 30.) and np.isclose(kw['loc'] + kw['scale'], 2 * guess)
+    assert np.isclose(kw['loc'], guess - 30.) and np.isclose(kw['loc'] + kw['scale'], guess + 60.)
     assert len(g.freepar_names) == 2
     g._setup(['vrot'])                                       # RADMAX not free: the estimated rings
     assert g._inri.nr == base.nr and g.ndim == base.nr

@@ -12,13 +12,19 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   with DVDZ, form a comb in velocity). Against converged MC models: a thick edge-on Gaussian layer was off
   by up to 9% of the peak, a Lorentzian layer (LTYPE 4) with DVDZ by 10% of the peak of the spectrum, and
   the box model of a ring of 3DFIT was not a crop of the full model (12%). The heights are now evenly
-  spaced, 0.25 pixels apart once projected (and 0.5 σ apart in velocity with DVDZ), each with the flux of
+  spaced, 0.75 pixels apart once projected when the model is convolved with a beam of at least 3 pixels
+  (minor axis), 0.25 pixels otherwise (and 0.5 σ apart in velocity with DVDZ), each with the flux of
   the layer around it, out to where the layer has less than 1E-6 of its flux or no cloud can fall in the
   box (beyond 1E-3 of the peak density, 1 pixel apart): all the layers agree with MC to its noise (0.5%),
   and box models are crops. This changes the ANALYTIC models with Z0 > 0 (the default of BAYESIAN3DFIT);
-  the time is about the same, longer for the Lorentzian layer (its long tail is now deposited, as MC does).
-  `ring_maps` (the deconvolved profiles, GUESSTYPE FIT) ignored DVDZ: it has the same samples now (it was
-  7-19% off the model).
+  thick layers take longer, as the flux now reaches every pixel the layer covers (and the long tail of the
+  Lorentzian layer is deposited, as MC does). The beam smooths out the aliasing of the samples on the pixel
+  grid, so convolved models use the coarser spacing: within 0.8% of the peak of the 0.25-pixel model after a
+  beam of 3 pixels (2% at 2 pixels, hence the threshold; 12-48% without a beam). `ring_maps` (the deconvolved
+  profiles, GUESSTYPE FIT) ignored DVDZ: it has the same samples now (it was 7-19% off the model). On NGC 2403
+  (Z0 = 10", 16" pixels, beam of 3.7 pixels) a likelihood call of BAYESIAN3DFIT takes 1.12 times longer with
+  ANALYTIC models (1.16 with INC and PA free, which recompute the deconvolved profile at each call; 1.26 and
+  1.4 with the 0.25-pixel spacing), 1.05 with MC ones with INC and PA free.
 - **The deconvolved density profile of ELLPROF**: on cubes it was 2.1% low (the unit of SDENS_FO per unit
   of DENS divided the flux of a disk by an area that included its empty centre); it fitted all the pixels
   with data, also beyond the model (the rings and an exterior annulus two beams wide), so emission outside
@@ -485,10 +491,10 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   `beam=` is now the keyword BEAM (also a string, `beam='0.01d 0.01d 30'`): the input copy written for the
   plots of a task with a new beam is no longer needed.
 - **BAYESIAN3DFIT: the default prior of RADMAX** goes from the estimated outer radius (the last initial
-  radius) minus one beam to twice that radius (it was ±1 beam), still within the rings. With RADMAX free as
-  the edge of the disk (`radmax=edge` or `taper`) and the number of rings estimated (RADII and NRADII not
-  given), the rings are extended, with the same separation and the values of the last ring, out to twice the
-  estimated radius, so that the edge can be found up to there.
+  radius) minus one beam to that radius plus two beams (it was ±1 beam), still within the rings. With RADMAX
+  free as the edge of the disk (`radmax=edge` or `taper`) and the number of rings estimated (RADII and NRADII
+  not given), the rings are extended, with the same separation and the values of the last ring, out to the
+  estimated radius plus two beams, so that the edge can be found up to there.
 
 - **BAYESIAN3DFIT: the measured correlation of the noise is conservative** (`LIKEOPTS noisecorr=measured`, the
   default). The spatial correlation area is the largest of the sum of the autocorrelation of the noise, its

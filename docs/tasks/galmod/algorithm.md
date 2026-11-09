@@ -228,12 +228,14 @@ on a stratified grid and each deposits its line profile integrated over the chan
   evenly spaced by
 
   $$
-  \Delta z = \min\!\left(\frac{p}{4\,|\sin i|},\ \frac{\sigma}{2\,|\partial V/\partial z|\,|\sin i|}\right)
+  \Delta z = \min\!\left(\frac{s\,p}{|\sin i|},\ \frac{\sigma}{2\,|\partial V/\partial z|\,|\sin i|}\right)
   $$
 
-  (a quarter of a pixel once projected and, with a vertical gradient, half a dispersion in velocity; the
-  second term only when $\partial V/\partial z \ne 0$), symmetric about the plane and offset from it by
-  half a step, $z_q = \pm(q + 1/2)\,\Delta z$ (a sample in the plane would fall on the edges of the
+  ($s$ pixels once projected and, with a vertical gradient, half a dispersion in velocity; the
+  second term only when $\partial V/\partial z \ne 0$). $s = 3/4$ when the model is convolved with a beam
+  whose minor axis is at least 3 pixels, which smooths out the aliasing of the samples on the pixel grid
+  (within 0.8% of the peak of the finer sampling), and $s = 1/4$ otherwise. The samples are symmetric about
+  the plane and offset from it by half a step, $z_q = \pm(q + 1/2)\,\Delta z$ (a sample in the plane would fall on the edges of the
   pixels when the centre is at a pixel edge). Where the density of the layer is below $10^{-3}$ of its
   peak the bins are $4\Delta z$ wide. Each sample carries the fraction of the layer in its bin,
   $w_q = F(z_q + \Delta z/2) - F(z_q - \Delta z/2)$, with $F$ the cumulative distribution of the layer. The
