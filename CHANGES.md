@@ -345,7 +345,7 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   VWIND, VDISP and VROT per shell, the centre and VSYS) sampled with nautilus or dynesty, with the emission of the
   wind not assumed. The emission is a set of emissivities on cells of the cones, about one beam across. They are
   solved at every evaluation of the likelihood and marginalised (exact Gaussian integral, with the mean EMSCALE, the
-  clumpiness EMCLUMP and the ratio of the two cones EMRATIO of their prior fitted). A patchy wind then does not bias the geometry, and cones or
+  clumpiness EMCLUMP, the ratio of the two cones EMRATIO and the radial slope EMSLOPE of their prior fitted). A patchy wind then does not bias the geometry, and cones or
   velocities larger than the data need are penalised, unlike the voxel weighting of MoKA-3D (Marconcini et al. 2023)
   and the profile likelihood. On a mock wind with half of its cells empty (log-normal clumps) and noise smoothed by
   the beam, VWIND, INC and OPENANG came out within one sigma of the truth; the profile likelihood was flat over 25

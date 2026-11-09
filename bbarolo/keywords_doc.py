@@ -1259,7 +1259,7 @@ BAYESIANWIND (required): `VWIND`, `VDISP` and `VROT` have one value per shell, N
 the shells, NAME_FUNC a function of radius (VWIND an arctangent rising to the terminal velocity p1);
 `XPOS`, `YPOS`, `VSYS`, `INC`, `PA`, `OPENANG`, `OPENIN`, `HTOT`, `SIGMA` and the parameters of the prior
 of the emission `EMSCALE`, `EMCLUMP`, `EMRATIO` and `EMSLOPE` are single values; e.g. `FREE VWIND_SINGLE
-VDISP_SINGLE INC PA OPENANG` (EMSCALE, EMCLUMP and EMRATIO are added unless `LIKEOPTS` fixes them).
+VDISP_SINGLE INC PA OPENANG` (EMSCALE, EMCLUMP, EMRATIO and EMSLOPE are added unless `LIKEOPTS` fixes them).
 """),
     'GUESSTYPE': dict(
         group='Rings',
@@ -1583,7 +1583,7 @@ The smoothness penalties of the ring parameters (`lambdas`) are available only i
 
 BAYESIANWIND has its own options: `emission` (cells, shells, cone, spaxel or voxel), `cellsize`,
 `marginal`, `prior` (gauss or exp), `noisecorr`, `sigma`, `datafrac`, `grow`, `emscale`, `emclump`,
-`emratio` and `prune` (see the BAYESIANWIND page).
+`emratio`, `emslope` and `prune` (see the BAYESIANWIND page).
 """),
     'HTOT': dict(
         group='Wind',

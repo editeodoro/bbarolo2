@@ -44,7 +44,7 @@ CONFIGS = {
     "lognormal": dict(truth={}, mock=dict(kind="lognormal", sigma_ln=1.0, corr=20.), free=BASE_FREE),
     "lowsnr": dict(truth={}, mock=dict(kind="clumps", snr=5.), free=BASE_FREE),
     # emission falling as r^-2 (the clumps and the cone), fitted with EMSLOPE fixed at 0 or free
-    "slope": dict(truth={}, mock=dict(kind="clumps", slope=2., snr=20.), free=BASE_FREE),
+    "slope": dict(truth={}, mock=dict(kind="clumps", slope=2., snr=20.), free=BASE_FREE, like=dict(emslope=0.)),
     "slope-free": dict(truth={}, mock=dict(kind="clumps", slope=2., snr=20.), free=BASE_FREE + ["emslope"]),
 }
 BASES = {"cells": dict(emission="cells"), "cells-profile": dict(emission="cells", marginal=False),
@@ -77,7 +77,8 @@ def one_fit(config, seed, basis, threads, nlive, out, neff=2000):
                      **{k: v for k, v in ini.items() if k != "vwind"}, verbose=False,
                      outfolder=os.path.join(HERE, "results", "wind_tmp") + "/")
     t0 = time.time()
-    f.run(freepar=cfg["free"], threads=threads, like_kwargs=BASES[basis], sampler_kwargs=dict(n_live=nlive, seed=seed),
+    f.run(freepar=cfg["free"], threads=threads, like_kwargs={**BASES[basis], **cfg.get("like", {})},
+          sampler_kwargs=dict(n_live=nlive, seed=seed),
           run_kwargs=dict(verbose=False, n_eff=neff), verbose=False)
     res = dict(config=config, seed=seed, basis=basis, time=time.time() - t0, ess=f.ess, ndim=f.ndim,
                names=f.freepar_names, quantiles=f.quantiles.tolist(), snr=tr["snr"], kind=tr["kind"],
@@ -151,7 +152,8 @@ def report(path=RESULTS, out=REPORT):
          "Mocks: performance/wind_mocks.py (GalMod3D, an engine independent of the fit; clumps or a log-normal field "
          "in the cones; noise smoothed by the beam, peak S/N 10 unless noted). Fits: BayesianWind with nautilus "
          "(300 live points, 2000 effective samples), the initial wind offset from the truth (INC -5, PA +5, OPENANG "
-         "-5, VWIND -20 km/s, VDISP +5 km/s) and the default priors around it. For each parameter: the mean bias "
+         "-5, VWIND -20 km/s, VDISP +5 km/s) and the default priors around it; EMSLOPE fixed at 0 (the slope of the "
+         "mocks; fitted by default since) but in the configuration slope-free. For each parameter: the mean bias "
          "(posterior median - truth), the rms of the pulls (bias / half-width of the 68% interval: 1 if the "
          "intervals are right) and the coverage of the 68% intervals over the seeds. EMSCALE, EMCLUMP and EMRATIO "
          "have no true value and are left out.", ""]
@@ -186,8 +188,8 @@ def report(path=RESULTS, out=REPORT):
                 st = _stats(rs, p)
                 cells.append("" if st is None else f"{st[0]:+.1f} ({st[2]:.1f}, {st[3]:.2f})")
             L.append(f"| {config} | {len(rs)} | " + " | ".join(cells) + " |")
-        L += ["", "slope: the clump mock with its emission falling as r^-2 (peak S/N 20), EMSLOPE fixed at 0 (the prior "
-              "mean uniform in radius); slope-free: EMSLOPE fitted.", ""]
+        L += ["", "slope: the clump mock with its emission falling as r^-2 (peak S/N 20), EMSLOPE fixed at 0 (the "
+              "prior mean uniform in radius); slope-free: EMSLOPE fitted (the default since).", ""]
     # 3. the bases of the emission
     L += ["## The descriptions of the emission (option emission, marginal or profile)", "",
           "| configuration | basis | seeds | min per fit | " + " | ".join(PARS[:6]) + " |",

@@ -5,7 +5,8 @@ The mock (performance/wind_mocks.py) is made with GalMod3D: 100 Gaussian clumps 
 (60 degrees of full opening angle, 200 arcsec long, inclined by 60 degrees, PA 30), a radial wind of 200 km/s with a
 dispersion of 20 km/s, and noise smoothed by the beam, peak S/N 10. The fit starts from a wrong guess of the
 geometry, as a real one would, and samples the velocity of the wind, the inclination and the opening angle; the
-mean emissivity and the clumpiness of the prior of the emission (EMSCALE, EMCLUMP) are fitted with them.
+mean emissivity, clumpiness, ratio of the cones and radial slope of the prior of the emission (EMSCALE, EMCLUMP,
+EMRATIO, EMSLOPE) are fitted with them.
 
     python3 examples/wind_example.py [outfolder] [threads]
 """

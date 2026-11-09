@@ -28,9 +28,10 @@ Free parameters: VWIND, VDISP, VROT (one value per shell, NAME_SINGLE one value 
 radius, see funcs); XPOS, YPOS, VSYS, INC, PA, OPENANG, OPENIN, HTOT (single values); SIGMA (the noise); EMSCALE,
 EMCLUMP, EMRATIO and EMSLOPE (the prior of the emissivities: its mean at r0, the median radius of the cells, in the
 receding cone (+z), its fractional scatter, the ratio of the mean of the approaching cone to that of the receding one,
-and its power-law slope in radius). EMSCALE, EMCLUMP and EMRATIO are always fitted (added to the free parameters
-unless fixed with the options emscale, emclump and emratio: fixed at a rough value they bias the geometry, and the two
-cones of a wind often differ, e.g. the far one extincted), EMSLOPE is 0 unless free.
+and its power-law slope in radius). They are always fitted, added to the free parameters unless fixed with the
+options emscale, emclump, emratio and emslope: fixed at a rough value they bias the geometry (the two cones of a wind
+often differ, e.g. the far one extincted, and its emission fades outwards: EMSLOPE fixed at 0 for an emission falling
+as r^-2 gave VWIND 24% low and INC 11 degrees low).
 
 Options of the likelihood (LIKEOPTS, run(like_kwargs=...)):
   emission   the basis of the emission: 'cells' (default: cells about cellsize across, fewer near the apex),
@@ -53,6 +54,7 @@ Options of the likelihood (LIKEOPTS, run(like_kwargs=...)):
              likelihood at each evaluation, about 20 times slower); default: free
   emclump    a fixed EMCLUMP (prior 'gauss'); default: free
   emratio    a fixed EMRATIO (e.g. 1: the cones have the same mean emissivity); default: free
+  emslope    a fixed EMSLOPE (e.g. 0: a mean emissivity uniform in radius); default: free
 
 The likelihood uses all the voxels of its region (no mask: the empty voxels are what tell a cone that is too
 large). The fixed disk (DISKRINGS: a rings file of 3DFIT or BAYESIAN3DFIT) adds one model per ring with its
@@ -84,9 +86,10 @@ DEFAULT_WIND_FUNCS = dict(vwind=lambda R, p1, p2: 2. / np.pi * p1 * np.arctan(R 
                           vrot=lambda R, p1, p2: p1 + p2 * R)                          # linear
 
 WIND_LIKE_OPTIONS = dict(emission="cells", cellsize=None, marginal=True, prior="gauss", noisecorr="measured",
-                         sigma=None, datafrac=0., grow=1., emscale=None, emclump=None, emratio=None, prune=1e-3)
-# the hyperparameters of the prior of the emission, free unless fixed (LIKEOPTS emscale, emclump, emratio)
-HYPER = dict(gauss=("emscale", "emclump", "emratio"), exp=("emscale", "emratio"))
+                         sigma=None, datafrac=0., grow=1., emscale=None, emclump=None, emratio=None, emslope=None,
+                         prune=1e-3)
+# the hyperparameters of the prior of the emission, free unless fixed (LIKEOPTS emscale, emclump, emratio, emslope)
+HYPER = dict(gauss=("emscale", "emclump", "emratio", "emslope"), exp=("emscale", "emratio", "emslope"))
 
 
 def wind_like_option(name, value):
@@ -119,6 +122,14 @@ def wind_like_option(name, value):
             return key, value.strip().lower()
     if key == "emscale" and isinstance(value, str) and value.strip().lower() == "fit":
         return key, "fit"
+    if key == "emslope":                            # (any sign)
+        try:
+            x = float(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"emslope: expected a number, not {value!r}") from None
+        if not np.isfinite(x):
+            raise ValueError(f"emslope: expected a finite number, not {value!r}")
+        return key, x
     try:
         x = float(value)
     except (TypeError, ValueError):
@@ -603,7 +614,7 @@ class BayesianWind(Task):
         R = ini["radii"]
         kw = {k: ini[k] for k in WIND_SCALAR_PARS}
         sh = {k: np.array(ini[k], float) for k in WIND_SHELL_PARS}
-        hyp = dict(sigma=None, emscale=None, emclump=None, emratio=None, emslope=0.)
+        hyp = dict(sigma=None, emscale=None, emclump=None, emratio=None, emslope=None)
         for key, idx in self.freepar_idx.items():
             base, _, suf = key.partition("_")
             if suf.startswith("p"):
@@ -633,7 +644,7 @@ class BayesianWind(Task):
         basis = self.like_kwargs["emission"]
         pts = wm.points(p) if pts is None else pts
         weight = None
-        slope = hyp.get("emslope") or 0.
+        slope = self._slope(hyp)
         if basis == "cone" and slope:
             weight = (np.maximum(pts["r"], 1e-3 * self._r0) / self._r0) ** (-slope)
         B = wm.boxes(p, lim=self._lim, pts=pts, weight=weight)
@@ -693,6 +704,11 @@ class BayesianWind(Task):
             out = (logl, dict(x=x, p=p, B=B, pts=pts, G=G, b=b, mu=mu, hyp=hyp))
         logl = out[0] + self._lognorm
         return (logl, out[1]) if details else logl
+
+    def _slope(self, hyp):
+        """EMSLOPE: free (hyp), fixed (LIKEOPTS emslope) or 0."""
+        s = hyp.get("emslope")
+        return float(s) if s is not None else float(self.like_kwargs.get("emslope") or 0.)
 
     def _kappa(self, hyp, n):
         """The fractional scatter of the prior of each amplitude: EMCLUMP for the cells of the wind, 3 (a broad prior
@@ -820,14 +836,14 @@ class BayesianWind(Task):
             return names
         added = []
         for h in HYPER[lk.get("prior", "gauss")]:
-            if h == "emratio" and lk["emission"] == "spaxel":
-                continue                                # (the uniform cone of each spaxel: no cones apart)
+            if h in ("emratio", "emslope") and lk["emission"] == "spaxel":
+                continue                                # (the uniform cone of each spaxel: no cones, no radial law)
             if h not in names and lk.get(h) is None:
                 names.append(h)
                 added.append(h.upper())
         if added:
             vprint(verbose, f" BAYESIANWIND: {', '.join(added)} (the prior of the emission) added to the free "
-                            "parameters (fix them with LIKEOPTS emscale=, emclump=, emratio=)")
+                            "parameters (fix them with LIKEOPTS emscale=, emclump=, emratio=, emslope=)")
         return names
 
     def _set_sampling_stats(self, samples, weights):
@@ -864,8 +880,9 @@ class BayesianWind(Task):
         p, x, hyp = det["p"], det["x"], det["hyp"]
         pts = det["pts"]
         weight = None
-        if basis == "cone" and (hyp.get("emslope") or 0.):
-            weight = (np.maximum(pts["r"], 1e-3 * self._r0) / self._r0) ** (-hyp["emslope"])
+        slope = self._slope(hyp)
+        if basis == "cone" and slope:
+            weight = (np.maximum(pts["r"], 1e-3 * self._r0) / self._r0) ** (-slope)
         B = self._wm.boxes(p, pts=pts, weight=weight)
         nw = B.n
         m = B.model(x[:nw], shape)

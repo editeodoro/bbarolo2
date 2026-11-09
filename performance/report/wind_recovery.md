@@ -1,6 +1,6 @@
 # BAYESIANWIND: recovery of patchy mock winds
 
-Mocks: performance/wind_mocks.py (GalMod3D, an engine independent of the fit; clumps or a log-normal field in the cones; noise smoothed by the beam, peak S/N 10 unless noted). Fits: BayesianWind with nautilus (300 live points, 2000 effective samples), the initial wind offset from the truth (INC -5, PA +5, OPENANG -5, VWIND -20 km/s, VDISP +5 km/s) and the default priors around it. For each parameter: the mean bias (posterior median - truth), the rms of the pulls (bias / half-width of the 68% interval: 1 if the intervals are right) and the coverage of the 68% intervals over the seeds. EMSCALE, EMCLUMP and EMRATIO have no true value and are left out.
+Mocks: performance/wind_mocks.py (GalMod3D, an engine independent of the fit; clumps or a log-normal field in the cones; noise smoothed by the beam, peak S/N 10 unless noted). Fits: BayesianWind with nautilus (300 live points, 2000 effective samples), the initial wind offset from the truth (INC -5, PA +5, OPENANG -5, VWIND -20 km/s, VDISP +5 km/s) and the default priors around it; EMSLOPE fixed at 0 (the slope of the mocks; fitted by default since) but in the configuration slope-free. For each parameter: the mean bias (posterior median - truth), the rms of the pulls (bias / half-width of the 68% interval: 1 if the intervals are right) and the coverage of the 68% intervals over the seeds. EMSCALE, EMCLUMP and EMRATIO have no true value and are left out.
 
 ## The configurations (emission cells, marginal likelihood: the defaults)
 
@@ -25,7 +25,7 @@ Each entry: bias (rms pull, coverage). All the configurations: vwind: pull rms 1
 | slope | 4 | -48.5 (12.2, 0.00) | +18.8 (11.0, 0.00) |  | -11.1 (7.9, 0.00) | -1.4 (1.3, 0.25) | -6.8 (5.2, 0.25) |
 | slope-free | 4 | -12.7 (2.7, 0.00) | +6.2 (2.9, 0.00) |  | -2.1 (1.9, 0.25) | -0.2 (1.3, 0.75) | -3.1 (2.6, 0.00) |
 
-slope: the clump mock with its emission falling as r^-2 (peak S/N 20), EMSLOPE fixed at 0 (the prior mean uniform in radius); slope-free: EMSLOPE fitted.
+slope: the clump mock with its emission falling as r^-2 (peak S/N 20), EMSLOPE fixed at 0 (the prior mean uniform in radius); slope-free: EMSLOPE fitted (the default since).
 
 ## The descriptions of the emission (option emission, marginal or profile)
 

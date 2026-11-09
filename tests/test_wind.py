@@ -247,8 +247,8 @@ def test_galwind_wtype2():
 
 def test_bayesian_wind_quick(tmp_path):
     """BAYESIANWIND on a tiny mock wind (GalMod3D clumps): the marginal likelihood prefers the true geometry to wider or
-    narrower cones and slower or faster winds, EMSCALE, EMCLUMP and EMRATIO are added to the free parameters, a short
-    sampling runs (dynesty, few live points: only the pipeline, not the accuracy, which is that of
+    narrower cones and slower or faster winds, EMSCALE, EMCLUMP, EMRATIO and EMSLOPE are added to the free parameters,
+    a short sampling runs (dynesty, few live points: only the pipeline, not the accuracy, which is that of
     performance/wind_recovery.py) and the outputs are written: the model, the maps and PV slices of data and model in
     the layout of 3DFIT (maps/, pvs/), and the plots (the scripts in plotscripts/ run)."""
     pytest.importorskip("dynesty")
@@ -261,16 +261,16 @@ def test_bayesian_wind_quick(tmp_path):
                      ntot=2, outfolder=str(tmp_path) + "/")
     f.like_kwargs = dict(f.like_kwargs, cellsize=40.)
     names = f._with_hyper(["vwind_single", "openang"], verbose=False)
-    assert names == ["vwind_single", "openang", "emscale", "emclump", "emratio"]
+    assert names == ["vwind_single", "openang", "emscale", "emclump", "emratio", "emslope"]
     f._setup(names, verbose=False)
-    ll = lambda vw, oa: max(f.log_likelihood([vw, oa, s, k, 1.]) for s in np.exp(np.linspace(-3, 3, 7)) * f._s0
+    ll = lambda vw, oa: max(f.log_likelihood([vw, oa, s, k, 1., 0.]) for s in np.exp(np.linspace(-3, 3, 7)) * f._s0
                             for k in (0.5, 1., 2.))
     best = ll(200., 60.)
     for vw, oa in ((200., 80.), (200., 40.), (140., 60.), (260., 60.)):
         assert ll(vw, oa) < best - 3, (vw, oa)
     f.run(freepar=["vwind_single", "openang"], method="dynesty", sampler_kwargs=dict(nlive=10, seed=1),
           run_kwargs=dict(maxiter=40), like_kwargs=dict(cellsize=40.), verbose=False)
-    assert f.ndim == 5 and np.all(np.isfinite(f.params)) and f.model.shape == hdu.data.shape
+    assert f.ndim == 6 and np.all(np.isfinite(f.params)) and f.model.shape == hdu.data.shape
     files = f.write(plots=1, verbose=False)
     assert all(os.path.isfile(x) for x in files)
     names = {os.path.relpath(x, str(tmp_path)) for x in files}
@@ -355,10 +355,10 @@ def test_bayesian_wind_fixed_disk(tmp_path):
             f.like_kwargs = dict(f.like_kwargs, cellsize=40., noisecorr=1.)
             f._setup(f._with_hyper(["openang"], verbose=False), verbose=False)
             ss = np.exp(np.linspace(-2, 1, 7)) * f._s0
-            res[with_disk] = {oa: max(f.log_likelihood([oa, s, 1., 1.]) for s in ss) for oa in (60., 80.)}
+            res[with_disk] = {oa: max(f.log_likelihood([oa, s, 1., 1., 0.]) for s in ss) for oa in (60., 80.)}
             if with_disk:
-                s = max(ss, key=lambda s: f.log_likelihood([60., s, 1., 1.]))
-                x = f.log_likelihood([60., s, 1., 1.], details=True)[1]["x"][-f._disk.n:]
+                s = max(ss, key=lambda s: f.log_likelihood([60., s, 1., 1., 0.]))
+                x = f.log_likelihood([60., s, 1., 1., 0.], details=True)[1]["x"][-f._disk.n:]
                 assert np.all(np.abs(x / dens - 1) < 0.3), x / dens
     assert res[True][60.] > res[True][80.]
     assert res[False][80.] > res[False][60.]

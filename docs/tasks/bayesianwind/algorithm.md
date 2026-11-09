@@ -52,12 +52,14 @@ by the beam:
   at 85°;
 - it recovered the mean emissivity of the mock and EMCLUMP = 1, the clumpiness of half-empty cells.
 
-EMSCALE, EMCLUMP and EMRATIO are always fitted. Fixed at a rough value they bias the geometry: too low a
+EMSCALE, EMCLUMP, EMRATIO and EMSLOPE are always fitted. Fixed at a rough value they bias the geometry: too low a
 mean favours wide cones (the flux is spread over more cells), too high a mean narrow ones. With one mean for
 both cones, a wind whose receding cone was empty came out with OPENANG 8° too narrow, VDISP 9 km/s too high
 and INC 5° too low: the empty cone penalised every larger cone. With EMRATIO fitted (it went to about 250),
 VDISP and INC were recovered, and OPENANG was 6° low: the 100 clumps of that mock did not reach the walls
-of its single cone (the opening angle of a patchy wind is that of its emission).
+of its single cone (the opening angle of a patchy wind is that of its emission). EMSLOPE is fitted too: with
+an emission falling as r^-2, EMSLOPE fixed at 0 gave VWIND 24% low, VDISP 19 km/s high and INC 11° low; fitted
+(it came out at 1.4–1.8), the biases were those of the mocks of uniform emission.
 
 The emissivities are not forced to be positive: their posterior means can be slightly negative in empty
 cells, within the noise. The alternative prior `exp` (non-negative exponential emissivities, the
@@ -86,7 +88,8 @@ independent of the fit, with 100 Gaussian clumps (as the mocks of MoKA-3D) or a 
 noise smoothed by the beam and a peak S/N of 10 (5 for `lowsnr`). The configurations are filled and hollow cones,
 a single cone, inclinations of 30° and 85°, an accelerating and a rotating wind, and a log-normal field, with 4
 realisations of the patchiness each. `performance/report/wind_recovery.md` has the bias, the pulls and the coverage
-of the 68% intervals of every case. With the defaults:
+of the 68% intervals of every case. With the defaults (but EMSLOPE fixed at 0, the slope of those mocks: it is fitted
+by default since the test of a declining emission):
 
 - PA is recovered with the right errors (rms pull 1.1, coverage 0.67), INC within about 1° (rms pull 1.4), the
   opening angle of a hollow cone and the acceleration and rotation of the wind within a few per cent.
