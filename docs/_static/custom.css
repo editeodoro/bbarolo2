@@ -75,6 +75,16 @@ html[data-theme="dark"] .bd-sidebar-primary {
 .bd-article h1 { color: var(--pst-color-primary); }
 .bd-article h2 { border-bottom: 2px solid var(--pst-color-border); padding-bottom: 0.15rem; }
 
+/* Justified body text, with hyphenation so that narrow columns (cards, list items) get no wide gaps. Only
+   the running text of the pages: not tables, captions, the landing tagline or the parameter descriptions. */
+.bd-article p, .bd-article li > p, .bd-article dd > p {
+  text-align: justify;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+.bd-article .bb-tagline, .bd-article td p, .bd-article th p, .bd-article figcaption p,
+.bd-article .sd-card-title, .bd-article p.rubric { text-align: left; hyphens: manual; }
+
 /* Landing page */
 .bb-hero { padding: 2.5rem 0 1.5rem; }
 .bb-hero h1 { font-size: 2.6rem; margin-bottom: 0.3rem; }
