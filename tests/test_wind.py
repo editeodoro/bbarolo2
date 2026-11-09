@@ -63,8 +63,8 @@ def test_windmodel_vs_galmod3d():
     assert np.sqrt(np.mean((m - g) ** 2)) < 3e-3 * g.max()
     assert np.corrcoef(m.ravel(), g.ravel())[0, 1] > 0.9999
     v = np.arange(m.shape[0])
-    v1 = [np.where(a.sum(0) > 1e-2 * a.sum(0).max(), (a * v[:, None, None]).sum(0) / np.maximum(a.sum(0), 1e-30), np.nan)
-          for a in (m, g)]
+    v1 = [np.where(a.sum(0) > 1e-2 * a.sum(0).max(), (a * v[:, None, None]).sum(0) / np.maximum(a.sum(0), 1e-30),
+                   np.nan) for a in (m, g)]
     ok = np.isfinite(v1[0]) & np.isfinite(v1[1])
     assert np.nanmax(np.abs(v1[0][ok] - v1[1][ok])) < 0.3          # (channels)
 
@@ -247,9 +247,9 @@ def test_galwind_wtype2():
 
 def test_bayesian_wind_quick(tmp_path):
     """BAYESIANWIND on a tiny mock wind (GalMod3D clumps): the marginal likelihood prefers the true geometry to wider or
-    narrower cones and slower or faster winds, EMSCALE and EMCLUMP are added to the free parameters, a short sampling
-    runs (dynesty, few live points: only the pipeline, not the accuracy, which is performance/wind_recovery.py's) and
-    the outputs are written."""
+    narrower cones and slower or faster winds, EMSCALE, EMCLUMP and EMRATIO are added to the free parameters, a short
+    sampling runs (dynesty, few live points: only the pipeline, not the accuracy, which is that of
+    performance/wind_recovery.py) and the outputs are written."""
     pytest.importorskip("dynesty")
     from wind_mocks import mock_wind
     from bbarolo import BayesianWind
@@ -260,25 +260,25 @@ def test_bayesian_wind_quick(tmp_path):
                      ntot=2, outfolder=str(tmp_path) + "/")
     f.like_kwargs = dict(f.like_kwargs, cellsize=40.)
     names = f._with_hyper(["vwind_single", "openang"], verbose=False)
-    assert names == ["vwind_single", "openang", "emscale", "emclump"]
+    assert names == ["vwind_single", "openang", "emscale", "emclump", "emratio"]
     f._setup(names, verbose=False)
-    ll = lambda vw, oa: max(f.log_likelihood([vw, oa, s, k]) for s in np.exp(np.linspace(-3, 3, 7)) * f._s0
+    ll = lambda vw, oa: max(f.log_likelihood([vw, oa, s, k, 1.]) for s in np.exp(np.linspace(-3, 3, 7)) * f._s0
                             for k in (0.5, 1., 2.))
     best = ll(200., 60.)
     for vw, oa in ((200., 80.), (200., 40.), (140., 60.), (260., 60.)):
         assert ll(vw, oa) < best - 3, (vw, oa)
     f.run(freepar=["vwind_single", "openang"], method="dynesty", sampler_kwargs=dict(nlive=10, seed=1),
           run_kwargs=dict(maxiter=40), like_kwargs=dict(cellsize=40.), verbose=False)
-    assert f.ndim == 4 and np.all(np.isfinite(f.params)) and f.model.shape == hdu.data.shape
+    assert f.ndim == 5 and np.all(np.isfinite(f.params)) and f.model.shape == hdu.data.shape
     files = f.write(plots=0, verbose=False)
     assert all(os.path.isfile(x) for x in files)
     assert any(x.endswith("_wind_shells.txt") for x in files) and any(x.endswith("_windmod.fits") for x in files)
 
 
 def test_emission_gauss_exact():
-    """log_marginal_gauss (the default prior of BAYESIANWIND: Gaussian emissivities of mean m and scatter kappa m) is the
-    exact integral (brute force for 1-3 correlated amplitudes), and log_marginal_gauss_diag its diagonal version; the
-    posterior mean is the solution of the regularised normal equations."""
+    """log_marginal_gauss (the default prior of BAYESIANWIND: Gaussian emissivities of mean m and scatter kappa m) is
+    the exact integral (brute force for 1-2 correlated amplitudes, the Gaussian of the data for 6), and
+    log_marginal_gauss_diag its diagonal version; the posterior mean solves the regularised normal equations."""
     from scipy import integrate
     from bbarolo.bayesian.emission import log_marginal_gauss, log_marginal_gauss_diag
     rng = np.random.default_rng(5)
@@ -289,7 +289,8 @@ def test_emission_gauss_exact():
         m = rng.uniform(0.5, 2, n)
         k, c0 = 0.8, 5.
         f = lambda *x: math.exp(-0.5 * c0 + b @ np.array(x) - 0.5 * np.array(x) @ G @ np.array(x)
-                                - 0.5 * np.sum(((np.array(x) - m) / (k * m)) ** 2)) / np.prod(np.sqrt(2 * np.pi) * k * m)
+                                - 0.5 * np.sum(((np.array(x) - m) / (k * m)) ** 2)) \
+            / np.prod(np.sqrt(2 * np.pi) * k * m)
         val = integrate.nquad(f, [[m[i] - 12 * k * m[i], m[i] + 12 * k * m[i]] for i in range(n)],
                               opts={"epsrel": 1e-9})[0]
         r = log_marginal_gauss(G, b, c0, m, k)
@@ -306,5 +307,5 @@ def test_emission_gauss_exact():
     C = s2 * np.eye(30) + A @ np.diag((k * m) ** 2) @ A.T
     assert abs(r["logz"] - 0.5 * 30 * math.log(2 * math.pi * s2) - multivariate_normal(A @ m, C).logpdf(d)) < 1e-8
     g, bb, mm = np.array([2., 3.]), np.array([1., -1.]), np.array([1., 2.])
-    assert abs(log_marginal_gauss_diag(g, bb, 4., mm, 0.7)[0] - log_marginal_gauss(np.diag(g), bb, 4., mm, 0.7)["logz"]) \
-        < 1e-12
+    ld = log_marginal_gauss_diag(g, bb, 4., mm, 0.7)[0]
+    assert abs(ld - log_marginal_gauss(np.diag(g), bb, 4., mm, 0.7)["logz"]) < 1e-12

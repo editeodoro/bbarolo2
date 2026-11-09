@@ -1252,6 +1252,12 @@ for all the rings; `NAME_FUNC` is a function of radius with two parameters: `VRO
 `SIGMA` (the noise per voxel), `FRACERR` (a model error proportional to the model) and `RADMAX` (the
 outer edge of the disk, see `LIKEOPTS`) are single values. Each parameter appears once, and its prior is
 set by `PRIORS`; e.g. `FREE VROT VDISP_SINGLE INC_SINGLE PA_SINGLE`.
+
+BAYESIANWIND (required): `VWIND`, `VDISP` and `VROT` have one value per shell, NAME_SINGLE one for all
+the shells, NAME_FUNC a function of radius (VWIND an arctangent rising to the terminal velocity p1);
+`XPOS`, `YPOS`, `VSYS`, `INC`, `PA`, `OPENANG`, `OPENIN`, `HTOT`, `SIGMA` and the parameters of the prior
+of the emission `EMSCALE`, `EMCLUMP`, `EMRATIO` and `EMSLOPE` are single values; e.g. `FREE VWIND_SINGLE
+VDISP_SINGLE INC PA OPENANG` (EMSCALE, EMCLUMP and EMRATIO are added unless `LIKEOPTS` fixes them).
 """),
     'GUESSTYPE': dict(
         group='Rings',
@@ -1496,6 +1502,9 @@ largest + w:
 The priors follow the rings when they change (in Python, `update`), but those given are kept. An
 estimated INC can be wrong by 10° or more below 45° (see `GUESSTYPE`): for a galaxy seen nearly face-on,
 give `INC` or a wider prior.
+
+BAYESIANWIND: the names of its free parameters (e.g. `OPENANG=(uniform,20,100) VWIND_P1=(uniform,0,800)`);
+the defaults follow the initial wind (see the BAYESIANWIND page).
 """),
     'SAMPLEROPTS': dict(
         group='Bayesian sampling',
@@ -1569,6 +1578,10 @@ run, and `none` gives the default. The options, with their defaults in brackets:
 
 The smoothness penalties of the ring parameters (`lambdas`) are available only in Python
 (`like_kwargs` of `BayesianBBarolo.run`).
+
+BAYESIANWIND has its own options: `emission` (cells, shells, cone, spaxel or voxel), `cellsize`,
+`marginal`, `prior` (gauss or exp), `noisecorr`, `sigma`, `datafrac`, `grow`, `emscale`, `emclump`,
+`emratio` and `prune` (see the BAYESIANWIND page).
 """),
     'HTOT': dict(
         group='Wind',

@@ -22,8 +22,8 @@ In Python: {class}`bbarolo.BayesianWind`. It needs the package of the sampler
 A mock wind with a clumpy emission (performance/wind_mocks.py): cones of 60° full opening angle, 200 arcsec
 long, inclined by 60°, with a radial velocity of 200 km/s and a dispersion of 20 km/s. The initial wind is
 given as for GALWIND, with a guess of the geometry; the free parameters are the velocity of the wind, its
-inclination and its opening angle. `EMSCALE` and `EMCLUMP`, the mean emissivity and the clumpiness of the
-prior of the emission, are fitted with them.
+inclination and its opening angle. `EMSCALE`, `EMCLUMP` and `EMRATIO`, the mean emissivity, the clumpiness
+and the ratio of the two cones of the prior of the emission, are fitted with them.
 
 ::::{tab-set}
 :sync-group: lang
@@ -72,9 +72,10 @@ f.write("output/wind/")
   rising to a terminal velocity; VDISP and VROT: linear);
 - `XPOS`, `YPOS`, `VSYS`, `INC` (0 to 90°: the cone along +z recedes, `PA` sets the side it projects on),
   `PA`, `OPENANG`, `OPENIN`, `HTOT`;
-- `EMSCALE`, `EMCLUMP`, `EMSLOPE`: the prior of the emissivities, its mean, its fractional scatter and its
-  power-law slope in radius. EMSCALE and EMCLUMP are always fitted, added to the free parameters unless
-  `LIKEOPTS` fixes them; EMSLOPE is 0 unless free;
+- `EMSCALE`, `EMCLUMP`, `EMRATIO`, `EMSLOPE`: the prior of the emissivities, its mean (in the receding
+  cone), its fractional scatter, the ratio of the mean of the approaching cone to that of the receding one
+  (the far cone is often extincted), and its power-law slope in radius. EMSCALE, EMCLUMP and EMRATIO are
+  always fitted, added to the free parameters unless `LIKEOPTS` fixes them; EMSLOPE is 0 unless free;
 - `SIGMA`: the noise, as BAYESIAN3DFIT.
 
 The default priors follow the initial wind (INC ± 15°, PA ± 20°, OPENANG ± 30°, VWIND 0 to twice the
@@ -90,7 +91,7 @@ initial value, ...); `PRIORS` changes them, e.g. `PRIORS OPENANG=(uniform,20,100
 | `cellsize` | the size of the cells (arcsec; default the beam FWHM) |
 | `marginal` | `true` (default): the likelihood marginalised over the emission; `false`: its maximum (the profile likelihood) |
 | `prior` | `gauss` (default: Gaussian emissivities, exact marginal likelihood) or `exp` (non-negative exponential emissivities, approximate) |
-| `emscale`, `emclump` | fixed values of EMSCALE and EMCLUMP (default: fitted) |
+| `emscale`, `emclump`, `emratio` | fixed values of EMSCALE, EMCLUMP and EMRATIO (default: fitted) |
 | `noisecorr`, `sigma` | the correlation and the value of the noise, as BAYESIAN3DFIT |
 | `datafrac` | a model error proportional to the data (default 0) |
 | `grow` | the region of the likelihood: the projected cones of the priors grown by `grow` beams (default 1) |
@@ -98,6 +99,8 @@ initial value, ...); `PRIORS` changes them, e.g. `PRIORS OPENANG=(uniform,20,100
 
 A fixed disk can be added with `DISKRINGS` (a rings file of 3DFIT or BAYESIAN3DFIT): its geometry and
 kinematics are those of the file, and the densities of its rings are fitted with the emission of the wind.
+On a mock wind on top of a rotating disk, the fit with the disk found the true opening angle and the
+densities of the rings within 25%; without it, the cones widened to absorb the disk.
 
 ## Outputs
 

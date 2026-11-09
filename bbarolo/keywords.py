@@ -285,8 +285,8 @@ KEYWORDS = [
     K("EXCLWIND", "str", ["exclude_windows"], ("CONTSUB",), "Channel window(s) to exclude for continuum fit"),
     K("CONTORDER", "int", ["cont_order"], ("CONTSUB",), "Order of polynomial for continuum fit"),
     K("MAKEMASK", "flag", ["makeMask"], ("MAKEMASK",), "Writing the mask to a fitsfile", flag=True),
-    K("MASK", "str", ["MaskType"], ("MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "BAYESIANWIND", "GALMOD", "SPACEPAR", "2DFIT", "ELLPROF",
-                                    "REND3D") + MAPSM,
+    K("MASK", "str", ["MaskType"], ("MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "BAYESIANWIND", "GALMOD", "SPACEPAR",
+                                    "2DFIT", "ELLPROF", "REND3D") + MAPSM,
       "Type of mask: SMOOTH, SEARCH, SMOOTH&SEARCH, THRESHOLD, NEGATIVE, NONE or FILE(mask.fits)"),
     K("BLANKCUT", "float", ["blankCut"], ("MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT",
                                           "ELLPROF", "REND3D") + MAPSM,
@@ -364,7 +364,8 @@ KEYWORDS = [
 
     # ---------------------------------------------------------------- rings (GALMOD/3DFIT/GALWIND)
     K("NRADII", "int", _g(G2, "NRADII"), RING, "Number of radii"),
-    K("RADII", "str", _g(G3, "RADII"), RING + WIND, "Radii for rings (arcsec): list of values, Rmin~Rmax:step or file()"),
+    K("RADII", "str", _g(G3, "RADII"), RING + WIND,
+      "Radii for rings (arcsec): list of values, Rmin~Rmax:step or file()"),
     K("RADSEP", "float", _g(G2, "RADSEP"), RING, "Separation between radii (arcsec)"),
     K("VROT", "str", _g(G3, "VROT"), RING + WIND, "Rotation velocity (km/s)"),
     K("VRAD", "str", _g(G2, "VRAD"), RING, "Radial velocity (km/s)"),
@@ -582,8 +583,8 @@ def unknown_message(name):
 # --------------------------------------------------------------------------
 # Help
 # --------------------------------------------------------------------------
-TASK_NAMES = ("3DFIT", "BAYESIAN3DFIT", "BAYESIANWIND", "GALMOD", "GALWIND", "SEARCH", "2DFIT", "ELLPROF", "SMOOTH", "SMOOTHSPEC",
-              "MAPS", "PVSLICE", "SPACEPAR", "REND3D", "CONTSUB", "STATS", "MAKEMASK", "SLITFIT")
+TASK_NAMES = ("3DFIT", "BAYESIAN3DFIT", "BAYESIANWIND", "GALMOD", "GALWIND", "SEARCH", "2DFIT", "ELLPROF", "SMOOTH",
+              "SMOOTHSPEC", "MAPS", "PVSLICE", "SPACEPAR", "REND3D", "CONTSUB", "STATS", "MAKEMASK", "SLITFIT")
 _CLASS_TASK = {"fitmod3d": "3DFIT", "galmod": "GALMOD", "galwind": "GALWIND", "search": "SEARCH",
                "fitmod2d": "2DFIT", "ellprof": "ELLPROF", "smooth": "SMOOTH", "smoothspec": "SMOOTHSPEC",
                "maps": "MAPS", "pvslice": "PVSLICE", "spacepar": "SPACEPAR", "rend3d": "REND3D",

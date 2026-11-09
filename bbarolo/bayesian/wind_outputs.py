@@ -86,8 +86,9 @@ def write_outputs(f, outfolder=None, plots=None, verbose=True):
                       "EMISSIVITY\n")
             for k in range(cells.ncell):
                 cc = cells.cells[k]
-                out.write(f" {int(cc[0]):3d} {cc[1]:10.3f} {cc[2]:10.3f} {np.degrees(cc[3]):8.3f} {np.degrees(cc[4]):8.3f}"
-                          f" {np.degrees(cc[5]):8.3f} {np.degrees(cc[6]):8.3f} {vol[k]:12.5g} {x[k]:12.5g}\n")
+                out.write(f" {int(cc[0]):3d} {cc[1]:10.3f} {cc[2]:10.3f} {np.degrees(cc[3]):8.3f} "
+                          f"{np.degrees(cc[4]):8.3f} {np.degrees(cc[5]):8.3f} {np.degrees(cc[6]):8.3f} "
+                          f"{vol[k]:12.5g} {x[k]:12.5g}\n")
         files.append(fn)
     # the model, its maps and the slices
     mod = Cube.fromArray(np.asarray(f.model, np.float32), h.copy(), c.pars())

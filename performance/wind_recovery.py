@@ -51,7 +51,7 @@ BASES = {"cells": dict(emission="cells"), "cells-profile": dict(emission="cells"
 OFFSETS = dict(inc=-5., pa=5., openang=-5., openin=5., vwind=-20., vdisp=5., vrot=10.)
 
 
-def one_fit(config, seed, basis, threads, nlive, out):
+def one_fit(config, seed, basis, threads, nlive, out, neff=2000):
     from wind_mocks import mock_wind
     from bbarolo import BayesianWind
     cfg = CONFIGS[config]
@@ -71,10 +71,11 @@ def one_fit(config, seed, basis, threads, nlive, out):
     ini["inc"] = min(max(ini["inc"], 1.), 89.)
     radii = tr["radii"]
     f = BayesianWind(hdu, radii=" ".join(str(r) for r in radii), vwind=" ".join(f"{v:g}" for v in ini["vwind"]),
-                     **{k: v for k, v in ini.items() if k != "vwind"}, verbose=False, outfolder=os.path.join(HERE, "results", "wind_tmp") + "/")
+                     **{k: v for k, v in ini.items() if k != "vwind"}, verbose=False,
+                     outfolder=os.path.join(HERE, "results", "wind_tmp") + "/")
     t0 = time.time()
     f.run(freepar=cfg["free"], threads=threads, like_kwargs=BASES[basis], sampler_kwargs=dict(n_live=nlive, seed=seed),
-          run_kwargs=dict(verbose=False), verbose=False)
+          run_kwargs=dict(verbose=False, n_eff=neff), verbose=False)
     res = dict(config=config, seed=seed, basis=basis, time=time.time() - t0, ess=f.ess, ndim=f.ndim,
                names=f.freepar_names, quantiles=f.quantiles.tolist(), snr=tr["snr"], kind=tr["kind"],
                truth={k: (np.asarray(v).tolist() if np.ndim(v) else v) for k, v in tr.items()
@@ -148,6 +149,7 @@ def main():
     ap.add_argument("--jobs", type=int, default=4, help="fits at the same time")
     ap.add_argument("--threads", type=int, default=8, help="processes of each fit")
     ap.add_argument("--nlive", type=int, default=500)
+    ap.add_argument("--neff", type=int, default=2000, help="effective sample size at which nautilus stops")
     ap.add_argument("--out", default=RESULTS)
     ap.add_argument("--quick", action="store_true", help="2 configurations x 2 seeds, n_live 200")
     ap.add_argument("--report", action="store_true", help="only write the report of the results")
@@ -157,7 +159,7 @@ def main():
         report(a.out)
         return
     if a.one:
-        one_fit(a.one[0], int(a.one[1]), a.one[2], a.threads, a.nlive, a.out)
+        one_fit(a.one[0], int(a.one[1]), a.one[2], a.threads, a.nlive, a.out, a.neff)
         return
     if a.quick:
         a.configs, a.seeds, a.nlive = "filled,hollow", 2, 200
@@ -178,7 +180,7 @@ def main():
         while todo and len(running) < a.jobs:
             c, s, b = todo.pop(0)
             cmd = [sys.executable, os.path.abspath(__file__), "--one", c, str(s), b, "--threads", str(a.threads),
-                   "--nlive", str(a.nlive), "--out", a.out]
+                   "--nlive", str(a.nlive), "--neff", str(a.neff), "--out", a.out]
             running.append(((c, s, b), subprocess.Popen(cmd, env=env)))
         time.sleep(2)
         for job in list(running):

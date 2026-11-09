@@ -304,7 +304,8 @@ def _raw_boxes(qoff, gx, gy, vel, sig, w, lim, chmin, axtyp, velsys, lfreq0, crv
             bx0 = bx1 = lim[0]
             by0 = by1 = lim[2]
             bk0 = bk1 = lim[4]
-        rboxes[k, 0], rboxes[k, 1], rboxes[k, 2], rboxes[k, 3], rboxes[k, 4], rboxes[k, 5] = bx0, bx1, by0, by1, bk0, bk1
+        rboxes[k, 0], rboxes[k, 1], rboxes[k, 2] = bx0, bx1, by0
+        rboxes[k, 3], rboxes[k, 4], rboxes[k, 5] = by1, bk0, bk1
 
 
 @nb.njit(cache=True, nogil=True)
@@ -360,7 +361,8 @@ def _convolve_boxes(rbuf, roffs, rboxes, kern, kx, ky, separable, buf, offs, box
     the boxes of buf (the boxes of rbuf grown by the kernel and clipped)."""
     hy, hx = kern.shape[0] // 2, kern.shape[1] // 2
     for k in range(rboxes.shape[0]):
-        rx0, rx1, ry0, ry1, rk0, rk1 = rboxes[k, 0], rboxes[k, 1], rboxes[k, 2], rboxes[k, 3], rboxes[k, 4], rboxes[k, 5]
+        rx0, rx1, ry0 = rboxes[k, 0], rboxes[k, 1], rboxes[k, 2]
+        ry1, rk0, rk1 = rboxes[k, 3], rboxes[k, 4], rboxes[k, 5]
         x0, x1, y0, y1, k0, k1 = boxes[k, 0], boxes[k, 1], boxes[k, 2], boxes[k, 3], boxes[k, 4], boxes[k, 5]
         if rx1 <= rx0 or ry1 <= ry0 or rk1 <= rk0 or x1 <= x0 or y1 <= y0 or k1 <= k0:
             continue

@@ -36,8 +36,8 @@ BAYESIANWIND keeps the idea that the data, not a law, set the emission, within a
 
 ## The marginal likelihood
 
-The emissivities have independent Gaussian priors: mean `EMSCALE` (times (r/r0)^−`EMSLOPE`) and dispersion
-`EMCLUMP` times the mean. EMCLUMP is the clumpiness: for clumps of one brightness filling a fraction f of the
+The emissivities have independent Gaussian priors: mean `EMSCALE` (times (r/r0)^−`EMSLOPE`, and times
+`EMRATIO` in the approaching cone) and dispersion `EMCLUMP` times the mean. EMCLUMP is the clumpiness: for clumps of one brightness filling a fraction f of the
 cells, EMCLUMP² = (1 − f)/f. The likelihood of the other parameters is the integral over the emissivities.
 For a Gaussian prior and a model linear in them, this is a Gaussian integral, exact with one Cholesky
 factorisation of G + diag(1/(EMCLUMP·mean)²).
@@ -52,8 +52,12 @@ by the beam:
   at 85°;
 - it recovered the mean emissivity of the mock and EMCLUMP = 1, the clumpiness of half-empty cells.
 
-EMSCALE and EMCLUMP are always fitted. Fixed at a rough value they bias the geometry: too low a mean favours
-wide cones (the flux is spread over more cells), too high a mean narrow ones.
+EMSCALE, EMCLUMP and EMRATIO are always fitted. Fixed at a rough value they bias the geometry: too low a
+mean favours wide cones (the flux is spread over more cells), too high a mean narrow ones. With one mean for
+both cones, a wind whose receding cone was empty came out with OPENANG 8° too narrow, VDISP 9 km/s too high
+and INC 5° too low: the empty cone penalised every larger cone. With EMRATIO fitted (it went to about 250),
+VDISP and INC were recovered, and OPENANG was 6° low: the 100 clumps of that mock did not reach the walls
+of its single cone (the opening angle of a patchy wind is that of its emission).
 
 The emissivities are not forced to be positive: their posterior means can be slightly negative in empty
 cells, within the noise. The alternative prior `exp` (non-negative exponential emissivities, the
