@@ -413,9 +413,10 @@ KEYWORDS = [
     K("TOL", "float", ["gf.TOL"], ("3DFIT",), "Minimization tolerance"),
     K("FREE", "str", ["gf.FREE"], ("3DFIT", "BAYESIAN3DFIT", "BAYESIANWIND", "2DFIT"),
       "Free parameters, case-insensitive. 3DFIT and 2DFIT: any of VROT, VDISP, DENS, Z0, INC, PA, XPOS, YPOS, "
-      "VSYS, VRAD, or ALL. BAYESIAN3DFIT (required): a name alone has one value per ring, NAME_SINGLE one "
+      "VSYS, VRAD, or ALL. BAYESIAN3DFIT: a name alone has one value per ring, NAME_SINGLE one "
       "value for all the rings, NAME_FUNC a function of radius (VROT, VDISP, DENS), plus SIGMA, FRACERR and "
-      "RADMAX"),
+      "RADMAX (default: VROT VDISP XPOS_SINGLE YPOS_SINGLE VSYS_SINGLE INC_SINGLE PA_SINGLE Z0_SINGLE RADMAX "
+      "FRACERR)"),
     K("GUESSTYPE", "ustr", ["gf.GUESSTYPE"], ("3DFIT", "BAYESIAN3DFIT", "2DFIT", "SPACEPAR"),
       "Initial estimates of the parameters that are not given: FIT (a beam-convolved disk fitted to the "
       "total map and a 2D tilted-ring fit of the velocity field), ELLIPSE (the C++ algorithm, corrected) or "
@@ -620,7 +621,9 @@ def _task_of(name):
 
 
 # Defaults that differ for a task (applied by its class, e.g. Bayesian3DFIT._all_params)
-TASK_DEFAULTS = {"BAYESIAN3DFIT": {"GALMODTYPE": "ANALYTIC"}}
+# FREE of BAYESIAN3DFIT when not given (the FREE of Param is that of 3DFIT)
+BAYES_DEFAULT_FREE = "VROT VDISP XPOS_SINGLE YPOS_SINGLE VSYS_SINGLE INC_SINGLE PA_SINGLE Z0_SINGLE RADMAX FRACERR"
+TASK_DEFAULTS = {"BAYESIAN3DFIT": {"GALMODTYPE": "ANALYTIC", "FREE": BAYES_DEFAULT_FREE}}
 
 
 def describe(kw, default=None):

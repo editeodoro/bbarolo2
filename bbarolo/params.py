@@ -544,10 +544,6 @@ class Param:
                 out(f"BAYESIAN3DFIT error: SAMPLER {gf.SAMPLER} needs the Python package {gf.SAMPLER.lower()} "
                     f"(pip install {gf.SAMPLER.lower()}).")
                 good = False
-            if "FREE" not in getattr(self, "_given", {}):
-                out("BAYESIAN3DFIT error: FREE is not an optional parameter. Give the free parameters, e.g. "
-                    "FREE VROT VDISP_SINGLE INC_SINGLE (see bbarolo.help('FREE')).")
-                good = False
             for key, check in (("FREE", bayes_freepar), ("PRIORS", bayes_priors), ("SAMPLEROPTS", bayes_options),
                                ("RUNOPTS", bayes_options), ("LIKEOPTS", bayes_likeopts)):
                 if key == "FREE" and "FREE" not in getattr(self, "_given", {}):
@@ -1521,7 +1517,7 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
             R("[DVDZ]", "   Vertical gradient of rotation velocity (km/s/arcs)", gm.DVDZ)
             R("[ZCYL]", "   Height where the gradient begins (arcs)", gm.ZCYL)
         if isGalfit or isBayes:
-            free = gf.FREE if (isGalfit or "FREE" in getattr(p, "_given", {})) else "(required)"
+            free = gf.FREE if (isGalfit or "FREE" in getattr(p, "_given", {})) else _kw.BAYES_DEFAULT_FREE
             R("[FREE]", "   Parameters to be minimized", free)
         R("[MASK]", "   Type of mask", p.MaskType)
         if isGalfit or isGalmod or isSpacepar: R("[NORM]", "   Type of normalization", gf.NORM)

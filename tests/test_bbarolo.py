@@ -870,16 +870,17 @@ def test_bayesian_keywords(capsys):
     s = str(p)
     assert "[BAYESIAN3DFIT]  =  true" in s and "inc=(uniform,40,40)" in s and "[3DFIT]" not in s
     assert "[NORM]" not in s and "[NOISERMS]" not in s and "VROT INC_SINGLE" in s
-    # FREE is required (in any case)
+    # FREE is optional: the default of BAYESIAN3DFIT (not that of 3DFIT)
     p.set("free", None)
     assert "FREE" not in p._given and p.gf.FREE == "VROT VDISP INC PA"
-    assert not p.checkPars() and "FREE is not an optional parameter" in capsys.readouterr().out
+    assert p.checkPars() and "FREE" not in capsys.readouterr().out
     p.set("free", "vrot pa_single Inc_Single")
     assert p.checkPars()
     capsys.readouterr()
     st = io.StringIO()
     Param().printDefaults(st, "BAYESIAN3DFIT")
-    assert "[FREE]  =  (required)" in st.getvalue() and "[NORM]" not in st.getvalue()
+    assert ("[FREE]  =  VROT VDISP XPOS_SINGLE YPOS_SINGLE VSYS_SINGLE INC_SINGLE PA_SINGLE Z0_SINGLE RADMAX "
+            "FRACERR" in st.getvalue() and "[NORM]" not in st.getvalue())
     p = Param()
     p.readParamString("FITSFILE m.fits\nBAYESIAN3DFIT true\nSAMPLER emcee\nFREE VROT INC_FUNC\n"
                       "PRIORS vrot=(xx,1)\nSAMPLEROPTS nlive\nLIKEOPTS factor=1\n")
@@ -986,7 +987,7 @@ def test_bayesian_task(tmp_path, capsys):
     h.prior_distr['vrot'] = stats.norm(150., 5.)
     h._setup(['vrot_single'])
     assert h.prior_distr['vrot'].dist.name == 'norm'
-    # the free parameters are required; names in any case (PA is phi); run_geometry's default
+    # the free parameters: run(freepar), FREE, or the default; names in any case (PA is phi); run_geometry's default
     seen = []
 
     def fake_setup(freepar, **kwargs):
@@ -1003,9 +1004,11 @@ def test_bayesian_task(tmp_path, capsys):
     assert seen == [['vrot_single', 'vdisp_single', 'phi'], ['vrot_single', 'inc_single'],
                     ['vrot_single', 'vdisp_single'], ['xpos_single', 'ypos_single', 'inc_single', 'phi_single'],
                     ['inc_single', 'phi_single']]
-    h.update(free=None)
-    with pytest.raises(ValueError, match="give the free parameters"):
+    h.update(free=None)                         # the default FREE
+    with pytest.raises(RuntimeError):
         h.run()
+    assert seen[-1] == ['vrot', 'vdisp', 'xpos_single', 'ypos_single', 'vsys_single', 'inc_single', 'phi_single',
+                        'z0_single', 'radmax', 'fracerr']
 
 
 # --------------------------------------------------------------------------

@@ -1251,13 +1251,16 @@ velocity field.
 2DFIT: `VROT`, `INC`, `PA`, `XPOS`, `YPOS`, `VSYS`, `VRAD` (or `VEXP`) or `ALL`, the others are ignored;
 with `SIDE` `A` or `R` the centre and VSYS stay fixed.
 
-BAYESIAN3DFIT requires FREE. A ring parameter (`VROT`, `VDISP`, `DENS`, `Z0`, `INC`, `PA`, `XPOS`,
+BAYESIAN3DFIT: a ring parameter (`VROT`, `VDISP`, `DENS`, `Z0`, `INC`, `PA`, `XPOS`,
 `YPOS`, `VSYS`, `VRAD`, `VVERT`, `DVDZ`, `ZCYL`) has one value per ring; `NAME_SINGLE` has one value
 for all the rings; `NAME_FUNC` is a function of radius with two parameters: `VROT_FUNC` an arctangent,
 2/π·p1·arctan(R/p2), `VDISP_FUNC` a line, p1 + p2·R, `DENS_FUNC` an exponential, p1·exp(−R/p2).
 `SIGMA` (the noise per voxel), `FRACERR` (a model error proportional to the model) and `RADMAX` (the
 outer edge of the disk, see `LIKEOPTS`) are single values. Each parameter appears once, and its prior is
-set by `PRIORS`; e.g. `FREE VROT VDISP_SINGLE INC_SINGLE PA_SINGLE`.
+set by `PRIORS`; e.g. `FREE VROT VDISP_SINGLE INC_SINGLE PA_SINGLE`. The default frees the rotation
+velocity and the dispersion of each ring, one centre, systemic velocity, inclination, position angle and
+scale height for all the rings, the outer edge of the disk and the fractional model error:
+`VROT VDISP XPOS_SINGLE YPOS_SINGLE VSYS_SINGLE INC_SINGLE PA_SINGLE Z0_SINGLE RADMAX FRACERR`.
 
 BAYESIANWIND (required): `VWIND`, `VDISP` and `VROT` have one value per shell, NAME_SINGLE one for all
 the shells, NAME_FUNC a function of radius (VWIND an arctangent rising to the terminal velocity p1);

@@ -38,8 +38,8 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
     VROT: see _set_default_priors and the keyword PRIORS).
 
     The parameters of the BAYESIAN3DFIT task of parameter files are accepted too: FREE (the
-    free parameters, e.g. 'VROT VDISP_SINGLE INC_SINGLE'; run() needs them, as FREE or as
-    freepar), SAMPLER, SAMPLEROPTS and RUNOPTS are the defaults of run(); PRIORS sets entries
+    free parameters, e.g. 'VROT VDISP_SINGLE INC_SINGLE'; default
+    keywords.BAYES_DEFAULT_FREE, used when neither FREE nor freepar is given), SAMPLER, SAMPLEROPTS and RUNOPTS are the defaults of run(); PRIORS sets entries
     of priors (e.g. 'VROT=(uniform,loc=0,scale=300)'). Bayesian3DFIT.from_parfile(file)
     reads a parameter file.
 
@@ -558,7 +558,9 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         Args:
           threads (int):        number of processes for the sampler (default: THREADS if it was
                                 given, otherwise 1 = serial)
-          freepar (list):       the free parameters (required, here or as the parameter FREE), e.g.
+          freepar (list):       the free parameters (here or as the parameter FREE; default
+                                'VROT VDISP XPOS_SINGLE YPOS_SINGLE VSYS_SINGLE INC_SINGLE PA_SINGLE
+                                Z0_SINGLE RADMAX FRACERR', keywords.BAYES_DEFAULT_FREE), e.g.
                                 ['vrot','vdisp_single','inc_single','sigma'], or a string as FREE in
                                 a parameter file ('VROT VDISP_SINGLE INC_SINGLE SIGMA'). Names are
                                 case-insensitive (PA is phi, DISP is vdisp)
@@ -599,8 +601,8 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         if freepar is None:
             freepar = dflt.get('FREE')
             if freepar is None:
-                raise ValueError("Bayesian3DFIT.run: give the free parameters, as run(freepar=[...]) or as the "
-                                 "parameter FREE (e.g. free='VROT VDISP_SINGLE INC_SINGLE').")
+                from ..keywords import BAYES_DEFAULT_FREE
+                freepar = self._keyword_option('FREE', BAYES_DEFAULT_FREE)
         elif isinstance(freepar, str):
             freepar = self._keyword_option('FREE', freepar)
         else:

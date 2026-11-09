@@ -539,6 +539,9 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **FREE of BAYESIAN3DFIT has a default** and is no longer required: `VROT VDISP XPOS_SINGLE YPOS_SINGLE
+  VSYS_SINGLE INC_SINGLE PA_SINGLE Z0_SINGLE RADMAX FRACERR`, in parameter files and in `Bayesian3DFIT.run()`
+  without `freepar` nor FREE (`keywords.BAYES_DEFAULT_FREE`). BAYESIANWIND still requires FREE.
 - **`BayesianBBarolo` is now `Bayesian3DFIT`**, the name of its task (BAYESIAN3DFIT), as `BayesianWind` is
   that of BAYESIANWIND.
 - **BEAM replaces BMAJ, BMIN, BPA, BEAMFWHM, OBMAJ, OBMIN and OBPA**, which are now errors that name it.

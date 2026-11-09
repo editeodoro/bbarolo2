@@ -17,7 +17,8 @@ keywords (radii or nradii/radsep, xpos, ypos, vsys, vrot, vdisp, inc, pa, z0, vr
     >>> f.print_stats(); f.write_bestmodel(); f.corner_plot()
 
 Parameter files (``BBarolo -p``, ``bbarolo.run``): the task BAYESIAN3DFIT, with the free
-parameters in FREE (required; e.g. VROT VDISP PA_SINGLE INC_SINGLE RADMAX), the priors in PRIORS (e.g.
+parameters in FREE (e.g. VROT VDISP PA_SINGLE INC_SINGLE RADMAX; by default VROT VDISP and the
+geometry, Z0, RADMAX and FRACERR), the priors in PRIORS (e.g.
 VROT=(uniform,loc=0,scale=250) INC=(norm,60,5)), and SAMPLER, SAMPLEROPTS, RUNOPTS and
 THREADS; it samples, writes the outputs and the samples, prints the statistics (VERBOSE)
 and makes the plots (PLOTS): see run_task and Bayesian3DFIT.write. These keywords are accepted by Bayesian3DFIT

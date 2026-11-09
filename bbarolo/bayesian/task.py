@@ -30,7 +30,8 @@ def _task_fitter(c, par):
 def run_task(c, par):
     """ The BAYESIAN3DFIT task: samples the posterior with the parameters of par (a checked
     Param; its values as given, see Param._given) on the cube c read by BBarolo (with the
-    changes of the tasks run before it, e.g. CONTSUB). The free parameters are FREE (required),
+    changes of the tasks run before it, e.g. CONTSUB). The free parameters are FREE (default
+    keywords.BAYES_DEFAULT_FREE),
     the sampler SAMPLER, with SAMPLEROPTS and RUNOPTS, and the priors PRIORS (the others: the
     defaults of Bayesian3DFIT); the sampler runs with THREADS processes. With VERBOSE it prints
     the statistics of the posterior (print_stats). Nothing is written (see write_task). Returns the
@@ -44,7 +45,8 @@ def run_task(c, par):
     run_kwargs = {}
     if method == 'dynesty' and not p.showbar and 'print_progress' not in bayes_options(gf.RUNOPTS):
         run_kwargs['print_progress'] = False      # e.g. LOGFILE: no progress line
-    f.run(freepar=gf.FREE, method=method, threads=p.threads, verbose=verbose, run_kwargs=run_kwargs)
+    free = gf.FREE if "FREE" in getattr(par, "_given", {}) else None     # None: the default FREE
+    f.run(freepar=free, method=method, threads=p.threads, verbose=verbose, run_kwargs=run_kwargs)
     if verbose:
         f.print_stats()
     return f
