@@ -9,10 +9,22 @@ The parameters of GALWIND: the keywords of the parameter files (case-insensitive
 :group: Task
 ```
 
+## Rings
+
+```{bbparams} GALWIND
+:group: Rings
+```
+
 ## Model
 
 ```{bbparams} GALWIND
 :group: Model
+```
+
+## Spectral lines
+
+```{bbparams} GALWIND
+:group: Spectral lines
 ```
 
 ## Wind
