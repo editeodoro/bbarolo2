@@ -13,7 +13,7 @@ This example puts an outflow in {doc}`NGC 2403 <../../getting-started/example-da
 model: two cones with a full opening angle of 60°, which reach 600 arcsec from the centre, and a gas
 velocity of 150 km/s and dispersion of 30 km/s. The disk has the centre, the systemic velocity, the
 inclination and the position angle of the galaxy. The cube gives the grid and the beam. The default model
-is a stack of 25 cylinders in each cone ({ref}`NTOT <par-galwind-ntot>`, {ref}`WTYPE <par-galwind-wtype>`
+is a stack of 25 cylinders in each cone ({ref}`NLAYERS <par-galwind-nlayers>`, {ref}`WTYPE <par-galwind-wtype>`
 0), all with the density {ref}`DENS <par-galwind-dens>`, a flux per unit area in the units of the cube
 times km/s per arcsec² (its value here is arbitrary).
 
@@ -33,7 +33,7 @@ INC         60
 PA          123.7
 VWIND       150
 OPENANG     60
-HTOT        600
+CONELEN     600
 VDISP       30
 DENS        0.001
 ```
@@ -50,7 +50,7 @@ BBarolo -p ngc2403_galwind.par
 from bbarolo import GalWind
 
 w = GalWind("ngc2403.fits", xpos=77, ypos=77, vsys=132.8, inc=60, pa=123.7, vwind=150,
-            openang=60, htot=600, vdisp=30, dens=0.001)
+            openang=60, conelen=600, vdisp=30, dens=0.001)
 res = w.run(threads=4)
 
 res.model                 # the model cube: an astropy PrimaryHDU

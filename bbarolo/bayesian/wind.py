@@ -3,7 +3,7 @@ BayesianWind (the task BAYESIANWIND): fit a bi-conical wind to a datacube by sam
 geometry and kinematics with nested sampling (dynesty or nautilus), the emission of the wind marginalised.
 
 The model is that of GALWIND (bbarolo.windmodel: the cones along the rotation axis of a disk of inclination INC and
-position angle PA, opening angles OPENIN to OPENANG, out to HTOT, a radial velocity VWIND, a dispersion VDISP and a
+position angle PA, opening angles OPENIN to OPENANG, out to CONELEN, a radial velocity VWIND, a dispersion VDISP and a
 rotation VROT around the axis, per shell), and its emission is not assumed: it is a set of emissivities on cells of
 the cones (shells x polar bins x azimuthal sectors, each cone its own; option emission, see below), linear in the
 model, solved at every evaluation of the likelihood and marginalised, with Gaussian priors of mean
@@ -14,18 +14,18 @@ profile likelihood (marginal=False) does not: with correlated noise the profile 
 of opening angle of a patchy mock, the marginal one peaked at the truth.
 
     >>> from bbarolo import BayesianWind
-    >>> f = BayesianWind("wind.fits", xpos=31.5, ypos=31.5, vsys=0, inc=60, pa=30, openang=60, htot=200,
+    >>> f = BayesianWind("wind.fits", xpos=31.5, ypos=31.5, vsys=0, inc=60, pa=30, openang=60, conelen=200,
     ...                  vwind=200, vdisp=20, outfolder="output/wind")
     >>> f.run(freepar=['vwind_single', 'vdisp_single', 'inc', 'pa', 'openang', 'emscale'], threads=8)
     >>> f.print_stats(); f.write()
 
 Parameter files: the task BAYESIANWIND, with the initial wind as for GALWIND (XPOS, YPOS, VSYS, INC, PA, OPENANG,
-OPENIN, HTOT, VWIND, VDISP, VROT; the shells from RADII or NTOT, by default one per beam), the free parameters in FREE
-(e.g. VWIND_SINGLE VDISP_SINGLE INC PA OPENANG EMSCALE), the priors in PRIORS, the sampler in SAMPLER, SAMPLEROPTS,
+OPENIN, CONELEN, VWIND, VDISP, VROT; the shells from RADII or NLAYERS, by default one per beam), the free parameters
+in FREE (e.g. VWIND_SINGLE VDISP_SINGLE INC PA OPENANG EMSCALE), the priors in PRIORS, the sampler in SAMPLER, SAMPLEROPTS,
 RUNOPTS and THREADS, the options of the likelihood in LIKEOPTS, and an optional fixed disk in DISKRINGS.
 
 Free parameters: VWIND, VDISP, VROT (one value per shell, NAME_SINGLE one value for all, NAME_FUNC a function of
-radius, see funcs); XPOS, YPOS, VSYS, INC, PA, OPENANG, OPENIN, HTOT (single values); SIGMA (the noise); EMSCALE,
+radius, see funcs); XPOS, YPOS, VSYS, INC, PA, OPENANG, OPENIN, CONELEN (single values); SIGMA (the noise); EMSCALE,
 EMCLUMP, EMRATIO and EMSLOPE (the prior of the emissivities: its mean at r0, the median radius of the cells, in the
 receding cone (+z), its fractional scatter, the ratio of the mean of the approaching cone to that of the receding one,
 and its power-law slope in radius). They are always fitted, added to the free parameters unless fixed with the
@@ -76,7 +76,7 @@ from .common import vprint, get_distribution, SIGMA_QUANTILES
 from .sampling import sample, sampler_options
 
 WIND_SHELL_PARS = ("vwind", "vdisp", "vrot")
-WIND_SCALAR_PARS = ("xpos", "ypos", "vsys", "inc", "pa", "openang", "openin", "htot")
+WIND_SCALAR_PARS = ("xpos", "ypos", "vsys", "inc", "pa", "openang", "openin", "conelen")
 WIND_OTHER_PARS = ("sigma", "emscale", "emclump", "emratio", "emslope")
 WIND_FUNC_PARS = WIND_SHELL_PARS
 _WIND_ALIASES = {"phi": "pa", "disp": "vdisp"}
@@ -180,9 +180,9 @@ class BayesianWind(Task):
     """Fit a bi-conical wind to a datacube in a Bayesian framework (see the module documentation).
 
     BayesianWind(cube, **params): the cube (FITS file, HDU or (data, header)) and any BBarolo parameter: the initial
-    wind as for GALWIND (XPOS, YPOS, VSYS, INC, PA, OPENANG, HTOT, VWIND are required; OPENIN, VDISP, VROT, RADII,
-    NTOT, DISKRINGS optional) and the options FREE, PRIORS, SAMPLER, SAMPLEROPTS, RUNOPTS and LIKEOPTS (the defaults of
-    run()).
+    wind as for GALWIND (XPOS, YPOS, VSYS, INC, PA, OPENANG, CONELEN, VWIND are required; OPENIN, VDISP, VROT,
+    RADII, NLAYERS, DISKRINGS optional) and the options FREE, PRIORS, SAMPLER, SAMPLEROPTS, RUNOPTS and LIKEOPTS (the
+    defaults of run()).
 
     Methods: run(freepar, method, threads, like_kwargs, sampler_kwargs, run_kwargs, verbose, dynamic, **params) samples
     the posterior (nothing is written); write(outfolder, plots) writes the outputs; print_stats(), corner_plot(),
@@ -343,16 +343,17 @@ class BayesianWind(Task):
         ini = dict(xpos=x0, ypos=y0, vsys=float(need("VSYS", gw.VSYS)), inc=float(need("INC", gw.INC)),
                    pa=float(need("PA", gw.PHI)), openang=float(values("OPENANG", need("OPENANG", gw.OPENANG))[0]),
                    openin=float(values("OPENIN", getattr(gw, "OPENIN", "0") or "0")[0]),
-                   htot=float(gw.HTOT))
-        if not ini["htot"] > 0:
-            raise BBaroloError("BAYESIANWIND: HTOT is not an optional parameter (the length of the cones, arcsec).")
+                   conelen=float(gw.CONELEN))
+        if not ini["conelen"] > 0:
+            raise BBaroloError("BAYESIANWIND: CONELEN is not an optional parameter (the length of the cones, arcsec).")
         radii = None
         rs = str(gw.RADII).strip()
         if rs not in ("", "-1"):
             radii = values("RADII", rs)
         else:
-            n = int(gw.NTOT) if "NTOT" in self._params else max(1, min(15, int(round(ini["htot"] / self._beam))))
-            radii = (np.arange(n) + 0.5) * ini["htot"] / n
+            n = (int(gw.NLAYERS) if "NLAYERS" in self._params
+                 else max(1, min(15, int(round(ini["conelen"] / self._beam)))))
+            radii = (np.arange(n) + 0.5) * ini["conelen"] / n
         n = radii.size
         ini["radii"] = np.asarray(radii, float)
         ini["vwind"] = values("VWIND", need("VWIND", gw.VWIND), n)
@@ -370,7 +371,7 @@ class BayesianWind(Task):
     # ------------------------------------------------------------------ priors
     def _set_default_priors(self):
         """The default priors, from the initial wind: XPOS, YPOS +- one beam; VSYS +- 5 channels (at least 20 km/s);
-        INC +- 15 deg within 0-90; PA +- 20 deg; OPENANG +- 30 deg within 1-180; OPENIN 0 to OPENANG - 1; HTOT 0.5 to
+        INC +- 15 deg within 0-90; PA +- 20 deg; OPENANG +- 30 deg within 1-180; OPENIN 0 to OPENANG - 1; CONELEN 0.5 to
         1.5 times; VWIND 0 to twice the largest (at least 100 km/s); VDISP 0 to 3 times the largest (at least 50); VROT
         +- twice the largest (at least 50); SIGMA log-uniform 0.5-1000 times the noise; EMSCALE log-uniform over six
         decades around the mean emissivity of the data; EMSLOPE -2 to 6. A prior given (priors) is kept."""
@@ -386,15 +387,15 @@ class BayesianWind(Task):
                    inc=U(max(0., ini["inc"] - 15), min(90., ini["inc"] + 15)),
                    pa=U(ini["pa"] - 20, ini["pa"] + 20),
                    openang=U(max(1., ini["openang"] - 30), min(180., ini["openang"] + 30)),
-                   openin=U(0., max(1., ini["openang"] - 1.)), htot=U(0.5 * ini["htot"], 1.5 * ini["htot"]),
+                   openin=U(0., max(1., ini["openang"] - 1.)), conelen=U(0.5 * ini["conelen"], 1.5 * ini["conelen"]),
                    vwind=U(0., vmax), vdisp=U(0., dmax), vrot=U(-rmax, rmax),
                    sigma=dict(name="loguniform", a=0.5 * self.noiserms, b=1000. * self.noiserms),
                    emscale=dict(name="loguniform", a=1e-3 * self._s0, b=1e3 * self._s0) if self._s0 else None,
                    emslope=U(-2., 6.), emclump=dict(name="loguniform", a=0.1, b=10.),
                    emratio=dict(name="loguniform", a=1e-3, b=1e3),
-                   vwind_p1=U(0., vmax), vwind_p2=U(0.02 * ini["htot"], ini["htot"]),
-                   vdisp_p1=U(0., dmax), vdisp_p2=U(-dmax / ini["htot"], dmax / ini["htot"]),
-                   vrot_p1=U(-rmax, rmax), vrot_p2=U(-rmax / ini["htot"], rmax / ini["htot"]))
+                   vwind_p1=U(0., vmax), vwind_p2=U(0.02 * ini["conelen"], ini["conelen"]),
+                   vdisp_p1=U(0., dmax), vdisp_p2=U(-dmax / ini["conelen"], dmax / ini["conelen"]),
+                   vrot_p1=U(-rmax, rmax), vrot_p2=U(-rmax / ini["conelen"], rmax / ini["conelen"]))
         for k, v in pri.items():
             if v is None:
                 continue
@@ -411,7 +412,7 @@ class BayesianWind(Task):
             return None
         flux = float(np.nansum(np.where(self.mask.astype(bool), self.data, 0.)))
         th1, th0 = math.radians(ini["openang"] / 2), math.radians(ini["openin"] / 2)
-        vol = 2 * 2 * math.pi / 3 * ini["htot"] ** 3 * (math.cos(th0) - math.cos(th1))
+        vol = 2 * 2 * math.pi / 3 * ini["conelen"] ** 3 * (math.cos(th0) - math.cos(th1))
         return abs(flux) / vol if vol > 0 and flux != 0 else 1.
 
     def _parse_freepar(self, freepar):
@@ -488,7 +489,7 @@ class BayesianWind(Task):
         lk = self.like_kwargs
         ini = self._init
         # (the bounds of the free parameters: the cells cover the largest cones, the quadrature the fastest wind)
-        rmax = self._bounds("htot")[1]
+        rmax = self._bounds("conelen")[1]
         thmax = min(90., 0.5 * self._bounds("openang")[1])
         vw = max(abs(x) for x in self._shell_range("vwind"))
         vr = max(abs(x) for x in self._shell_range("vrot"))
@@ -521,7 +522,7 @@ class BayesianWind(Task):
         if base in self.freepar_idx:
             return self._bounds(base)
         if f"{base}_p1" in self.freepar_idx:
-            R = np.linspace(0, self._bounds("htot")[1], 50)
+            R = np.linspace(0, self._bounds("conelen")[1], 50)
             f = self.funcs[base]
             npar = f.__code__.co_argcount - 1
             rng = np.random.default_rng(0)
@@ -536,7 +537,7 @@ class BayesianWind(Task):
         ini = self._init
         keys = ("xpos", "ypos", "inc", "pa")
         ranges = [self._bounds(k) for k in keys]
-        rmax = self._bounds("htot")[1]
+        rmax = self._bounds("conelen")[1]
         thmax = min(180., self._bounds("openang")[1])
         out = []
         for combo in itertools.product(*[(lo, hi) if hi > lo else (lo,) for lo, hi in ranges]):
@@ -544,7 +545,7 @@ class BayesianWind(Task):
             for pa in np.linspace(min(ranges[3]), max(ranges[3]), 5):
                 kw["pa"] = pa
                 out.append(WindPars(radii=ini["radii"], vwind=ini["vwind"], vdisp=ini["vdisp"], vrot=ini["vrot"],
-                                    vsys=ini["vsys"], openang=thmax, openin=0., htot=rmax, **kw))
+                                    vsys=ini["vsys"], openang=thmax, openin=0., conelen=rmax, **kw))
         return out
 
     def _setup_region(self):
@@ -556,7 +557,7 @@ class BayesianWind(Task):
         grow = int(math.ceil(float(lk.get("grow", 1.)) * self._beam / self._pix))
         self._region2d = self._wm.footprint(self._corner_pars(), grow=grow)
         if not self._region2d.any():
-            raise BBaroloError("BAYESIANWIND: the cones of the priors are outside the cube (check XPOS, YPOS, HTOT)")
+            raise BBaroloError("BAYESIANWIND: the cones of the priors are outside the cube (check XPOS, YPOS, CONELEN)")
         ys, xs = np.nonzero(self._region2d)
         nz = self.data.shape[0]
         self._lim = np.array([xs.min(), xs.max() + 1, ys.min(), ys.max() + 1, 0, nz], dtype=np.int64)
@@ -645,7 +646,7 @@ class BayesianWind(Task):
         return WindPars(radii=R, **sh, **kw), hyp
 
     def _valid(self, p):
-        return (0. <= p.inc <= 90. and 0. <= p.openin < p.openang <= 180. and p.htot > 0
+        return (0. <= p.inc <= 90. and 0. <= p.openin < p.openang <= 180. and p.conelen > 0
                 and np.all(p.vdisp >= 0) and np.all(np.isfinite(p.vwind)))
 
     def _amplitude_system(self, p, hyp, pts=None):

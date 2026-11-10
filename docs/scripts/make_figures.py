@@ -109,7 +109,7 @@ def fig_galmod3d():
 @figure("galwind")
 def fig_galwind():
     from bbarolo import GalWind
-    w = GalWind(CUBE, xpos=77, ypos=77, vsys=132.8, inc=60, pa=123.7, vwind=150, openang=60, htot=600,
+    w = GalWind(CUBE, xpos=77, ypos=77, vsys=132.8, inc=60, pa=123.7, vwind=150, openang=60, conelen=600,
                 vdisp=30, dens=0.001)
     res = w.run(threads=4)
     _moment_panels([res.maps["0mom"], res.maps["1mom"], res.maps["2mom"]],

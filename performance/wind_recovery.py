@@ -65,7 +65,7 @@ def one_fit(config, seed, basis, threads, nlive, out, neff=2000):
     mock = dict(snr=10.)
     mock.update(cfg["mock"])
     hdu, tr = mock_wind(truth=cfg["truth"], seed=seed, **mock)
-    ini = {k: tr[k] for k in ("xpos", "ypos", "vsys", "inc", "pa", "openang", "openin", "htot")}
+    ini = {k: tr[k] for k in ("xpos", "ypos", "vsys", "inc", "pa", "openang", "openin", "conelen")}
     ini["vwind"] = np.atleast_1d(tr["vwind"]).astype(float).tolist()
     ini["vdisp"] = float(np.atleast_1d(tr["vdisp"])[0])
     ini["vrot"] = float(np.atleast_1d(tr.get("vrot", 0.))[0])
@@ -87,7 +87,7 @@ def one_fit(config, seed, basis, threads, nlive, out, neff=2000):
     res = dict(config=config, seed=seed, basis=basis, time=time.time() - t0, ess=f.ess, ndim=f.ndim,
                names=f.freepar_names, quantiles=f.quantiles.tolist(), snr=tr["snr"], kind=tr["kind"],
                truth={k: (np.asarray(v).tolist() if np.ndim(v) else v) for k, v in tr.items()
-                      if k in ("xpos", "ypos", "vsys", "inc", "pa", "openang", "openin", "htot", "vwind", "vdisp",
+                      if k in ("xpos", "ypos", "vsys", "inc", "pa", "openang", "openin", "conelen", "vwind", "vdisp",
                                "vrot", "radii", "noise", "peak")})
     with open(out, "a") as fh:
         fh.write(json.dumps(res) + "\n")

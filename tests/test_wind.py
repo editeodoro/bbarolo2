@@ -28,15 +28,15 @@ def _cube(nx=32, nz=30, pix=10., chan=15., beam=30., obj="WIND"):
     return c, hdu
 
 
-GEO = dict(xpos=15.5, ypos=15.5, vsys=0., inc=60., pa=45., openang=60., htot=140.)
+GEO = dict(xpos=15.5, ypos=15.5, vsys=0., inc=60., pa=45., openang=60., conelen=140.)
 
 
-def _uniform_cone_funcs(htot, oa, vw):
+def _uniform_cone_funcs(conelen, oa, vw):
     th = math.radians(oa / 2)
 
     def dens(x, y, z):
         r = np.sqrt(x * x + y * y + z * z)
-        return ((r <= htot) & (np.abs(z) >= r * math.cos(th))).astype(float)
+        return ((r <= conelen) & (np.abs(z) >= r * math.cos(th))).astype(float)
 
     def comp(i):
         def f(x, y, z):
@@ -56,7 +56,7 @@ def test_windmodel_vs_galmod3d():
     wm = WindModel(c, cells).quadrature(vmax=150, sigmin=10)
     p = WindPars(radii=[70.], vwind=150., vdisp=10., **GEO)
     m = wm.cube(p)
-    dens, vx, vy, vz = _uniform_cone_funcs(GEO["htot"], GEO["openang"], 150.)
+    dens, vx, vy, vz = _uniform_cone_funcs(GEO["conelen"], GEO["openang"], 150.)
     g = GalMod3D(hdu, coords="xyz", xpos=15.5, ypos=15.5, vsys=0., inc=60., pa=45., rmax=140., zmax=140.,
                  step=10 / 3., dens=dens, vx=vx, vy=vy, vz=vz, vdisp=10.).model().data.astype(float)
     assert abs(m.sum() / g.sum() - 1) < 3e-3
@@ -77,8 +77,8 @@ def test_windmodel_galwind_conventions():
     cells = WindCells([0., 140.], 1, 1, thmax=30.)
     wm = WindModel(c, cells).quadrature(vmax=150, sigmin=10)
     m = wm.cube(WindPars(radii=[70.], vwind=150., vdisp=10., **GEO))
-    res = GalWind(hdu, xpos=15.5, ypos=15.5, vsys=0, inc=60, pa=45, openang=60, htot=140, vwind=150, vdisp=10,
-                  dens=10, ntot=10, wtype=1, cdens=50, nv=10, iseed=3, verbose=False).run()
+    res = GalWind(hdu, xpos=15.5, ypos=15.5, vsys=0, inc=60, pa=45, openang=60, conelen=140, vwind=150, vdisp=10,
+                  dens=10, nlayers=10, wtype=1, cdens=50, nv=10, iseed=3, verbose=False).run()
     g = np.asarray(res.model.data, float)
     v = np.arange(m.shape[0]) - (m.shape[0] / 2.)
     v1 = []
@@ -98,7 +98,7 @@ def test_wind_boxes_normal_equations():
     c, _ = _cube(nx=24, nz=20)
     cells = WindCells.resolved(110., 40., 35.)
     wm = WindModel(c, cells).quadrature(vmax=150, sigmin=10)
-    p = WindPars(radii=[50.], vwind=150., vdisp=10., xpos=11.5, ypos=11.5, inc=60, pa=45, openang=60, htot=100.)
+    p = WindPars(radii=[50.], vwind=150., vdisp=10., xpos=11.5, ypos=11.5, inc=60, pa=45, openang=60, conelen=100.)
     pts = wm.points(p)
     B = wm.boxes(p, pts=pts)
     rng = np.random.default_rng(0)
@@ -139,11 +139,11 @@ def test_wind_boxes_normal_equations():
 
 def test_wind_model_continuous():
     """The columns change continuously with the geometry: cells clipped by the cone, quadrature points moving with
-    it (a small change of OPENANG, INC or HTOT changes the normal equations by a small amount)."""
+    it (a small change of OPENANG, INC or CONELEN changes the normal equations by a small amount)."""
     c, _ = _cube(nx=24, nz=20)
     wm = WindModel(c, WindCells.resolved(110., 40., 30.)).quadrature(vmax=150, sigmin=10)
     W = np.ones(wm.shape)
-    base = dict(radii=[50.], vwind=150., vdisp=10., xpos=11.5, ypos=11.5, inc=60, pa=45, openang=60, htot=100.)
+    base = dict(radii=[50.], vwind=150., vdisp=10., xpos=11.5, ypos=11.5, inc=60, pa=45, openang=60, conelen=100.)
     d = wm.cube(WindPars(**base))
 
     def Gb(**kw):
@@ -151,7 +151,7 @@ def test_wind_model_continuous():
         q.update(kw)
         return wm.boxes(WindPars(**q)).normal(W * d, W)
     G0, b0 = Gb()
-    for k, dv in (("openang", 0.1), ("inc", 0.1), ("htot", 0.2)):
+    for k, dv in (("openang", 0.1), ("inc", 0.1), ("conelen", 0.2)):
         G1, b1 = Gb(**{k: base[k] + dv})
         G2, b2 = Gb(**{k: base[k] + 2 * dv})
         d1, d2 = np.abs(b1 - b0).max(), np.abs(b2 - b0).max()
@@ -210,14 +210,14 @@ def test_wind_parsers_and_keywords():
     with pytest.raises(ValueError):
         wind_likeopts("likemask=none")
     names = {k.name for k in keywords_for("BAYESIANWIND")}
-    assert {"OPENIN", "DISKRINGS", "FREE", "PRIORS", "LIKEOPTS", "VWIND", "OPENANG", "HTOT", "XPOS"} <= names
+    assert {"OPENIN", "DISKRINGS", "FREE", "PRIORS", "LIKEOPTS", "VWIND", "OPENANG", "CONELEN", "XPOS"} <= names
     assert lookup("BAYESIANWIND").flag
     # the checks of the task: FREE required, LIKEOPTS checked
     from bbarolo.tasks import build_param
     import io
     import contextlib
-    base = dict(FITSFILE="x.fits", BAYESIANWIND=True, XPOS=10, YPOS=10, VSYS=0, INC=60, PA=30, OPENANG=60, HTOT=100,
-                VWIND=200)
+    base = dict(FITSFILE="x.fits", BAYESIANWIND=True, XPOS=10, YPOS=10, VSYS=0, INC=60, PA=30, OPENANG=60,
+                CONELEN=100, VWIND=200)
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         ok = build_param(dict(base)).checkPars()
@@ -228,13 +228,29 @@ def test_wind_parsers_and_keywords():
     assert not ok and "LIKEOPTS" in buf.getvalue()
 
 
+def test_htot_ntot_renamed():
+    """HTOT and NTOT of BBarolo 1.8 are now CONELEN and NLAYERS: the old names are errors that name the new ones, in
+    parameter files and in Python."""
+    from bbarolo import GalWind, BayesianWind
+    _, hdu = _cube()
+    for old, new in (("HTOT", "CONELEN"), ("NTOT", "NLAYERS")):
+        with pytest.raises(BBaroloError, match=f"{old}.*renamed {new}"):
+            Param().readParamString(f"FITSFILE x.fits\nGALWIND true\n{old} 10\n")
+        for task in (GalWind, BayesianWind):
+            with pytest.raises(BBaroloError, match=new):
+                task(hdu, **{old.lower(): 10})
+    p = Param()
+    p.readParamString("FITSFILE x.fits\nGALWIND true\nCONELEN 120\nNLAYERS 6\n")
+    assert p.gw.CONELEN == 120. and p.gw.NLAYERS == 6
+
+
 def test_galwind_wtype2():
     """GALWIND WTYPE 2: the cones of the engine (OPENIN, DENS per shell as an emissivity), noise-free; the flux is the
     emissivity times the volume of the cones (over the channel width), a hollow cone has less."""
     from bbarolo import GalWind
     _, hdu = _cube()
-    kw = dict(xpos=15.5, ypos=15.5, vsys=0, inc=60, pa=45, openang=60, htot=140, vwind=150, vdisp=10, dens=2.,
-              ntot=4, wtype=2, verbose=False)
+    kw = dict(xpos=15.5, ypos=15.5, vsys=0, inc=60, pa=45, openang=60, conelen=140, vwind=150, vdisp=10, dens=2.,
+              nlayers=4, wtype=2, verbose=False)
     m = np.asarray(GalWind(hdu, **kw).run().model.data, float)
     vol = 2 * 2 * math.pi / 3 * 140. ** 3 * (1 - math.cos(math.radians(30)))
     assert abs(m.sum() * 15. / (2. * vol) - 1) < 0.01
@@ -255,10 +271,10 @@ def test_bayesian_wind_quick(tmp_path):
     from wind_mocks import mock_wind
     from bbarolo import BayesianWind
     hdu, tr = mock_wind(kind="clumps", seed=2, snr=15, shape=(24, 24, 20), pix=12., chan=25., beam=36.,
-                        truth=dict(xpos=11.5, ypos=11.5, htot=110., radii=[55., 110.], vwind=200.), nclumps=40,
+                        truth=dict(xpos=11.5, ypos=11.5, conelen=110., radii=[55., 110.], vwind=200.), nclumps=40,
                         clump=20.)
-    f = BayesianWind(hdu, xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, htot=110, vwind=180, vdisp=20,
-                     ntot=2, outfolder=str(tmp_path) + "/")
+    f = BayesianWind(hdu, xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, conelen=110, vwind=180, vdisp=20,
+                     nlayers=2, outfolder=str(tmp_path) + "/")
     f.like_kwargs = dict(f.like_kwargs, cellsize=40.)
     names = f._with_hyper(["vwind_single", "openang"], verbose=False)
     assert names == ["vwind_single", "openang", "emscale", "emclump", "emratio", "emslope"]
@@ -329,7 +345,7 @@ def test_bayesian_wind_fixed_disk(tmp_path):
     from astropy.io import fits
     from bbarolo.bayesian import common
     hdu, tr = mock_wind(kind="clumps", seed=4, snr=15, noise=False, shape=(28, 28, 24), pix=12., chan=25., beam=36.,
-                        truth=dict(xpos=13.5, ypos=13.5, htot=130., radii=[65., 130.], vwind=200.), nclumps=50,
+                        truth=dict(xpos=13.5, ypos=13.5, conelen=130., radii=[65., 130.], vwind=200.), nclumps=50,
                         clump=20.)
     radii = np.arange(15., 151., 30.)
     vrot = 150 * np.tanh(radii / 40.)
@@ -349,8 +365,8 @@ def test_bayesian_wind_fixed_disk(tmp_path):
     with common.blas_threads():
         res = {}
         for with_disk in (True, False):
-            f = BayesianWind(mock, xpos=13.5, ypos=13.5, vsys=0, inc=tr["inc"], pa=tr["pa"], openang=60, htot=130,
-                             vwind=200, vdisp=20, ntot=2, outfolder=str(tmp_path) + "/",
+            f = BayesianWind(mock, xpos=13.5, ypos=13.5, vsys=0, inc=tr["inc"], pa=tr["pa"], openang=60, conelen=130,
+                             vwind=200, vdisp=20, nlayers=2, outfolder=str(tmp_path) + "/",
                              **({"diskrings": rf} if with_disk else {}))
             f.like_kwargs = dict(f.like_kwargs, cellsize=40., noisecorr=1.)
             f._setup(f._with_hyper(["openang"], verbose=False), verbose=False)
@@ -376,10 +392,10 @@ def test_bayesian_wind_one_cone(tmp_path):
     with pytest.raises(ValueError):
         wind_likeopts("cones=near")
     hdu, tr = mock_wind(kind="clumps", seed=3, snr=15, shape=(24, 24, 20), pix=12., chan=25., beam=36., cones=(-1,),
-                        truth=dict(xpos=11.5, ypos=11.5, htot=110., radii=[55., 110.], vwind=200.), nclumps=40,
+                        truth=dict(xpos=11.5, ypos=11.5, conelen=110., radii=[55., 110.], vwind=200.), nclumps=40,
                         clump=20.)
-    f = BayesianWind(hdu, xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, htot=110, vwind=180, vdisp=20,
-                     ntot=2, outfolder=str(tmp_path) + "/")
+    f = BayesianWind(hdu, xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, conelen=110, vwind=180, vdisp=20,
+                     nlayers=2, outfolder=str(tmp_path) + "/")
     f.like_kwargs = dict(f.like_kwargs, cellsize=40., cones="approaching")
     with pytest.raises(ValueError):
         f._with_hyper(["openang", "emratio"], verbose=False)

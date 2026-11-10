@@ -33,7 +33,7 @@ $$
 
 ($V_\mathrm{sys}$ is {ref}`VSYS <par-galwind-vsys>`, km/s). The cones have the full opening angle
 $\theta_\mathrm{o}$ ({ref}`OPENANG <par-galwind-openang>`, degrees) and extend to $H$
-({ref}`HTOT <par-galwind-htot>`, arcsec). The outflow velocity is $V_\mathrm{w}$
+({ref}`CONELEN <par-galwind-conelen>`, arcsec). The outflow velocity is $V_\mathrm{w}$
 ({ref}`VWIND <par-galwind-vwind>`, km/s; positive values are an outflow), the rotation velocity around the
 axis $V_\mathrm{rot}$ ({ref}`VROT <par-galwind-vrot>`, 0 by default) and the velocity dispersion $\sigma$
 ({ref}`VDISP <par-galwind-vdisp>`), to which the instrumental broadening is added in quadrature, as in GALMOD.
@@ -43,7 +43,7 @@ the lines of a cloud share its Doppler factor; on a velocity axis only one line 
 
 ## Cylinders (WTYPE 0)
 
-Each cone is a stack of $N$ ({ref}`NTOT <par-galwind-ntot>`, default 25) cylinders of height $\Delta z = H/N$.
+Each cone is a stack of $N$ ({ref}`NLAYERS <par-galwind-nlayers>`, default 25) cylinders of height $\Delta z = H/N$.
 Cylinder $k$ ($k = 1, \dots, N$, from the centre outwards) has the half-height and outer radius
 
 $$

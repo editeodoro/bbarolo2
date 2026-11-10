@@ -208,8 +208,8 @@ class GalwindPar(GalmodPar):
     VROT: str = "0"
     OPENANG: str = "-1"
     OPENIN: str = "0"
-    HTOT: float = -1.0
-    NTOT: int = 25
+    CONELEN: float = -1.0
+    NLAYERS: int = 25
     LTYPE: int = 5
     DENSTYPE: int = 1
     WTYPE: int = 0
@@ -720,16 +720,16 @@ class Param:
             for k in ("XPOS", "YPOS", "VSYS", "INC", "PHI", "OPENANG", "VWIND"):
                 if getattr(gw, k) == "-1":
                     out(f"BAYESIANWIND ERROR: {k}" + msg); good = False
-            if gw.HTOT == -1:
-                out("BAYESIANWIND error: HTOT" + msg); good = False
+            if gw.CONELEN == -1:
+                out("BAYESIANWIND error: CONELEN" + msg); good = False
 
         if gw.flagGALWIND:
             msg = " is not an optional parameter. Please specify it in the input file."
             for k in ("XPOS", "YPOS", "VSYS", "VDISP", "INC", "PHI", "DENS", "OPENANG", "VWIND"):
                 if getattr(gw, k) == "-1":
                     out(f"GALWIND ERROR: {k}" + msg); good = False
-            if gw.HTOT == -1:
-                out("GALWIND error: HTOT" + msg); good = False
+            if gw.CONELEN == -1:
+                out("GALWIND error: CONELEN" + msg); good = False
 
         if self.flagSmooth:
             if self.newbeam is None and self.factor == -1:
@@ -1570,7 +1570,7 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
         R("[VWIND]", "   Radial velocity of the wind (km/s)", gw.VWIND)
         R("[VROT]", "   Azimuthal velocity of the wind (km/s)", gw.VROT)
         R("[OPENANG]", "   Wind opening angle (degrees)", gw.OPENANG)
-        R("[HTOT]", "   Wind maximum distance (arcsec)", gw.HTOT)
+        R("[CONELEN]", "   Length of each cone of the wind (arcsec)", gw.CONELEN)
         R("[XPOS]", "   X center of the galaxy (pixel)", gw.XPOS)
         R("[YPOS]", "   Y center of the galaxy (pixel)", gw.YPOS)
         R("[VSYS]", "   Systemic velocity of the galaxy (km/s)", gw.VSYS)
@@ -1578,7 +1578,7 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
         R("[INC]", "   Global inclination (degrees)", gw.INC)
         R("[PA]", "   Global position angle (degrees)", gw.PHI)
         R("[DENS]", "   Global column density of gas (atoms/cm2)", gw.DENS)
-        R("[NTOT]", "   Number of layers/cylinder for each cone", gw.NTOT)
+        R("[NLAYERS]", "   Number of layers (cylinders or shells) per cone", gw.NLAYERS)
         R("[DENSTYPE]", "   How to distribute density in layers", gw.DENSTYPE)
         R("[WTYPE]", "   Cylindrical or spherical model", gw.WTYPE)
         R("[GALMODTYPE]", "   Type of model (MC or ANALYTIC)", p.galmodtype)

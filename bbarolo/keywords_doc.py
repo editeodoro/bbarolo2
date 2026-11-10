@@ -744,14 +744,14 @@ GALMOD is turned off when `3DFIT` or `BAYESIAN3DFIT` run.
         doc="""\
 Builds a model datacube of a bi-conical outflow on the grid of `FITSFILE`: two opposite cones with their
 apex at (`XPOS`, `YPOS`), along the rotation axis of a disk with inclination `INC` and position angle
-`PA`, extending to `HTOT` with opening angle `OPENANG`. The gas moves along the cones at `VWIND`,
+`PA`, extending to `CONELEN` with opening angle `OPENANG`. The gas moves along the cones at `VWIND`,
 rotates around the axis at `VROT` and has velocity dispersion `VDISP`. `true` runs the task.
 
 The cones are made of cylinders (`WTYPE` 0), of spherical shells (`WTYPE` 1) or are the noise-free cones
 of `BAYESIANWIND` (`WTYPE` 2, with the inner opening angle `OPENIN`). The model is convolved with the
 beam if `SM` is true and written to `<prefix>_wind.fits`, with its moment maps
 (`<prefix>_wind_0mom.fits`, ...), a position-velocity slice along the axis (`<prefix>_wind_pv.fits`) and
-plots. `XPOS`, `YPOS`, `VSYS`, `VDISP`, `INC`, `PA`, `DENS`, `OPENANG`, `VWIND` and `HTOT` are required.
+plots. `XPOS`, `YPOS`, `VSYS`, `VDISP`, `INC`, `PA`, `DENS`, `OPENANG`, `VWIND` and `CONELEN` are required.
 """),
     'BAYESIANWIND': dict(
         group='Task',
@@ -760,9 +760,9 @@ Fits a bi-conical wind to the datacube by sampling the posterior distribution of
 kinematics with nested sampling (see `SAMPLER`). `true` runs the task. The wind is that of GALWIND: two
 cones with their apex at (`XPOS`, `YPOS`), along the rotation axis of a disk with inclination `INC` (0
 to 90: the cone along +z recedes, `PA` sets its side) and position angle `PA`, between the opening
-angles `OPENIN` and `OPENANG`, out to `HTOT`, with the radial velocity `VWIND`, the dispersion `VDISP`
-and the rotation `VROT` per shell (`RADII`, or `NTOT` shells; by default one per beam). The initial wind
-is given as for GALWIND (`XPOS`, `YPOS`, `VSYS`, `INC`, `PA`, `OPENANG`, `HTOT` and `VWIND` are
+angles `OPENIN` and `OPENANG`, out to `CONELEN`, with the radial velocity `VWIND`, the dispersion `VDISP`
+and the rotation `VROT` per shell (`RADII`, or `NLAYERS` shells; by default one per beam). The initial wind
+is given as for GALWIND (`XPOS`, `YPOS`, `VSYS`, `INC`, `PA`, `OPENANG`, `CONELEN` and `VWIND` are
 required) and the free parameters in `FREE` (e.g. `FREE VWIND_SINGLE VDISP_SINGLE INC PA OPENANG
 EMSCALE`).
 
@@ -1265,7 +1265,7 @@ scale height for all the rings, the outer edge of the disk and the fractional mo
 
 BAYESIANWIND (required): `VWIND`, `VDISP` and `VROT` have one value per shell, NAME_SINGLE one for all
 the shells, NAME_FUNC a function of radius (VWIND an arctangent rising to the terminal velocity p1);
-`XPOS`, `YPOS`, `VSYS`, `INC`, `PA`, `OPENANG`, `OPENIN`, `HTOT`, `SIGMA` and the parameters of the prior
+`XPOS`, `YPOS`, `VSYS`, `INC`, `PA`, `OPENANG`, `OPENIN`, `CONELEN`, `SIGMA` and the parameters of the prior
 of the emission `EMSCALE`, `EMCLUMP`, `EMRATIO` and `EMSLOPE` are single values; e.g. `FREE VWIND_SINGLE
 VDISP_SINGLE INC PA OPENANG` (EMSCALE, EMCLUMP, EMRATIO and EMSLOPE are added unless `LIKEOPTS` fixes them).
 """),
@@ -1595,11 +1595,11 @@ BAYESIANWIND has its own options: `emission` (cells, shells, cone, spaxel or vox
 `marginal`, `prior` (gauss or exp), `noisecorr`, `sigma`, `datafrac`, `grow`, `emscale`, `emclump`,
 `emratio`, `emslope`, `prune` and `cones` (both, approaching or receding; see the BAYESIANWIND page).
 """),
-    'HTOT': dict(
+    'CONELEN': dict(
         group='Wind',
         default='required',
         doc="""\
-The extent of each cone of the outflow (arcsec) in GALWIND: the height of the stack of `NTOT` cylinders
+The extent of each cone of the outflow (arcsec) in GALWIND: the height of the stack of `NLAYERS` cylinders
 along the axis (`WTYPE` 0), or the outer radius of the spherical shells (`WTYPE` 1). Required.
 """),
     'OPENANG': dict(
@@ -1607,7 +1607,7 @@ along the axis (`WTYPE` 0), or the outer radius of the spherical shells (`WTYPE`
         default='required',
         doc="""\
 The full opening angle of the cones of GALWIND (degrees). With cylinders (`WTYPE` 0), the cylinder k,
-counted from the centre, has a radius of k·(`HTOT`/`NTOT`)·tan(OPENANG/2); with spherical shells
+counted from the centre, has a radius of k·(`CONELEN`/`NLAYERS`)·tan(OPENANG/2); with spherical shells
 (`WTYPE` 1), the gas fills the polar angles from 0 to OPENANG/2 from the axis, uniformly in angle. One
 value (an error otherwise with `WTYPE` 0); with `WTYPE` 1 also one value per shell (a list or a file
 column). Required.
@@ -1629,14 +1629,14 @@ that BAYESIANWIND adds to the model of the wind: its geometry and kinematics are
 fixed, and the densities of its rings are non-negative amplitudes fitted (and marginalised) with the
 emission of the wind, so that the emission of the disk does not have to be masked.
 """),
-    'NTOT': dict(
+    'NLAYERS': dict(
         group='Wind',
         doc="""\
 The number of cylinders in each cone of GALWIND (`WTYPE` 0), or the number of spherical shells (`WTYPE`
-1 and 2, and the shells of BAYESIANWIND, whose default is one per beam up to 15), each `HTOT`/NTOT
+1 and 2, and the shells of BAYESIANWIND, whose default is one per beam up to 15), each `CONELEN`/NLAYERS
 thick. With `WTYPE` 1 the radii of the shells can be read instead from a file column or a list given
 with `RADII`. With cylinders, `VWIND`, `VDISP`, `DENS` and `VROT` given as lists or file columns must
-have NTOT values; with shells, at least as many values as shells.
+have NLAYERS values; with shells, at least as many values as shells.
 """),
     'VWIND': dict(
         group='Wind',
@@ -1665,11 +1665,11 @@ cylinder, to `OPENANG`/2 from it, at the edge. The spherical model does not use 
     'WTYPE': dict(
         group='Wind',
         doc="""\
-The geometry of the outflow of GALWIND: 0 (the default), a stack of `NTOT` cylinders in each cone, each
-a disk model as in GALMOD, a box `HTOT`/`NTOT` high, with the vertical and radial velocities of the
-wind; 1, `NTOT` spherical shells, with clouds within `OPENANG`/2 of the axis moving radially; 2, the
-noise-free cones of BAYESIANWIND (bbarolo.windmodel), filled from the apex to `HTOT` between `OPENIN`/2
-and `OPENANG`/2, with `VWIND`, `VDISP`, `VROT` and `DENS` per shell (`RADII` or `NTOT` shells, linear
+The geometry of the outflow of GALWIND: 0 (the default), a stack of `NLAYERS` cylinders in each cone, each
+a disk model as in GALMOD, a box `CONELEN`/`NLAYERS` high, with the vertical and radial velocities of the
+wind; 1, `NLAYERS` spherical shells, with clouds within `OPENANG`/2 of the axis moving radially; 2, the
+noise-free cones of BAYESIANWIND (bbarolo.windmodel), filled from the apex to `CONELEN` between `OPENIN`/2
+and `OPENANG`/2, with `VWIND`, `VDISP`, `VROT` and `DENS` per shell (`RADII` or `NLAYERS` shells, linear
 between them), where `DENS` is an emissivity (a flux per arcsec³ in the units of the cube times km/s).
 Any other value than 0 and 2 gives shells.
 

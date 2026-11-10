@@ -138,7 +138,7 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 - **GALWIND cylinders (WTYPE 0)**: the smoothed model was multiplied by the area of the beam in pixels, as
   the shells, although the cylinders are a flux per unit area: about 10 times too bright for a beam of 3
   pixels. Their layers used the Gaussian profile of GALMOD (LTYPE of the wind, 5, was never used), so a third
-  of the flux of each cylinder fell into its neighbours and beyond HTOT; they are boxes now **(C++)**.
+  of the flux of each cylinder fell into its neighbours and beyond CONELEN; they are boxes now **(C++)**.
 - **2DFIT: the model velocity field** stopped with a ValueError when a ring was not fitted (after writing
   the table: the later tasks did not run); the ring is left out now. The pixels between the rings had
   their radius computed with the geometry of the ring of the previous pixel; it is that of the last ring
@@ -368,7 +368,7 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   surface density and that of the model with its errors, in the same units (map units per arcsec²): the
   profile deconvolved from the beam when DENS is not fitted, the fitted DENS otherwise.
 - **BAYESIANWIND: Bayesian fits of bi-conical winds** (`bbarolo.BayesianWind`, the task `BAYESIANWIND`): the
-  geometry and kinematics of the wind of GALWIND (INC, PA, OPENANG, the new inner opening angle OPENIN, HTOT,
+  geometry and kinematics of the wind of GALWIND (INC, PA, OPENANG, the new inner opening angle OPENIN, CONELEN,
   VWIND, VDISP and VROT per shell, the centre and VSYS) sampled with nautilus or dynesty, with the emission of the
   wind not assumed. The emission is a set of emissivities on cells of the cones, about one beam across. They are
   solved at every evaluation of the likelihood and marginalised (exact Gaussian integral, with the mean EMSCALE, the
@@ -386,7 +386,7 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   at the exact positions of the points); the emission and the marginal likelihoods are in
   `bbarolo/bayesian/emission.py`. The mocks are in `performance/wind_mocks.py` (GalMod3D: clumps or a log-normal
   field in the cones), and the recovery study (bias, pulls, coverage) is `performance/wind_recovery.py`. New
-  keywords: BAYESIANWIND, OPENIN, DISKRINGS; FREE, PRIORS, SAMPLER, SAMPLEROPTS, RUNOPTS, LIKEOPTS, NTOT, RADII and
+  keywords: BAYESIANWIND, OPENIN, DISKRINGS; FREE, PRIORS, SAMPLER, SAMPLEROPTS, RUNOPTS, LIKEOPTS, NLAYERS, RADII and
   the geometry of the wind are shared with BAYESIAN3DFIT and GALWIND. LIKEOPTS `cones=approaching|receding` fits
   only one cone, for winds whose other side is not seen (with both cones, the default, an empty one is found by
   EMRATIO). The outputs follow those of 3DFIT and use its
@@ -394,7 +394,7 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   and `pvs/` (slices across and along the axis of the cones), and plotting scripts in `plotscripts/` for channel maps
   with the model contours, data/model/residual moment maps, and PV slices along the axis and across each cone.
 - **GALWIND WTYPE 2**: the noise-free cones of BAYESIANWIND on the command line. They are filled from the apex to
-  HTOT between OPENIN/2 and OPENANG/2, with VWIND, VDISP, VROT and DENS per shell, DENS being an emissivity (a flux
+  CONELEN between OPENIN/2 and OPENANG/2, with VWIND, VDISP, VROT and DENS per shell, DENS being an emissivity (a flux
   per arcsec³ in the units of the cube times km/s). WTYPE 0 and 1 are unchanged, and any other value still gives
   shells (WTYPE 2 gave shells before).
 - **3DFIT: the density profile deconvolved from the beam** (`<prefix>_densprof_deconvolved.txt`,
@@ -539,6 +539,9 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **CONELEN replaces HTOT and NLAYERS replaces NTOT** (GALWIND and BAYESIANWIND: the length of each cone and
+  its number of cylinders or shells), in parameter files and in Python (`conelen=`, `nlayers=`, and `conelen`
+  in FREE and PRIORS of BAYESIANWIND). HTOT and NTOT are now errors that name the new keywords.
 - **RADSEP of BAYESIAN3DFIT, when not given, is the beam FWHM** whatever the number of rings (it was halved,
   as in 3DFIT, when the disk spanned fewer than 20 beams), so the estimated rings are half as many.
 - **FREE of BAYESIAN3DFIT has a default** and is no longer required: `VROT VDISP XPOS_SINGLE YPOS_SINGLE

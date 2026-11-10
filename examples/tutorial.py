@@ -65,7 +65,7 @@ print(r.table)
 
 ### GALWIND ####################################################################
 gw = GalWind(fitsname, xpos=74, ypos=74, pa=123.7, inc=60, vdisp=20, dens=1.25, vsys=132.8, vwind=100,
-             openang=100, htot=500, threads=4, verbose=False)
+             openang=100, conelen=500, threads=4, verbose=False)
 wmodel = gw.run().model
 wmodel.writeto("wind_model.fits", overwrite=True)
 wmodel.data = wmodel.data + mymodel.data

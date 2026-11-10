@@ -21,8 +21,8 @@ from ..bbutils import DeltaVel, AlltoVel, FluxtoJy
 
 
 def _geometry(f):
-    """The projected axis of the cones (pixels: the points at HTOT along +z and -z), their far rims (the circles of
-    radius HTOT sin(OPENANG/2) at HTOT cos(OPENANG/2) along the axis), and the slices across each cone at half its
+    """The projected axis of the cones (pixels: the points at CONELEN along +z and -z), their far rims (the circles of
+    radius CONELEN sin(OPENANG/2) at CONELEN cos(OPENANG/2) along the axis), and the slices across each cone at half its
     length (the ends of segments along the x axis of the wind, its PA, out to 1.3 times the radius of the cone there
     plus one beam), for the best wind of f."""
     b = f.best
@@ -37,14 +37,14 @@ def _geometry(f):
         ys = yd * ci - z * si
         return b.xpos + (x * spa - ys * cpa) / cd0, b.ypos + (x * cpa + ys * spa) / cd1
     cones = f._wm.cells.cones
-    axis = [sky(0., 0., c * b.htot) for c in cones]
+    axis = [sky(0., 0., c * b.conelen) for c in cones]
     if len(axis) == 1:
         axis.insert(0, sky(0., 0., 0.))                 # (one cone: the axis from the apex)
     th = math.radians(0.5 * b.openang)
     phi = np.linspace(0., 2 * math.pi, 73)
     rims = []
     for c in cones:
-        R, z = b.htot * math.sin(th), c * b.htot * math.cos(th)
+        R, z = b.conelen * math.sin(th), c * b.conelen * math.cos(th)
         gx, gy = sky(R * np.cos(phi), R * np.sin(phi), z)
         rims.append((np.round(gx, 2).tolist(), np.round(gy, 2).tolist()))
     x0, y0 = sky(0., 0., 0.)
@@ -52,12 +52,12 @@ def _geometry(f):
     ux, uy = ux - x0, uy - y0
     nu = math.hypot(ux, uy)
     h = f._cube_obj.Head()
-    half = 1.3 * (0.5 * b.htot * math.tan(th) + h.Bmaj() * 3600.)           # (arcsec)
+    half = 1.3 * (0.5 * b.conelen * math.tan(th) + h.Bmaj() * 3600.)           # (arcsec)
     cuts = []
     for c in cones:
-        cx, cy = sky(0., 0., 0.5 * c * b.htot)
+        cx, cy = sky(0., 0., 0.5 * c * b.conelen)
         cuts.append(((cx - half * ux, cy - half * uy), (cx + half * ux, cy + half * uy)))
-    labels = ["across the %s cone, at HTOT/2 (PA)" % ("receding" if c > 0 else "approaching") for c in cones]
+    labels = ["across the %s cone, at CONELEN/2 (PA)" % ("receding" if c > 0 else "approaching") for c in cones]
     return axis, rims, [[[float(v) for v in p] for p in cut] for cut in cuts], labels
 
 

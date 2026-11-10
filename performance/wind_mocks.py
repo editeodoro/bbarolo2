@@ -8,13 +8,13 @@ the fits are not tested on their own model. The geometry is that of GALWIND and 
 rotation axis z of a disk of inclination INC and position angle PA (GalMod3D with the same INC and PA), a radial
 velocity v(r), a rotation around the axis and a dispersion.
 
-The emission inside the cones (the half opening angles OPENIN/2 to OPENANG/2, out to HTOT):
-  'smooth'     uniform, times (r/htot)^-slope;
+The emission inside the cones (the half opening angles OPENIN/2 to OPENANG/2, out to CONELEN):
+  'smooth'     uniform, times (r/conelen)^-slope;
   'clumps'     nclumps Gaussian clumps (dispersion clump arcsec, +-50%) at random positions in the volume of the
-               cones, with log-normal amplitudes (sigma 0.5) times (r/htot)^-slope (as the 100-clump mocks of
+               cones, with log-normal amplitudes (sigma 0.5) times (r/conelen)^-slope (as the 100-clump mocks of
                MoKA-3D, Marconcini et al. 2023);
   'lognormal'  a log-normal random field exp(s G - s^2/2), G a Gaussian field of correlation length corr (arcsec),
-               times (r/htot)^-slope;
+               times (r/conelen)^-slope;
 optionally only one cone (cones=(1,) the receding one, (-1,) the approaching one). Noise: Gaussian, smoothed to the
 beam (the noise of DiskModel.addnoise), of rms peak/snr.
 
@@ -31,7 +31,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from bbarolo.utils import emptyfits                  # noqa: E402
 
-DEFAULT_TRUTH = dict(xpos=23.5, ypos=23.5, vsys=0., inc=60., pa=30., openang=60., openin=0., htot=200.,
+DEFAULT_TRUTH = dict(xpos=23.5, ypos=23.5, vsys=0., inc=60., pa=30., openang=60., openin=0., conelen=200.,
                      radii=[50., 100., 150., 200.], vwind=[200., 200., 200., 200.], vdisp=20., vrot=0.)
 
 
@@ -74,13 +74,13 @@ def _in_cones(x, y, z, truth, cones):
     for c in cones:
         cc = c * ct
         ok |= (cc >= math.cos(t1)) & (cc <= math.cos(t0) + 1e-12)
-    return ok & (r <= truth["htot"])
+    return ok & (r <= truth["conelen"])
 
 
 def random_cone_points(n, truth, cones, rng):
     """n points uniform in the volume of the cones (x, y, z arcsec), and the cone of each."""
     t1, t0 = math.radians(truth["openang"] / 2.), math.radians(truth.get("openin", 0.) / 2.)
-    r = truth["htot"] * rng.random(n) ** (1. / 3.)
+    r = truth["conelen"] * rng.random(n) ** (1. / 3.)
     ct = rng.uniform(math.cos(t1), math.cos(t0), n)
     st = np.sqrt(1 - ct * ct)
     ph = rng.uniform(0, 2 * math.pi, n)
@@ -97,8 +97,8 @@ def mock_wind(kind="clumps", truth=None, seed=0, snr=10., cones=(1, -1), nclumps
     tr.update(truth or {})
     rng = np.random.default_rng(seed)
     hdu = template(shape, pix, chan, beam)
-    htot = tr["htot"]
-    radial = (lambda r: (np.maximum(r, 0.05 * htot) / htot) ** (-slope)) if slope else (lambda r: 1.)
+    conelen = tr["conelen"]
+    radial = (lambda r: (np.maximum(r, 0.05 * conelen) / conelen) ** (-slope)) if slope else (lambda r: 1.)
     if kind == "smooth":
         dens = lambda x, y, z: _in_cones(x, y, z, tr, cones) * radial(np.sqrt(x * x + y * y + z * z))
     elif kind == "clumps":
@@ -114,8 +114,8 @@ def mock_wind(kind="clumps", truth=None, seed=0, snr=10., cones=(1, -1), nclumps
                 out[near] += ca[k] * np.exp(-0.5 * d2[near] / cs[k] ** 2)
             return out * _in_cones(x, y, z, tr, cones)
     elif kind == "lognormal":
-        n = int(math.ceil(2 * htot / (corr / 3.))) + 1
-        ax = np.linspace(-htot, htot, n)
+        n = int(math.ceil(2 * conelen / (corr / 3.))) + 1
+        ax = np.linspace(-conelen, conelen, n)
         g = rng.normal(size=(n, n, n))
         k = np.fft.fftfreq(n, d=ax[1] - ax[0]) * 2 * math.pi
         kk = k[:, None, None] ** 2 + k[None, :, None] ** 2 + k[None, None, :] ** 2
@@ -132,7 +132,7 @@ def mock_wind(kind="clumps", truth=None, seed=0, snr=10., cones=(1, -1), nclumps
         raise ValueError(f"kind: smooth, clumps or lognormal, not {kind!r}")
     vx, vy, vz, disp = _frame_func(tr)
     g = GalMod3D(hdu, coords="xyz", xpos=tr["xpos"], ypos=tr["ypos"], vsys=tr["vsys"], inc=tr["inc"], pa=tr["pa"],
-                 rmax=htot, zmax=htot, step=step or pix / 3., dens=dens, vx=vx, vy=vy, vz=vz, vdisp=disp)
+                 rmax=conelen, zmax=conelen, step=step or pix / 3., dens=dens, vx=vx, vy=vy, vz=vz, vdisp=disp)
     model = g.model().data.astype(np.float64)
     peak = float(model.max())
     rms = peak / snr

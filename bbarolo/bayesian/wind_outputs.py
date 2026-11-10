@@ -114,7 +114,7 @@ def write_outputs(f, outfolder=None, plots=None, verbose=True):
         write_hdu(hdu, fn)
         files.append(fn)
     b = f.best
-    apex = Rings().setRings(radii=[b.htot], xpos=b.xpos, ypos=b.ypos, vsys=b.vsys, phi=b.pa, inc=b.inc)
+    apex = Rings().setRings(radii=[b.conelen], xpos=b.xpos, ypos=b.ypos, vsys=b.vsys, phi=b.pa, inc=b.inc)
     for name, hdu in pv_slices(c, mod, apex, mask, "_wind").items():
         fn = of + "pvs/" + prefix + "_" + name + ".fits"
         write_hdu(hdu, fn)

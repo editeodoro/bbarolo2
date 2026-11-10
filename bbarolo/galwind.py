@@ -1,7 +1,7 @@
 """
 GALWIND task: 3D models of bi-conical outflows (port of Tasks/galwind.cpp).
 
-The cone is built either as a stack of ``NTOT`` cylinders (``WTYPE=0``, Lelli's
+The cone is built either as a stack of ``NLAYERS`` cylinders (``WTYPE=0``, Lelli's
 approach, each cylinder being a GALMOD disk with vertical/radial velocities), as
 a set of spherical shells (``WTYPE=1``, Galmod_wind) or, in bbarolo2 only, with the
 noise-free cones of bbarolo.windmodel (``WTYPE=2``, the engine of BAYESIANWIND: inner
@@ -69,8 +69,8 @@ class GalWind:
 
         GalWind(cube)                     # parameters from cube.pars().gw
         GalWind(cube, gwpar)              # a GalwindPar structure
-        GalWind(cube, x0, y0, pa, inc, disp, dens, vsys, vw, openang, htot, denstype,
-                ntot=25, cdens=10, nv=10, nthreads=1)
+        GalWind(cube, x0, y0, pa, inc, disp, dens, vsys, vw, openang, conelen, denstype,
+                nlayers=25, cdens=10, nv=10, nthreads=1)
     """
 
     def __init__(self, cube, *args, **kwargs):
@@ -79,9 +79,9 @@ class GalWind:
         if len(args) <= 1 and not kwargs:
             self.par = copy.deepcopy(args[0] if args else cube.pars().gw)
         else:
-            names = ("x0", "y0", "pa", "inc", "disp", "dens", "vsys", "vw", "openang", "htot",
-                     "denstype", "ntot", "cdens", "nv", "nthreads")
-            vals = dict(ntot=25, cdens=10, nv=10, nthreads=1)
+            names = ("x0", "y0", "pa", "inc", "disp", "dens", "vsys", "vw", "openang", "conelen",
+                     "denstype", "nlayers", "cdens", "nv", "nthreads")
+            vals = dict(nlayers=25, cdens=10, nv=10, nthreads=1)
             vals.update(dict(zip(names, args)))
             vals.update(kwargs)
             from .params import GalwindPar
@@ -93,8 +93,8 @@ class GalWind:
             p.PHI, p.INC = str(vals["pa"]), str(vals["inc"])
             p.VDISP, p.DENS = text(vals["disp"]), text(vals["dens"])
             p.VSYS, p.VWIND = str(vals["vsys"]), text(vals["vw"])
-            p.OPENANG, p.HTOT = text(vals["openang"]), float(vals["htot"])
-            p.DENSTYPE, p.NTOT = int(vals["denstype"]), int(vals["ntot"])
+            p.OPENANG, p.CONELEN = text(vals["openang"]), float(vals["conelen"])
+            p.DENSTYPE, p.NLAYERS = int(vals["denstype"]), int(vals["nlayers"])
             p.CDENS, p.NV = int(vals["cdens"]), int(vals["nv"])
             self.par = p
             cube.pars().threads = int(vals["nthreads"])
@@ -124,8 +124,8 @@ class GalWind:
 
     def _analytic(self):
         """WTYPE 2: the cones of bbarolo.windmodel (the engine of BAYESIANWIND), noise-free: filled from the apex to
-        HTOT between the half opening angles OPENIN/2 and OPENANG/2, with VWIND, VDISP, VROT and DENS given per shell
-        (RADII, or NTOT shells HTOT/NTOT apart; linear between the shells, constant beyond them). DENS is an
+        CONELEN between the half opening angles OPENIN/2 and OPENANG/2, with VWIND, VDISP, VROT and DENS given per shell
+        (RADII, or NLAYERS shells CONELEN/NLAYERS apart; linear between the shells, constant beyond them). DENS is an
         emissivity: a flux per arcsec^3 in the units of the cube times km/s (the analogue of DENS of GALMOD, a flux per
         arcsec^2). The model is convolved with the beam when SM is true. Returns the cube (nz, ny, nx)."""
         from .windmodel import WindModel, WindCells, WindPars
@@ -136,8 +136,8 @@ class GalWind:
         if Radii is not None:
             radii = np.asarray(Radii, float)
         else:
-            nr = max(1, int(par.NTOT))
-            radii = (np.arange(nr) + 0.5) * par.HTOT / nr
+            nr = max(1, int(par.NLAYERS))
+            radii = (np.arange(nr) + 0.5) * par.CONELEN / nr
         nr = radii.size
         oa = _values("OPENANG", par.OPENANG, 1)
         if _column(par.OPENANG) is not None and len(_column(par.OPENANG)) > 1:
@@ -149,9 +149,9 @@ class GalWind:
             raise BBaroloError("GALWIND: negative VDISP or DENS")
         p = WindPars(radii=radii, vwind=vw, vdisp=vd, vrot=vr, xpos=x0, ypos=y0, vsys=float(par.VSYS),
                      inc=float(par.INC), pa=float(par.PHI), openang=float(oa[0]), openin=float(oi[0]),
-                     htot=float(par.HTOT))
+                     conelen=float(par.CONELEN))
         p.check()
-        cells = WindCells([0., float(par.HTOT)], 1, 1, thmax=min(90., 0.5 * float(oa[0])))
+        cells = WindCells([0., float(par.CONELEN)], 1, 1, thmax=min(90., 0.5 * float(oa[0])))
         wm = WindModel(c, cells, smooth=bool(par.SM)).quadrature(
             vmax=float(np.max(np.abs(vw)) + np.max(np.abs(vr))), sigmin=float(np.min(vd)))
         pts = wm.points(p)
@@ -182,18 +182,18 @@ class GalWind:
         except ValueError:
             raise BBaroloError(f"GALWIND: OPENANG {par.OPENANG}: with cylinders (WTYPE 0) the opening angle is "
                                "one value.") from None
-        ntot = int(par.NTOT)
-        z0 = par.HTOT / (2 * ntot)                          # half-height of cylinders (arcsec)
+        nlayers = int(par.NLAYERS)
+        z0 = par.CONELEN / (2 * nlayers)                          # half-height of cylinders (arcsec)
         width = (2 * z0) * math.tan(OpA / 2. * math.pi / 180.)
         PA, inc, Vsys = float(par.PHI), float(par.INC), float(par.VSYS)
         x0, y0 = self._center()
 
         def column(name, s):
             col = _column(s)
-            if col is not None and len(col) != ntot:
-                raise BBaroloError(f"GALWIND: VWIND, VDISP, DENS and VROT must have NTOT={ntot} values (one per "
+            if col is not None and len(col) != nlayers:
+                raise BBaroloError(f"GALWIND: VWIND, VDISP, DENS and VROT must have NLAYERS={nlayers} values (one per "
                                    f"cylinder): {name} has {len(col)}.")
-            return list(_values(name, s, ntot))
+            return list(_values(name, s, nlayers))
         Vwind, Vdisp = column("VWIND", par.VWIND), column("VDISP", par.VDISP)
         Dens, Vrot = column("DENS", par.DENS), column("VROT", par.VROT)
 
@@ -234,12 +234,12 @@ class GalWind:
         nthreads = max(1, int(c.pars().threads))
         verb = c.pars().verbose
         bar = ProgressBar(False, verb, c.pars().showbar)
-        bar.init(" Generating outflow model... ", ntot)
-        nch = max(1, min(nthreads, ntot))          # chunk t: the cylinders t+1, t+1+nch, ...
+        bar.init(" Generating outflow model... ", nlayers)
+        nch = max(1, min(nthreads, nlayers))          # chunk t: the cylinders t+1, t+1+nch, ...
         done = [0]
 
         def work(t, buf):
-            for k in range(t + 1, ntot + 1, nch):
+            for k in range(t + 1, nlayers + 1, nch):
                 for ic, r in enumerate(cylinder(k)):
                     setup._build(r, (0, 0), (c.DimX(), c.DimY()), buf, (base + 2 * k + ic) & 0xFFFFFFFF, 1, gtype)
                 done[0] += 1
@@ -254,8 +254,8 @@ class GalWind:
         PA, inc, Vsys = float(par.PHI), float(par.INC), float(par.VSYS)
         x0, y0 = self._center()
         Radii = _column(par.RADII)
-        nr = int(par.NTOT)
-        radsep = par.HTOT / nr
+        nr = int(par.NLAYERS)
+        radsep = par.CONELEN / nr
         if Radii is not None:
             radsep = np.mean(np.diff(Radii[1:])) if len(Radii) > 2 else radsep
             nr = len(Radii)

@@ -4,7 +4,7 @@ BAYESIANWIND fits a bi-conical wind to an emission-line datacube by sampling the
 its geometry and kinematics with nested sampling (nautilus or dynesty). The wind is the model of
 {doc}`GALWIND <../galwind/index>`: two opposite cones with their apex at the centre, along the rotation axis
 of a disk of inclination `INC` and position angle `PA`, between the opening angles `OPENIN` and `OPENANG`,
-out to `HTOT`, with a radial velocity, a velocity dispersion and a rotation around the axis in each shell.
+out to `CONELEN`, with a radial velocity, a velocity dispersion and a rotation around the axis in each shell.
 
 The emission of the wind is **not assumed**. Winds are patchy: clumps and filaments fill the cones
 unevenly, and a smooth density law would bias the geometry. BAYESIANWIND describes the emission as a set
@@ -40,7 +40,7 @@ VSYS          0
 INC           55
 PA            30
 OPENANG       55
-HTOT          200
+CONELEN       200
 VWIND         180
 VDISP         20
 FREE          VWIND_SINGLE INC OPENANG
@@ -54,7 +54,7 @@ THREADS       8
 ```python
 from bbarolo import BayesianWind
 
-f = BayesianWind("wind_mock.fits", xpos=23.5, ypos=23.5, vsys=0, inc=55, pa=30, openang=55, htot=200,
+f = BayesianWind("wind_mock.fits", xpos=23.5, ypos=23.5, vsys=0, inc=55, pa=30, openang=55, conelen=200,
                  vwind=180, vdisp=20)
 f.run(freepar=["vwind_single", "inc", "openang"], threads=8)
 f.print_stats()
@@ -67,11 +67,11 @@ f.write("output/wind/")
 
 `FREE` lists them, as for BAYESIAN3DFIT:
 
-- `VWIND`, `VDISP`, `VROT`: one value per shell (the shells are `RADII`, or `NTOT` shells, by default one per
+- `VWIND`, `VDISP`, `VROT`: one value per shell (the shells are `RADII`, or `NLAYERS` shells, by default one per
   beam), `NAME_SINGLE` one value for all the shells, `NAME_FUNC` a function of radius (VWIND: an arctangent
   rising to a terminal velocity; VDISP and VROT: linear);
 - `XPOS`, `YPOS`, `VSYS`, `INC` (0 to 90°: the cone along +z recedes, `PA` sets the side it projects on),
-  `PA`, `OPENANG`, `OPENIN`, `HTOT`;
+  `PA`, `OPENANG`, `OPENIN`, `CONELEN`;
 - `EMSCALE`, `EMCLUMP`, `EMRATIO`, `EMSLOPE`: the prior of the emissivities, its mean (in the receding
   cone), its fractional scatter, the ratio of the mean of the approaching cone to that of the receding one
   (the far cone is often extincted), and its power-law slope in radius (the emission fades outwards). They

@@ -2294,7 +2294,7 @@ def test_galwind_lists_and_openang(synthetic_cube):
     c = synthetic_cube
     gw = c.pars().gw
     for k, v in dict(XPOS="31.5", YPOS="31.5", VSYS="0", VWIND="100", VROT="0", VDISP="10", DENS="10",
-                     INC="60", PHI="30", OPENANG="60", HTOT=400., NTOT=4, SM=False, ISEED=1).items():
+                     INC="60", PHI="30", OPENANG="60", CONELEN=400., NLAYERS=4, SM=False, ISEED=1).items():
         setattr(gw, k, v)
 
     def model(**kw):
@@ -2307,7 +2307,7 @@ def test_galwind_lists_and_openang(synthetic_cube):
         one = model(WTYPE=wtype)
         assert np.array_equal(one, model(WTYPE=wtype, VWIND="100 100 100 100"))
         assert not np.array_equal(one, model(WTYPE=wtype, VWIND="100, 150, 200, 250"))
-    with pytest.raises(BBaroloError, match="NTOT=4"):
+    with pytest.raises(BBaroloError, match="NLAYERS=4"):
         model(WTYPE=0, VWIND="100 150")
     with pytest.raises(BBaroloError, match="OPENANG"):
         model(WTYPE=0, OPENANG="file(rings.txt,2)")
@@ -2491,7 +2491,7 @@ def test_galwind_outflow_signs_and_nv(synthetic_cube):
     c = synthetic_cube
     gw = c.pars().gw
     for k, v in dict(XPOS="31.5", YPOS="31.5", VSYS="0", VWIND="100", VROT="0", VDISP="10", DENS="10",
-                     INC="60", PHI="0", OPENANG="60", HTOT=400., NTOT=4, SM=False, ISEED=1).items():
+                     INC="60", PHI="0", OPENANG="60", CONELEN=400., NLAYERS=4, SM=False, ISEED=1).items():
         setattr(gw, k, v)
 
     def model(**kw):
@@ -3015,7 +3015,7 @@ def test_galwind_cylinders_flux_and_layers(synthetic_cube):
     c = synthetic_cube
     gw = c.pars().gw
     for k, v in dict(XPOS="31.5", YPOS="31.5", VSYS="0", VWIND="100", VROT="0", VDISP="10", DENS="10",
-                     INC="60", PHI="30", OPENANG="60", HTOT=400., NTOT=4, SM=True, ISEED=1).items():
+                     INC="60", PHI="30", OPENANG="60", CONELEN=400., NLAYERS=4, SM=True, ISEED=1).items():
         setattr(gw, k, v)
     ratio = {}
     for wtype in (0, 1):
@@ -3090,7 +3090,7 @@ _RING_KW = dict(radii=[105, 195, 285], xpos=77, ypos=77, vsys=132.8, vrot=120, v
 _TASKS = [
     ("FitMod3D", dict(_RING_KW, free="VROT VDISP", mask="SEARCH", twostage=False, norm="LOCAL")),
     ("GalMod", dict(_RING_KW, dens=1, norm="AZIM", mask="SEARCH", noiserms=0.001)),
-    ("GalWind", dict(xpos=77, ypos=77, vsys=132.8, vwind=100, openang=60, htot=400, ntot=4, inc=60, phi=0,
+    ("GalWind", dict(xpos=77, ypos=77, vsys=132.8, vwind=100, openang=60, conelen=400, nlayers=4, inc=60, phi=0,
                      dens=10, vdisp=10, wtype=1)),
     ("Search", dict(searchtype="spatial", snrcut=10, growthcut=3, minpix=30, minchannels=5, snmap=True)),
     ("FitMod2D", dict(nradii=6, radsep=30, xpos=77, ypos=77, vsys=132.8, vrot=120, inc=60, pa=123.7,

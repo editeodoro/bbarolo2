@@ -463,11 +463,12 @@ KEYWORDS = [
       aliases=["like_kwargs"]),
 
     # ---------------------------------------------------------------- GALWIND
-    K("HTOT", "float", ["gw.HTOT"], WIND, "Wind maximum distance (arcsec)"),
+    K("CONELEN", "float", ["gw.CONELEN"], WIND, "Length of each cone of the wind, from the centre (arcsec)"),
     K("OPENANG", "str", ["gw.OPENANG"], WIND, "Wind opening angle (degrees)"),
     K("OPENIN", "str", ["gw.OPENIN"], WIND, "Wind inner opening angle (degrees): hollow cones (WTYPE 2 and "
       "BAYESIANWIND; default 0)"),
-    K("NTOT", "int", ["gw.NTOT"], WIND, "Number of layers/cylinder for each cone (BAYESIANWIND: number of shells)"),
+    K("NLAYERS", "int", ["gw.NLAYERS"], WIND, "Number of layers (cylinders or shells) in each cone (BAYESIANWIND: "
+      "number of shells)"),
     K("VWIND", "str", ["gw.VWIND"], WIND, "Radial velocity of the wind (km/s)"),
     K("DENSTYPE", "int", ["gw.DENSTYPE"], ("GALWIND",), "How to distribute density in layers",
       aliases=["dtype"]),
@@ -541,6 +542,8 @@ _BEAM_MSG = ("{} is no longer a parameter: give the beam of the data with BEAM (
              "BMAJ and BMIN in arcsec, or in degrees with a final d, e.g. BEAM 0.01d 0.01d 45; one value is a "
              "circular beam), and the new beam of SMOOTH with NEWBEAM.")
 REMOVED = {n.lower(): _BEAM_MSG.format(n) for n in ("BMAJ", "BMIN", "BPA", "BEAMFWHM", "OBMAJ", "OBMIN", "OBPA")}
+REMOVED.update({old.lower(): f"{old} is no longer a parameter: it was renamed {new} (GALWIND, BAYESIANWIND)."
+                for old, new in (("HTOT", "CONELEN"), ("NTOT", "NLAYERS"))})
 
 
 def check_removed(name):

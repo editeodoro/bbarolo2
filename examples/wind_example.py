@@ -25,7 +25,7 @@ out = sys.argv[1] if len(sys.argv) > 1 else "output/wind_example/"
 threads = int(sys.argv[2]) if len(sys.argv) > 2 else 8
 
 hdu, truth = mock_wind(kind="clumps", seed=1, snr=10)
-f = BayesianWind(hdu, xpos=23.5, ypos=23.5, vsys=0, inc=55, pa=30, openang=55, htot=200, vwind=180, vdisp=20,
+f = BayesianWind(hdu, xpos=23.5, ypos=23.5, vsys=0, inc=55, pa=30, openang=55, conelen=200, vwind=180, vdisp=20,
                  outfolder=out)
 f.run(freepar=["vwind_single", "inc", "openang"], threads=threads)
 f.print_stats()

@@ -17,7 +17,7 @@ instrumental dispersion.
 
 The emission: a fixed grid of cells in the frame of the wind (WindCells), each cone with its own cells:
 radial bins, polar bins from the axis to the largest half opening angle, azimuthal sectors. The current
-cone (inner and outer half opening angles OPENIN/2 and OPENANG/2, outer radius HTOT) clips the cells: the
+cone (inner and outer half opening angles OPENIN/2 and OPENANG/2, outer radius CONELEN) clips the cells: the
 quadrature points of a cell fill its clipped part, so the model moves continuously with the geometry and a
 cell outside the cone has no volume. The model is linear in the amplitudes of the cells (emissivity per
 unit volume): M = A(geometry, kinematics) . amplitudes. The columns of A, each point deposited with its line
@@ -42,14 +42,14 @@ MAX_POINTS = 2_000_000              # (warning above this number of quadrature p
 # --------------------------------------------------------------------------
 class WindPars:
     """The parameters of a wind model: centre (xpos, ypos: pixels), vsys (km/s), inc and pa (degrees, as GALWIND),
-    openang and openin (full outer and inner opening angles, degrees), htot (outer radius, arcsec), and per
+    openang and openin (full outer and inner opening angles, degrees), conelen (outer radius, arcsec), and per
     shell (radii: arcsec) vwind, vdisp and vrot (km/s)."""
 
-    NAMES = ("xpos", "ypos", "vsys", "inc", "pa", "openang", "openin", "htot")
+    NAMES = ("xpos", "ypos", "vsys", "inc", "pa", "openang", "openin", "conelen")
     SHELL = ("vwind", "vdisp", "vrot")
 
     def __init__(self, radii, vwind, vdisp, vrot=0., xpos=0., ypos=0., vsys=0., inc=60., pa=0., openang=60.,
-                 openin=0., htot=None):
+                 openin=0., conelen=None):
         self.radii = np.atleast_1d(np.asarray(radii, dtype=np.float64))
         n = self.radii.size
         if n == 0 or np.any(np.diff(self.radii) <= 0):
@@ -64,7 +64,7 @@ class WindPars:
         self.xpos, self.ypos, self.vsys = float(xpos), float(ypos), float(vsys)
         self.inc, self.pa = float(inc), float(pa)
         self.openang, self.openin = float(openang), float(openin)
-        self.htot = float(self.radii[-1] if htot is None else htot)
+        self.conelen = float(self.radii[-1] if conelen is None else conelen)
 
     def copy(self):
         p = WindPars.__new__(WindPars)
@@ -76,8 +76,8 @@ class WindPars:
         if not (0 <= self.openin < self.openang <= 180.):
             raise BBaroloError(f"WindModel: the opening angles must be 0 <= OPENIN < OPENANG <= 180 "
                                f"(OPENIN={self.openin:g}, OPENANG={self.openang:g})")
-        if not self.htot > 0:
-            raise BBaroloError(f"WindModel: HTOT must be positive (HTOT={self.htot:g})")
+        if not self.conelen > 0:
+            raise BBaroloError(f"WindModel: CONELEN must be positive (CONELEN={self.conelen:g})")
         if np.any(self.vdisp < 0):
             raise BBaroloError("WindModel: negative velocity dispersion")
 
@@ -807,7 +807,7 @@ class WindModel:
         ang = math.radians(p.pa) + su.crota2
         _wind_points(c.cells, c.qn, c.qoff, p.radii, p.vwind, p.vdisp, p.vrot, p.xpos, p.ypos, p.vsys * 1000.,
                      math.sin(inc), math.cos(inc), math.sin(ang), math.cos(ang), self.cdelt[0], self.cdelt[1],
-                     math.radians(0.5 * p.openin), math.radians(0.5 * p.openang), p.htot, su.sig_instr,
+                     math.radians(0.5 * p.openin), math.radians(0.5 * p.openang), p.conelen, su.sig_instr,
                      out["gx"], out["gy"], out["vel"], out["sig"], out["w"], out["r"], vol, rbar)
         out["vol"], out["rbar"] = vol, rbar
         return out

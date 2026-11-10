@@ -73,7 +73,7 @@ wider than the truth.
 ## The region, the noise and the sampling
 
 The likelihood uses all the voxels of a fixed region: the pixels within `grow` beams of the projected cones of
-the widest priors (the corners of the box of the priors of the centre, INC, PA, OPENANG and HTOT), all the
+the widest priors (the corners of the box of the priors of the centre, INC, PA, OPENANG and CONELEN), all the
 channels. There is no mask, because the empty voxels are what tell a cone that is too large. The noise rms is
 measured outside the mask of the emission (`MASK`), and the log-likelihood is divided by the correlation volume
 of the noise, as in {doc}`BAYESIAN3DFIT <../bayesian3dfit/algorithm>`. Values of the columns below `prune`
