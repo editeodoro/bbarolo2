@@ -1111,7 +1111,7 @@ class DiskModel:
         self.scalefactor = 1.           # flux scaling of the convolution (column densities)
         self.smooth = bool(self.par.SM if smooth is None else smooth)
         if self.smooth and not self._set_kernel():
-            sys.stderr.write(" WARNING: can not set an appropriate convolution field. "
+            sys.stderr.write("WARNING: can not set an appropriate convolution field. "
                              "Turning off the convolution step.\n")
             self.smooth = False
         self.setup.zstep = self.zstep

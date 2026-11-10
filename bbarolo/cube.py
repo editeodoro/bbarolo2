@@ -152,7 +152,7 @@ class Cube:
                                "value is a circular beam), or beam=(bmaj, bmin, bpa) in Python.")
         elif min(h.Bmaj(), h.Bmin()) < h.PixScale() and not getattr(self, "_beamwarned", False):
             self._beamwarned = True
-            print(f"\n WARNING: the beam ({h.Bmaj() * 3600.:.4g}x{h.Bmin() * 3600.:.4g} arcsec) is smaller than a "
+            print(f"\nWARNING: the beam ({h.Bmaj() * 3600.:.4g}x{h.Bmin() * 3600.:.4g} arcsec) is smaller than a "
                   f"pixel ({h.PixScale() * 3600.:.4g} arcsec).\n")
 
     def readCube(self, fname, printInfo=True):
@@ -642,17 +642,17 @@ class Cube:
             elif "FILE(" in MASK:
                 first, last = MASK.find("("), MASK.rfind(")")
                 if first < 0 or last < 0:
-                    raise BBaroloError("\n  ERROR: MASK parameter is not correct. Provide file(Maskfitsfile)")
+                    raise BBaroloError("\nERROR: MASK parameter is not correct. Provide file(Maskfitsfile)")
                 fname = MASK[first + 1:last]
                 try:
                     md = read_fits_image(fname)[1]
                 except Exception:
                     md = None
                 if md is None:
-                    raise BBaroloError(f"\n ERROR: Mask {fname} is not a readable FITS image! Exiting ...")
+                    raise BBaroloError(f"\nERROR: Mask {fname} is not a readable FITS image! Exiting ...")
                 md = np.squeeze(md)
                 if md.size != self.array.size:
-                    raise BBaroloError(f"\n ERROR: Mask file and data file have different dimensions.{fname} "
+                    raise BBaroloError(f"\nERROR: Mask file and data file have different dimensions.{fname} "
                                        "Exiting ...")
                 mask = np.nan_to_num(md.reshape(self.array.shape)) != 0
             elif MASK == "NONE":

@@ -253,7 +253,7 @@ def main(argv=None):
         return _main(argv)
     except BBaroloError as e:
         sys.stdout.flush()
-        sys.stderr.write(f"\n BBAROLO ERROR: {str(e).strip()}\n\n")
+        sys.stderr.write(f"\nBBAROLO ERROR: {str(e).strip()}\n\n")
         return 1
     except BrokenPipeError:
         # Output piped to a program that closed it early (e.g. "BBarolo -d | head")

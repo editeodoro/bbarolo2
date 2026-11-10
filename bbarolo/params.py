@@ -87,7 +87,7 @@ def unknown_keyword(name):
     if close:
         from .bbutils import BBaroloError
         raise BBaroloError(f"{_kw.unknown_message(name)}")
-    sys.stderr.write(f" BBAROLO WARNING: {_kw.unknown_message(name)}. It is ignored.\n")
+    sys.stderr.write(f"BBAROLO WARNING: {_kw.unknown_message(name)}. It is ignored.\n")
 
 
 def ring_value_problem(key, value):
@@ -473,7 +473,7 @@ class Param:
                 self.images.append(self.imageFile)
 
         if len(self.images) == 0:
-            out("\n BBAROLO ERROR: no FITSFILE provided.")
+            out("\nBBAROLO ERROR: no FITSFILE provided.")
             return False
 
         self.outFolder = checkHome(self.outFolder)
@@ -499,7 +499,7 @@ class Param:
                     maskOK = True
                     self.MaskType = ms
         if not maskOK:
-            out(f"\n ERROR: Unknown type of mask: {self.MaskType}\n Setting to SMOOTH")
+            out(f"\nERROR: Unknown type of mask: {self.MaskType}\nSetting to SMOOTH")
             self.MaskType = "SMOOTH"
 
         if self.contsub and self.cont_order < 0:

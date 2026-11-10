@@ -603,7 +603,7 @@ def BBcore(par, collect=False):
         outfolder = os.getcwd() + "/output/" + h.Name() + "/"
         p.setOutfolder(outfolder)
     if p.verbose and os.path.isdir(outfolder) and os.listdir(outfolder):
-        print(f" BBAROLO WARNING: the output folder {shortpath(outfolder)} already exists: its files will be "
+        print(f"BBAROLO WARNING: the output folder {shortpath(outfolder)} already exists: its files will be "
               "overwritten.")
     mkdirp(outfolder)
     with _logfile(par, outfolder):
@@ -875,7 +875,7 @@ class Result:
             if plots is not None:
                 p.plots = par.plots = int(plots)
             if p.verbose and os.path.isdir(of) and os.listdir(of):
-                print(f" BBAROLO WARNING: the output folder {shortpath(of)} already exists: its files will be "
+                print(f"BBAROLO WARNING: the output folder {shortpath(of)} already exists: its files will be "
                       "overwritten.")
             mkdirp(of)
             before = _snapshot(of)

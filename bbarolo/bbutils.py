@@ -412,7 +412,7 @@ def getDataColumn(filestring):
                 row_high = int(hi) - 1
     filename = os.path.expanduser(filename)
     if not os.path.isfile(filename):
-        raise FileNotFoundError(f"\n ERROR: {filename} doesn't exist! \n")
+        raise FileNotFoundError(f"\nERROR: {filename} doesn't exist! \n")
     data = []
     with open(filename) as f:
         for row_n, line in enumerate(f):

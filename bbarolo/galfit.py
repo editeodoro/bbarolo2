@@ -308,7 +308,7 @@ def check_vsys(c, rings, fatal=True):
            + (": is it in m/s?" if lo <= out[0] / 1000. <= hi else "."))
     if fatal:
         raise BBaroloError(msg)
-    print(f" WARNING: {msg}")
+    print(f"WARNING: {msg}")
 
 
 def default_z0(h):
