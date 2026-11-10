@@ -324,6 +324,7 @@ class BayesianWind(Task):
         self._beam = math.sqrt(bmaj * bmin) if bmaj > 0 and bmin > 0 else self._pix
         self.beam_area = float(np.pi * bmaj * bmin / (4 * np.log(2)) / self._pix ** 2) if bmaj > 0 else 1.
         self.noise_correlation = None
+        self._noisecorr_failed = False
         return c
 
     def _initial(self):
@@ -575,7 +576,7 @@ class BayesianWind(Task):
         holder = _LikeFactor(self, lk.get("noisecorr", "measured"))
         LikelihoodMixin._set_likefactor(holder)
         self.likefactor, self._likefactor_note = holder.likefactor, holder._likefactor_note
-        self.noise_correlation = holder.noise_correlation
+        self.noise_correlation, self._noisecorr_failed = holder.noise_correlation, holder._noisecorr_failed
         self._dsafe = np.where(self._ok, self.data, 0.)
         self._set_weights(self._sigma_fixed())
         if lk["emission"] == "voxel":
@@ -1055,6 +1056,7 @@ class _LikeFactor:
         self.like_kwargs = dict(noisecorr=mode)
         self.beam_area = f.beam_area
         self.noise_correlation = f.noise_correlation
+        self._noisecorr_failed = getattr(f, "_noisecorr_failed", False)
         self._cube_obj = f._cube_obj
         self.data = f.data                     # (_set_likefactor leaves the blanks out of the noise correlation)
         self.mask = f.mask

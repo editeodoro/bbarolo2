@@ -108,6 +108,7 @@ class LikelihoodMixin(object):
             print("BAYESIAN WARNING: the beam of the cube is unknown, the pixels are treated as independent.")
             self.beam_area = 1.
         self.noise_correlation = None
+        self._noisecorr_failed = False
         self._set_likefactor()
         self._setup_likemask(force=True)
         self.map_rms = self._map_noise(self._nvox_map)
@@ -249,16 +250,20 @@ class LikelihoodMixin(object):
             A = A2 = float(mode)
             self._likefactor_note = f"1/{A:g} (noisecorr given: voxels per independent noise value)"
         elif str(mode).lower() == 'measured':
-            if self.noise_correlation is None:
+            # (measured once: a failure is remembered too, in _noisecorr_failed, and reported once)
+            if self.noise_correlation is None and not getattr(self, '_noisecorr_failed', False):
                 h = self._cube_obj.Head()
                 bpix = abs(h.Bmaj() / h.Cdelt(0)) if h.Bmaj() and h.Cdelt(0) else None
                 blank = LikelihoodMixin._blank(self.data)   # (the blanks, 0 in the cube: NaN, not noise)
                 self.noise_correlation = noise_correlation(np.where(blank, np.nan, self.data) if blank.any()
                                                            else self.data, self.mask, bpix)
+                self._noisecorr_failed = self.noise_correlation is None
+                if self._noisecorr_failed:
+                    print("BAYESIAN WARNING: too few voxels without emission to measure the correlation of the "
+                          "noise:\n         using the beam area (like_kwargs noisecorr='beam').")
             nc = self.noise_correlation
             if nc is None:
-                print("BAYESIAN WARNING: too few voxels without emission to measure the correlation of the "
-                      "noise:\n         using the beam area (like_kwargs noisecorr='beam').")
+                self._likefactor_note += " (the correlation of the noise could not be measured)"
             else:
                 sp = max(nc['spatial'], nc.get('spatial_core', nc['spatial']), self.beam_area)
                 sz = max(nc['spectral'], nc.get('spectral_core', nc['spectral']), 1.)

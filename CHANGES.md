@@ -7,6 +7,11 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **BAYESIAN3DFIT and BAYESIANWIND: the warning on the correlation of the noise printed several times.** When the
+  correlation could not be measured (too few voxels without emission), the failure was not remembered: the
+  measure was tried again, and the warning printed again, at the reading of the cube and at every setup of the
+  likelihood (each run). It is now tried and reported once, and the note of the likelihood factor says that the
+  beam area was used because the measure failed.
 - **BAYESIANWIND and GALWIND WTYPE 2: cones sampled as a few blobs.** The quadrature of a cell had at most 16
   points per dimension, so a cell that spans a whole cone (the bases `cone`, `spaxel` and `voxel`, each shell of
   `shells`, the cones of GALWIND WTYPE 2) was sampled far more coarsely than the beam when the cone is many beams

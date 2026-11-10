@@ -674,6 +674,25 @@ def test_bayesian_blanks(tmp_path):
                            f._calculate_residuals(model, nan, lm, region=f._region, fracerr=0.1)], rtol=1e-9, atol=0)
 
 
+def test_bayesian_noisecorr_failure_once(tmp_path, monkeypatch, capsys):
+    """When the correlation of the noise cannot be measured (too few voxels without emission), BAYESIAN3DFIT tries once
+    and warns once, not again at every setup of the likelihood (the failure was not remembered: the warning was
+    printed at the reading of the cube and at each run); the likelihood then uses the beam area."""
+    import bbarolo.bayesian.likelihood as lik
+    from bbarolo.bayesian import Bayesian3DFIT
+    calls = []
+    monkeypatch.setattr(lik, "noise_correlation", lambda *a, **k: calls.append(1))
+    fn = _mock_cube(tmp_path)
+    kw = dict(radii=[20, 60, 100, 140], xpos=31.5, ypos=31.5, vsys=0, vrot=120, vdisp=15, z0=0, inc=60, pa=45,
+              mask="SEARCH", galmodtype="ANALYTIC")
+    f = Bayesian3DFIT(fn, **kw, outfolder=str(tmp_path) + "/")
+    f._setup(['vrot_single', 'vdisp_single'])
+    f._setup(['vrot_single'])
+    assert len(calls) == 1
+    assert capsys.readouterr().out.count("too few voxels without emission") == 1
+    assert f.likefactor == pytest.approx(1. / f.beam_area) and "could not be measured" in f._likefactor_note
+
+
 @needs_data
 def test_bayesian_noisecorr_and_fracerr(tmp_path):
     """The fractional model error ('fracerr', variance sigma^2 + (fracerr*model)^2) and the

@@ -83,6 +83,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         self.results = None
         self.sampler = None
         self.noise_correlation = None
+        self._noisecorr_failed = False                 # (the measure of the correlation failed: not retried)
         self._likemask_key = None
         self.dens_profile = None
         self.useBBres = False
