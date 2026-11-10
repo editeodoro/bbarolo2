@@ -103,13 +103,16 @@ log-normal field (EMCLUMP about 0.7).
 
 The likelihood uses all the voxels of a fixed region: the pixels within `grow` beams of the projected cones of
 the widest priors (the corners of the box of the priors of the centre, INC, PA, OPENANG and CONELEN), all the
-channels. There is no mask, because the empty voxels are what tell a cone that is too large. The noise rms is
-measured outside the mask of the emission (`MASK`), and the log-likelihood is divided by the correlation volume
-of the noise, as in {doc}`BAYESIAN3DFIT <../bayesian3dfit/algorithm>`. Values of the columns below `prune`
+channels. There is no mask, because the empty voxels are what tell a cone that is too large, but the blanks
+(NaN in the file) are not data and are left out: blank what is not the wind (other lines, other sources) to keep
+it out of the fit. The noise rms is measured outside the mask of the emission (`MASK`) and the blanks, and the
+log-likelihood is divided by the correlation volume of the noise, as in {doc}`BAYESIAN3DFIT <../bayesian3dfit/algorithm>`. Values of the columns below `prune`
 times the peak of their cell (the faint wings, where the tails of the line and of the beam multiply, about
 0.3% of the flux) are left out of the normal equations, which makes the likelihood about ten times faster.
 
-The sampling runs on `THREADS` processes, as BAYESIAN3DFIT. A likelihood evaluation of a wind 8 beams long in a
+The quadrature points of each cell are one dispersion of the beam apart (at most 2 million points in all; beyond,
+the spacing grows, with a warning above twice the dispersion), so the bases with one cell per cone or per shell
+are as smooth as the cells. The sampling runs on `THREADS` processes, as BAYESIAN3DFIT. A likelihood evaluation of a wind 8 beams long in a
 48×48×40 cube takes 15–60 ms with about 500 cells.
 
 ## Validation
@@ -143,7 +146,7 @@ four to six times faster.
 The weighting of MoKA-3D with the χ² of the voxels the cone does not reach (the earlier `voxel`, without the cuts of
 MoKA-3D) ran every parameter to the edge of its prior: VWIND +83 km/s, VDISP +55 km/s, OPENANG +25°. With the
 detection likelihood (`voxel`, EMSLOPE fixed at 0 as the cells of the table) the filled and hollow cones and the
-log-normal field came out as well as with the cells, about ten times faster (0.7 minutes per fit): VWIND −0.5 to
-−4.6 km/s, VDISP +4 to +9 km/s, INC and PA within 0.6°, OPENANG 1–2° narrow, OPENIN +0.8°, with rms pulls mostly 0.4–1.4
+log-normal field came out as well as with the cells, four to five times faster (1.5 minutes per fit): VWIND −0.4
+to −4.6 km/s, VDISP +4 to +8 km/s, INC and PA within 0.6°, OPENANG 1–2° narrow, OPENIN +0.8°, with rms pulls mostly 0.4–1.4
 (the cells: up to 2.3). Edge-on it does worse than the cells: VWIND 24% low and VDISP 24 km/s high (the cells: 14% and
 8 km/s), the same trade of a slower wind for broader lines, which the detections, blind to the flux, constrain less.

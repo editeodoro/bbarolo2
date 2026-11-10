@@ -487,3 +487,62 @@ def test_bayesian_wind_voxel(tmp_path):
     pre = f._cube_obj.pars().outPrefix
     with open(str(tmp_path) + "/" + pre + "_wind_params.txt") as fh:
         assert "emission voxel, detection likelihood" in fh.readline()
+
+
+def test_wind_single_cell_sampled_at_the_beam():
+    """A cell that spans a whole cone (the bases cone, spaxel and voxel, a shell of the basis shells, GALWIND WTYPE 2)
+    gets the quadrature points the beam needs, not at most 16 per dimension: a uniform cone many beams long is the
+    same with one cell as with cells about a beam across (it was a set of separate blobs: 16 azimuths on rings 2
+    beams wide). Beyond MAX_POINTS the spacing is enlarged, with a warning."""
+    import bbarolo.windmodel as wmod
+    c, _ = _cube(nx=64, nz=24, pix=4., chan=20., beam=12.)
+    p = WindPars(radii=[60., 120.], vwind=150., vdisp=20., xpos=31.5, ypos=31.5, inc=50, pa=30, openang=60,
+                 conelen=120.)
+    one = WindModel(c, WindCells([0., 120.], 1, 1, thmax=30.)).quadrature(vmax=150, sigmin=20)
+    many = WindModel(c, WindCells.resolved(120., 30., 12.)).quadrature(vmax=150, sigmin=20)
+    assert one.cells.spacing == pytest.approx(one.sigbeam)
+    m1 = one.cube(p, amp=np.ones(one.cells.ncell))
+    m2 = many.cube(p, amp=np.ones(many.cells.ncell))
+    assert abs(m1.sum() / m2.sum() - 1) < 0.01
+    assert np.abs(m1 - m2).max() < 0.03 * m2.max()
+    cells = WindCells([0., 120.], 1, 1, thmax=30.)
+    cells.set_quadrature(one.sigbeam, 150., 40., maxpoints=2000)
+    assert cells.npoints <= 2000 and cells.spacing > one.sigbeam
+    old = wmod.MAX_POINTS
+    try:
+        wmod.MAX_POINTS = 2000
+        import io
+        from contextlib import redirect_stderr
+        err = io.StringIO()
+        with redirect_stderr(err):
+            WindModel(c, WindCells([0., 120.], 1, 1, thmax=30.)).quadrature(vmax=150, sigmin=20)
+        assert "WARNING: the cones are sampled every" in err.getvalue()
+    finally:
+        wmod.MAX_POINTS = old
+
+
+def test_bayesian_wind_blanks(tmp_path):
+    """The blanks of the cube (NaN in the file, 0 once read) are not data: BAYESIANWIND leaves them out of the voxels of
+    the likelihood and out of the noise (which they made too low: 30% of zeros pulled the median absolute deviation
+    down by about a third)."""
+    from wind_mocks import mock_wind
+    from bbarolo import BayesianWind
+    from astropy.io import fits
+    hdu, tr = mock_wind(kind="clumps", seed=2, snr=15, shape=(24, 24, 20), pix=12., chan=25., beam=36.,
+                        truth=dict(xpos=11.5, ypos=11.5, conelen=110., radii=[55., 110.], vwind=200.), nclumps=40,
+                        clump=20.)
+    data = hdu.data.astype(np.float64).copy()
+    data[:, :, :7] = np.nan                                           # (30% of the field blank)
+    blank = fits.PrimaryHDU(data.astype(np.float32), hdu.header)
+    kw = dict(xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, conelen=110, vwind=180, vdisp=20, nlayers=2,
+              outfolder=str(tmp_path) + "/")
+    fs = []
+    for h in (hdu, blank):
+        f = BayesianWind(h, **kw)
+        f.like_kwargs = dict(f.like_kwargs, emission="voxel")
+        f._setup(f._with_hyper(["openang"], verbose=False), verbose=False)
+        fs.append(f)
+    full, f = fs
+    assert not f._ok[:, :, :7].any()
+    assert np.array_equal(f._ok[:, :, 7:], full._ok[:, :, 7:])
+    assert abs(f.noiserms / full.noiserms - 1) < 0.05

@@ -64,8 +64,10 @@ Options of the likelihood (LIKEOPTS, run(like_kwargs=...)):
   emslope    a fixed EMSLOPE (e.g. 0: a mean emissivity uniform in radius); default: free
 
 The likelihood uses all the voxels of its region (no mask: the empty voxels are what tell a cone that is too
-large). The fixed disk (DISKRINGS: a rings file of 3DFIT or BAYESIAN3DFIT) adds one model per ring with its
-geometry and kinematics, whose densities are non-negative amplitudes solved and marginalised with the emission.
+large) but the blanks (NaN in the file, 0 in the cube), which are not data: blank what is not the wind (other
+lines, other sources) to leave it out. The fixed disk (DISKRINGS: a rings file of 3DFIT or BAYESIAN3DFIT) adds
+one model per ring with its geometry and kinematics, whose densities are non-negative amplitudes solved and
+marginalised with the emission.
 """
 
 import os
@@ -308,7 +310,8 @@ class BayesianWind(Task):
             if not c.MaskAll():
                 c.BlankMask(None, False)
         self.mask = c.Mask() if c.MaskAll() else np.zeros(self.data.shape, bool)
-        out = self.data[(~self.mask.astype(bool)) & np.isfinite(self.data)]
+        # (the blanks, NaN in the file, are 0 in the cube: they are not data, here and in the likelihood)
+        out = self.data[(~self.mask.astype(bool)) & np.isfinite(self.data) & (self.data != 0)]
         if out.size == 0:
             out = self.data[np.isfinite(self.data)]
         self.noiserms = float(1.4826 * np.median(np.abs(out - np.median(out))))
@@ -567,7 +570,7 @@ class BayesianWind(Task):
         ys, xs = np.nonzero(self._region2d)
         nz = self.data.shape[0]
         self._lim = np.array([xs.min(), xs.max() + 1, ys.min(), ys.max() + 1, 0, nz], dtype=np.int64)
-        self._ok = self._region2d[None, :, :] & np.isfinite(self.data)
+        self._ok = self._region2d[None, :, :] & np.isfinite(self.data) & (self.data != 0)     # (0: blanks)
         # the correlation factor of the noise, as BAYESIAN3DFIT (LikelihoodMixin._set_likefactor needs like_kwargs)
         holder = _LikeFactor(self, lk.get("noisecorr", "measured"))
         LikelihoodMixin._set_likefactor(holder)
@@ -1053,7 +1056,7 @@ class _LikeFactor:
         self.beam_area = f.beam_area
         self.noise_correlation = f.noise_correlation
         self._cube_obj = f._cube_obj
-        self.data = f.data
+        self.data = np.where(f.data != 0, f.data, np.nan)          # (the blanks out of the noise correlation)
         self.mask = f.mask
 
 

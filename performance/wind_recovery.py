@@ -52,7 +52,7 @@ CONFIGS = {
     "slope-free": dict(truth={}, mock=dict(kind="clumps", slope=2., snr=20.), free=BASE_FREE + ["emslope"]),
 }
 BASES = {"cells": dict(emission="cells"), "cells-profile": dict(emission="cells", marginal=False),
-         "shells": dict(emission="shells"), "cone": dict(emission="cone"), "spaxel": dict(emission="spaxel"),
+         "shells": dict(emission="shells", emslope=0.), "cone": dict(emission="cone"), "spaxel": dict(emission="spaxel"),
          "voxel": dict(emission="voxel", emslope=0.)}
 # the initial wind of the fits: the truth offset (as a user's guess), and the priors of BayesianWind around it
 OFFSETS = dict(inc=-5., pa=5., openang=-5., openin=5., vwind=-20., vdisp=5., vrot=10.)

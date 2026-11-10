@@ -7,6 +7,18 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **BAYESIANWIND and GALWIND WTYPE 2: cones sampled as a few blobs.** The quadrature of a cell had at most 16
+  points per dimension, so a cell that spans a whole cone (the bases `cone`, `spaxel` and `voxel`, each shell of
+  `shells`, the cones of GALWIND WTYPE 2) was sampled far more coarsely than the beam when the cone is many beams
+  long: on a MUSE cube of Circinus (1.8" beam, CONELEN 140") the points were 9" apart along the cone and 12" apart
+  in azimuth at 30", and the model was a set of spokes. The points are now as close as the beam needs (its
+  dispersion) in every dimension, the cap applying only to the sampling of the velocities. Above 2 million points
+  the spacing is enlarged, with a warning if it exceeds twice the dispersion of the beam. The `cells` basis (cells
+  about a beam across) is unchanged.
+- **BAYESIANWIND: blanks counted as empty data.** The blanks of the cube (NaN in the file, 0 once read) were voxels
+  of the likelihood with no emission, and they entered the noise rms (too low: 9% on the Circinus cube, with 6% of
+  its spaxels blank) and its correlation. They are now left out, so blanking what is not the wind (other lines, other
+  sources) removes it from the fit.
 - **MAPTYPE in 3DFIT, BAYESIAN3DFIT and GALMOD**: their maps of the data and of the models (`maps/`, the
   maps page of the plots) were always moments, whatever MAPTYPE (as in C++). With MAPTYPE GAUSSIAN they
   are now Gaussian fits, for both data and models, and the rows of the maps plot are labelled
@@ -551,8 +563,8 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   EMCLUMP plus the noise (`emission.log_detection`): a cone that predicts emission where the data have none is
   penalised. EMSCALE, EMCLUMP, EMRATIO and EMSLOPE are now added to the free parameters with `voxel`; SIGMA free and
   DISKRINGS are errors with it (DISKRINGS was ignored). In the recovery study the filled and hollow cones and the
-  log-normal field came out as well as with the cells (VWIND −0.5 to −4.6 km/s, VDISP +4 to +9 km/s, OPENANG 1–2°
-  narrow, pulls about 1), ten times faster; edge-on VWIND is 24% low and VDISP 24 km/s high (the cells: 14%, 8
+  log-normal field came out as well as with the cells (VWIND −0.4 to −4.6 km/s, VDISP +4 to +8 km/s, OPENANG 1–2°
+  narrow, pulls about 1), four to five times faster; edge-on VWIND is 24% low and VDISP 24 km/s high (the cells: 14%, 8
   km/s). MoKA-3D itself handles the degeneracy with cuts on the 1st and 99th percentile velocities of the
   unweighted model (see the algorithm page of BAYESIANWIND).
 - **CONELEN replaces HTOT and NLAYERS replaces NTOT** (GALWIND and BAYESIANWIND: the length of each cone and

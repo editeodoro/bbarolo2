@@ -34,7 +34,7 @@ from .bbutils import BBaroloError, arcsconv, getCenterCoordinates
 from .galmod import GalmodSetup, _lround, _velgrid, _line_profile, _PHI_TAB
 
 PSF_CUTOFF = 1.0e-4                 # (as CUTOFFRATIO of SMOOTH: the beam is zero below this fraction of its peak)
-MAX_POINTS = 2_000_000              # (warning above this number of quadrature points)
+MAX_POINTS = 2_000_000              # (the most quadrature points: beyond, the cones are sampled more coarsely)
 
 
 # --------------------------------------------------------------------------
@@ -165,20 +165,31 @@ class WindCells:
             raise BBaroloError(f"WindCells: no cell ({cone}, {ir}, {it}, {ip})")
         return int(hit[0])
 
-    def set_quadrature(self, spacing, vmax, sigmin, cap=16):
+    def set_quadrature(self, spacing, vmax, sigmin, cap=16, maxpoints=None):
         """The number of quadrature points of each cell in r, theta and phi: points at most spacing (arcsec) apart
-        on the sky, and with line-of-sight velocities at most half the narrowest line dispersion sigmin (km/s) apart
-        for winds up to vmax (km/s: the largest |VWIND| + |VROT|); at most cap per dimension."""
+        on the sky (as many as a cell needs: one cell can span a whole cone), and with line-of-sight velocities at
+        most half the narrowest line dispersion sigmin (km/s) apart for winds up to vmax (km/s: the largest |VWIND| +
+        |VROT|), at most cap per dimension for the velocities. With maxpoints, the spacing is enlarged until the cells
+        have at most maxpoints points. Sets qn, qoff and spacing (the spacing used, arcsec)."""
         c = self.cells
         dr = c[:, 2] - c[:, 1]
         dth = c[:, 4] - c[:, 3]
         dph = c[:, 6] - c[:, 5]
         st = np.sin(c[:, 4])
         dv = max(0.5 * float(sigmin), 1e-3)
-        nr = np.ceil(dr / spacing)
-        nt = np.maximum(np.ceil(c[:, 2] * dth / spacing), np.ceil(vmax * dth / dv))
-        npp = np.maximum(np.ceil(c[:, 2] * st * dph / spacing), np.ceil(vmax * st * dph / dv))
-        qn = np.clip(np.vstack([nr, nt, npp]).T, 1, cap).astype(np.int64)
+        nt_v = np.minimum(np.ceil(vmax * dth / dv), cap)
+        np_v = np.minimum(np.ceil(vmax * st * dph / dv), cap)
+        sp = float(spacing)
+        while True:
+            nr = np.ceil(dr / sp)
+            nt = np.maximum(np.ceil(c[:, 2] * dth / sp), nt_v)
+            npp = np.maximum(np.ceil(c[:, 2] * st * dph / sp), np_v)
+            qn = np.maximum(np.vstack([nr, nt, npp]).T, 1).astype(np.int64)
+            tot = int(np.sum(np.prod(qn, axis=1)))
+            if maxpoints is None or tot <= maxpoints:
+                break
+            sp *= max(1.02, (tot / maxpoints) ** (1. / 3.))
+        self.spacing = sp
         self.qn = np.ascontiguousarray(qn)
         self.qoff = np.zeros(self.ncell + 1, dtype=np.int64)
         np.cumsum(np.prod(qn, axis=1), out=self.qoff[1:])
@@ -779,11 +790,14 @@ class WindModel:
         if spacing is None:
             spacing = self.pixsize if self.beam is None else self.sigbeam
         sig = math.hypot(sigmin, self.setup.sig_instr / 1000.)
-        self.cells.set_quadrature(spacing, vmax, 2. * sig, cap=cap)
-        if self.cells.npoints > MAX_POINTS:
+        self.cells.set_quadrature(spacing, vmax, 2. * sig, cap=cap, maxpoints=MAX_POINTS)
+        if self.cells.spacing > 2. * spacing:
+            # (Gaussians 2 dispersions apart sum to a ripple of 1.5%; coarser, the model is lumpy)
             import sys
-            sys.stderr.write(f" WindModel WARNING: {self.cells.npoints} quadrature points: the models will be slow. "
-                             "Use fewer cells or a coarser spacing.\n")
+            sys.stderr.write(f" WindModel WARNING: the cones are sampled every {self.cells.spacing:.3g} arcsec, more "
+                             f"than twice the {spacing:.3g} arcsec needed (at most {MAX_POINTS} quadrature points): the "
+                             "model is lumpier than the beam. Use shorter or narrower cones (CONELEN, OPENANG), or a "
+                             "cube with fewer pixels per beam.\n")
         return self
 
     # ------------------------------------------------------------------
