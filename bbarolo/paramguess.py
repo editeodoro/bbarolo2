@@ -354,11 +354,14 @@ class ParamGuess:
             self.inclin = math.degrees(math.acos(min(math.sqrt(max(b2, 0.) / a2), 1.)))
         self.inclin = min(max(self.inclin, 5.), 89.)
 
-    def findRings(self):
+    def findRings(self, halve=True):
+        """The rings out to Rmax, one beam (radsep) wide; halve: half a beam wide when there are fewer
+        than 20 (as C++; BAYESIAN3DFIT keeps one beam)."""
         self.nrings = _lround(self.Rmax / self.radsep)
-        if self.nrings < 20:
+        if halve and self.nrings < 20:
             self.radsep /= 2.
             self.nrings = _lround(self.Rmax / self.radsep)
+        self.nrings = max(1, self.nrings)
         if self.nrings > 4:
             self.nrings -= 1
 
@@ -644,8 +647,9 @@ def funcIncfromMap(mypar, c, radsep, Rmax, pa, xcen, ycen, vsys, Imap, totflux):
     return res
 
 
-def EstimateInitial(c, p):
-    """Estimate the initial parameters not given in the GALFIT_PAR structure p."""
+def EstimateInitial(c, p, beamrings=False):
+    """Estimate the initial parameters not given in the GALFIT_PAR structure p. beamrings: rings one beam
+    wide when RADSEP is not given (BAYESIAN3DFIT), otherwise half a beam wide for fewer than 20 rings."""
     from .search import Detection
     largest = None
     if c.MaskAll() and "FILE(" in c.pars().MaskType:
@@ -680,7 +684,7 @@ def EstimateInitial(c, p):
     if p.NRADII != -1 and p.RADSEP != -1:
         ip.radsep, ip.nrings = p.RADSEP, p.NRADII
     else:
-        ip.findRings()
+        ip.findRings(halve=not beamrings)
         if p.RADSEP != -1:
             # RADSEP alone: rings of RADSEP out to the estimated extent of the disk (C++ kept the number of
             # the beam-wide rings, so the extent scaled with RADSEP)

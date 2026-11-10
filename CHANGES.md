@@ -539,6 +539,8 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **RADSEP of BAYESIAN3DFIT, when not given, is the beam FWHM** whatever the number of rings (it was halved,
+  as in 3DFIT, when the disk spanned fewer than 20 beams), so the estimated rings are half as many.
 - **FREE of BAYESIAN3DFIT has a default** and is no longer required: `VROT VDISP XPOS_SINGLE YPOS_SINGLE
   VSYS_SINGLE INC_SINGLE PA_SINGLE Z0_SINGLE RADMAX FRACERR`, in parameter files and in `Bayesian3DFIT.run()`
   without `freepar` nor FREE (`keywords.BAYES_DEFAULT_FREE`). BAYESIANWIND still requires FREE.

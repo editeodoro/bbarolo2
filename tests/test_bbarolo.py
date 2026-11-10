@@ -1898,21 +1898,26 @@ def test_bayesian_flux_beyond_rings(tmp_path, capsys):
 def test_bayesian_initial_rings_as_3dfit(tmp_path):
     """Bayesian3DFIT starts from the initial rings of 3DFIT (galfit.initial_rings) for the same parameters,
     also those estimated: with GUESSTYPE FIT, VDISP is the estimate from the second moment (it was 8 km/s),
-    and the default priors are centred on the estimates."""
+    and the default priors are centred on the estimates. The estimated rings of Bayesian3DFIT are one beam
+    wide (30"), whatever their number; those of 3DFIT half a beam for fewer than 20 rings."""
     pytest.importorskip("dynesty")
     from bbarolo import Bayesian3DFIT
     from bbarolo.galfit import Galfit
     fn = _mock_cube(tmp_path)
     for given in ("", "INC 55\nVSYS 0\n"):
+        prm = dict(inc=55, vsys=0) if given else {}
+        f = Bayesian3DFIT(fn, mask="SEARCH", guesstype="FIT", outfolder=str(tmp_path / "bbb"), **prm)
+        b = f._inri.object
+        assert np.isclose(b.radsep, 30.) and b.nr > 3
         p = Param()
         p.readParamString(f"FITSFILE {fn}\n3DFIT true\nMASK SEARCH\nGUESSTYPE FIT\n{given}VERBOSE false\n"
                           f"OUTFOLDER {tmp_path}/fit/\n")
         assert p.checkPars(quiet=True)
+        assert np.isclose(Galfit(Cube(fn, par=p)).rings_initial.radsep, 15.)
+        p.readParamString(f"NRADII {b.nr}\nRADSEP {b.radsep!r}\n")
+        assert p.checkPars(quiet=True)
         r = Galfit(Cube(fn, par=p)).rings_initial
-        prm = dict(inc=55, vsys=0) if given else {}
-        f = Bayesian3DFIT(fn, mask="SEARCH", guesstype="FIT", outfolder=str(tmp_path / "bbb"), **prm)
-        b = f._inri.object
-        assert b.nr == r.nr > 3
+        assert b.nr == r.nr
         for k in ("radii", "xpos", "ypos", "vsys", "vrot", "vdisp", "vrad", "dens", "z0", "inc", "phi"):
             assert np.array_equal(np.float32(getattr(b, k)), np.float32(getattr(r, k))), k
         assert 12. < r.vdisp[0] < 16. and np.allclose(r.z0, 10.)       # (estimated; one pixel)

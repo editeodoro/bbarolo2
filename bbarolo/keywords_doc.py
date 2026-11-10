@@ -825,13 +825,14 @@ each ring is an annulus reaching halfway to the neighbouring radii (see also `RI
 """),
     'RADSEP': dict(
         group='Rings',
-        default='estimated from the beam',
+        default='estimated from the beam (BAYESIAN3DFIT: the beam FWHM)',
         doc="""\
 The separation between consecutive rings (arcsec), which is also the width of each ring, used with
 `NRADII` when `RADII` is not given (with `RADII` it is ignored, except for a single radius).
 
-If it is not given, 3DFIT, BAYESIAN3DFIT, SPACEPAR and 2DFIT use the FWHM of the major axis of the
-beam, or half of it when that gives fewer than 20 rings across the emission. Given without `NRADII`, the
+If it is not given, BAYESIAN3DFIT uses the FWHM of the major axis of the beam, whatever the number of
+rings; 3DFIT, SPACEPAR and 2DFIT use the FWHM, or half of it when that gives fewer than 20 rings across
+the emission. Given without `NRADII`, the
 number of rings is estimated so that rings of RADSEP cover the emission. GALMOD and ELLPROF need it
 (or `RADII`).
 """),

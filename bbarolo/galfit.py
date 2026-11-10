@@ -328,7 +328,8 @@ def initial_rings(c, par, galmod=False, write=True, buildmask=False, task="3DFIT
     buildmask=True builds it here (MASK; BAYESIAN3DFIT, only when something is estimated), otherwise
     only a mask from a file is built (GALMOD). With write=True the rings are kept in the cube for
     rings_model.txt (GALMOD) or rings_initial.txt (3DFIT), see Cube.add_output. task: the name in
-    the error messages.
+    the error messages; with BAYESIAN3DFIT, the estimated rings are one beam wide (EstimateInitial
+    beamrings), not half a beam for fewer than 20 rings.
 
     Returns a namespace with: rings (a Rings object), fromfile (the rings were read from a
     file), estimated (dict: which parameters were not given), toEstimate (bool) and ip (the
@@ -347,7 +348,7 @@ def initial_rings(c, par, galmod=False, write=True, buildmask=False, task="3DFIT
                 c.BlankMask()
         elif "FILE(" in p.MaskType and not c.MaskAll():    # the estimates use a mask from a file
             c.BlankMask()
-        ip = EstimateInitial(c, par)
+        ip = EstimateInitial(c, par, beamrings=task == "BAYESIAN3DFIT")
         if par.RADII == "-1":
             if par.NRADII == -1: par.NRADII = ip.nrings
             if par.RADSEP == -1: par.RADSEP = ip.radsep
