@@ -45,21 +45,25 @@ The same mocks (only the approaching cone emits): single and single-both fit bot
 | filled | cells-profile | 4 | 2.7 | +22.8 (2.6, 0.00) | -18.0 (10.5, 0.00) |  | +3.5 (2.9, 0.00) | +4.2 (2.6, 0.50) | +19.9 (6.0, 0.00) |
 | filled | shells | 4 | 1.1 | -7.7 (2.3, 0.50) | +4.7 (1.7, 0.25) |  | -1.7 (2.0, 0.25) | +0.6 (1.8, 0.50) | -3.5 (3.3, 0.00) |
 | filled | spaxel | 4 | 0.8 | -5.9 (2.3, 0.25) | +2.9 (1.5, 0.50) |  | -1.2 (2.8, 0.25) | +0.7 (1.7, 0.50) | -3.4 (3.2, 0.00) |
-| filled | voxel | 4 | 1.5 | +82.5 (25.6, 0.00) | +54.8 (295.4, 0.00) |  | +2.6 (34.6, 0.00) | +0.2 (8.7, 0.50) | +24.9 (259.6, 0.00) |
+| filled | voxel | 4 | 0.7 | -4.6 (0.8, 0.75) | +5.7 (1.0, 0.75) |  | -0.5 (1.4, 0.25) | +0.5 (0.8, 0.75) | -1.2 (0.4, 1.00) |
+| filled | voxel-kappa | 4 | 1.5 | +82.5 (25.6, 0.00) | +54.8 (295.4, 0.00) |  | +2.6 (34.6, 0.00) | +0.2 (8.7, 0.50) | +24.9 (259.6, 0.00) |
 | filled | cells22 | 4 | 10.3 | -7.2 (1.9, 0.25) | +3.2 (1.5, 0.50) |  | -1.2 (1.6, 0.50) | +0.1 (1.3, 0.50) | -2.9 (2.2, 0.00) |
 | filled | cells-df | 4 | 6.4 | -7.7 (1.4, 0.50) | +4.0 (1.3, 0.50) |  | -1.7 (1.8, 0.50) | +0.3 (1.0, 0.75) | -3.6 (2.1, 0.00) |
 | hollow | cells | 4 | 8.2 | -4.7 (2.0, 0.25) | +2.3 (1.4, 0.25) |  | -0.4 (1.0, 0.75) | -0.2 (1.5, 0.50) | -2.9 (2.3, 0.00) |
 | hollow | cells-profile | 4 | 4.7 | +21.5 (3.2, 0.00) | -18.1 (11.1, 0.00) |  | +4.2 (2.0, 0.25) | +3.1 (2.9, 0.75) | +20.8 (6.1, 0.00) |
 | hollow | shells | 4 | 1.6 | -3.8 (3.1, 0.50) | +2.1 (1.9, 0.50) |  | -0.2 (1.1, 0.50) | -0.1 (1.9, 0.25) | -2.3 (2.0, 0.00) |
 | hollow | spaxel | 4 | 1.4 | -3.5 (2.1, 0.25) | +1.6 (1.4, 0.50) |  | -0.2 (1.4, 0.00) | -0.1 (1.7, 0.25) | -2.6 (2.3, 0.25) |
-| hollow | voxel | 4 | 1.4 | +87.1 (17.4, 0.00) | +54.8 (307.4, 0.00) |  | +3.0 (17.9, 0.00) | -10.5 (15.9, 0.50) | +24.9 (240.7, 0.00) |
+| hollow | voxel | 4 | 0.8 | -2.0 (0.9, 0.50) | +4.3 (0.9, 0.75) |  | -0.0 (0.6, 1.00) | -0.1 (0.9, 0.75) | -1.1 (0.6, 0.75) |
+| hollow | voxel-kappa | 4 | 1.4 | +87.1 (17.4, 0.00) | +54.8 (307.4, 0.00) |  | +3.0 (17.9, 0.00) | -10.5 (15.9, 0.50) | +24.9 (240.7, 0.00) |
 | lognormal | cells | 4 | 6.3 | -0.6 (1.4, 0.50) | +4.3 (1.5, 0.25) |  | -0.1 (1.6, 0.50) | -0.2 (0.7, 0.75) | -0.8 (0.5, 1.00) |
+| lognormal | voxel | 4 | 0.6 | -0.5 (0.8, 0.75) | +8.6 (0.7, 1.00) |  | -0.6 (1.9, 0.50) | +0.2 (0.4, 1.00) | -2.1 (0.7, 0.75) |
 | lognormal | cells22 | 4 | 9.6 | -0.7 (1.4, 0.50) | +4.6 (1.6, 0.25) |  | -0.2 (1.6, 0.50) | -0.2 (0.7, 0.75) | -0.8 (0.7, 0.75) |
 | edgeon | cells | 4 | 7.3 | -27.6 (2.8, 0.00) | +7.8 (3.2, 0.00) |  | -1.0 (1.4, 0.75) | +0.6 (1.2, 0.75) | -1.1 (0.7, 1.00) |
+| edgeon | voxel | 4 | 0.7 | -47.2 (1.5, 0.00) | +23.8 (1.9, 0.00) |  | -2.1 (1.2, 0.50) | +0.7 (1.0, 0.50) | +0.5 (0.6, 0.75) |
 | edgeon | cells22 | 4 | 11.0 | -26.3 (2.9, 0.00) | +8.1 (3.3, 0.00) |  | -1.0 (1.5, 0.75) | +0.6 (1.3, 0.75) | -1.4 (0.9, 0.50) |
 | edgeon | cells-df | 4 | 7.2 | -28.8 (2.1, 0.00) | +9.0 (2.1, 0.00) |  | -1.3 (1.3, 0.50) | +0.4 (1.0, 0.75) | -2.5 (1.2, 0.25) |
 
-cells-profile: the maximum over the emission (no Occam factor); voxel: the weighting of MoKA-3D (the model is the data wherever the uniform cone reaches); cells22: cells of 22 arcsec instead of the beam (30 arcsec); cells-df: the model error datafrac = 0.3.
+cells-profile: the maximum over the emission (no Occam factor); voxel: the weighting of MoKA-3D (the model is the data wherever the uniform cone reaches) with the detection likelihood (the voxels above 3 times the noise, each detected with the probability of a log-normal flux of mean the uniform cone, scatter EMCLUMP, plus the noise); voxel-kappa: the earlier voxel likelihood, the chi^2 of the voxels the cone does not reach (the kappa of MoKA-3D without its cuts on the percentile velocities; code before November 10, 2026); cells22: cells of 22 arcsec instead of the beam (30 arcsec); cells-df: the model error datafrac = 0.3.
 
 ## Details
 
@@ -105,6 +109,16 @@ cells-profile: the maximum over the emission (no Occam factor); voxel: the weigh
 | inc | 85 | -0.989 | 0.956 | 1.45 | 0.75 |
 | pa | 30 | +0.58 | 0.759 | 1.31 | 0.75 |
 | openang | 60 | -1.44 | 0.517 | 0.94 | 0.50 |
+
+### edgeon, voxel (4 seeds, 0.7 min per fit)
+
+| parameter | truth | bias | scatter | pull rms | coverage 68% |
+|---|---|---|---|---|---|
+| vwind | 200 | -47.2 | 15.7 | 1.47 | 0.00 |
+| vdisp | 20 | +23.8 | 8.2 | 1.92 | 0.00 |
+| inc | 85 | -2.12 | 2.19 | 1.19 | 0.50 |
+| pa | 30 | +0.738 | 0.703 | 0.98 | 0.50 |
+| openang | 60 | +0.539 | 1.45 | 0.64 | 0.75 |
 
 ### filled, cells (4 seeds, 6.5 min per fit)
 
@@ -166,7 +180,17 @@ cells-profile: the maximum over the emission (no Occam factor); voxel: the weigh
 | pa | 30 | +0.665 | 0.886 | 1.74 | 0.50 |
 | openang | 60 | -3.38 | 0.694 | 3.25 | 0.00 |
 
-### filled, voxel (4 seeds, 1.5 min per fit)
+### filled, voxel (4 seeds, 0.7 min per fit)
+
+| parameter | truth | bias | scatter | pull rms | coverage 68% |
+|---|---|---|---|---|---|
+| vwind | 200 | -4.6 | 6.01 | 0.80 | 0.75 |
+| vdisp | 20 | +5.74 | 4.6 | 1.03 | 0.75 |
+| inc | 60 | -0.528 | 2.36 | 1.44 | 0.25 |
+| pa | 30 | +0.483 | 0.777 | 0.77 | 0.75 |
+| openang | 60 | -1.22 | 0.884 | 0.44 | 1.00 |
+
+### filled, voxel-kappa (4 seeds, 1.5 min per fit)
 
 | parameter | truth | bias | scatter | pull rms | coverage 68% |
 |---|---|---|---|---|---|
@@ -220,7 +244,18 @@ cells-profile: the maximum over the emission (no Occam factor); voxel: the weigh
 | openang | 70 | -2.62 | 0.867 | 2.30 | 0.25 |
 | openin | 30 | +2.53 | 1.52 | 1.90 | 0.25 |
 
-### hollow, voxel (4 seeds, 1.4 min per fit)
+### hollow, voxel (4 seeds, 0.8 min per fit)
+
+| parameter | truth | bias | scatter | pull rms | coverage 68% |
+|---|---|---|---|---|---|
+| vwind | 200 | -2.02 | 4.96 | 0.94 | 0.50 |
+| vdisp | 20 | +4.27 | 1.59 | 0.88 | 0.75 |
+| inc | 60 | -0.0121 | 0.737 | 0.58 | 1.00 |
+| pa | 30 | -0.14 | 0.828 | 0.88 | 0.75 |
+| openang | 70 | -1.08 | 1.22 | 0.59 | 0.75 |
+| openin | 30 | +0.842 | 1.89 | 0.59 | 0.75 |
+
+### hollow, voxel-kappa (4 seeds, 1.4 min per fit)
 
 | parameter | truth | bias | scatter | pull rms | coverage 68% |
 |---|---|---|---|---|---|
@@ -250,6 +285,16 @@ cells-profile: the maximum over the emission (no Occam factor); voxel: the weigh
 | inc | 60 | -0.205 | 2.13 | 1.58 | 0.50 |
 | pa | 30 | -0.184 | 0.727 | 0.73 | 0.75 |
 | openang | 60 | -0.847 | 1.54 | 0.71 | 0.75 |
+
+### lognormal, voxel (4 seeds, 0.6 min per fit)
+
+| parameter | truth | bias | scatter | pull rms | coverage 68% |
+|---|---|---|---|---|---|
+| vwind | 200 | -0.5 | 8.68 | 0.83 | 0.75 |
+| vdisp | 20 | +8.6 | 5.1 | 0.66 | 1.00 |
+| inc | 60 | -0.594 | 4.29 | 1.95 | 0.50 |
+| pa | 30 | +0.197 | 1 | 0.36 | 1.00 |
+| openang | 60 | -2.07 | 2.91 | 0.67 | 0.75 |
 
 ### lowinc, cells (4 seeds, 4.5 min per fit)
 

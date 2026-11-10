@@ -53,7 +53,7 @@ CONFIGS = {
 }
 BASES = {"cells": dict(emission="cells"), "cells-profile": dict(emission="cells", marginal=False),
          "shells": dict(emission="shells"), "cone": dict(emission="cone"), "spaxel": dict(emission="spaxel"),
-         "voxel": dict(emission="voxel", marginal=False)}
+         "voxel": dict(emission="voxel", emslope=0.)}
 # the initial wind of the fits: the truth offset (as a user's guess), and the priors of BayesianWind around it
 OFFSETS = dict(inc=-5., pa=5., openang=-5., openin=5., vwind=-20., vdisp=5., vrot=10.)
 
@@ -216,7 +216,7 @@ def report(path=RESULTS, out=REPORT):
     L += ["## The descriptions of the emission (option emission, marginal or profile)", "",
           "| configuration | basis | seeds | min per fit | " + " | ".join(PARS[:6]) + " |",
           "|---|---|---|---|" + "---|" * 6]
-    order = ["cells", "cells-profile", "shells", "spaxel", "voxel", "cells22", "cells-df"]
+    order = ["cells", "cells-profile", "shells", "spaxel", "voxel", "voxel-kappa", "cells22", "cells-df"]
     for config in ("filled", "hollow", "lognormal", "edgeon"):
         for basis in order:
             rs = groups.get((config, basis))
@@ -229,8 +229,12 @@ def report(path=RESULTS, out=REPORT):
             L.append(f"| {config} | {basis} | {len(rs)} | {np.mean([r['time'] for r in rs]) / 60:.1f} | "
                      + " | ".join(cells) + " |")
     L += ["", "cells-profile: the maximum over the emission (no Occam factor); voxel: the weighting of MoKA-3D (the "
-          "model is the data wherever the uniform cone reaches); cells22: cells of 22 arcsec instead of the beam "
-          "(30 arcsec); cells-df: the model error datafrac = 0.3.", ""]
+          "model is the data wherever the uniform cone reaches) with the detection likelihood (the voxels above 3 "
+          "times the noise, each detected with the probability of a log-normal flux of mean the uniform cone, scatter "
+          "EMCLUMP, plus the noise); voxel-kappa: the earlier voxel likelihood, the chi^2 of the voxels the cone does "
+          "not reach (the kappa of MoKA-3D without its cuts on the percentile velocities; code before November 10, "
+          "2026); cells22: cells of 22 arcsec instead of the beam (30 arcsec); cells-df: the model error datafrac = "
+          "0.3.", ""]
     # 5. the details
     L += ["## Details", ""]
     for (config, basis), rs in sorted(groups.items()):

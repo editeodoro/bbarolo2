@@ -14,9 +14,13 @@ sight, but only once the geometry and the kinematics are known, and those are wh
 - MoKA-3D (Marconcini et al. 2023, A&A 677, A58) weights the clouds of each voxel by the observed flux over
   the model flux. The weighted model then equals the data wherever the model reaches and is zero elsewhere.
   The fit sees only which voxels are reachable, so any model whose position-position-velocity support covers
-  the data fits as well as the truth: fast winds at any inclination, hollow cones. The paper cures this with
-  percentile cuts on the line profiles; the current code compares velocity percentiles of the unweighted
-  model per shell.
+  the data fits as well as the truth: fast winds at any inclination, hollow cones. The paper (its section 2.6)
+  cures this with cuts on the line profiles: it discards the models whose unweighted integrated spectrum has the
+  1st or 99th percentile velocity more than 5% away from the observed one, and it fixes the position angle and the
+  opening angle from the data. The current code (github.com/cosimomarconcini/moka_3d) fits only the 1st and 99th
+  percentile velocities of the unweighted model in shells on the sky (or a CRPS of 19 percentiles), and weights
+  the clouds by the observed flux only after the fit. BAYESIANWIND's `emission=voxel` keeps the weighting with a
+  likelihood of the detections instead (see below).
 
 ## The emission as linear amplitudes
 
@@ -70,6 +74,31 @@ Laplace approximation treats the cells at zero as independent, and overestimates
 when many weakly constrained, overlapping cells are empty. With correlated noise it favoured cones 10–17°
 wider than the truth.
 
+## The detection likelihood (`emission=voxel`)
+
+`emission=voxel` is the weighting of MoKA-3D: the flux of the model is the data wherever the cone reaches, so the
+flux of the data says nothing about the cone, only where the data have emission. The cone is fitted to that: a
+voxel is a detection if the data are above `snrcut` (default 3, as MoKA-3D) times the noise, and each voxel is
+detected with the probability
+
+  p = E[Φ(F/σ − snrcut)],
+
+where F is the flux of the voxel, log-normal with mean the uniform cone (EMSCALE, times (r/r0)^−EMSLOPE and EMRATIO
+in the approaching cone, convolved with the beam and the line) and fractional scatter EMCLUMP, and Φ includes the
+Gaussian noise σ. The log-likelihood is the sum of ln p over the detections and of ln(1 − p) over the other voxels
+of the region, times the correlation factor of the noise. A voxel where the cone predicts emission and the data have
+none costs ln(1 − p), about −(F/σ − snrcut)²/2 for a smooth emission: this is the penalty of the cones too wide and
+the winds too fast that the weighting alone lacks (it fitted even the noise of every voxel the cone reached, so
+every parameter ran to the edge of its prior). A detection outside the cone costs ln Φ(−snrcut), −6.6 at 3σ.
+EMCLUMP → 0 is the probit Φ(EMSCALE·M/σ − snrcut), the likelihood of the detections of a smooth cone plus noise.
+
+The threshold matters: it hides the faint wings of each clump, so the detections are narrower than the emission.
+A link that ignores it (the probability of at least one clump in the voxel, 1 − exp(−n) with n proportional to
+the flux of the cone) expects detections in the faint wings of the cone: in profiles of the likelihood of a clumpy
+mock it peaked at VDISP 0 and at cones 10° too narrow at 3σ (5° at 2σ, 15° at 4σ). The log-normal flux above the
+threshold peaked at the true opening angle, VWIND, VDISP and INC of the clumpy mocks (EMCLUMP near 0) and of the
+log-normal field (EMCLUMP about 0.7).
+
 ## The region, the noise and the sampling
 
 The likelihood uses all the voxels of a fixed region: the pixels within `grow` beams of the projected cones of
@@ -107,6 +136,14 @@ by default since the test of a declining emission):
   by only 30–40%. With the log-normal field VWIND is unbiased and VDISP 4 km/s high.
 
 The profile likelihood (the best-fit emission, no marginalisation) has the degeneracy of the free emission. On the
-filled cone it found cones 20° too wide, winds 11% too fast and almost no dispersion (rms pulls up to 10). The
-voxel weighting of MoKA-3D ran every parameter to the edge of its prior. On the same mocks, one emissivity per shell
-(`shells`) or per spaxel (`spaxel`) gave about the same results as the cells, four to six times faster.
+filled cone it found cones 20° too wide, winds 11% too fast and almost no dispersion (rms pulls up to 10). On the
+same mocks, one emissivity per shell (`shells`) or per spaxel (`spaxel`) gave about the same results as the cells,
+four to six times faster.
+
+The weighting of MoKA-3D with the χ² of the voxels the cone does not reach (the earlier `voxel`, without the cuts of
+MoKA-3D) ran every parameter to the edge of its prior: VWIND +83 km/s, VDISP +55 km/s, OPENANG +25°. With the
+detection likelihood (`voxel`, EMSLOPE fixed at 0 as the cells of the table) the filled and hollow cones and the
+log-normal field came out as well as with the cells, about ten times faster (0.7 minutes per fit): VWIND −0.5 to
+−4.6 km/s, VDISP +4 to +9 km/s, INC and PA within 0.6°, OPENANG 1–2° narrow, OPENIN +0.8°, with rms pulls mostly 0.4–1.4
+(the cells: up to 2.3). Edge-on it does worse than the cells: VWIND 24% low and VDISP 24 km/s high (the cells: 14% and
+8 km/s), the same trade of a slower wind for broader lines, which the detections, blind to the flux, constrain less.

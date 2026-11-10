@@ -27,6 +27,7 @@ maximum over x >= 0 (no prior, no Occam factor): it is flat for all the models t
 the voxel weighting of MoKA-3D).
 """
 
+import functools
 import math
 import numpy as np
 from scipy import linalg
@@ -228,3 +229,47 @@ def log_marginal_gauss_diag(g, b, c0, m, kappa):
         x[use] = h / A
         logz += float(np.sum(-0.5 * P * mu * mu + 0.5 * h * h / A - np.log(ku * mu) - 0.5 * np.log(A)))
     return logz, x
+
+
+# ---------------------------------------------------------------- the detection likelihood (emission voxel)
+_DET_LX = (math.log(1e-6), math.log(1e4), 2000)     # ln(x) of the table: x = the expected flux / noise
+_DET_LK = (math.log(1e-3), math.log(30.), 70)       # ln(kappa): the fractional scatter of the flux of a voxel
+_DET_Z = np.linspace(-8., 8., 321)                  # the nodes of the log-normal (standard normal deviates)
+
+
+@functools.lru_cache(maxsize=8)
+def detection_table(snrcut):
+    """The table of the detection likelihood for the threshold snrcut (in units of the noise): (ln x, ln kappa, ln p,
+    ln(1 - p)) with p(x, kappa) = E[Phi(F - snrcut)], the probability that a voxel whose flux F (in units of the noise)
+    is log-normal, of mean x and fractional scatter kappa, plus Gaussian noise of unit rms, is above snrcut. kappa -> 0
+    is the probit Phi(x - snrcut) of a smooth emission; x -> 0 gives the false-positive rate Phi(-snrcut)."""
+    from scipy.special import logsumexp
+    lx = np.linspace(*_DET_LX)
+    lk = np.linspace(*_DET_LK)
+    lw = -0.5 * _DET_Z ** 2
+    lw = lw - logsumexp(lw)
+    LP, L1 = np.empty((lk.size, lx.size)), np.empty((lk.size, lx.size))
+    for i, k in enumerate(lk):
+        s2 = math.log1p(math.exp(2. * k))                  # the variance of ln F
+        F = np.exp(lx[:, None] - 0.5 * s2 + math.sqrt(s2) * _DET_Z[None, :])
+        LP[i] = logsumexp(log_ndtr(F - snrcut) + lw, axis=1)
+        L1[i] = logsumexp(log_ndtr(snrcut - F) + lw, axis=1)
+    return lx, lk, LP, L1
+
+
+def log_detection(x, det, kappa, snrcut):
+    """The log-likelihood of the detections det (bool, a voxel above snrcut times the noise) given the expected flux
+    of each voxel x (in units of the noise, >= 0), each voxel independent: sum of ln p over the detections and of
+    ln(1 - p) over the others, p = the probability of a detection of a voxel whose flux is log-normal of mean x and
+    fractional scatter kappa (the clumpiness) plus the noise (detection_table; kappa below 1e-3 or above 30 is taken
+    at those limits, x below 1e-6 at 1e-6: the false-positive rate). An undetected voxel where the model predicts
+    flux costs ln(1 - p) (for kappa -> 0 about -(x - snrcut)^2/2 above the threshold): the penalty of the models that
+    predict emission where the data have none. A detection where the model has no flux costs ln Phi(-snrcut)."""
+    lx, lk, LP, L1 = detection_table(float(snrcut))
+    j = min(max((math.log(kappa) - lk[0]) / (lk[1] - lk[0]), 0.), lk.size - 1.000001)
+    j0 = int(j)
+    a = j - j0
+    lp = (1. - a) * LP[j0] + a * LP[j0 + 1]
+    l1 = (1. - a) * L1[j0] + a * L1[j0 + 1]
+    lxv = np.log(np.maximum(np.asarray(x, dtype=np.float64), math.exp(lx[0])))
+    return float(np.sum(np.interp(lxv[det], lx, lp)) + np.sum(np.interp(lxv[~det], lx, l1)))

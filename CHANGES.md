@@ -539,6 +539,19 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **BAYESIANWIND `LIKEOPTS emission=voxel` (the weighting of MoKA-3D) has a likelihood of the detections.** The flux
+  of the model is still the data wherever the cone reaches, but the cone is no longer scored by the χ² of the voxels
+  it does not reach, which never penalised a cone too large (it fitted even the noise of every voxel it reached), so
+  every parameter ran to the edge of its prior (on the filled clumpy mock VWIND +83 km/s, VDISP +55 km/s, OPENANG
+  +25°). Each voxel of the region is now a detection (above `snrcut`, new option, default 3, times the noise) or
+  not, with the probability of a log-normal flux of mean the uniform cone (EMSCALE, EMSLOPE, EMRATIO) and scatter
+  EMCLUMP plus the noise (`emission.log_detection`): a cone that predicts emission where the data have none is
+  penalised. EMSCALE, EMCLUMP, EMRATIO and EMSLOPE are now added to the free parameters with `voxel`; SIGMA free and
+  DISKRINGS are errors with it (DISKRINGS was ignored). In the recovery study the filled and hollow cones and the
+  log-normal field came out as well as with the cells (VWIND −0.5 to −4.6 km/s, VDISP +4 to +9 km/s, OPENANG 1–2°
+  narrow, pulls about 1), ten times faster; edge-on VWIND is 24% low and VDISP 24 km/s high (the cells: 14%, 8
+  km/s). MoKA-3D itself handles the degeneracy with cuts on the 1st and 99th percentile velocities of the
+  unweighted model (see the algorithm page of BAYESIANWIND).
 - **CONELEN replaces HTOT and NLAYERS replaces NTOT** (GALWIND and BAYESIANWIND: the length of each cone and
   its number of cylinders or shells), in parameter files and in Python (`conelen=`, `nlayers=`, and `conelen`
   in FREE and PRIORS of BAYESIANWIND). HTOT and NTOT are now errors that name the new keywords.

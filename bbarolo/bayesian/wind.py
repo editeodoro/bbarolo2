@@ -36,10 +36,15 @@ as r^-2 gave VWIND 24% low and INC 11 degrees low).
 Options of the likelihood (LIKEOPTS, run(like_kwargs=...)):
   emission   the basis of the emission: 'cells' (default: cells about cellsize across, fewer near the apex),
              'shells' (one emissivity per shell and cone), 'cone' (one per cone, a power law r^-EMSLOPE), 'spaxel'
-             (a uniform cone normalised in each spaxel, as NORM LOCAL), 'voxel' (MoKA-3D: the model equals the
-             data in the voxels the uniform cone reaches; for comparison only: it is degenerate)
+             (a uniform cone normalised in each spaxel, as NORM LOCAL), 'voxel' (MoKA-3D: the flux of the model is
+             the data in the voxels the cone reaches, and the cone is fitted by the likelihood of the detections, the
+             voxels above snrcut times the noise: each is detected with the probability of a log-normal flux of mean
+             the uniform cone (EMSCALE, EMSLOPE, EMRATIO) and fractional scatter EMCLUMP plus the noise; a cone that
+             predicts emission where the data have none is penalised. No DISKRINGS, SIGMA not free)
   cellsize   the size of the cells (arcsec, default the beam FWHM)
-  marginal   true (default): the likelihood marginalised over the emission; false: its maximum (profile)
+  marginal   true (default): the likelihood marginalised over the emission; false: its maximum (profile); not
+             used by 'voxel'
+  snrcut     emission 'voxel': the threshold of a detection, in units of the noise (default 3, as MoKA-3D)
   prior      the prior of the emissivities: 'gauss' (default: Gaussian, exact marginal likelihood) or 'exp'
              (exponential, non-negative emissivities: an approximate marginal likelihood, see emission.py)
   noisecorr  the correlation of the noise, as BAYESIAN3DFIT: 'measured' (default), 'beam' or a number of voxels
@@ -71,7 +76,8 @@ import numpy as np
 from ..tasks import Task, build_param, _checked
 from ..bbutils import BBaroloError, getCenterCoordinates, DeltaVel
 from ..windmodel import WindModel, WindCells, WindPars, Boxes
-from .emission import log_marginal, log_marginal_diag, log_profile, log_marginal_gauss, log_marginal_gauss_diag
+from .emission import (log_marginal, log_marginal_diag, log_profile, log_marginal_gauss, log_marginal_gauss_diag,
+                       log_detection)
 from .common import vprint, get_distribution, SIGMA_QUANTILES
 from .sampling import sample, sampler_options
 
@@ -89,7 +95,7 @@ DEFAULT_WIND_FUNCS = dict(vwind=lambda R, p1, p2: 2. / np.pi * p1 * np.arctan(R 
 
 WIND_LIKE_OPTIONS = dict(emission="cells", cellsize=None, marginal=True, prior="gauss", noisecorr="measured",
                          sigma=None, datafrac=0., grow=1., emscale=None, emclump=None, emratio=None, emslope=None,
-                         prune=1e-3, cones="both")
+                         prune=1e-3, cones="both", snrcut=3.)
 # the cones of the model (option cones): +1 the cone along +z, receding for INC < 90; -1 the other, approaching
 CONES = {"both": (1, -1), "receding": (1,), "approaching": (-1,)}
 # the hyperparameters of the prior of the emission, free unless fixed (LIKEOPTS emscale, emclump, emratio, emslope)
@@ -143,7 +149,7 @@ def wind_like_option(name, value):
         x = float(value)
     except (TypeError, ValueError):
         raise ValueError(f"{key}: expected a number, not {value!r}") from None
-    pos = ("cellsize", "sigma", "noisecorr", "emscale", "emclump", "emratio")
+    pos = ("cellsize", "sigma", "noisecorr", "emscale", "emclump", "emratio", "snrcut")
     if not np.isfinite(x) or x < 0 or (x == 0 and key in pos):
         raise ValueError(f"{key}: expected a number {'>' if key in pos else '>='} 0, not {value!r}")
     return key, x
@@ -569,6 +575,9 @@ class BayesianWind(Task):
         self.noise_correlation = holder.noise_correlation
         self._dsafe = np.where(self._ok, self.data, 0.)
         self._set_weights(self._sigma_fixed())
+        if lk["emission"] == "voxel":
+            # (the detections of the detection likelihood: the voxels of the region above snrcut times the noise)
+            self._det = (self._dsafe > float(lk.get("snrcut") or 3.) * self._wsigma)[self._ok]
 
     def _sigma_fixed(self):
         s = self.like_kwargs.get("sigma")
@@ -592,6 +601,8 @@ class BayesianWind(Task):
         fn = str(getattr(self._par.gw, "DISKRINGS", "") or "").strip()
         if not fn:
             return
+        if self.like_kwargs["emission"] == "voxel":
+            raise BBaroloError("BAYESIANWIND: DISKRINGS (a fixed disk) is not available with LIKEOPTS emission=voxel")
         from ..rings import ring_file_columns, Rings
         from ..galmod import DiskModel
         cols, _ = ring_file_columns(fn)
@@ -700,8 +711,10 @@ class BayesianWind(Task):
         if hyp["sigma"] is not None and hyp["sigma"] != self._wsigma:
             self._set_weights(hyp["sigma"])
         basis = self.like_kwargs["emission"]
-        if basis in ("spaxel", "voxel"):
-            out = self._loglike_smooth(p, hyp, basis)
+        if basis == "voxel":
+            out = self._loglike_detection(p, hyp)
+        elif basis == "spaxel":
+            out = self._loglike_smooth(p, hyp)
         else:
             G, b, mu, B, pts = self._amplitude_system(p, hyp)
             if self.like_kwargs.get("marginal", True):
@@ -713,7 +726,7 @@ class BayesianWind(Task):
             else:
                 logl, x = log_profile(G, b, self._c0)
             out = (logl, dict(x=x, p=p, B=B, pts=pts, G=G, b=b, mu=mu, hyp=hyp))
-        logl = out[0] + self._lognorm
+        logl = out[0] + (self._lognorm if basis != "voxel" else 0.)      # (voxel: a likelihood of the detections)
         return (logl, out[1]) if details else logl
 
     def _slope(self, hyp):
@@ -758,18 +771,45 @@ class BayesianWind(Task):
         r["emscale"] = math.exp(best)
         return r
 
-    def _loglike_smooth(self, p, hyp, basis):
-        """'spaxel' (a uniform cone normalised in each spaxel, marginalised) and 'voxel' (MoKA-3D: the model is the
-        data where the uniform cone reaches, zero elsewhere: the profile likelihood of the voxels it does not reach)."""
+    def _loglike_detection(self, p, hyp):
+        """'voxel' (MoKA-3D: the flux of the model is the data wherever the cone reaches, and the cone is fitted to the
+        voxels where the data have emission): the likelihood of the detections (the voxels above snrcut times the
+        noise), each voxel detected with the probability of a log-normal flux of mean the uniform cone (EMSCALE
+        (r/r0)^-EMSLOPE, EMRATIO in the approaching cone) and fractional scatter EMCLUMP, plus the noise (see
+        emission.log_detection), times the correlation factor of the noise."""
+        lk = self.like_kwargs
+        wm = self._wm
+        pts = wm.points(p)
+        slope = self._slope(hyp)
+        weight = (np.maximum(pts["r"], 1e-3 * self._r0) / self._r0) ** (-slope) if slope else None
+        B = wm.boxes(p, lim=self._lim, pts=pts, weight=weight)
+        ratio = hyp.get("emratio") or float(lk.get("emratio") or 1.)
+        amp = np.where(wm.cells.cells[:, 0] < 0, ratio, 1.)                 # (the approaching cone)
+        amp = np.where(pts["vol"] > 0, amp, 0.)
+        M = B.model(amp, self.data.shape)
+        x = M[self._ok] / self._wsigma
+        k = hyp.get("emclump") or float(lk.get("emclump") or 1.)
+        snr = float(lk.get("snrcut") or 3.)
+        loglike = lambda sc: self.likefactor * log_detection(sc * x, self._det, k, snr)
+        s = hyp.get("emscale") or self._emscale_fixed()
+        if hyp.get("emscale") is None and lk.get("emscale") == "fit":
+            from scipy.optimize import minimize_scalar
+            ls0 = math.log(s)
+            grid = ls0 + np.linspace(-7, 7, 15)
+            vals = [-loglike(math.exp(v)) for v in grid]
+            i = int(np.argmin(vals))
+            res = minimize_scalar(lambda v: -loglike(math.exp(v)), bounds=(grid[max(i - 1, 0)], grid[min(i + 1, 14)]),
+                                  method="bounded", options=dict(xatol=0.02))
+            s = math.exp(res.x if res.fun < vals[i] else grid[i])
+        thr = 1e-3 * float(np.max(M)) if np.max(M) > 0 else 0.
+        return loglike(s), dict(x=None, p=p, covered=M > thr, emscale=s, hyp=hyp)
+
+    def _loglike_smooth(self, p, hyp):
+        """'spaxel': a uniform cone normalised in each spaxel, marginalised."""
         wm = self._wm
         pts = wm.points(p)
         B = wm.boxes(p, lim=self._lim, pts=pts)
         M = B.model(np.ones(B.n), self.data.shape)
-        if basis == "voxel":
-            thr = 1e-3 * float(np.max(M)) if np.max(M) > 0 else 0.
-            covered = M > thr
-            logl = -0.5 * float(np.sum(np.where(covered, 0., self._Wd * self._dsafe)))
-            return logl, dict(x=None, p=p, covered=covered)
         g = np.sum(self._W * M * M, axis=0).ravel()
         bb = np.sum(self._Wd * M, axis=0).ravel()
         s = hyp.get("emscale") or self._emscale_fixed()
@@ -847,10 +887,14 @@ class BayesianWind(Task):
         if one and "emratio" in names:
             raise ValueError(f"BAYESIANWIND: EMRATIO (the ratio of the two cones) is not a parameter with one cone "
                              f"(LIKEOPTS cones={lk['cones']})")
-        if lk["emission"] == "voxel" or not lk.get("marginal", True):
+        voxel = lk["emission"] == "voxel"
+        if voxel and "sigma" in names:
+            raise ValueError("BAYESIANWIND: SIGMA is not a parameter with LIKEOPTS emission=voxel (the detections use "
+                             "the noise measured or given in LIKEOPTS sigma=)")
+        if not voxel and not lk.get("marginal", True):
             return names
         added = []
-        for h in HYPER[lk.get("prior", "gauss")]:
+        for h in HYPER["gauss" if voxel else lk.get("prior", "gauss")]:
             if h in ("emratio", "emslope") and lk["emission"] == "spaxel":
                 continue                                # (the uniform cone of each spaxel: no cones, no radial law)
             if h == "emratio" and one:
@@ -916,10 +960,16 @@ class BayesianWind(Task):
             st.write(" BAYESIANWIND: run() first.\n")
             return
         st.write(f"\n BAYESIANWIND posterior ({self._method}, emission {self.like_kwargs['emission']}, "
-                 f"{'marginal' if self.like_kwargs.get('marginal', True) else 'profile'} likelihood):\n")
+                 f"{self._likelihood_name()} likelihood):\n")
         for name, (lo, med, hi) in zip(self.freepar_names, self.quantiles):
             st.write(f"   {name:12s} = {med:12.4g}  -{med - lo:<10.3g} +{hi - med:<10.3g}\n")
         st.write("\n")
+
+    def _likelihood_name(self):
+        """The likelihood of the fit, for the outputs: 'detection' (emission voxel), 'marginal' or 'profile'."""
+        if self.like_kwargs["emission"] == "voxel":
+            return "detection"
+        return "marginal" if self.like_kwargs.get("marginal", True) else "profile"
 
     def corner_plot(self, labels=None, truths=None, quantiles=SIGMA_QUANTILES, **kwargs):
         """Corner plot of the posterior (needs the package corner)."""

@@ -415,3 +415,75 @@ def test_bayesian_wind_one_cone(tmp_path):
     pre = f._cube_obj.pars().outPrefix
     for n in ("_pv_wind.pdf", "_maps_wind.pdf", "_chanmaps_wind.pdf", "_wind_shells.txt"):
         assert os.path.isfile(str(tmp_path) + "/" + pre + n), n
+
+
+def test_log_detection():
+    """log_detection (the likelihood of emission=voxel): its table is the integral of Phi(F - t) over a log-normal F of
+    mean x and fractional scatter kappa (brute force), the probit Phi(x - t) for kappa -> 0 and the false-positive rate
+    Phi(-t) for x -> 0; the sum over detected and undetected voxels; flux predicted in undetected voxels lowers it."""
+    from scipy import integrate
+    from scipy.special import ndtr
+    from bbarolo.bayesian.emission import log_detection
+    t = 3.
+    one = lambda x, k, d: log_detection(np.array([x]), np.array([d]), k, t)
+    for x, k in ((0.3, 0.2), (2.5, 0.5), (4., 1.3), (10., 4.)):
+        s2 = math.log1p(k * k)
+        p = integrate.quad(lambda z: math.exp(-0.5 * z * z) / math.sqrt(2 * math.pi)
+                           * ndtr(math.exp(math.log(x) - 0.5 * s2 + math.sqrt(s2) * z) - t), -12, 12, epsabs=1e-12)[0]
+        assert abs(math.exp(one(x, k, True)) / p - 1) < 2e-3, (x, k)
+        assert abs(math.exp(one(x, k, False)) / (1 - p) - 1) < 2e-3, (x, k)
+    for x in (0.5, 3., 6.):
+        assert abs(math.exp(one(x, 1e-4, True)) - ndtr(x - t)) < 1e-4
+    assert abs(one(0., 1., True) - math.log(ndtr(-t))) < 1e-5
+    x = np.array([0., 1., 4., 7.])
+    det = np.array([True, False, True, False])
+    tot = sum(one(v, 0.7, d) for v, d in zip(x, det))
+    assert abs(log_detection(x, det, 0.7, t) - tot) < 1e-9
+    assert log_detection(x + np.array([0, 1, 0, 1.]), det, 0.7, t) < log_detection(x, det, 0.7, t)
+
+
+def test_bayesian_wind_voxel(tmp_path):
+    """LIKEOPTS emission=voxel (MoKA-3D: the flux of the model is the data wherever the cone reaches) with the
+    detection likelihood: EMSCALE, EMCLUMP, EMRATIO and EMSLOPE are added to the free parameters, SIGMA and DISKRINGS
+    are errors; the likelihood prefers the true opening angle and velocity to wider or faster cones (which the old
+    voxel weighting, without a penalty for the voxels it predicts and the data find empty, preferred) and to narrower or
+    slower ones; a short sampling runs and the outputs are written, the model being the data where the cone reaches."""
+    pytest.importorskip("dynesty")
+    from wind_mocks import mock_wind
+    from bbarolo import BayesianWind
+    from bbarolo.bayesian.wind import wind_likeopts
+    assert wind_likeopts("emission=voxel snrcut=2.5") == dict(emission="voxel", snrcut=2.5)
+    with pytest.raises(ValueError):
+        wind_likeopts("snrcut=0")
+    hdu, tr = mock_wind(kind="clumps", seed=2, snr=15, shape=(24, 24, 20), pix=12., chan=25., beam=36.,
+                        truth=dict(xpos=11.5, ypos=11.5, conelen=110., radii=[55., 110.], vwind=200.), nclumps=40,
+                        clump=20.)
+    kw = dict(xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, conelen=110, vwind=180, vdisp=20, nlayers=2,
+              outfolder=str(tmp_path) + "/")
+    f = BayesianWind(hdu, **kw)
+    f.like_kwargs = dict(f.like_kwargs, emission="voxel")
+    with pytest.raises(ValueError):
+        f._with_hyper(["openang", "sigma"], verbose=False)
+    names = f._with_hyper(["vwind_single", "openang"], verbose=False)
+    assert names == ["vwind_single", "openang", "emscale", "emclump", "emratio", "emslope"]
+    f._setup(names, verbose=False)
+    ll = lambda vw, oa: max(f.log_likelihood([vw, oa, s, k, 1., 0.]) for s in np.exp(np.linspace(-3, 3, 7)) * f._s0
+                            for k in (0.1, 0.5, 2.))
+    best = ll(200., 60.)
+    for vw, oa in ((200., 80.), (260., 60.)):                     # wider, faster: the voxels predicted and empty
+        assert ll(vw, oa) < best - 5, (vw, oa)
+    for vw, oa in ((200., 40.), (140., 60.)):                     # narrower, slower: the detections left out
+        assert ll(vw, oa) < best - 2, (vw, oa)
+    g = BayesianWind(hdu, diskrings=str(tmp_path / "rings.txt"), **kw)
+    g.like_kwargs = dict(g.like_kwargs, emission="voxel")
+    with pytest.raises(BBaroloError):
+        g._setup(names, verbose=False)
+    f.run(freepar=["vwind_single", "openang"], method="dynesty", sampler_kwargs=dict(nlive=10, seed=1),
+          run_kwargs=dict(maxiter=40), like_kwargs=dict(emission="voxel"), verbose=False)
+    assert f.ndim == 6 and np.all(np.isfinite(f.params))
+    cov = f.best_details["covered"]
+    assert np.array_equal(f.model, np.where(cov, f._dsafe, 0.))
+    f.write(plots=0, verbose=False)
+    pre = f._cube_obj.pars().outPrefix
+    with open(str(tmp_path) + "/" + pre + "_wind_params.txt") as fh:
+        assert "emission voxel, detection likelihood" in fh.readline()

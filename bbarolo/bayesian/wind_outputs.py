@@ -49,7 +49,7 @@ def write_outputs(f, outfolder=None, plots=None, verbose=True):
     fn = pre + "_wind_params.txt"
     with open(fn, "w") as out:
         out.write(f"# BAYESIANWIND: emission {f.like_kwargs['emission']}, "
-                  f"{'marginal' if f.like_kwargs.get('marginal', True) else 'profile'} likelihood, sampler "
+                  f"{f._likelihood_name()} likelihood, sampler "
                   f"{f._method}, effective sample size {f.ess:.0f}, log-likelihood at the medians {f.best_logl:.6g}\n")
         out.write(f"#{'NAME':>13s} {'MEDIAN':>14s} {'ERR_LO':>12s} {'ERR_HI':>12s}   PRIOR\n")
         for name, (lo, med, hi) in zip(f.freepar_names, f.quantiles):

@@ -87,9 +87,10 @@ initial value, ...); `PRIORS` changes them, e.g. `PRIORS OPENANG=(uniform,20,100
 
 | option | meaning |
 |---|---|
-| `emission` | the description of the emission: `cells` (default), `shells` (one emissivity per shell and cone), `cone` (one per cone, a power law in radius), `spaxel` (a uniform cone normalised in each spaxel, as NORM LOCAL), `voxel` (the voxel weighting of MoKA-3D: for comparison only, it is degenerate) |
+| `emission` | the description of the emission: `cells` (default), `shells` (one emissivity per shell and cone), `cone` (one per cone, a power law in radius), `spaxel` (a uniform cone normalised in each spaxel, as NORM LOCAL), `voxel` (MoKA-3D: the flux of the model is the data wherever the cone reaches, and the cone is fitted by the likelihood of the detections, the voxels above `snrcut` times the noise; see {doc}`algorithm`) |
 | `cellsize` | the size of the cells (arcsec; default the beam FWHM) |
-| `marginal` | `true` (default): the likelihood marginalised over the emission; `false`: its maximum (the profile likelihood) |
+| `snrcut` | `emission=voxel`: the threshold of a detection, in units of the noise (default 3, as MoKA-3D) |
+| `marginal` | `true` (default): the likelihood marginalised over the emission; `false`: its maximum (the profile likelihood); not used by `voxel` |
 | `prior` | `gauss` (default: Gaussian emissivities, exact marginal likelihood) or `exp` (non-negative exponential emissivities, approximate) |
 | `emscale`, `emclump`, `emratio`, `emslope` | fixed values of EMSCALE, EMCLUMP, EMRATIO and EMSLOPE (default: fitted) |
 | `cones` | `both` (default), `approaching` or `receding`: only one cone in the model, for a wind whose other side is not seen (half the cells, no EMRATIO). With both cones, an empty one is found by EMRATIO |
