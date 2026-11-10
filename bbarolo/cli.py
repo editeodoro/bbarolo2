@@ -224,8 +224,31 @@ def getopts(argv):
 from .tasks import BBcore, run_steps, run_par  # noqa: E402,F401
 
 
+def _set_process_name(name="BBarolo"):
+    """Show the process as ``name`` instead of ``python`` in top/ps (best effort, never fails).
+
+    With the optional ``setproctitle`` package the whole command line shown by ``ps``/``top -c``
+    changes too; otherwise on Linux only the short name (what ``top`` shows by default) changes.
+    Worker processes forked later (THREADS > 1) inherit the name.
+    """
+    try:
+        import setproctitle
+        setproctitle.setproctitle(" ".join([name] + sys.argv[1:]))
+        return
+    except Exception:
+        pass
+    if sys.platform.startswith("linux"):
+        try:
+            import ctypes
+            libc = ctypes.CDLL(None, use_errno=True)
+            libc.prctl(15, ctypes.c_char_p(name.encode()[:15]), 0, 0, 0)   # 15 = PR_SET_NAME
+        except Exception:
+            pass
+
+
 def main(argv=None):
     """Entry point of the BBarolo command (returns the exit code: 0, or 1 if something failed)."""
+    _set_process_name()
     try:
         return _main(argv)
     except BBaroloError as e:

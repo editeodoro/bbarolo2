@@ -358,6 +358,9 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **Process name**: the `BBarolo` command now shows as `BBarolo` instead of `python` in `top` and `ps`
+  (on Linux; with the optional `setproctitle` package the full command line too, also on macOS).
+  Worker processes (THREADS > 1) inherit the name.
 - **BAYESIAN3DFIT: smoothness penalties in parameter files**: `LIKEOPTS lambdas=(vrot=3000, vdisp=1000)`, until
   now only in Python (`like_kwargs=dict(lambdas=...)`). The options of `SAMPLEROPTS`, `RUNOPTS` and `LIKEOPTS`
   accept `key=value` pairs in brackets as a value. A key of `lambdas` that is not a ring parameter is now an

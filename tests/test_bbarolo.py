@@ -265,6 +265,15 @@ def test_cli_version():
     assert out.returncode == 0 and f"BBarolo version {__version__}" in out.stdout
 
 
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="reads /proc")
+def test_cli_process_name():
+    """The command shows as BBarolo, not python, in top/ps."""
+    code = (f"import sys; sys.path.insert(0, {ROOT!r}); from bbarolo import cli; cli._set_process_name(); "
+            "print(open('/proc/self/comm').read().strip())")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert out.stdout.strip() == "BBarolo"
+
+
 @needs_data
 def test_search_matches_cpp(tmp_path):
     p = Param()
