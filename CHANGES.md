@@ -19,6 +19,15 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   of the likelihood with no emission, and they entered the noise rms (too low: 9% on the Circinus cube, with 6% of
   its spaxels blank) and its correlation. They are now left out, so blanking what is not the wind (other lines, other
   sources) removes it from the fit.
+- **BAYESIAN3DFIT: blanks counted as empty data (C++).** The blanks of the cube (NaN in the file, 0 once read) entered
+  the noise rms, its correlation and the likelihood, as voxels with no emission (the statistics of the cube, and so
+  the mask and 3DFIT, skip them). The noise was too low, and the errors with it, by about the fraction of the field
+  that is blank, and the blanks in the voxels of the likelihood (the dilated mask) pulled the model towards zero.
+  The high-z IFU examples U3_25160 and zcos_z1_202, whose blank spaxels (75% and 66%) are 0 in the file, had a
+  noise 2.5 and 2 times too low and a third and a quarter of the voxels of the likelihood blank (VROT, VDISP and INC
+  of zcos_z1_202, fitted with one value each: +4 km/s, −1.7 km/s and −1.9° with the blanks left out); on a mock with
+  6% of its spaxels blank as masked stars the noise was 7% low and VDISP and INC about 1σ off. They are now left
+  out, as in BAYESIANWIND and in the 3D profile of ELLPROF.
 - **MAPTYPE in 3DFIT, BAYESIAN3DFIT and GALMOD**: their maps of the data and of the models (`maps/`, the
   maps page of the plots) were always moments, whatever MAPTYPE (as in C++). With MAPTYPE GAUSSIAN they
   are now Gaussian fits, for both data and models, and the rows of the maps plot are labelled

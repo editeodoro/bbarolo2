@@ -633,6 +633,47 @@ def test_noise_correlation():
     assert noise_correlation(n[:2, :20, :20], None, beam_fwhm=b) is None        # too few voxels
 
 
+def test_bayesian_blanks(tmp_path):
+    """The blanks of the cube (NaN in the file, 0 once read) are not data: BAYESIAN3DFIT leaves them out of the
+    noise rms (pulled 38% low by a quarter of the field blank), its correlation, the voxels of the
+    likelihood and the residuals, which are those of the same cube with the blanks NaN."""
+    from astropy.io import fits
+    from bbarolo.bayesian import Bayesian3DFIT, noise_correlation
+    fn = _mock_cube(tmp_path)
+    d, h = fits.getdata(fn).astype(np.float32), fits.getheader(fn)
+    yy, xx = np.mgrid[:64, :64]
+    star = (xx - 40) ** 2 + (yy - 36) ** 2 <= 2.5 ** 2               # a masked star on the galaxy
+    d[:, :, :16] = np.nan                                             # (a quarter of the field blank)
+    d[:, star] = np.nan
+    fits.PrimaryHDU(d, header=h).writeto(str(tmp_path / "blank.fits"))
+    kw = dict(radii=[20, 60, 100, 140], xpos=31.5, ypos=31.5, vsys=0, vrot=120, vdisp=15, z0=0, inc=60, pa=45,
+              mask="SEARCH", galmodtype="ANALYTIC")
+    fs = []
+    for name in ("mock", "blank"):
+        f = Bayesian3DFIT(str(tmp_path / f"{name}.fits"), **kw, outfolder=str(tmp_path / f"o{name}") + "/")
+        f._setup(['vrot_single', 'vdisp_single'])
+        fs.append(f)
+    full, f = fs
+    assert abs(f.noiserms / full.noiserms - 1) < 0.03
+    blank = f.data == 0
+    assert full._nvox_map[star].sum() > 0 and not f._nvox_map[star].any() and not f._nvox_map[:, :16].any()
+    assert f.nvox == int((f._likemask & ~blank & f._region[None]).sum())
+    nan = np.where(blank, np.nan, f.data)
+    bpix = abs(f._cube_obj.Head().Bmaj() / f._cube_obj.Head().Cdelt(0))
+    nc = noise_correlation(nan, f.mask, bpix)
+    assert all(f.noise_correlation[k] == pytest.approx(nc[k], rel=1e-9) for k in ('spatial', 'spectral'))
+    th = np.array([150., 10.])
+    L = [f._log_likelihood(th), f._log_likelihood(th, fracerr=0.1)]
+    model = f._galfit.model.array(f._update_rings(f._work, th).object, [0, 0], [64, 64])
+    lm = f._likemask
+    R = [f._calculate_residuals(model[None], f.data, lm, region=f._region),       # (the numpy versions)
+         f._calculate_residuals(model[None], f.data, lm, region=f._region, fracerr=0.1)]
+    f.data = nan
+    assert np.allclose(L, [f._log_likelihood(th), f._log_likelihood(th, fracerr=0.1)], rtol=1e-12, atol=0)
+    assert np.allclose(R, [f._calculate_residuals(model, nan, lm, region=f._region),
+                           f._calculate_residuals(model, nan, lm, region=f._region, fracerr=0.1)], rtol=1e-9, atol=0)
+
+
 @needs_data
 def test_bayesian_noisecorr_and_fracerr(tmp_path):
     """The fractional model error ('fracerr', variance sigma^2 + (fracerr*model)^2) and the

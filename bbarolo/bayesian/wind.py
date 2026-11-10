@@ -1056,7 +1056,7 @@ class _LikeFactor:
         self.beam_area = f.beam_area
         self.noise_correlation = f.noise_correlation
         self._cube_obj = f._cube_obj
-        self.data = np.where(f.data != 0, f.data, np.nan)          # (the blanks out of the noise correlation)
+        self.data = f.data                     # (_set_likefactor leaves the blanks out of the noise correlation)
         self.mask = f.mask
 
 

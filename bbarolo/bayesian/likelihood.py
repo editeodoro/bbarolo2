@@ -11,10 +11,10 @@ from ..galmod import _half_widths
 
 @nb.njit(cache=True, nogil=True)
 def _sumsq_residuals(model, data, mask, maskmode, region):
-    """sum over voxels of (d - model)^2, skipping NaN data (as np.nansum) and, if region
-    (ny,nx) is not empty, the pixels outside region. maskmode: 0 = all the voxels, d = data;
-    1 (or True) = d = data*mask (zero outside the mask); 2 = only the voxels in the mask,
-    d = data (the other voxels are skipped)."""
+    """sum over voxels of (d - model)^2, skipping the blanks (NaN or 0 data: the blanks of the file are 0 in
+    the cube, as in its statistics) and, if region (ny,nx) is not empty, the pixels outside region.
+    maskmode: 0 = all the voxels, d = data; 1 (or True) = d = data*mask (zero outside the mask); 2 = only
+    the voxels in the mask, d = data (the other voxels are skipped)."""
     nz, ny, nx = model.shape
     useregion = region.shape[0] > 0
     s = 0.
@@ -24,7 +24,7 @@ def _sumsq_residuals(model, data, mask, maskmode, region):
                 if useregion and not region[j, i]:
                     continue
                 d = data[k, j, i]
-                if d != d:
+                if d != d or d == 0.:
                     continue
                 if maskmode != 0 and not mask[k, j, i]:
                     if maskmode == 2:
@@ -50,7 +50,7 @@ def _residuals_fracerr(model, data, mask, maskmode, region, sigma2, eps2):
                 if useregion and not region[j, i]:
                     continue
                 d = data[k, j, i]
-                if d != d:
+                if d != d or d == 0.:
                     continue
                 if maskmode != 0 and not mask[k, j, i]:
                     if maskmode == 2:
@@ -83,7 +83,7 @@ class LikelihoodMixin(object):
         """ Noise and correlation scale of the data, used by the likelihood.
 
         noiserms:   rms noise per voxel, from the median absolute deviation of the data
-                    outside the mask;
+                    outside the mask and the blanks (NaN or 0: see _blank);
         beam_area:  area of the (Gaussian) beam in pixels, pi*bmaj*bmin/(4 ln2)/pixel area:
                     the number of pixels that share the same noise (1 if the beam is unknown);
         likefactor: multiplicative factor of the log-likelihood (see _set_likefactor): by
@@ -92,9 +92,10 @@ class LikelihoodMixin(object):
         Also: the voxels of the likelihood (see _setup_likemask), and the maps of their
         squared data and number, used with the likelihood region (see _setup_likebox).
         """
-        out = self.data[(self.mask == 0) & np.isfinite(self.data)]
+        ok = ~self._blank(self.data)
+        out = self.data[(self.mask == 0) & ok]
         if out.size == 0:
-            out = self.data[np.isfinite(self.data)]
+            out = self.data[ok]
         self.noiserms = float(1.4826 * np.median(np.abs(out - np.median(out))))
         if not self.noiserms > 0:
             self.noiserms = float(np.nanstd(out)) if out.size else 1.
@@ -123,6 +124,7 @@ class LikelihoodMixin(object):
                            of channels), default (1, 3): a disk of 1 FWHM radius in each
                            channel, then +-3 channels. The other voxels are not used;
         'none':            the data, not masked, in all the voxels of the likelihood region.
+        The blanks (NaN or 0, see _blank) are never voxels of the likelihood.
 
         The model is compared with the data in a fixed set of voxels: data selected through
         the mask of their neighbours, not their own values, and not clipped. (The original
@@ -168,7 +170,7 @@ class LikelihoodMixin(object):
         self._nvox_map = np.zeros((ny, nx), np.int64)
         mom0 = np.zeros((ny, nx))
         for k in range(0, nz, 16):                     # in chunks of channels (no full float64 copies)
-            v = lm[k:k + 16] & np.isfinite(self.data[k:k + 16])
+            v = lm[k:k + 16] & ~self._blank(self.data[k:k + 16])
             d = np.where(v, self.data[k:k + 16], 0.).astype(np.float64)
             self._dm2_map += np.sum(d * d, axis=0)
             self._nvox_map += v.sum(axis=0)
@@ -221,7 +223,8 @@ class LikelihoodMixin(object):
         1/(number of voxels per independent measurement), from like_kwargs['noisecorr']:
 
         'measured' (default): 1/(correlation volume of the noise, measured from the voxels
-                          without emission, spatial x spectral; see noise_correlation), and
+                          without emission and not blank, spatial x spectral; see
+                          noise_correlation), and
                           1/(spatial correlation area) for the likelihood of run_geometry;
                           if it cannot be measured (too few voxels without emission, e.g.
                           MASK=NONE), the beam area. The measure is conservative (wider
@@ -249,7 +252,9 @@ class LikelihoodMixin(object):
             if self.noise_correlation is None:
                 h = self._cube_obj.Head()
                 bpix = abs(h.Bmaj() / h.Cdelt(0)) if h.Bmaj() and h.Cdelt(0) else None
-                self.noise_correlation = noise_correlation(self.data, self.mask, bpix)
+                blank = LikelihoodMixin._blank(self.data)   # (the blanks, 0 in the cube: NaN, not noise)
+                self.noise_correlation = noise_correlation(np.where(blank, np.nan, self.data) if blank.any()
+                                                           else self.data, self.mask, bpix)
             nc = self.noise_correlation
             if nc is None:
                 print("BAYESIAN WARNING: too few voxels without emission to measure the correlation of the "
@@ -457,8 +462,16 @@ class LikelihoodMixin(object):
         return 0.5 * ss / sigma ** 2 + 0.5 * nvox * np.log(2. * np.pi * sigma ** 2)
 
     @staticmethod
+    def _blank(data):
+        """ The blanks of the data: NaN, or 0 (the cube reader sets the NaN of the file to 0; the statistics
+        of the cube skip both). They are not data: out of the noise, its correlation and the likelihood. """
+        return ~np.isfinite(data) | (data == 0)
+
+    @staticmethod
     def _masked(data, mask, maskmode):
-        """ (data used, voxels used) for maskmode (see _calculate_residuals). """
+        """ (data used, voxels used) for maskmode (see _calculate_residuals), the blanks (NaN in the data used)
+        excluded by the nansums of the callers. """
+        data = np.where(data != 0, data, np.nan)
         if mask is None or maskmode == 0:
             return data, True
         if maskmode == 2:

@@ -231,7 +231,7 @@ The errors of the profile combine two terms in quadrature, separately for the lo
 ### Noise of the cube
 
 The noise per voxel is measured as the scaled median absolute deviation of the data $d$ outside the mask
-({ref}`MASK <par-bayesian3dfit-mask>`):
+({ref}`MASK <par-bayesian3dfit-mask>`) and the blanks:
 
 $$
 \sigma_\mathrm n = 1.4826\;\mathrm{median}\,\bigl|\,d - \mathrm{median}(d)\,\bigr| ,
@@ -261,9 +261,10 @@ LIKEOPTS:
 The data in these voxels are used as they are, neither masked nor clipped: the faint emission below the
 threshold of the mask (line wings, beam-smeared edges) is compared with the model, and a voxel is selected
 by the mask of its neighbours, not by its own value. With channels much narrower than the velocity
-dispersion, more channels are needed (about $1.5\,V_\mathrm{disp}$ divided by the channel width). Voxels
-with non-finite data are skipped. $N_\mathrm v$ is the number of voxels of $\mathcal V$ within the
-likelihood region.
+dispersion, more channels are needed (about $1.5\,V_\mathrm{disp}$ divided by the channel width). The
+blanks (NaN in the file, 0 once read, as in the statistics of the cube) are not data: they are skipped here, in
+the noise and in its correlation, so blanking what the disk does not describe (stars, other sources) removes
+it from the fit. $N_\mathrm v$ is the number of voxels of $\mathcal V$ within the likelihood region.
 
 ### Likelihood region
 
@@ -342,7 +343,7 @@ counts once. `noisecorr` of LIKEOPTS sets $f$:
 - a number $N > 0$: $f = 1/N$ ($N = 1$: independent voxels).
 
 The correlation is measured in the voxels without emission: those outside the mask dilated by
-$\lceil F_\mathrm{pix}\rceil$ pixels and 2 channels, with the median subtracted. The autocorrelations are
+$\lceil F_\mathrm{pix}\rceil$ pixels and 2 channels and not blank, with the median subtracted. The autocorrelations are
 computed with FFTs, each lag normalised by the number of pairs of noise voxels:
 
 $$
