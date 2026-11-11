@@ -442,17 +442,19 @@ KEYWORDS = [
     K("PLOTMINCON", "float", ["gf.PLOTMINCON"], ("3DFIT", "BAYESIAN3DFIT"), "Minimum flux contour for output plots"),
 
     # ---------------------------------------------------------------- BAYESIAN3DFIT
-    K("SAMPLER", "ustr", ["gf.SAMPLER"], BAYESW, "Nested sampler: NAUTILUS or DYNESTY"),
+    K("SAMPLER", "ustr", ["gf.SAMPLER"], BAYESW,
+      "Nested sampler: NAUTILUS or DYNESTY; or OPTIMISE, the best fit by a minimisation of the likelihood"),
     K("PRIORS", "str", ["gf.PRIORS"], BAYESW,
       "Priors of the free parameters, NAME=(distribution,arguments) with the distributions of scipy.stats, "
       "e.g. VROT=(uniform,loc=0,scale=300) INC=(norm,60,5) (default: see bbarolo.Bayesian3DFIT)"),
     K("SAMPLEROPTS", "str", ["gf.SAMPLEROPTS"], BAYESW,
       "Options of the sampler, key=value, e.g. nlive=200 dynamic=true seed=1 (dynesty; the static sampler unless "
       "dynamic=true) or n_live=1000 "
-      "seed=1 (nautilus)",
+      "seed=1 (nautilus) or method=powell nstart=3 seed=1 errors=true (OPTIMISE)",
       aliases=["sampler_kwargs"]),
     K("RUNOPTS", "str", ["gf.RUNOPTS"], BAYESW,
-      "Options of the sampling, key=value, e.g. dlogz=0.5 maxiter=20000 (dynesty) or f_live=0.01 (nautilus)",
+      "Options of the sampling, key=value, e.g. dlogz=0.5 maxiter=20000 (dynesty) or f_live=0.01 (nautilus) or "
+      "maxiter=500 (OPTIMISE: the options of the method of scipy)",
       aliases=["run_kwargs"]),
     K("LIKEOPTS", "str", ["gf.LIKEOPTS"], BAYESW,
       "Options of the likelihood, key=value (defaults first): likemask=dilated|none, dilation=1,3 (radius in "

@@ -60,7 +60,8 @@ class OutputsMixin(object):
                     pass
             fn = os.path.join(of, f"{pre}_{self._method}_results.npy")
             self.save_results(fn)
-            vprint(verbose, f"Posterior samples written in {shortpath(fn)} (see Bayesian3DFIT.load_results)")
+            what = "The optimisation" if self._method == 'optimize' else "Posterior samples"
+            vprint(verbose, f"{what} written in {shortpath(fn)} (see Bayesian3DFIT.load_results)")
             if plots > 0:
                 self._save_plots(of, pre, verbose)
         finally:
@@ -73,8 +74,11 @@ class OutputsMixin(object):
         import warnings
         import matplotlib.pyplot as plt
         from ..bbutils import shortpath
-        for name, make in (("corner", lambda: self.corner_plot(plot_dynesty=(self._method == 'dynesty'))),
-                           ("profiles", self.plot_profiles)):
+        plots = (("corner", lambda: self.corner_plot(plot_dynesty=(self._method == 'dynesty'))),
+                 ("profiles", self.plot_profiles))
+        if self._method == 'optimize' and self.optimum.get('cov') is None:
+            plots = plots[1:]                     # (an optimisation without errors: no distribution to plot)
+        for name, make in plots:
             out = os.path.join(of, f"{pre}_{name}.pdf")
             root = logging.getLogger()
             level = root.level
@@ -362,16 +366,22 @@ class OutputsMixin(object):
         results = self.results
         lk = getattr(self, '_like_kwargs', {})          # the likelihood options of run()
         llf = getattr(self, '_log_like_func', self._log_likelihood)
+        opt = self.optimum if self._method == 'optimize' else None
         if llf is not None:
             print(f"\nBest-fit parameters (log_likelihood = {llf(self.params, **lk):.2f}):")
         else:
             print("\nBest-fit parameters (user-defined log-likelihood, not saved with the results):")
-        if getattr(self, 'ess', np.inf) < 20:
+        if opt is not None:
+            what = "maximum a posteriori" if opt.get('posterior') else "maximum likelihood"
+            err = "Laplace approximation" if opt.get('cov') is not None else "not computed"
+            print(f"  ({what} by {opt.get('method')}; errors: {err})")
+        elif getattr(self, 'ess', np.inf) < 20:
             print(f"  (effective sample size of the posterior: {self.ess:.1f}: the errors are not reliable)")
         q = np.quantile(self.samples_equal, quantiles, axis=0)
         for i in range(len(self.freepar_names)):
             d = np.diff(q[:, i])
-            print("  %10s = %10.3f %+10.3f %+10.3f" % (self.freepar_names[i], q[1, i], -d[0], d[1]))
+            val = self.params[i] if opt is not None else q[1, i]       # (an optimisation: the best fit)
+            print("  %10s = %10.3f %+10.3f %+10.3f" % (self.freepar_names[i], val, -d[0], d[1]))
         dp = getattr(self, 'dens_profile', None)
         if dp is not None:
             print("\nDeconvolved density profile (DENS, not fitted; errors from the geometry and the noise):")
@@ -422,6 +432,8 @@ class OutputsMixin(object):
                       prior_distr=self.prior_distr, lambdas=self.lambdas, like_kwargs=like,
                       loglike=getattr(self, '_log_like_kind', 'cube'), method=self._method,
                       funcs=self._funcs_used())
+        if self._method == 'optimize' and self.optimum is not None:
+            tosave['optimum'] = {k: v for k, v in self.optimum.items() if k != 'samples'}     # (the samples: above)
         np.save(outfile, tosave)
 
     def _funcs_used(self):
@@ -433,9 +445,9 @@ class OutputsMixin(object):
                 for k, f in self.funcs.items() if k in used}
 
     def load_results(self, inputfile, sampler=None):
-        """ Load results saved with save_results() (dynesty or nautilus: the sampler of the fit, or 'dynesty' for
-        files that do not record it): the samples, the priors, the rings and the parameters of the fit (BEAM
-        included). The output folder is that of the fit unless this object has one (outfolder given). A fit with functions of radius of its own (funcs) needs the same functions in funcs
+        """ Load results saved with save_results() (dynesty, nautilus or optimize: the sampler of the fit, or
+        'dynesty' for files that do not record it): the samples, the priors, the rings and the parameters of the fit
+        (BEAM included). The output folder is that of the fit unless this object has one (outfolder given). A fit with functions of radius of its own (funcs) needs the same functions in funcs
         (functions are not saved): BBaroloError otherwise. """
         from ..bbutils import BBaroloError
         from .fitter import DEFAULT_FUNCS
@@ -489,8 +501,14 @@ class OutputsMixin(object):
         elif sampler in ('dynesty', 'nautilus') and r.get('weights') is not None:
             self.results = None
             self._set_sampling_stats(r['samples'], r['weights'])
+        elif sampler == 'optimize' and r.get('optimum') is not None:
+            from scipy.optimize import OptimizeResult
+            self.results = None
+            self._set_optimum(OptimizeResult(**r['optimum'], samples=np.asarray(r['samples'])))
         else:
             raise BBaroloError(f"load_results: cannot load results for sampler {sampler} from {inputfile}")
+        if sampler != 'optimize':
+            self.optimum = None
         self._method = sampler
         self.outri = self._update_rings(self._fit0.copy(), self.params)
         if self.useNorm and not self.useBBres:

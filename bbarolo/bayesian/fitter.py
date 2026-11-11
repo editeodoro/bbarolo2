@@ -17,6 +17,7 @@ from .likelihood import LikelihoodMixin
 from .density import DensityMixin
 from .outputs import OutputsMixin
 from .sampling import sample, sampler_options, dyfunc
+from .optimize import SAMPLER_NAMES, sampler_options as optimize_options
 
 # the default functions of radius of VROT_FUNC, VDISP_FUNC and DENS_FUNC (Bayesian3DFIT.funcs)
 DEFAULT_FUNCS = dict(vrot=lambda R, p1, p2: 2. / np.pi * p1 * np.arctan(R / p2),     # arctan curve
@@ -82,6 +83,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         self._default_pri = {}
         self.results = None
         self.sampler = None
+        self.optimum = None                            # (the details of a fit of optimize)
         self.noise_correlation = None
         self._noisecorr_failed = False                 # (the measure of the correlation failed: not retried)
         self._likemask_key = None
@@ -126,7 +128,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         return self
 
     def _keyword_option(self, name, value):
-        """ The value of FREE (list of free parameters), SAMPLER ('dynesty' or 'nautilus'),
+        """ The value of FREE (list of free parameters), SAMPLER ('dynesty', 'nautilus' or 'optimise'),
         PRIORS (dict of priors), SAMPLEROPTS, RUNOPTS or LIKEOPTS (dict of options), from a
         string as in a parameter file. Raises ValueError. """
         from ..params import bayes_freepar, bayes_priors, bayes_options, bayes_likeopts, BAYES_FUNC_PARS
@@ -140,8 +142,9 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                 return bayes_priors(s)
             if name == "SAMPLER":
                 m = s.strip().lower()
-                if m not in ("dynesty", "nautilus"):
-                    raise ValueError(f"unknown sampler {s.strip()} (DYNESTY or NAUTILUS)")
+                m = "optimise" if m == "optimize" else m
+                if m not in ("dynesty", "nautilus", "optimise"):
+                    raise ValueError(f"unknown sampler {s.strip()} (NAUTILUS, DYNESTY or OPTIMISE)")
                 return m
             return bayes_options(s)
         except ValueError as e:
@@ -565,7 +568,10 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                                 ['vrot','vdisp_single','inc_single','sigma'], or a string as FREE in
                                 a parameter file ('VROT VDISP_SINGLE INC_SINGLE SIGMA'). Names are
                                 case-insensitive (PA is phi, DISP is vdisp)
-          method (str):         'nautilus' or 'dynesty' (default: SAMPLER if given, otherwise 'nautilus')
+          method (str):         'nautilus' or 'dynesty' (default: SAMPLER if given, otherwise 'nautilus');
+                                'optimise' (or 'optimize'): optimize(), with sampler_kwargs its arguments
+                                (method, x0, posterior, errors, nstart, seed, step, nsamples) and run_kwargs
+                                the options of its method (SAMPLER OPTIMISE in parameter files)
           log_like (callable):  a custom log-likelihood f(theta, **like_kwargs) (default _log_likelihood)
           like_kwargs (dict):   the options of the likelihood, added to LIKEOPTS if given (they are
                                 kept in self.like_kwargs, with the defaults; see
@@ -590,14 +596,138 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
           kwargs:               verbose (bool), dynamic (bool, dynesty only: the dynamic sampler;
                                 default False, the static one), and any BBarolo parameter
         """
-        moved = [k for k in ('useBBres', 'noisecorr', 'likemask') if k in kwargs]
-        if moved:
-            raise TypeError(f"Bayesian3DFIT.run: {', '.join(moved)} are options of like_kwargs, e.g. "
-                            "like_kwargs=dict(likemask='none', noisecorr='beam', bbres=True).")
         params = {k: v for k, v in kwargs.items() if k not in ('verbose', 'dynamic')}
+        self._check_moved(kwargs, 'run')
         if params:
             self.update(**params)
         kwargs = {k: v for k, v in kwargs.items() if k in ('verbose', 'dynamic')}
+        dflt = self._run_defaults()
+        method = str(dflt.get('SAMPLER', 'nautilus') if method is None else method).lower()
+        sampler_kwargs = {**dflt.get('SAMPLEROPTS', {}), **sampler_kwargs}
+        if method in SAMPLER_NAMES:                  # (SAMPLER OPTIMISE: the optimisation)
+            okw = optimize_options(sampler_kwargs, {**dflt.get('RUNOPTS', {}), **run_kwargs})
+            return self.optimize(freepar, threads=threads, log_like=log_like, like_kwargs=like_kwargs,
+                                 verbose=kwargs.get('verbose', True), **okw)
+        if 'dynamic' in sampler_kwargs:              # dynesty: static (default) or dynamic sampler
+            kwargs.setdefault('dynamic', bool(sampler_kwargs.pop('dynamic')))
+        if method == 'dynesty' and 'seed' in sampler_kwargs:     # (nautilus: its own option seed)
+            seed = sampler_kwargs.pop('seed')
+            sampler_kwargs.setdefault('rstate', np.random.default_rng(None if seed is None else int(seed)))
+        run_kwargs = {**dflt.get('RUNOPTS', {}), **run_kwargs}
+        sampler_kwargs, run_kwargs = sampler_options(method, kwargs.get('dynamic', False), sampler_kwargs,
+                                                      run_kwargs)
+        like_kwargs, threads, custom = self._start_fit(freepar, threads, log_like, like_kwargs, kwargs, 'run')
+        verbose = kwargs.get('verbose', True)
+        self._method = method
+        self.optimum = None
+        samples, weights, dt = sample(self, like_kwargs, method, threads, kwargs.get('dynamic', False), sampler_kwargs,
+                                      run_kwargs, verbose)
+        dt = f'{dt:.2f} seconds' if dt < 60.00 else f'{dt / 60.00:.2f} minutes'
+        vprint(verbose, f'\nSampling with {method} took {dt} to run.')
+        self._set_sampling_stats(samples, weights)
+        if verbose and self.ess < 20:
+            print(f"WARNING: the posterior is concentrated on {self.ess:.1f} samples (effective sample size), "
+                  "so the\n         credible intervals are not reliable: the sampling stopped early "
+                  "(maxiter, maxcall), or\n         the likelihood is extremely narrow (check that the noise "
+                  "sigma is right, or make it\n         a free parameter).")
+        return self._finish_fit(like_kwargs, custom, verbose)
+
+    def optimize(self, freepar=None, method='L-BFGS-B', threads=None, *, log_like=None, like_kwargs: dict = {},
+                 x0=None, posterior=False, errors=True, nstart=1, seed=None, step=1e-3, options: dict = {},
+                 nsamples=4000, **kwargs):
+        """ Find the best fit by a classic minimisation of -log L, with the likelihood of run() (the same free
+        parameters, options and priors: see run), e.g. to test the sampling. Nothing is written (see write).
+
+        The result is the maximum likelihood within the bounds of the priors (posterior=True: the maximum of the
+        posterior, likelihood x prior), searched in the unit cube of the priors (see bbarolo.bayesian.optimize).
+        Its errors (errors=True) are those of the Laplace approximation (the inverse Hessian of -log L at the best
+        fit, about ndim^2 likelihoods), and nsamples draws of it serve as the samples of the posterior in the
+        outputs (errors in the tables, corner plot, ring_errors, the errors of the deconvolved profile); errors=False:
+        no errors (zero). The best fit is in params (not the median of the draws), the details in self.optimum (see
+        bbarolo.bayesian.optimize.optimize).
+
+        Args:
+          freepar, threads, log_like, like_kwargs: as in run (threads: the processes of the likelihoods of a
+                                gradient, of the Hessian and of a population)
+          method (str):         'L-BFGS-B' (default: quasi-Newton, the gradient by central differences),
+                                'TNC', 'SLSQP', 'trust-constr', 'Powell', 'Nelder-Mead', 'COBYLA', 'COBYQA'
+                                (scipy.optimize.minimize, with the bounds of the priors) or
+                                'differential_evolution' (global, then polished with L-BFGS-B)
+          x0:                   the starting point: None (default: the initial rings, the noise for SIGMA, the
+                                centre of the prior for FRACERR and the parameters of functions of radius),
+                                'centre' (the centres of the priors) or a vector of the free parameters (NaN: the
+                                centre of the prior)
+          posterior (bool):     maximise the posterior instead of the likelihood (default False)
+          errors (bool):        the errors from the Hessian (default True)
+          nstart (int):         local methods: also start from nstart - 1 points drawn from the priors (seed), and
+                                keep the best (default 1)
+          step (float):         the step of the gradient, in units of the range of each prior (default 1e-3: the
+                                likelihood of the discretised models is rough at much smaller steps)
+          options (dict):       options of the method (scipy's, e.g. maxiter)
+          kwargs:               verbose (bool) and any BBarolo parameter
+        """
+        from .optimize import optimize as _optimize, summary, method_name
+        method = method_name(method)
+        params = {k: v for k, v in kwargs.items() if k not in ('verbose',)}
+        self._check_moved(kwargs, 'optimize')
+        if params:
+            self.update(**params)
+        kwargs = {k: v for k, v in kwargs.items() if k == 'verbose'}
+        like_kwargs, threads, custom = self._start_fit(freepar, threads, log_like, like_kwargs, kwargs, 'optimize')
+        verbose = kwargs.get('verbose', True)
+        self.results = self.sampler = None
+        if isinstance(x0, str):
+            if x0.strip().lower() not in ('centre', 'center'):
+                raise BBaroloError(f"Bayesian3DFIT.optimize: x0={x0!r} (None, 'centre' or a vector of the free "
+                                   "parameters)")
+            theta0 = np.full(self.ndim, np.nan)
+        else:
+            theta0 = self._initial_theta() if x0 is None else np.asarray(x0, float)
+        vprint(verbose, f"\nOptimising with {method} ({threads} process{'es' if threads > 1 else ''})...")
+        res = _optimize(self, like_kwargs, theta0, method=method, threads=threads, posterior=posterior,
+                        errors=errors, nstart=nstart, seed=seed, step=step, options=options, nsamples=nsamples,
+                        verbose=verbose)
+        summary(res, verbose)
+        self._set_optimum(res)
+        return self._finish_fit(like_kwargs, custom, verbose)
+
+    def _set_optimum(self, res):
+        """ The results of an optimisation (optimize): optimum, the draws of its Laplace approximation as the
+        samples (equal weights) and the best fit as params. """
+        self.optimum = res
+        self._method = 'optimize'
+        self._set_sampling_stats(res.samples, np.ones(len(res.samples)))
+        self.params = np.asarray(res.x, float).copy()
+
+    def _initial_theta(self):
+        """ The vector of the free parameters at the initial rings (with the density profile when DENS is not
+        fitted): the value of each ring, or their median for NAME_SINGLE; RADMAX the estimated outer radius, SIGMA
+        the noise (or the value given); NaN (the centre of the prior) for FRACERR and the parameters of the
+        functions of radius. """
+        th = np.full(self.ndim, np.nan)
+        r = self._fit0.r
+        for key, idx in self.freepar_idx.items():
+            if key == 'sigma':
+                th[idx] = self.like_kwargs.get('sigma') or self.noiserms
+            elif key == 'radmax':
+                th[idx] = self._radmax_guess if getattr(self, '_radmax_mode', 'edge') != 'ring' else r['radii'][-1]
+            elif key in r and '_p' not in key:
+                v = np.asarray(r[key], float)
+                th[idx] = v if idx.size == v.size else np.median(v)
+        return th
+
+    @staticmethod
+    def _check_moved(kwargs, caller):
+        moved = [k for k in ('useBBres', 'noisecorr', 'likemask') if k in kwargs]
+        if moved:
+            raise TypeError(f"Bayesian3DFIT.{caller}: {', '.join(moved)} are options of like_kwargs, e.g. "
+                            "like_kwargs=dict(likemask='none', noisecorr='beam', bbres=True).")
+
+    def _start_fit(self, freepar, threads, log_like, like_kwargs, kwargs, caller):
+        """ The start of a fit (run, optimize): the free parameters (freepar or FREE), the processes, the options of
+        the likelihood (LIKEOPTS and like_kwargs), the setup, the log-likelihood (log_like or _log_likelihood) and,
+        if verbose, the description of the likelihood and the priors. Returns the options of each call of the
+        log-likelihood, the number of processes and whether the residuals are the user's. """
         dflt = self._run_defaults()
         if freepar is None:
             freepar = dflt.get('FREE')
@@ -610,18 +740,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             from ..params import bayes_name
             freepar = [bayes_name(p) for p in freepar]
         if len(freepar) == 0:                       # (it sampled zero dimensions)
-            raise BBaroloError("Bayesian3DFIT.run: no free parameters (freepar or FREE).")
-        method = str(dflt.get('SAMPLER', 'nautilus') if method is None else method).lower()
-        self._method = method
-        sampler_kwargs = {**dflt.get('SAMPLEROPTS', {}), **sampler_kwargs}
-        if 'dynamic' in sampler_kwargs:              # dynesty: static (default) or dynamic sampler
-            kwargs.setdefault('dynamic', bool(sampler_kwargs.pop('dynamic')))
-        if method == 'dynesty' and 'seed' in sampler_kwargs:     # (nautilus: its own option seed)
-            seed = sampler_kwargs.pop('seed')
-            sampler_kwargs.setdefault('rstate', np.random.default_rng(None if seed is None else int(seed)))
-        run_kwargs = {**dflt.get('RUNOPTS', {}), **run_kwargs}
-        sampler_kwargs, run_kwargs = sampler_options(method, kwargs.get('dynamic', False), sampler_kwargs,
-                                                      run_kwargs)
+            raise BBaroloError(f"Bayesian3DFIT.{caller}: no free parameters (freepar or FREE).")
         if threads is None:
             threads = int(self._params.get("THREADS", 1))
         # residuals replaced by the user (f._calculate_residuals = my_function)? a custom log-likelihood?
@@ -687,18 +806,12 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
 
         self._log_like_kind = ('geometry' if log_like == self._log_likelihood_geometry else
                                'cube' if log_like is None or log_like == self._log_likelihood else 'custom')
-        samples, weights, dt = sample(self, like_kwargs, method, threads, kwargs.get('dynamic', False), sampler_kwargs,
-                                      run_kwargs, verbose)
-        dt = f'{dt:.2f} seconds' if dt < 60.00 else f'{dt / 60.00:.2f} minutes'
-        vprint(verbose, f'\nSampling with {method} took {dt} to run.')
+        return like_kwargs, threads, custom
 
+    def _finish_fit(self, like_kwargs, custom, verbose):
+        """ The end of a fit (run, optimize): the reduced chi-square, the best-fit rings (outri, with the density
+        profile at the best-fit geometry if DENS is not fitted) and the errors of the deconvolved profile. """
         self.modCalculated = True
-        self._set_sampling_stats(samples, weights)
-        if verbose and self.ess < 20:
-            print(f"WARNING: the posterior is concentrated on {self.ess:.1f} samples (effective sample size), "
-                  "so the\n         credible intervals are not reliable: the sampling stopped early "
-                  "(maxiter, maxcall), or\n         the likelihood is extremely narrow (check that the noise "
-                  "sigma is right, or make it\n         a free parameter).")
         if verbose and self._log_like_func == self._log_likelihood and not self.useBBres and not custom:
             try:
                 chi2 = self.chi2_reduced()

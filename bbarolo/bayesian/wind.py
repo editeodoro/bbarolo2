@@ -82,6 +82,7 @@ from .emission import (log_marginal, log_marginal_diag, log_profile, log_margina
                        log_detection)
 from .common import vprint, get_distribution, SIGMA_QUANTILES
 from .sampling import sample, sampler_options
+from .optimize import SAMPLER_NAMES, sampler_options as optimize_options
 
 WIND_SHELL_PARS = ("vwind", "vdisp", "vrot")
 WIND_SCALAR_PARS = ("xpos", "ypos", "vsys", "inc", "pa", "openang", "openin", "conelen")
@@ -193,11 +194,14 @@ class BayesianWind(Task):
     defaults of run()).
 
     Methods: run(freepar, method, threads, like_kwargs, sampler_kwargs, run_kwargs, verbose, dynamic, **params) samples
-    the posterior (nothing is written); write(outfolder, plots) writes the outputs; print_stats(), corner_plot(),
-    best_model(), emission_errors(), shells_table(); log_likelihood(theta) and the parameters of theta (wind_pars).
+    the posterior (nothing is written); optimize(freepar, method, threads, like_kwargs, x0, posterior, errors, ...)
+    finds the best fit by a classic minimisation of the same likelihood; write(outfolder, plots) writes the outputs;
+    print_stats(), corner_plot(), best_model(), emission_errors(), shells_table(); log_likelihood(theta) and the
+    parameters of theta (wind_pars).
 
     Attributes: priors (definitions, see bbarolo.params.bayes_priors), funcs (functions of radius), like_kwargs, the
-    results samples, weights, samples_equal, quantiles, params (the medians), best (the WindPars of the medians),
+    results samples, weights, samples_equal, quantiles, params (the medians, or the best fit of optimize), optimum (the
+    details of optimize), best (the WindPars of params),
     emission (the emissivities of the cells at the best fit), model (the best model cube).
     """
 
@@ -215,6 +219,7 @@ class BayesianWind(Task):
         self.funcs = dict(DEFAULT_WIND_FUNCS)
         self.like_kwargs = dict(WIND_LIKE_OPTIONS)
         self.results = self.sampler = None
+        self.optimum = None                     # (the details of a fit of optimize)
         self.samples = self.weights = self.samples_equal = self.quantiles = self.params = None
         self.best = self.emission = self.model = None
         self.modCalculated = False
@@ -267,8 +272,9 @@ class BayesianWind(Task):
                 return wind_priors(s)
             if name == "SAMPLER":
                 m = s.strip().lower()
-                if m not in ("dynesty", "nautilus"):
-                    raise ValueError(f"unknown sampler {s.strip()} (DYNESTY or NAUTILUS)")
+                m = "optimise" if m == "optimize" else m
+                if m not in ("dynesty", "nautilus", "optimise"):
+                    raise ValueError(f"unknown sampler {s.strip()} (NAUTILUS, DYNESTY or OPTIMISE)")
                 return m
             from ..params import bayes_options
             return bayes_options(s)
@@ -838,16 +844,91 @@ class BayesianWind(Task):
         """Sample the posterior of the free parameters freepar (names as in FREE; default FREE) with method
         ('nautilus', default, or 'dynesty'; SAMPLER), in threads processes (default THREADS, or 1), with the options of
         the likelihood like_kwargs (LIKEOPTS), of the sampler (SAMPLEROPTS) and of its run (RUNOPTS). Nothing is
-        written (see write). Returns self."""
+        written (see write). method 'optimise' (or 'optimize'; SAMPLER OPTIMISE) runs optimize instead, with
+        sampler_kwargs its arguments (method, x0, posterior, errors, nstart, seed, step, nsamples) and run_kwargs the
+        options of its method. Returns self."""
         if params:
             self.update(**params)
         dflt = self._run_defaults()
+        freepar = self._fit_options(freepar, like_kwargs, dflt)
+        method = (method or dflt.get("SAMPLER") or "nautilus").lower()
+        threads = self._threads(threads)
+        skw = {**dflt.get("SAMPLEROPTS", {}), **dict(sampler_kwargs or {})}
+        rkw = {**dflt.get("RUNOPTS", {}), **dict(run_kwargs or {})}
+        if method in SAMPLER_NAMES:                         # (SAMPLER OPTIMISE: the optimisation)
+            okw = optimize_options(skw, rkw, task="BAYESIANWIND")
+            return self.optimize(freepar, threads=threads, like_kwargs=like_kwargs, verbose=verbose, **okw)
+        dynamic = bool(skw.pop("dynamic", dynamic))
+        if method == "dynesty" and "seed" in skw:          # (nautilus: its own option seed)
+            seed = skw.pop("seed")
+            skw.setdefault("rstate", np.random.default_rng(None if seed is None else int(seed)))
+        skw, rkw = sampler_options(method, dynamic, skw, rkw)
+        self._prepare_fit(freepar, verbose)
+        self._method = method
+        self.optimum = None
+        vprint(verbose, f" BAYESIANWIND: sampling {self.ndim} parameters with {method} ({threads} processes)...")
+        samples, weights, dt = sample(self, {}, method, int(threads), dynamic, skw, rkw, verbose)
+        self._set_sampling_stats(samples, weights)
+        self.time = dt
+        self._best_fit()
+        vprint(verbose, f" BAYESIANWIND: done in {dt / 60.:.1f} minutes.")
+        return self
+
+    def optimize(self, freepar=None, method="L-BFGS-B", threads=None, *, like_kwargs: dict = {}, x0=None,
+                 posterior=False, errors=True, nstart=1, seed=None, step=1e-3, options: dict = {}, nsamples=4000,
+                 verbose=True, **params):
+        """Find the best fit by a classic minimisation of -log L, with the likelihood of run() (the same free
+        parameters, with the hyperparameters of the emission added, options and priors), e.g. to test the sampling.
+        Nothing is written (see write). Returns self.
+
+        The result is the maximum likelihood within the bounds of the priors (posterior=True: the maximum of the
+        posterior), searched in the unit cube of the priors with method: 'L-BFGS-B' (default: quasi-Newton, the
+        gradient by central differences of step `step` in units of the range of each prior, its likelihoods computed
+        in threads processes), 'TNC', 'SLSQP', 'trust-constr', 'Powell', 'Nelder-Mead', 'COBYLA', 'COBYQA'
+        (scipy.optimize.minimize, with options) or 'differential_evolution' (global, then polished with L-BFGS-B);
+        see bbarolo.bayesian.optimize. x0: the starting point, None (the initial wind, the noise for SIGMA, the
+        centres of the priors for the other hyperparameters and the parameters of functions of radius), 'centre' (the
+        centres of the priors) or a vector of the free parameters (NaN: the centre of the prior); nstart > 1 also
+        starts from nstart - 1 points drawn from the priors (seed) and keeps the best.
+
+        The errors (errors=True) are those of the Laplace approximation (the inverse Hessian at the best fit, about
+        ndim^2 likelihoods), and nsamples draws of it serve as the samples of the posterior in the outputs (errors of
+        the tables, of the emission, corner plot); errors=False: none (zero). The best fit is in params (not the median
+        of the draws), the details in self.optimum (see bbarolo.bayesian.optimize.optimize)."""
+        from .optimize import optimize as _optimize, summary, method_name
+        method = method_name(method)
+        if params:
+            self.update(**params)
+        dflt = self._run_defaults()
+        freepar = self._fit_options(freepar, like_kwargs, dflt)
+        threads = self._threads(threads)
+        self._prepare_fit(freepar, verbose)
+        self.results = self.sampler = None
+        if isinstance(x0, str):
+            if x0.strip().lower() not in ("centre", "center"):
+                raise BBaroloError(f"BAYESIANWIND: optimize: x0={x0!r} (None, 'centre' or a vector of the free "
+                                   "parameters)")
+            theta0 = np.full(self.ndim, np.nan)
+        else:
+            theta0 = self._initial_theta() if x0 is None else np.asarray(x0, float)
+        vprint(verbose, f" BAYESIANWIND: optimising {self.ndim} parameters with {method} ({threads} processes)...")
+        res = _optimize(self, {}, theta0, method=method, threads=int(threads), posterior=posterior, errors=errors,
+                        nstart=nstart, seed=seed, step=step, options=options, nsamples=nsamples, verbose=verbose)
+        summary(res, verbose, taskname=" BAYESIANWIND: ")
+        self.optimum = res
+        self._method = "optimize"
+        self._set_sampling_stats(res.samples, np.ones(len(res.samples)))
+        self.params = np.asarray(res.x, float).copy()
+        self.time = res.time
+        self._best_fit()
+        return self
+
+    def _fit_options(self, freepar, like_kwargs, dflt):
+        """The free parameters (freepar, or FREE) and the options of the likelihood (LIKEOPTS and like_kwargs, checked
+        and set in like_kwargs with the defaults)."""
         freepar = freepar if freepar is not None else dflt.get("FREE")
         if not freepar:
             raise ValueError("BAYESIANWIND: no free parameters (give freepar or FREE)")
-        method = (method or dflt.get("SAMPLER") or "nautilus").lower()
-        if threads is None:
-            threads = int(self._params.get("THREADS", 1)) if "THREADS" in self._params else 1
         lk = dict(WIND_LIKE_OPTIONS)
         lk.update(dflt.get("LIKEOPTS", {}))
         for k, v in dict(like_kwargs or {}).items():
@@ -857,13 +938,16 @@ class BayesianWind(Task):
                                  f"(options: {', '.join(WIND_LIKE_OPTIONS)})")
             lk[kv[0]] = kv[1]
         self.like_kwargs = lk
-        skw = {**dflt.get("SAMPLEROPTS", {}), **dict(sampler_kwargs or {})}
-        rkw = {**dflt.get("RUNOPTS", {}), **dict(run_kwargs or {})}
-        dynamic = bool(skw.pop("dynamic", dynamic))
-        if method == "dynesty" and "seed" in skw:          # (nautilus: its own option seed)
-            seed = skw.pop("seed")
-            skw.setdefault("rstate", np.random.default_rng(None if seed is None else int(seed)))
-        skw, rkw = sampler_options(method, dynamic, skw, rkw)
+        return freepar
+
+    def _threads(self, threads):
+        if threads is None:
+            threads = int(self._params.get("THREADS", 1)) if "THREADS" in self._params else 1
+        return int(threads)
+
+    def _prepare_fit(self, freepar, verbose):
+        """The setup of a fit (run, optimize): the free parameters with the hyperparameters of the emission, the setup
+        and a check of the likelihood at the centre of the priors."""
         freepar = self._with_hyper(freepar, verbose)
         self._setup(freepar, verbose=verbose)
         theta0 = self._prior_transform(np.full(self.ndim, 0.5))
@@ -871,14 +955,25 @@ class BayesianWind(Task):
         if not np.isfinite(l0):
             raise BBaroloError("BAYESIANWIND: the likelihood at the centre of the priors is not finite (check the "
                                "initial wind and the priors)")
-        self._method = method
-        vprint(verbose, f" BAYESIANWIND: sampling {self.ndim} parameters with {method} ({threads} processes)...")
-        samples, weights, dt = sample(self, {}, method, int(threads), dynamic, skw, rkw, verbose)
-        self._set_sampling_stats(samples, weights)
-        self.time = dt
-        self._best_fit()
-        vprint(verbose, f" BAYESIANWIND: done in {dt / 60.:.1f} minutes.")
-        return self
+
+    def _initial_theta(self):
+        """The vector of the free parameters at the initial wind (the value of each shell, or their median for
+        NAME_SINGLE), SIGMA the noise (or the value given); NaN (the centre of the prior) for EMSCALE, EMCLUMP, EMRATIO,
+        EMSLOPE and the parameters of the functions of radius."""
+        th = np.full(self.ndim, np.nan)
+        ini = self._init
+        for key, idx in self.freepar_idx.items():
+            base, _, suf = key.partition("_")
+            if suf.startswith("p"):
+                continue
+            if base in WIND_SHELL_PARS:
+                v = np.asarray(ini[base], float) * np.ones(ini["radii"].size)
+                th[idx] = v if idx.size == v.size else np.median(v)
+            elif base in WIND_SCALAR_PARS:
+                th[idx] = float(ini[base])
+            elif base == "sigma":
+                th[idx] = self.like_kwargs.get("sigma") or self.noiserms
+        return th
 
     def _with_hyper(self, freepar, verbose=True):
         """The free parameters with the hyperparameters of the prior of the emission (EMSCALE, EMCLUMP) that are not
@@ -963,10 +1058,17 @@ class BayesianWind(Task):
         if not self.modCalculated:
             st.write(" BAYESIANWIND: run() first.\n")
             return
-        st.write(f"\n BAYESIANWIND posterior ({self._method}, emission {self.like_kwargs['emission']}, "
-                 f"{self._likelihood_name()} likelihood):\n")
-        for name, (lo, med, hi) in zip(self.freepar_names, self.quantiles):
-            st.write(f"   {name:12s} = {med:12.4g}  -{med - lo:<10.3g} +{hi - med:<10.3g}\n")
+        opt = self.optimum if self._method == "optimize" else None
+        if opt is None:
+            st.write(f"\n BAYESIANWIND posterior ({self._method}, emission {self.like_kwargs['emission']}, "
+                     f"{self._likelihood_name()} likelihood):\n")
+        else:
+            st.write(f"\n BAYESIANWIND {'maximum a posteriori' if opt.posterior else 'maximum likelihood'} "
+                     f"({opt.method}, emission {self.like_kwargs['emission']}, {self._likelihood_name()} likelihood; "
+                     f"errors: {'Laplace approximation' if opt.cov is not None else 'not computed'}):\n")
+        for name, val, (lo, med, hi) in zip(self.freepar_names, self.params, self.quantiles):
+            val = med if opt is None else val                 # (an optimisation: the best fit)
+            st.write(f"   {name:12s} = {val:12.4g}  -{med - lo:<10.3g} +{hi - med:<10.3g}\n")
         st.write("\n")
 
     def _likelihood_name(self):

@@ -384,6 +384,19 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **BAYESIAN3DFIT and BAYESIANWIND: fits by minimisation** (`SAMPLER OPTIMISE`, or `OPTIMIZE`, in parameter files;
+  `Bayesian3DFIT.optimize()` and `BayesianWind.optimize()` in Python): the best fit by a classic minimisation of the likelihood of the sampling (the same free parameters,
+  options and priors), to test a sampling or for a quick fit. It is the maximum likelihood within the bounds of the
+  priors (`posterior=True`: the maximum of the posterior), searched in the unit cube of the priors with L-BFGS-B
+  (default; the gradient by central differences, its likelihoods computed in `threads` processes), the other bounded
+  methods of `scipy.optimize.minimize` (Powell, Nelder-Mead, TNC, SLSQP, trust-constr, COBYLA, COBYQA) or
+  differential evolution; `nstart` adds starts drawn from the priors. In parameter files `SAMPLEROPTS` gives these
+  choices (e.g. `method=powell nstart=3`) and `RUNOPTS` the options of the method (e.g. `maxiter=500`). The errors are those of the Laplace
+  approximation (the inverse Hessian at the best fit), whose draws serve as the samples in the outputs (`write()`,
+  `print_stats()`, the corner plot, the error columns; `load_results` reads `<prefix>_optimize_results.npy`). On a
+  mock of NGC 2403 with nine free parameters, L-BFGS-B took 6 seconds on 16 processes, nautilus 10 minutes, for the
+  same best fit (within 0.4σ of the medians) and errors within 8% of the posterior widths; on a clumpy mock wind (nine
+  parameters) 5 seconds against 15 minutes, within 0.3σ and 10%.
 - **Process name**: the `BBarolo` command now shows as `BBarolo` instead of `python` in `top` and `ps`
   (on Linux; with the optional `setproctitle` package the full command line too, also on macOS).
   Worker processes (THREADS > 1) inherit the name.

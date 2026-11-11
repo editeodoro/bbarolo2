@@ -885,6 +885,119 @@ def test_bayesian_errors_on_mock_data(tmp_path):
     assert f.like_kwargs['noisecorr'] == 'measured' and 0.8 < f.noise_correlation['volume'] / f.beam_area < 1.3
 
 
+class _GaussFitter:
+    """A fitter with a Gaussian log-likelihood of mean mu and covariance C, for the tests of bayesian.optimize."""
+
+    def __init__(self, mu, C, priors):
+        from scipy import stats
+        self.mu, self.Ci = np.asarray(mu, float), np.linalg.inv(C)
+        self.ndim = len(mu)
+        self.freepar_names = [f"p{i}" for i in range(self.ndim)]
+        self.freepar_idx = {n: np.array([i]) for i, n in enumerate(self.freepar_names)}
+        self.prior_distr = {n: getattr(stats, d[0])(*d[1:]) for n, d in zip(self.freepar_names, priors)}
+        self.ncall = 0
+
+    def _prior_transform(self, u):
+        return np.array([self.prior_distr[n].ppf(u[i]) for i, n in enumerate(self.freepar_names)])
+
+    def _log_like_func(self, theta, **kw):
+        d = np.asarray(theta, float) - self.mu
+        return -0.5 * d @ self.Ci @ d
+
+
+def test_optimize_gaussian():
+    """bayesian.optimize on a Gaussian likelihood: every method finds its mean, the Laplace covariance is its
+    covariance (and the draws have its widths), a mean beyond a bound of the prior is found at the bound and flagged,
+    posterior=True maximises likelihood x prior (a log-uniform prior: the root of theta^2 - mu theta + sigma^2), the
+    pool of processes gives the same result, and an unknown method is an error."""
+    from bbarolo.bayesian.optimize import optimize, method_name
+    from bbarolo.bbutils import BBaroloError
+    mu = np.array([3., -1., 50.])
+    sd = np.array([0.2, 0.05, 5.])
+    R = np.array([[1., 0.6, 0.], [0.6, 1., -0.3], [0., -0.3, 1.]])
+    C = R * sd[:, None] * sd[None, :]
+    pri = [("uniform", 0., 10.), ("uniform", -5., 10.), ("loguniform", 1., 1000.)]
+    f = _GaussFitter(mu, C, pri)
+    th0 = np.array([5., 0., np.nan])                       # (NaN: the centre of the prior)
+    res = optimize(f, {}, th0, verbose=False)
+    assert np.all(np.abs(res.x - mu) < 0.01 * sd) and res.success and not res.at_bound
+    assert np.allclose(res.cov, C, rtol=0.01, atol=1e-3 * sd.min() ** 2) and not res.regularised
+    assert np.allclose(res.samples.std(axis=0), sd, rtol=0.05) and abs(res.logl) < 1e-4
+    for m in ("Powell", "Nelder-Mead", "TNC", "SLSQP", "differential_evolution"):
+        r = optimize(f, {}, th0, method=m, errors=False, seed=1, verbose=False)
+        assert np.all(np.abs(r.x - mu) < 0.1 * sd), m
+        assert r.cov is None and r.samples.shape == (1, 3)
+    assert method_name("nelder-mead") == "Nelder-Mead" and method_name("lbfgsb") == "L-BFGS-B"
+    with pytest.raises(BBaroloError, match="unknown method"):
+        method_name("simulated-annealing")
+    # the mean beyond the prior: the bound, flagged
+    g = _GaussFitter([3., -1., 1200.], C, pri)
+    r = optimize(g, {}, th0, verbose=False)
+    assert np.isclose(r.x[2], 1000., rtol=1e-6) and r.at_bound == ["p2"]
+    # posterior: x 1/theta for the log-uniform prior of p2 (the others are uniform)
+    r = optimize(f, {}, th0, posterior=True, errors=False, verbose=False)
+    map2 = 0.5 * (mu[2] + np.sqrt(mu[2] ** 2 - 4 * C[2, 2]))                # 49.49
+    assert abs(r.x[2] - map2) < 0.01 * sd[2] and abs(r.x[2] - mu[2]) > 0.08 * sd[2]
+    # the processes of the pool: the same best fit and Hessian
+    r4 = optimize(f, {}, th0, threads=3, verbose=False)
+    assert np.allclose(r4.x, res.x) and np.allclose(r4.cov, res.cov)
+
+
+@needs_data
+def test_bayesian_optimize(tmp_path, capsys):
+    """Bayesian3DFIT.optimize on a mock of NGC 2403 (the model at known parameters plus noise correlated as the beam):
+    the best fit is within 4 sigma of the truth, its errors (Laplace) are those of the curvature of the likelihood
+    along each parameter within the correlations, params is the best fit, print_stats shows it, nothing is written,
+    write() writes the rings and <prefix>_optimize_results.npy, and load_results restores the fit; nstart, x0='centre'
+    and errors=False."""
+    from scipy.ndimage import gaussian_filter
+    from astropy.io import fits
+    from bbarolo.bayesian import Bayesian3DFIT
+    from bbarolo.bbutils import BBaroloError
+    kw = dict(radii=np.arange(60, 400, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10, inc=60, pa=123.7, z0=10,
+              mask="SEARCH", galmodtype="ANALYTIC")
+    f = Bayesian3DFIT(N2403, outfolder=str(tmp_path / "a") + "/", **kw)
+    f._setup(['vrot', 'vdisp_single'], verbose=False)
+    truth = np.array([80., 108., 120., 13.])
+    model = f._calculate_model(f._update_rings(f._fit0.copy(), truth), fullcube=True)[0]
+    h = f._cube_obj.Head()
+    sk = np.sqrt(h.Bmaj() * h.Bmin()) / abs(h.Cdelt(0)) / np.sqrt(2) / 2.3548
+    n = np.stack([gaussian_filter(c, sk, mode="wrap") for c in np.random.default_rng(3).standard_normal(model.shape)])
+    fn = str(tmp_path / "mock.fits")
+    fits.writeto(fn, (model + 0.005 * n / n.std()).astype(np.float32), fits.getheader(N2403))
+    g = Bayesian3DFIT(fn, outfolder=str(tmp_path / "b") + "/", **kw)
+    g.optimize(freepar=['vrot', 'vdisp_single'], verbose=False)
+    opt = g.optimum
+    assert opt.method == "L-BFGS-B" and np.array_equal(g.params, opt.x) and g._method == "optimize"
+    assert np.all(np.abs(opt.x - truth) < 4 * opt.errors), (opt.x, opt.errors)
+    assert np.isclose(opt.logl, g._log_likelihood(opt.x))
+    # the errors: the conditional width along vdisp from a parabola, against the Hessian
+    i = g.freepar_idx['vdisp'][0]
+    dv = np.array([-0.3, 0., 0.3])
+    L = [g._log_likelihood(opt.x + np.eye(4)[i] * d) for d in dv]
+    a = np.polyfit(dv, L, 2)[0]
+    assert 0.7 < opt.hessian[i, i] / (-2 * a) < 1.4
+    assert not os.path.exists(str(tmp_path / "b"))           # optimize writes nothing
+    capsys.readouterr()
+    g.print_stats()
+    out = capsys.readouterr().out
+    assert "maximum likelihood by L-BFGS-B" in out and f"{opt.x[0]:10.3f}" in out
+    files = g.write(plots=-1, verbose=False)
+    assert sorted(os.path.basename(x) for x in files) == ["ngc2403_optimize_results.npy", "ngc2403_rings_final1.txt"]
+    r = Bayesian3DFIT(fn, outfolder=str(tmp_path / "c") + "/")
+    r.load_results(str(tmp_path / "b" / "ngc2403_optimize_results.npy"))
+    assert r._method == "optimize" and np.allclose(r.params, opt.x) and r.optimum.method == "L-BFGS-B"
+    assert np.allclose(r.ring_errors('vrot')[0], g.ring_errors('vrot')[0])
+    # from the centre of the priors, two starts, without errors (zero), Powell
+    g.optimize(freepar=['vrot', 'vdisp_single'], x0="centre", nstart=2, seed=1, errors=False, method="powell",
+               verbose=False)
+    assert len(g.optimum.starts) == 2 and g.optimum.cov is None
+    assert np.all(np.abs(g.params - opt.x) < 0.5 * opt.errors)
+    assert np.all(g.ring_errors('vrot')[0] == 0)
+    with pytest.raises(BBaroloError, match="x0"):
+        g.optimize(freepar=['vrot', 'vdisp_single'], x0="middle", verbose=False)
+
+
 def test_bayesian_keywords(capsys):
     """BAYESIAN3DFIT in parameter files: FREE, PRIORS, SAMPLER, SAMPLEROPTS and RUNOPTS."""
     import io
@@ -980,6 +1093,49 @@ def _mock_cube(tmp_path, name="mock"):
     fn = str(tmp_path / f"{name}.fits")
     fits.PrimaryHDU((m + noise).astype(np.float32), header=hdu.header).writeto(fn)
     return fn
+
+
+def test_bayesian_optimise_task(tmp_path, capsys):
+    """SAMPLER OPTIMISE (or OPTIMIZE) in parameter files: the checks of SAMPLEROPTS (the arguments of optimize) before
+    the run, BBarolo -p (the optimisation with the method of SAMPLEROPTS and the options of RUNOPTS, the statistics, the
+    outputs with <prefix>_optimize_results.npy), and the same as the default of Bayesian3DFIT.run() in Python; an
+    option that the method does not know is an error."""
+    from bbarolo import Bayesian3DFIT
+    from bbarolo.cli import main
+    from bbarolo.bbutils import BBaroloError
+    p = Param()
+    p.readParamString("FITSFILE m.fits\nBAYESIAN3DFIT true\nSAMPLER optimize\nSAMPLEROPTS method=nelder-mead nstart=2\n")
+    assert p.checkPars(quiet=True) and p.gf.SAMPLER == "OPTIMISE"
+    for opts, msg in (("nlive=20", "unknown option(s) nlive of SAMPLER OPTIMISE"), ("method=annealing",
+                                                                                     "unknown method 'annealing'")):
+        p = Param()
+        p.readParamString(f"FITSFILE m.fits\nBAYESIAN3DFIT true\nSAMPLER OPTIMISE\nSAMPLEROPTS {opts}\n")
+        assert not p.checkPars()
+        assert f"BAYESIAN3DFIT error: SAMPLEROPTS: {msg}" in capsys.readouterr().out
+    fn = _mock_cube(tmp_path)
+    par = tmp_path / "opt.par"
+    par.write_text(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/cli\nBAYESIAN3DFIT true\nNRADII 4\nRADSEP 40\nXPOS 31.5\n"
+                   "YPOS 31.5\nVSYS 0\nVROT 120\nVDISP 15\nZ0 0\nINC 60\nPA 45\nMASK SEARCH\nGALMODTYPE ANALYTIC\n"
+                   "LINEAR 0\nFREE VROT_SINGLE VDISP_SINGLE INC_SINGLE\nSAMPLER OPTIMISE\nSAMPLEROPTS method=Powell\n"
+                   "RUNOPTS maxiter=50\nTHREADS 2\nPLOTS false\n")
+    assert main(["-p", str(par)]) == 0
+    out = capsys.readouterr().out
+    assert "Optimisation with Powell (maximum likelihood)" in out and "(maximum likelihood by Powell; errors: " in out
+    cli = tmp_path / "cli"
+    for name in ("MOCK_rings_final1.txt", "MOCK_optimize_results.npy", "MOCK_mod_none.fits"):
+        assert (cli / name).is_file(), name
+    g = Bayesian3DFIT(fn, outfolder=str(tmp_path / "re"))
+    g.load_results(str(cli / "MOCK_optimize_results.npy"))
+    assert g._method == "optimize" and g.optimum.method == "Powell" and 140 < g.params[0] < 160
+    assert abs(g.params[2] - 60.) < 2.
+    # Python: SAMPLER as the default of run(), SAMPLEROPTS its arguments
+    h = Bayesian3DFIT.from_parfile(str(par), sampler="optimise", sampleropts="method=tnc errors=false",
+                                   runopts="maxfun=40", outfolder=str(tmp_path / "py"))
+    h.run(verbose=False)
+    assert h._method == "optimize" and h.optimum.method == "TNC" and h.optimum.cov is None
+    assert np.all(np.abs(h.params - g.params) < 1.)
+    with pytest.raises(BBaroloError, match="Unknown solver options: maxfunn"):
+        h.run(run_kwargs=dict(maxfunn=40), verbose=False)
 
 
 def test_bayesian_task(tmp_path, capsys):

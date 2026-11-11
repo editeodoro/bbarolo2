@@ -1462,14 +1462,21 @@ and BAYESIAN3DFIT: the contours are at 1, 2, 4, ..., 64 times this value, plus o
     'SAMPLER': dict(
         group='Bayesian sampling',
         doc="""\
-The nested sampler of `BAYESIAN3DFIT` (case-insensitive):
+The nested sampler of `BAYESIAN3DFIT` and `BAYESIANWIND` (case-insensitive):
 
 - `NAUTILUS` (the default): the nautilus package (`nautilus-sampler` on PyPI).
 - `DYNESTY`: the dynesty package, with its static sampler and multi-ellipsoid bounds (`bound=multi`);
   `SAMPLEROPTS dynamic=true` selects its dynamic sampler.
+- `OPTIMISE` (or `OPTIMIZE`): no sampling, but the best fit by a classic minimisation of the same
+  likelihood (the maximum likelihood within the bounds of the priors), with the errors of the Laplace
+  approximation (the inverse Hessian at the best fit): seconds instead of minutes, to test a setup or a
+  sampling. L-BFGS-B by default; `SAMPLEROPTS` gives its arguments (e.g. `method=powell`) and `RUNOPTS`
+  the options of the method. The outputs are those of a sampling, with the best fit and its errors, and
+  the draws of the Laplace approximation in `<prefix>_optimize_results.npy` (`_optimize_windresults.npy`
+  for `BAYESIANWIND`). In Python, `Bayesian3DFIT.optimize()` and `BayesianWind.optimize()`.
 
-The package must be installed: an unknown sampler, or one that is not installed, is an error before
-the run. The options of the sampler are given with `SAMPLEROPTS` and `RUNOPTS`.
+The package of a sampler must be installed: an unknown sampler, or one that is not installed, is an
+error before the run. The options of the sampler are given with `SAMPLEROPTS` and `RUNOPTS`.
 """),
     'PRIORS': dict(
         group='Bayesian sampling',
@@ -1535,6 +1542,20 @@ Some options are handled by BBarolo:
 
 The other options keep the defaults of the sampler, apart from `bound=multi` for dynesty. With
 several processes (`THREADS`) BBarolo gives the sampler its pool of processes.
+
+With `SAMPLER OPTIMISE`, the options are those of the minimisation:
+
+- `method`: `L-BFGS-B` (the default: quasi-Newton, the gradient by central differences computed on the
+  `THREADS` processes), `Powell`, `Nelder-Mead`, `TNC`, `SLSQP`, `trust-constr`, `COBYLA`, `COBYQA`
+  (`scipy.optimize.minimize`, with the bounds of the priors) or `differential_evolution` (a global
+  search, then L-BFGS-B), case-insensitive;
+- `x0`: the starting point, the initial values (the default) or `centre` (the centres of the priors), or
+  one value per free parameter separated by commas;
+- `nstart=N`: also N − 1 starts drawn from the priors, keeping the best (with `seed=N`, reproducible);
+- `posterior=true`: the maximum of the posterior instead of the likelihood;
+- `errors=false`: no Hessian (zero errors, no corner plot); `nsamples` (default 4000): the draws of the
+  Laplace approximation used as samples;
+- `step`: the step of the gradient, in units of the range of each prior (default 0.001).
 """),
     'RUNOPTS': dict(
         group='Bayesian sampling',
@@ -1551,6 +1572,9 @@ the live points), is accepted by all the samplers: it becomes `dlogz_init` for t
 `f_live` = 1 − exp(−dlogz) for nautilus. The progress of the sampling is shown with `VERBOSE`
 (`print_progress` of dynesty, also off when `SHOWBAR` is false; `verbose` of nautilus). The other
 options keep the defaults of the sampler.
+
+With `SAMPLER OPTIMISE`, the options of the method of `scipy.optimize` chosen in `SAMPLEROPTS`, e.g.
+`RUNOPTS maxiter=500` (an option that the method does not know is an error when it starts).
 """),
     'LIKEOPTS': dict(
         group='Bayesian sampling',

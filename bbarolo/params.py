@@ -537,9 +537,13 @@ class Param:
                     "Turning off GALMOD.")
                 gm.flagGALMOD = False
             gf.SAMPLER = gf.SAMPLER.strip().upper()
-            if gf.SAMPLER not in ("DYNESTY", "NAUTILUS"):
-                out(f"BAYESIAN3DFIT error: unknown SAMPLER {gf.SAMPLER} (DYNESTY or NAUTILUS).")
+            if gf.SAMPLER == "OPTIMIZE":
+                gf.SAMPLER = "OPTIMISE"
+            if gf.SAMPLER not in ("DYNESTY", "NAUTILUS", "OPTIMISE"):
+                out(f"BAYESIAN3DFIT error: unknown SAMPLER {gf.SAMPLER} (NAUTILUS, DYNESTY or OPTIMISE).")
                 good = False
+            elif gf.SAMPLER == "OPTIMISE":
+                good = _check_optimise(gf, "BAYESIAN3DFIT", out) and good
             elif importlib.util.find_spec(gf.SAMPLER.lower()) is None:
                 out(f"BAYESIAN3DFIT error: SAMPLER {gf.SAMPLER} needs the Python package {gf.SAMPLER.lower()} "
                     f"(pip install {gf.SAMPLER.lower()}).")
@@ -696,9 +700,13 @@ class Param:
                     "FREE, PRIORS and the options of the sampler).")
                 good = False
             gf.SAMPLER = gf.SAMPLER.strip().upper()
-            if gf.SAMPLER not in ("DYNESTY", "NAUTILUS"):
-                out(f"BAYESIANWIND error: unknown SAMPLER {gf.SAMPLER} (DYNESTY or NAUTILUS).")
+            if gf.SAMPLER == "OPTIMIZE":
+                gf.SAMPLER = "OPTIMISE"
+            if gf.SAMPLER not in ("DYNESTY", "NAUTILUS", "OPTIMISE"):
+                out(f"BAYESIANWIND error: unknown SAMPLER {gf.SAMPLER} (NAUTILUS, DYNESTY or OPTIMISE).")
                 good = False
+            elif gf.SAMPLER == "OPTIMISE":
+                good = _check_optimise(gf, "BAYESIANWIND", out) and good
             elif importlib.util.find_spec(gf.SAMPLER.lower()) is None:
                 out(f"BAYESIANWIND error: SAMPLER {gf.SAMPLER} needs the Python package {gf.SAMPLER.lower()} "
                     f"(pip install {gf.SAMPLER.lower()}).")
@@ -1161,6 +1169,22 @@ def bayes_priors(priors, ring_pars=BAYES_RING_PARS, other_pars=BAYES_OTHER_PARS,
     return out
 
 
+def _check_optimise(gf, task, out):
+    """SAMPLER OPTIMISE: the options of SAMPLEROPTS (the arguments of the optimisation, see
+    bayesian.optimize.sampler_options). Prints the error and returns False if they are wrong."""
+    from .bayesian.optimize import sampler_options
+    try:
+        opts = bayes_options(gf.SAMPLEROPTS)
+    except ValueError:
+        return True                            # (a wrong format: reported by the check of SAMPLEROPTS)
+    try:
+        sampler_options(opts, task=task)
+    except ValueError as e:                    # (BBaroloError)
+        out(f"{task} error: {str(e).replace(task + ': ', '')}")
+        return False
+    return True
+
+
 def bayes_value_string(name, value):
     """A Python value of FREE, PRIORS, SAMPLER, SAMPLEROPTS, RUNOPTS or LIKEOPTS (BAYESIAN3DFIT) as it is written in a
     parameter file: FREE a list of names (['vrot', 'inc_single'] -> 'vrot inc_single'); PRIORS a dict as
@@ -1552,7 +1576,7 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
             R("[PLOTMASK]", "   Overlaying mask to output plots?", stringize(gf.PLOTMASK))
             R("[PLOTMINCON]", "   Minimum flux contour for output plots", gf.PLOTMINCON)
         if isBayes:
-            R("[SAMPLER]", "   Nested sampler", gf.SAMPLER)
+            R("[SAMPLER]", "   Sampler (or OPTIMISE)", gf.SAMPLER)
             R("[PRIORS]", "   Priors of the free parameters", gf.PRIORS or "default")
             R("[SAMPLEROPTS]", "   Options of the sampler", gf.SAMPLEROPTS or "default")
             R("[RUNOPTS]", "   Options of the sampling", gf.RUNOPTS or "default")

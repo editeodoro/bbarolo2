@@ -300,6 +300,78 @@ def test_bayesian_wind_quick(tmp_path):
         assert f"pvs/{pre}_{n}.fits" in names, n
 
 
+def test_bayesian_wind_optimize(tmp_path, capsys):
+    """BayesianWind.optimize on the tiny mock of test_bayesian_wind_quick: EMSCALE, EMCLUMP, EMRATIO and EMSLOPE are
+    added as in run, the best fit is no worse than the best of a grid of the hyperparameters at the true wind and near
+    it, params is the best fit (and best its wind), print_stats and <prefix>_wind_params.txt show it with the errors of
+    the Laplace approximation, and the results file holds the optimisation."""
+    from wind_mocks import mock_wind
+    from bbarolo import BayesianWind
+    hdu, tr = mock_wind(kind="clumps", seed=2, snr=15, shape=(24, 24, 20), pix=12., chan=25., beam=36.,
+                        truth=dict(xpos=11.5, ypos=11.5, conelen=110., radii=[55., 110.], vwind=200.), nclumps=40,
+                        clump=20.)
+    f = BayesianWind(hdu, xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, conelen=110, vwind=180, vdisp=20,
+                     nlayers=2, outfolder=str(tmp_path) + "/")
+    f.optimize(freepar=["vwind_single", "openang"], like_kwargs=dict(cellsize=40.), verbose=False)
+    opt = f.optimum
+    assert f.freepar_names == ["vwind", "openang", "emscale", "emclump", "emratio", "emslope"]
+    assert f._method == "optimize" and np.array_equal(f.params, opt.x) and np.isclose(f.best.openang, opt.x[1])
+    grid = max(f.log_likelihood([200., 60., s, k, 1., 0.]) for s in np.exp(np.linspace(-3, 3, 7)) * f._s0
+               for k in (0.5, 1., 2.))
+    assert opt.logl >= grid and np.isclose(opt.logl, f.best_logl)
+    assert abs(opt.x[0] - 200.) < 3 * opt.errors[0] + 10 and abs(opt.x[1] - 60.) < 3 * opt.errors[1] + 3, opt.x
+    assert np.all(opt.errors > 0) and f.samples_equal.shape[1] == 6
+    capsys.readouterr()
+    f.print_stats()
+    out = capsys.readouterr().out
+    assert "maximum likelihood (L-BFGS-B" in out and f"{opt.x[0]:12.4g}" in out
+    files = f.write(plots=0, verbose=False)
+    pre = f._cube_obj.pars().outPrefix
+    names = {os.path.basename(x) for x in files}
+    assert pre + "_optimize_windresults.npy" in names
+    head = open(os.path.join(str(tmp_path), pre + "_wind_params.txt")).read().splitlines()
+    assert "maximum likelihood by L-BFGS-B" in head[0] and head[1].split()[2] == "BEST"
+    assert np.isclose(float(head[2].split()[1]), opt.x[0], rtol=1e-5)
+    r = np.load(os.path.join(str(tmp_path), pre + "_optimize_windresults.npy"), allow_pickle=True).item()
+    assert np.allclose(r["params"], opt.x) and r["optimum"]["method"] == "L-BFGS-B"
+
+
+def test_bayesian_wind_optimise_task(tmp_path, capsys):
+    """BAYESIANWIND with SAMPLER OPTIMISE: the checks of SAMPLEROPTS, BBarolo -p (the optimisation and the outputs with
+    <prefix>_optimize_windresults.npy and the best fit in <prefix>_wind_params.txt), and run() with
+    method='optimise' in Python."""
+    from wind_mocks import mock_wind
+    from bbarolo import BayesianWind
+    from bbarolo.cli import main
+    p = Param()
+    p.readParamString("FITSFILE m.fits\nBAYESIANWIND true\nFREE VWIND_SINGLE\nXPOS 1\nYPOS 1\nVSYS 0\nINC 60\n"
+                      "PA 30\nOPENANG 60\nVWIND 200\nCONELEN 100\nSAMPLER OPTIMISE\nSAMPLEROPTS nlive=10\n")
+    assert not p.checkPars()
+    assert "BAYESIANWIND error: SAMPLEROPTS: unknown option(s) nlive of SAMPLER OPTIMISE" in capsys.readouterr().out
+    hdu, tr = mock_wind(kind="clumps", seed=2, snr=15, shape=(24, 24, 20), pix=12., chan=25., beam=36.,
+                        truth=dict(xpos=11.5, ypos=11.5, conelen=110., radii=[55., 110.], vwind=200.), nclumps=40,
+                        clump=20.)
+    fn = str(tmp_path / "wind.fits")
+    hdu.writeto(fn)
+    par = tmp_path / "wind.par"
+    par.write_text(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/cli\nBAYESIANWIND true\nXPOS 11.5\nYPOS 11.5\nVSYS 0\n"
+                   "INC 55\nPA 30\nOPENANG 55\nCONELEN 110\nVWIND 180\nVDISP 20\nNLAYERS 2\n"
+                   "FREE VWIND_SINGLE OPENANG\nLIKEOPTS cellsize=40\nSAMPLER OPTIMIZE\nSAMPLEROPTS errors=true\n"
+                   "THREADS 2\nPLOTS false\n")
+    assert main(["-p", str(par)]) == 0
+    out = capsys.readouterr().out
+    assert "Optimisation with L-BFGS-B" in out and "BAYESIANWIND maximum likelihood (L-BFGS-B" in out
+    files = os.listdir(str(tmp_path / "cli"))
+    assert any(x.endswith("_optimize_windresults.npy") for x in files), files
+    params = next(x for x in files if x.endswith("_wind_params.txt"))
+    assert "maximum likelihood by L-BFGS-B" in open(str(tmp_path / "cli" / params)).readline()
+    f = BayesianWind(hdu, xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, conelen=110, vwind=180, vdisp=20,
+                     nlayers=2, outfolder=str(tmp_path) + "/")
+    f.run(freepar=["vwind_single", "openang"], method="optimise", like_kwargs=dict(cellsize=40.),
+          sampler_kwargs=dict(method="powell", errors=False), run_kwargs=dict(maxiter=3), verbose=False)
+    assert f._method == "optimize" and f.optimum.method == "Powell" and f.optimum.cov is None
+
+
 def test_emission_gauss_exact():
     """log_marginal_gauss (the default prior of BAYESIANWIND: Gaussian emissivities of mean m and scatter kappa m) is
     the exact integral (brute force for 1-2 correlated amplitudes, the Gaussian of the data for 6), and

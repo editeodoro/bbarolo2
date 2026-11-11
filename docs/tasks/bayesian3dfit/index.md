@@ -104,6 +104,34 @@ Marginal posteriors of the six free parameters (`f.corner_plot()`): the rotation
 (`vrot1` to `vrot4`, km/s), the velocity dispersion (`vdisp`, km/s) and the noise per voxel (`sigma`, Jy/beam).
 ```
 
+## A fit by minimisation
+
+`SAMPLER OPTIMISE` (in Python `f.optimize()`) finds the best fit by a classic minimisation of the same likelihood: the free parameters, the
+options of the likelihood and the priors of `run()`, whose ranges bound the search. It takes seconds where a
+sampling takes minutes, to test a sampling, to try a setup, or for a quick fit. It writes nothing, and the
+results then hold the best fit (`f.params`) with the errors of the Laplace approximation (the inverse Hessian of
+the log-likelihood at the best fit): `print_stats()`, `ring_errors()`, `corner_plot()` and `write()` work as
+after `run()`.
+
+```text
+SAMPLER       OPTIMISE
+SAMPLEROPTS   method=lbfgsb nstart=1           # the default; e.g. method=powell, x0=centre, posterior=true
+RUNOPTS       maxiter=500                      # the options of the method (scipy.optimize)
+```
+
+```python
+f.optimize(freepar="VROT VDISP_SINGLE INC_SINGLE PA_SINGLE", threads=16)     # L-BFGS-B
+f.print_stats()           # the best fit and its errors
+f.optimum                 # the details: log-likelihood, number of likelihoods, covariance, ...
+```
+
+The default method is L-BFGS-B, a quasi-Newton method whose gradient is computed by central differences on
+`threads` processes (`THREADS`); `method` also accepts the bounded methods of `scipy.optimize.minimize` (`"Powell"`,
+`"Nelder-Mead"`, `"TNC"`, `"SLSQP"`, ...) and `"differential_evolution"`, a global search. On a mock of NGC 2403
+(six rings, VROT in each, VDISP, INC and PA shared), L-BFGS-B took 6 seconds on 16 processes and nautilus 10
+minutes, for the same best fit (within 0.4σ of the medians of the posterior) and errors within 8% of the
+posterior widths. See {doc}`algorithm` for the details.
+
 ## How it differs from 3DFIT
 
 - 3DFIT fits the rings one at a time with a downhill simplex and finds one solution; BAYESIAN3DFIT builds
@@ -133,7 +161,7 @@ outputs, and `f.save_results(file)` only the samples.
 | `_mod_none.fits` | `write_bestmodel()` | the best model cube (the median of the posterior) |
 | `_densprof.txt` | `write_bestmodel()` | the observed radial profile of the data in the best-fit rings |
 | `_densprof_deconvolved.txt` | `f.dens_profile` | the density profile used by the model (DENS not free), deconvolved from the total intensity map, with its errors |
-| `_<sampler>_results.npy` | `save_results(file)`, `load_results(file)` | the samples and their weights, the free parameters, the rings, the priors and the options |
+| `_<sampler>_results.npy` | `save_results(file)`, `load_results(file)` | the samples and their weights, the free parameters, the rings, the priors and the options (after `optimize()`: `_optimize_results.npy`, with the best fit and the draws of the Laplace approximation) |
 | `maps/`, `pvs/` | `write_bestmodel()` | moment maps and position–velocity slices of the data and of the model |
 | `_corner.pdf` | `corner_plot()` | the corner plot (in Python it returns the figure) |
 | `_profiles.pdf` | `plot_profiles()` | the parameters of the rings against radius, with their errors (in Python it returns the figure) |

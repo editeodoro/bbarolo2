@@ -2,7 +2,8 @@
 The outputs of BayesianWind (BAYESIANWIND), written by BayesianWind.write in the output folder, with the prefix of
 the cube (<prefix>):
 
-  <prefix>_wind_params.txt       the free parameters: median and 1-sigma interval of the posterior, prior
+  <prefix>_wind_params.txt       the free parameters: median and 1-sigma interval of the posterior (optimize: the best
+                                 fit and the interval of the Laplace approximation), prior
   <prefix>_wind_shells.txt       the shells of the best fit: radius, VWIND, VDISP, VROT (with errors) and the flux of
                                  each cone in the radial bins of the emission (with errors)
   <prefix>_wind_cells.txt        the cells of the emission: cone, ranges of radius, polar angle and azimuth, clipped
@@ -14,6 +15,7 @@ the cube (<prefix>):
                                  slices of the data, the model and the mask through the apex, across the axis of the
                                  cones (a: along PA) and along it (b: PA + 90), as 3DFIT
   <prefix>_<sampler>_windresults.npy   the samples, their weights, the free parameters, the priors and the options
+                                 (optimize: <prefix>_optimize_windresults.npy, also the best fit and the optimisation)
   plotscripts/                   the plotting scripts (PLOTS >= 0; see wind_plots.py), run with PLOTS > 0:
                                  <prefix>_chanmaps_wind.pdf, <prefix>_maps_wind.pdf, <prefix>_pv_wind.pdf, and
                                  <prefix>_wind_corner.pdf, <prefix>_wind_shells.pdf
@@ -48,13 +50,23 @@ def write_outputs(f, outfolder=None, plots=None, verbose=True):
     # the parameters
     fn = pre + "_wind_params.txt"
     with open(fn, "w") as out:
-        out.write(f"# BAYESIANWIND: emission {f.like_kwargs['emission']}, "
-                  f"{f._likelihood_name()} likelihood, sampler "
-                  f"{f._method}, effective sample size {f.ess:.0f}, log-likelihood at the medians {f.best_logl:.6g}\n")
-        out.write(f"#{'NAME':>13s} {'MEDIAN':>14s} {'ERR_LO':>12s} {'ERR_HI':>12s}   PRIOR\n")
-        for name, (lo, med, hi) in zip(f.freepar_names, f.quantiles):
+        opt = f.optimum if f._method == "optimize" else None
+        if opt is None:
+            out.write(f"# BAYESIANWIND: emission {f.like_kwargs['emission']}, "
+                      f"{f._likelihood_name()} likelihood, sampler "
+                      f"{f._method}, effective sample size {f.ess:.0f}, log-likelihood at the medians "
+                      f"{f.best_logl:.6g}\n")
+        else:
+            out.write(f"# BAYESIANWIND: emission {f.like_kwargs['emission']}, {f._likelihood_name()} likelihood, "
+                      f"{'maximum a posteriori' if opt.posterior else 'maximum likelihood'} by {opt.method} "
+                      f"(errors: {'Laplace approximation' if opt.cov is not None else 'not computed'}), "
+                      f"log-likelihood at the best fit {f.best_logl:.6g}\n")
+        col = "MEDIAN" if opt is None else "BEST"
+        out.write(f"#{'NAME':>13s} {col:>14s} {'ERR_LO':>12s} {'ERR_HI':>12s}   PRIOR\n")
+        for name, val, (lo, med, hi) in zip(f.freepar_names, f.params, f.quantiles):
             key = name if name in f.priors else name.rstrip("0123456789")
-            out.write(f" {name:>13s} {med:14.6g} {med - lo:12.5g} {hi - med:12.5g}   {f.priors.get(key, '')}\n")
+            val = med if opt is None else val
+            out.write(f" {name:>13s} {val:14.6g} {med - lo:12.5g} {hi - med:12.5g}   {f.priors.get(key, '')}\n")
     files.append(fn)
     # the shells
     tab = f.shells_table()
@@ -121,9 +133,11 @@ def write_outputs(f, outfolder=None, plots=None, verbose=True):
         files.append(fn)
     # the samples
     fn = pre + f"_{f._method}_windresults.npy"
-    np.save(fn, dict(samples=f.samples, weights=f.weights, freepar_names=f.freepar_names,
-                     freepar_idx=f.freepar_idx, quantiles=f.quantiles, priors=f.priors, like_kwargs=f.like_kwargs,
-                     init=f._init), allow_pickle=True)
+    res = dict(samples=f.samples, weights=f.weights, freepar_names=f.freepar_names, freepar_idx=f.freepar_idx,
+               quantiles=f.quantiles, priors=f.priors, like_kwargs=f.like_kwargs, init=f._init)
+    if f._method == "optimize" and f.optimum is not None:
+        res.update(params=f.params, optimum={k: v for k, v in f.optimum.items() if k != "samples"})
+    np.save(fn, res, allow_pickle=True)
     files.append(fn)
     if plots is not None and plots >= 0:
         files += _plots(f, of, prefix, run=plots > 0, verbose=verbose)
@@ -170,6 +184,8 @@ def _plots(f, of, prefix, run=True, verbose=True):
     matplotlib.use("Agg", force=False)
     import matplotlib.pyplot as plt
     try:
+        if f._method == "optimize" and f.optimum.get("cov") is None:
+            raise ValueError("an optimisation without errors")
         fig = f.corner_plot()
         fn = pre + "_wind_corner.pdf"
         fig.savefig(fn, bbox_inches="tight")

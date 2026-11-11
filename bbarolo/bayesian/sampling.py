@@ -10,6 +10,7 @@ The functions given to the samplers must then be importable module-level functio
 import os
 import sys
 import math
+import contextlib
 import time
 import multiprocessing as mp
 import numpy as np
@@ -137,24 +138,71 @@ def sample(fitter, like_kwargs, method, threads, dynamic, sampler_kwargs, run_kw
         return _sample(fitter, like_kwargs, method, threads, dynamic, sampler_kwargs, run_kwargs, verbose)
 
 
+def _open_pool(fitter, like_kwargs, threads):
+    """ The pool of the evaluations of the log-likelihood of fitter (its _log_like_func with like_kwargs): an MPI
+    pool under MPI (the other ranks wait in it and exit), threads fork-based processes if threads > 1, otherwise
+    None (serial). Returns the pool and the functions of the log-likelihood and of the prior transform to give the
+    samplers (module-level functions, run in the workers with a pool). """
+    _WORKER['parent'] = (fitter, like_kwargs)
+    pool = None
+    loglike, prior = _parent_loglike, _parent_prior
+    if isMPI:
+        _WORKER['f'] = (fitter, like_kwargs)
+        pool = MPIPool()
+        if not pool.is_master():
+            pool.wait()
+            sys.exit(0)
+        loglike, prior = _worker_loglike, _worker_prior
+    elif threads > 1:
+        pool = _make_pool(fitter, like_kwargs, threads)
+        if pool is not None:
+            loglike, prior = _worker_loglike, _worker_prior
+    return pool, loglike, prior
+
+
+def _close_pool(fitter, pool, failed):
+    """ Closes the pool of _open_pool (terminated if the work failed: no workers are left running). """
+    if pool is not None:
+        if failed and not isMPI:
+            pool.terminate()
+        else:
+            pool.close()
+        if not isMPI:
+            pool.join()
+    _WORKER_REGISTRY.pop(id(fitter), None)
+    _WORKER.pop('parent', None)
+    _WORKER.pop('f', None)
+    _WORKER.pop('blas', None)
+
+
+@contextlib.contextmanager
+def evaluator(fitter, like_kwargs, threads):
+    """ A context that gives a function computing the log-likelihood of fitter (its _log_like_func with like_kwargs)
+    at a list of parameter vectors, an array of the values: in threads processes (or an MPI pool), as the sampling,
+    with one BLAS thread in each (common.blas_threads). Used by the optimisation (optimize.py). """
+    with common.blas_threads():
+        pool, loglike, _ = _open_pool(fitter, like_kwargs, threads)
+        failed = True
+        try:
+            if pool is None:
+                yield lambda thetas: np.array([loglike(np.asarray(t, float)) for t in thetas], float)
+            else:
+                # (chunks of about four vectors per worker and call keep the processes busy)
+                size = int(getattr(pool, 'size', None) or threads)
+                yield lambda thetas: np.array(pool.map(loglike, [np.asarray(t, float) for t in thetas],
+                                                       **({} if isMPI else
+                                                          dict(chunksize=max(1, len(thetas) // (4 * size))))),
+                                              float)
+            failed = False
+        finally:
+            _close_pool(fitter, pool, failed)
+
+
 def _sample(fitter, like_kwargs, method, threads, dynamic, sampler_kwargs, run_kwargs, verbose):
     pool = None
     failed = True
-    _WORKER['parent'] = (fitter, like_kwargs)
     try:
-        loglike, prior = _parent_loglike, _parent_prior
-        if isMPI:
-            _WORKER['f'] = (fitter, like_kwargs)
-            pool = MPIPool()
-            if not pool.is_master():
-                pool.wait()
-                sys.exit(0)
-            loglike, prior = _worker_loglike, _worker_prior
-        elif threads > 1:
-            pool = _make_pool(fitter, like_kwargs, threads)
-            if pool is not None:
-                loglike, prior = _worker_loglike, _worker_prior
-
+        pool, loglike, prior = _open_pool(fitter, like_kwargs, threads)
         toc = time.time()
         if method == 'dynesty':
             Sampler = dyn.DynamicNestedSampler if dynamic else dyn.NestedSampler
@@ -181,15 +229,5 @@ def _sample(fitter, like_kwargs, method, threads, dynamic, sampler_kwargs, run_k
             fitter.results = None
         failed = False
     finally:
-        if pool is not None:
-            if failed and not isMPI:
-                pool.terminate()            # (a failed sampling leaves no workers running)
-            else:
-                pool.close()
-            if not isMPI:
-                pool.join()
-        _WORKER_REGISTRY.pop(id(fitter), None)
-        _WORKER.pop('parent', None)
-        _WORKER.pop('f', None)
-        _WORKER.pop('blas', None)
+        _close_pool(fitter, pool, failed)
     return samples, weights, time.time() - toc

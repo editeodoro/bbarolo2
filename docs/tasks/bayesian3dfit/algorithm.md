@@ -483,6 +483,62 @@ the pixels and is recommended for real galaxies, whose maps have structure that 
 convergence in 20 minutes without it). FRACERR does not suit the map: it weights the faint outer disk. The
 map does not change for PA → PA + 180°, so the prior of PA should cover half a circle.
 
+## Fit by minimisation
+
+`SAMPLER OPTIMISE` (or `OPTIMIZE`), in Python `optimize(freepar, method, ...)`, minimises $-\ln\mathcal L$, or with `posterior=True` $-\ln\mathcal L - \ln\pi$
+(the maximum of the posterior), with the log-likelihood, the setup and the priors of `run` (and of
+`run_geometry` with `log_like=f._log_likelihood_geometry`). The search runs in the unit cube of the priors, the
+space of the samplers ($\theta_k = F_k^{-1}(u_k)$, with $F_k$ the cumulative distribution of the prior $k$):
+every parameter has a range of one, the bounds are those of the priors, and log-uniform priors (SIGMA,
+FRACERR) are searched in their logarithm. The search starts from the initial rings (`x0=None`, with SIGMA the
+noise and the centre of the prior for FRACERR and the parameters of the functions of radius), from the centres
+of the priors (`x0="centre"`) or from a vector; `nstart` adds starts drawn from the priors (`seed`) and keeps
+the best. The methods:
+
+- `L-BFGS-B` (the default), `TNC`, `SLSQP`, `trust-constr`: quasi-Newton methods, with the gradient by central
+  differences of step `step` (default $10^{-3}$ of the range of each prior: the likelihood is rough at much
+  smaller steps, see below), its $2n+1$ likelihoods computed at once on the processes of `threads`;
+- `Powell`, `Nelder-Mead`, `COBYLA`, `COBYQA`: without derivatives, one likelihood at a time (Powell with a
+  tolerance of $10^{-3}$ on $\ln\mathcal L$; the relative tolerance of scipy is too coarse for values of
+  $10^4$–$10^6$);
+- `differential_evolution`: a global search, its population computed on the processes, then polished with
+  L-BFGS-B.
+
+`options` passes the options of the method (those of scipy, e.g. `maxiter`). In parameter files,
+`SAMPLEROPTS` gives the arguments of `optimize` (`method`, `x0`, `nstart`, `seed`, `posterior`, `errors`,
+`nsamples`, `step`) and `RUNOPTS` the options of the method; in Python, `run(method="optimise")` (or
+`SAMPLER` given to the object) does the same with `sampler_kwargs` and `run_kwargs`.
+
+The errors are those of the Laplace approximation: the covariance is the inverse of the Hessian $\mathrm H$ of
+the objective at the best fit, computed by finite differences in the parameters ($n^2+n+1$ likelihoods, and a
+few $n$ more to choose the steps) with steps of about four conditional σ, a change of 8 in $-\ln\mathcal L$. The
+likelihood of the discretised models has a jitter of about 0.2 in $\ln\mathcal L$ on scales smaller than the
+errors (on the mock of NGC 2403 below), which makes small steps overestimate the curvature: with steps of one
+σ the errors of INC and PA were 2.5 times too small, with two σ 20%, with four σ 5–10% (those of VROT and
+VDISP did not change). The directions that the data constrain less than the prior get the width of the prior
+(eigenvalues of the Hessian in the unit cube below 12, the inverse variance of a uniform $u$; a warning), and
+the parameters closer to a bound of their prior than their error are listed in `f.optimum.at_bound` (a
+warning): the Laplace approximation does not hold there. The outputs use 4000 draws of the Gaussian, truncated
+to the supports of the priors, as the samples of the posterior (errors in the tables, corner plot, errors of the
+deconvolved profile), but the best fit is `f.params`, not their median. `errors=False` skips the Hessian (zero
+errors, no corner plot). `<prefix>_optimize_results.npy` holds the draws and the optimisation, and
+`load_results` reads it.
+
+On a mock of NGC 2403 (the model at six rings with VROT 60–124 km/s, VDISP 12 km/s, INC 62°, PA 124.5°, plus
+noise correlated as the beam, peak S/N 50; nine free parameters, 16 processes):
+
+| Method | Time | Likelihoods | $\ln\mathcal L$ of the best fit | INC | PA |
+|---|---|---|---|---|---|
+| L-BFGS-B | 6 s | 1899 | 10196.62 | 62.040 ± 0.048 | 124.478 ± 0.034 |
+| Powell | 25 s | 947 | 10196.59 | 62.064 ± 0.050 | 124.476 ± 0.034 |
+| Nelder-Mead | 43 s | 1465 | 10196.29 | 62.103 ± 0.048 | 124.460 ± 0.034 |
+| differential evolution | 17 s | 9183 | 10196.68 | 62.040 ± 0.048 | 124.481 ± 0.034 |
+| nautilus (median) | 10 min | | 10196.20 | 62.056 ± 0.051 | 124.472 ± 0.037 |
+
+The VROT of the six rings agree within 0.12 km/s (errors 0.25–0.6 km/s) and their errors within 5% of the
+posterior widths. Nelder-Mead stops the farthest from the maximum: its simplex shrinks onto the jitter of the
+likelihood.
+
 ## Outputs
 
 ### Posterior statistics
@@ -628,7 +684,7 @@ on top of the C++ library. With respect to it:
 
 ## In the code
 
-- `bbarolo/bayesian/fitter.py`: `Bayesian3DFIT` (`run`, `run_geometry`, the setup `_setup`, the initial
+- `bbarolo/bayesian/fitter.py`: `Bayesian3DFIT` (`run`, `optimize`, `run_geometry`, the setup `_setup`, the initial
   rings and default priors `_init_rings`, `_set_default_priors`, the free parameters `_parse_freepar`,
   `_prior_transform`, `_update_rings`, `_setup_radmax`).
 - `bbarolo/bayesian/likelihood.py`: `_log_likelihood`, `_log_likelihood_geometry`, `_calculate_residuals`,
@@ -637,7 +693,8 @@ on top of the C++ library. With respect to it:
 - `bbarolo/bayesian/density.py` and `bbarolo/profile.py`: the deconvolved profile (`_deconvolved_profile`,
   `profile_system`, `solve_profile`) and its errors (`deconvolved_profile_errors`).
 - `bbarolo/bayesian/noise.py`: `noise_correlation`, `dilate_mask`.
-- `bbarolo/bayesian/sampling.py`: `sample`, `sampler_options`, the process pool.
+- `bbarolo/bayesian/sampling.py`: `sample`, `sampler_options`, the process pool (`evaluator`, for the optimisation).
+- `bbarolo/bayesian/optimize.py`: `optimize` (the minimisation, the Hessian and the Laplace approximation).
 - `bbarolo/bayesian/outputs.py`: `write_bestmodel`, `ring_errors`, `in_disk`, `corner_plot`,
   `plot_profiles`, `print_stats`, `save_results`, `load_results`.
 - `bbarolo/bayesian/task.py`: `run_task` (the task of parameter files); `bbarolo/bayesian/rings.py`.
