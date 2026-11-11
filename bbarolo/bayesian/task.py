@@ -46,6 +46,7 @@ def run_task(c, par):
     if method == 'dynesty' and not p.showbar and 'print_progress' not in bayes_options(gf.RUNOPTS):
         run_kwargs['print_progress'] = False      # e.g. LOGFILE: no progress line
     free = gf.FREE if "FREE" in getattr(par, "_given", {}) else None     # None: the default FREE
+    f._task_showbar = p.showbar                   # (off with LOGFILE: the progress bars of SAMPLER OPTIMISE)
     f.run(freepar=free, method=method, threads=p.threads, verbose=verbose, run_kwargs=run_kwargs)
     if verbose:
         f.print_stats()

@@ -905,11 +905,13 @@ class _GaussFitter:
         return -0.5 * d @ self.Ci @ d
 
 
-def test_optimize_gaussian():
+def test_optimize_gaussian(monkeypatch, capsys):
     """bayesian.optimize on a Gaussian likelihood: every method finds its mean, the Laplace covariance is its
     covariance (and the draws have its widths), a mean beyond a bound of the prior is found at the bound and flagged,
     posterior=True maximises likelihood x prior (a log-uniform prior: the root of theta^2 - mu theta + sigma^2), the
-    pool of processes gives the same result, and an unknown method is an error."""
+    pool of processes gives the same result, an unknown method is an error, and with verbose the progress is printed
+    (here at every chunk of likelihoods, the first line at once: it is every 10 seconds or more)."""
+    import bbarolo.bayesian.optimize as O
     from bbarolo.bayesian.optimize import optimize, method_name
     from bbarolo.bbutils import BBaroloError
     mu = np.array([3., -1., 50.])
@@ -941,6 +943,16 @@ def test_optimize_gaussian():
     # the processes of the pool: the same best fit and Hessian
     r4 = optimize(f, {}, th0, threads=3, verbose=False)
     assert np.allclose(r4.x, res.x) and np.allclose(r4.cov, res.cov)
+    # the progress: none before _PROGRESS_FIRST seconds (here, quiet); with 0, at the first chunk
+    capsys.readouterr()
+    optimize(f, {}, th0, verbose=True)
+    assert "likelihoods, best log-likelihood" not in capsys.readouterr().out
+    monkeypatch.setattr(O, "_PROGRESS_FIRST", 0.)
+    monkeypatch.setattr(O, "_CHUNK", 4)
+    r5 = optimize(f, {}, th0, posterior=True, verbose=True)
+    out = capsys.readouterr().out
+    assert "likelihoods, best log-posterior" in out and np.isclose(r5.x[2], map2, rtol=1e-3)
+    assert " Estimating errors (Hessian)... Done." in out               # (the bar itself only on a terminal)
 
 
 @needs_data
@@ -996,6 +1008,12 @@ def test_bayesian_optimize(tmp_path, capsys):
     assert np.all(g.ring_errors('vrot')[0] == 0)
     with pytest.raises(BBaroloError, match="x0"):
         g.optimize(freepar=['vrot', 'vdisp_single'], x0="middle", verbose=False)
+    # the progress bar of the Hessian: SHOWBAR as given (the engine of the fit runs with VERBOSE, hence SHOWBAR, off)
+    from bbarolo.bayesian.common import show_bar
+    assert show_bar(g) and not g._cube_obj.pars().showbar
+    assert not show_bar(Bayesian3DFIT(fn, showbar=False, **kw))
+    g._task_showbar = False                              # (the task: off with LOGFILE)
+    assert not show_bar(g)
 
 
 def test_bayesian_keywords(capsys):

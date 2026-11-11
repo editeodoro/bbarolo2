@@ -11,7 +11,7 @@ from scipy import stats
 
 from ..tasks import FitMod3D, build_param, _checked
 from ..bbutils import BBaroloError
-from .common import vprint, get_distribution, SIGMA_QUANTILES
+from .common import vprint, get_distribution, show_bar, SIGMA_QUANTILES
 from .rings import _RingDict
 from .likelihood import LikelihoodMixin
 from .density import DensityMixin
@@ -686,7 +686,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         vprint(verbose, f"\nOptimising with {method} ({threads} process{'es' if threads > 1 else ''})...")
         res = _optimize(self, like_kwargs, theta0, method=method, threads=threads, posterior=posterior,
                         errors=errors, nstart=nstart, seed=seed, step=step, options=options, nsamples=nsamples,
-                        verbose=verbose)
+                        verbose=verbose, showbar=show_bar(self))
         summary(res, verbose)
         self._set_optimum(res)
         return self._finish_fit(like_kwargs, custom, verbose)

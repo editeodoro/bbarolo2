@@ -80,7 +80,7 @@ from ..bbutils import BBaroloError, getCenterCoordinates, DeltaVel
 from ..windmodel import WindModel, WindCells, WindPars, Boxes
 from .emission import (log_marginal, log_marginal_diag, log_profile, log_marginal_gauss, log_marginal_gauss_diag,
                        log_detection)
-from .common import vprint, get_distribution, SIGMA_QUANTILES
+from .common import vprint, get_distribution, show_bar, SIGMA_QUANTILES
 from .sampling import sample, sampler_options
 from .optimize import SAMPLER_NAMES, sampler_options as optimize_options
 
@@ -913,7 +913,8 @@ class BayesianWind(Task):
             theta0 = self._initial_theta() if x0 is None else np.asarray(x0, float)
         vprint(verbose, f" BAYESIANWIND: optimising {self.ndim} parameters with {method} ({threads} processes)...")
         res = _optimize(self, {}, theta0, method=method, threads=int(threads), posterior=posterior, errors=errors,
-                        nstart=nstart, seed=seed, step=step, options=options, nsamples=nsamples, verbose=verbose)
+                        nstart=nstart, seed=seed, step=step, options=options, nsamples=nsamples, verbose=verbose,
+                        showbar=show_bar(self))
         summary(res, verbose, taskname=" BAYESIANWIND: ")
         self.optimum = res
         self._method = "optimize"

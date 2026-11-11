@@ -504,7 +504,10 @@ the best. The methods:
 - `differential_evolution`: a global search, its population computed on the processes, then polished with
   L-BFGS-B.
 
-`options` passes the options of the method (those of scipy, e.g. `maxiter`). In parameter files,
+`options` passes the options of the method (those of scipy, e.g. `maxiter`). With `VERBOSE`, the minimisation,
+whose length is not known in advance, prints the likelihoods computed and the best log-likelihood after 10 seconds
+and then at intervals of a tenth of the time elapsed; the Hessian shows the progress bar (`SHOWBAR`). In parameter
+files,
 `SAMPLEROPTS` gives the arguments of `optimize` (`method`, `x0`, `nstart`, `seed`, `posterior`, `errors`,
 `nsamples`, `step`) and `RUNOPTS` the options of the method; in Python, `run(method="optimise")` (or
 `SAMPLER` given to the object) does the same with `sampler_kwargs` and `run_kwargs`.

@@ -17,9 +17,11 @@ Methods (method):
   'differential_evolution': a global search (scipy), its population computed in the processes, then polished with
              L-BFGS-B.
 The options of the method are given in `options` (scipy's, e.g. maxiter); nstart > 1 starts the local methods also
-from nstart - 1 points drawn from the priors (seed), and keeps the best. In parameter files (and as the default of
-run()), SAMPLER OPTIMISE (or OPTIMIZE) runs optimize, with its arguments in SAMPLEROPTS and the options of the method
-in RUNOPTS (see sampler_options).
+from nstart - 1 points drawn from the priors (seed), and keeps the best. With verbose, the progress (the likelihoods
+computed and the best log-likelihood) is printed after 10 seconds and then at intervals of a tenth of the time elapsed
+(the minimisation has no known length), and the Hessian shows the progress bar of BBarolo (showbar: SHOWBAR). In
+parameter files (and as the default of run()), SAMPLER OPTIMISE (or OPTIMIZE) runs optimize, with its arguments in
+SAMPLEROPTS and the options of the method in RUNOPTS (see sampler_options).
 
 The errors (errors=True): the Laplace approximation, the inverse of the Hessian of the objective at the best fit (in
 the parameters), computed by finite differences (about ndim^2 likelihoods, steps of about four conditional sigma, see
@@ -57,6 +59,12 @@ _U_EDGE = 1e-9              # the bound of u at an infinite end of a prior
 # (against the posterior of nautilus); those of VROT and VDISP did not change.
 _TARGET = 8.
 _FTOL = 1e-3                # the tolerance of Powell on -log L (scipy's is relative, 1e-4: ~2 for log L ~ 2e4)
+# the progress (verbose): the minimisation has no known length, so a line after _PROGRESS_FIRST seconds and then every
+# max(_PROGRESS_FIRST, a tenth of the time elapsed) seconds; the Hessian, whose number of likelihoods is known, has the
+# progress bar of BBarolo (bbutils.ProgressBar). The likelihoods are computed in chunks of _CHUNK, so that the long
+# batches (the Hessian, the populations of differential evolution) show the progress too.
+_PROGRESS_FIRST = 10.
+_CHUNK = 128
 
 
 def method_name(method):
@@ -129,14 +137,41 @@ class _Space:
         return np.array([d.support() for d in self.dists], float)
 
 
+def _duration(t):
+    return f"{t:.0f} s" if t < 120 else f"{t / 60.:.1f} min"
+
+
+class _Progress:
+    """ The progress of an optimisation (verbose): the time, the likelihoods computed and the best log-likelihood (or
+    log-posterior), printed after _PROGRESS_FIRST seconds and then at intervals of a tenth of the time elapsed. """
+
+    def __init__(self, verbose, posterior):
+        self.on = bool(verbose)
+        self.what = "log-posterior" if posterior else "log-likelihood"
+        self.t0 = time.time()
+        self.next = _PROGRESS_FIRST
+
+    def update(self, nfev, fbest):
+        if not self.on:
+            return
+        el = time.time() - self.t0
+        if el >= self.next:
+            print(f"  {_duration(el):>8s}: {nfev} likelihoods, best {self.what} {-fbest:.7g}", flush=True)
+            self.next = el + max(_PROGRESS_FIRST, 0.1 * el)
+
+
 class _Objective:
     """ The objective of the minimisation in u: -log L (or -log L - log prior), with the likelihoods of a list of
-    points computed at once (batch, in the processes); non-finite values are _BIG. Counts the likelihoods. """
+    points computed at once (batch, in the processes, in chunks of _CHUNK); non-finite values are _BIG. Counts the
+    likelihoods, and shows the progress. """
 
-    def __init__(self, space, loglikes, posterior):
+    def __init__(self, space, loglikes, posterior, progress=None):
         self.space, self.loglikes, self.posterior = space, loglikes, bool(posterior)
         self.nfev = 0
         self.best = (np.inf, None)
+        self.fmin = np.inf                     # (the best value computed, also by the Hessian: for the progress)
+        self.progress = progress or _Progress(False, posterior)
+        self.bar = None                        # (a ProgressBar and the likelihoods before it: the Hessian)
 
     def batch(self, us):
         """ The objective at a list of points in u. """
@@ -150,12 +185,21 @@ class _Objective:
     def batch_theta(self, thetas):
         """ The objective at a list of vectors of the parameters (within the bounds of the priors). """
         thetas = [np.clip(np.asarray(t, float), self.space.tlo, self.space.thi) for t in thetas]
-        L = self.loglikes(thetas)
-        self.nfev += len(thetas)
-        F = -np.asarray(L, float)
-        if self.posterior:
-            F = F - np.array([self.space.logprior(t) for t in thetas])
-        return np.where(np.isfinite(F), F, _BIG)
+        out = []
+        for k in range(0, len(thetas), _CHUNK):
+            chunk = thetas[k:k + _CHUNK]
+            F = -np.asarray(self.loglikes(chunk), float)
+            self.nfev += len(chunk)
+            if self.posterior:
+                F = F - np.array([self.space.logprior(t) for t in chunk])
+            F = np.where(np.isfinite(F), F, _BIG)
+            self.fmin = min(self.fmin, float(F.min())) if F.size else self.fmin
+            if self.bar is not None:
+                self.bar[0].update(self.nfev - self.bar[1])
+            else:
+                self.progress.update(self.nfev, self.fmin)
+            out.append(F)
+        return np.concatenate(out) if out else np.empty(0)
 
     def __call__(self, u):
         return float(self.batch([u])[0])
@@ -228,7 +272,7 @@ def _local_run(obj, method, u0, step, options):
     return sopt.minimize(obj, u0, method=method, bounds=bounds, options=opts)
 
 
-def _hessian(obj, x, verbose):
+def _hessian(obj, x, verbose, showbar=True):
     """ The Hessian of the objective in theta at x (finite differences), with steps of about four conditional sigma (a
     change _TARGET of the objective), the stencil moved inside the bounds of the priors. The Hessian is that of the
     parameters, not of u: with steps of a few sigma, the curvature in u of a log-uniform (or any non-uniform) prior
@@ -239,6 +283,20 @@ def _hessian(obj, x, verbose):
     S = sp.jacobian(x)                     # (dtheta/du: the scale of the prior at x)
     rng = sp.thi - sp.tlo
     h = 1e-3 * S
+    from ..bbutils import ProgressBar
+    bar = ProgressBar(True, verbose, showbar)
+    # (the likelihoods: the steps, 1 to 3 times 2n+1, then n^2 + n + 1; the bar counts the most)
+    bar.init(" Estimating errors (Hessian)... ", n * n + n + 1 + 3 * (2 * n + 1))
+    obj.bar = (bar, obj.nfev)
+    try:
+        return _hessian_steps(obj, x, n, S, rng, h)
+    finally:
+        obj.bar = None
+        bar.fillSpace("Done.\n")
+
+
+def _hessian_steps(obj, x, n, S, rng, h):
+    sp = obj.space
 
     def centre(h):
         return np.clip(x, sp.tlo + h, sp.thi - h)
@@ -266,7 +324,6 @@ def _hessian(obj, x, verbose):
     if pairs:
         E = np.eye(n)
         pts = [c + h[i] * E[i] + h[j] * E[j] for i, j in pairs] + [c - h[i] * E[i] - h[j] * E[j] for i, j in pairs]
-        vprint(verbose, f"  Hessian: {len(pts) + 2 * n + 1} likelihoods...")
         F = obj.batch_theta(pts)
         npair = len(pairs)
         for k, (i, j) in enumerate(pairs):
@@ -307,7 +364,7 @@ def _laplace(space, theta, H, nsamples, seed):
 
 
 def optimize(fitter, like_kwargs, theta0, method='L-BFGS-B', threads=1, posterior=False, errors=True, nstart=1,
-             seed=None, step=1e-3, options=None, nsamples=4000, verbose=True):
+             seed=None, step=1e-3, options=None, nsamples=4000, verbose=True, showbar=True):
     """ Minimise -log L of fitter (its _log_like_func with like_kwargs, its priors and free parameters; see the
     module documentation) from theta0 (a vector of the free parameters; NaN: the centre of the prior), with method,
     the likelihoods computed in threads processes. Returns an OptimizeResult: x (the best fit), logl (its
@@ -328,7 +385,7 @@ def optimize(fitter, like_kwargs, theta0, method='L-BFGS-B', threads=1, posterio
     rng = np.random.default_rng(seed)
     toc = time.time()
     with evaluator(fitter, like_kwargs, int(threads)) as loglikes:
-        obj = _Objective(space, loglikes, posterior)
+        obj = _Objective(space, loglikes, posterior, _Progress(verbose, posterior))
         if not obj(u0) < _BIG:
             raise BBaroloError("optimize: the likelihood is not finite at the starting point (x0).")
         starts = []
@@ -375,7 +432,7 @@ def optimize(fitter, like_kwargs, theta0, method='L-BFGS-B', threads=1, posterio
         out.fun = -logl - (out.logprior if posterior else 0.)
         tol = np.full(n, 1e-3)                   # (at a bound: closer than its error, or 0.1% of the prior)
         if errors:
-            H, h = _hessian(obj, x, verbose)
+            H, h = _hessian(obj, x, verbose, showbar)
             cov, cov_u, samples, reg = _laplace(space, x, H, int(nsamples), seed)
             out.hessian, out.steps, out.cov, out.samples, out.regularised = H, h, cov, samples, reg
             out.errors = np.sqrt(np.diag(cov))

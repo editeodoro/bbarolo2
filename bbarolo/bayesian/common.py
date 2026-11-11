@@ -22,6 +22,20 @@ def blas_threads():
         return contextlib.nullcontext()
     return threadpool_limits(limits=int(BLAS_THREADS))
 
+def show_bar(fitter):
+    """ SHOWBAR for the progress bars of a fit (Bayesian3DFIT, BayesianWind): the value of its task (_task_showbar, set
+    by the task of parameter files: off with LOGFILE), otherwise the parameter as given (default true). The engine of
+    the fit runs with VERBOSE off, which turns its own SHOWBAR off. """
+    v = getattr(fitter, "_task_showbar", None)
+    if v is not None:
+        return bool(v)
+    s = fitter._params.get("SHOWBAR")
+    if s is None:
+        return True
+    from ..tasks import build_param
+    return bool(build_param({"SHOWBAR": s}).showbar)
+
+
 # A function to print only if verbose is True
 vprint = lambda verbose, *args, **kwargs: print(*args, **kwargs) if verbose else None
 
