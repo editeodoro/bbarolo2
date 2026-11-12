@@ -76,7 +76,8 @@ saves the PDF; it needs numpy, matplotlib, astropy and scipy, and `plot_utils.py
 bbarolo. To change a plot, edit its script and run it, **from the folder where BBarolo was run**: the scripts
 read the cube with the name given in FITSFILE (a relative path too) and the other files from the output folder.
 In Python the same functions are in `bbarolo.plots`, and `res.plot_parameters()`, `res.plot_chanmaps()`, ...
-draw the plots of a fit from its outputs in memory (see {doc}`python`).
+draw the plots of a fit from its outputs in memory, and `res.write_allplots()` writes them all as these PDF
+files, without the other outputs (see {doc}`python`).
 
 ```bash
 python3 output/ngc2403/plotscripts/plot_all.py

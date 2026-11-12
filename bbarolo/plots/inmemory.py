@@ -176,6 +176,40 @@ class Fit3DPlots:
         return fit3d.plot_pvslices(self.cube(), self.model(model), self.final_rings(), data[0], self.mask(),
                                    vrange=self.settings["vrange"], **self.cube_kwargs())
 
+    def write_all(self, folder, prefix):
+        """Save all the plots as PDF files in folder, with the names of the command line: <prefix>_parameters.pdf,
+        <prefix>_asymmetricdrift.pdf (with the asymmetric drift), and for each model (and the noisy model, but
+        for its maps) <prefix>_chanmaps_<norm>.pdf, _pv_<norm>.pdf, _pvslices_<norm>.pdf and _maps_<norm>.pdf.
+        Returns the files written."""
+        import os
+        import matplotlib.pyplot as plt
+        folder = os.path.join(os.path.abspath(os.path.expanduser(str(folder))), "")
+        os.makedirs(folder, exist_ok=True)
+        files = []
+
+        def save(fig, name, tight=True):
+            fn = folder + prefix + name + ".pdf"
+            try:
+                if tight:
+                    fig.savefig(fn, bbox_inches="tight")
+                else:                               # (as plot_chanmaps.py)
+                    fig.savefig(fn, orientation="portrait", format="pdf")
+            finally:
+                plt.close(fig)
+            files.append(fn)
+
+        save(self.parameters(), "_parameters")
+        if self.get("asymdrift") is not None:
+            save(self.asymdrift(), "_asymmetricdrift")
+        mo, maps = self.mo(), self.get("maps")
+        for name in list(mo.models) + (["noise"] if mo.noise is not None else []):
+            save(self.chanmaps(name), f"_chanmaps_{name}", tight=False)
+            save(self.pvs(name), f"_pv_{name}")
+            save(self.pvslices(name), f"_pvslices_{name}")
+            if f"mod_0mom_{name}" in maps:
+                save(self.kinmaps(name), f"_maps_{name}")
+        return files
+
     def kinmaps(self, model=None):
         s = self.settings
         data, mods, bunit = self._maps(model)

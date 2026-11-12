@@ -409,6 +409,14 @@ class OutputsMixin(object):
         Returns a matplotlib Figure (see bbarolo.plots.plot_kinmaps). """
         return self._fit3d_plots().kinmaps()
 
+    def write_allplots(self, outfolder=None):
+        """ Write the plots of the best model as PDF files in outfolder (default: OUTFOLDER, or
+        ./output/<OBJECT>/), drawn in memory with the names written by write(): <prefix>_parameters.pdf,
+        <prefix>_chanmaps_none.pdf, <prefix>_pv_none.pdf, <prefix>_pvslices_none.pdf and <prefix>_maps_none.pdf
+        (not the corner plot). Nothing else is written (write() writes all the outputs, with the plotting scripts).
+        Returns the files written. """
+        return self._fit3d_plots().write_all(outfolder or self._outfolder(), self._cube_obj.pars().outPrefix)
+
     def print_stats(self, quantiles=SIGMA_QUANTILES):
         """ Print the median and 1-sigma errors of the posteriors (and the maximum likelihood) """
         if not self.modCalculated:

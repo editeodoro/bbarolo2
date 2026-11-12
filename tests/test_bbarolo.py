@@ -4177,6 +4177,26 @@ def test_plot_scripts_standalone(tmp_path):
     assert (out / "MOCK_parameters.pdf").is_file()
 
 
+def test_write_allplots(tmp_path):
+    """Result.write_allplots (and FitMod3D.write_allplots) writes the PDF files of the plots of write(), with the
+    same names, drawn in memory, and nothing else; by default in the folder of the last write()."""
+    from bbarolo import FitMod3D
+    _mock_cube(tmp_path)
+    f = FitMod3D(str(tmp_path / "mock.fits"), radii=[20, 60, 100, 140], xpos=31.5, ypos=31.5, vsys=0, vrot=120,
+                 vdisp=10, z0=0, inc=60, pa=45, free="VROT", mask="SEARCH", norm="AZIM", adrift=True, verbose=0,
+                 threads=1)
+    res = f.run()
+    files = res.write_allplots(str(tmp_path / "plots"))
+    names = sorted(os.listdir(tmp_path / "plots"))
+    assert sorted(os.path.basename(x) for x in files) == names
+    res.write(str(tmp_path / "out"), plots=True)
+    assert names == sorted(x for x in os.listdir(tmp_path / "out") if x.endswith(".pdf"))
+    assert "MOCK_asymmetricdrift.pdf" in names and "MOCK_chanmaps_azim.pdf" in names and len(names) == 6
+    for x in names:
+        os.remove(tmp_path / "out" / x)
+    assert sorted(f.write_allplots()) == sorted(str(tmp_path / "out" / x) for x in names)
+
+
 def test_plot_scripts_one_ring(tmp_path):
     """With one ring, the plots of the channel maps, the PV slices and the maps are made: the scripts read the
     ring file as 0-d arrays and failed (C++)."""
@@ -4206,3 +4226,7 @@ def test_bayesian_plots_in_memory(tmp_path):
     plt.close(f.plot_pvs())
     assert f._plots_cache[1]["mo"] is mo and list(mo.models) == ["none"]
     assert not (tmp_path / "bbb").exists()
+    files = f.write_allplots()
+    assert sorted(os.listdir(tmp_path / "bbb")) == sorted(os.path.basename(x) for x in files) == \
+        ["MOCK_chanmaps_none.pdf", "MOCK_maps_none.pdf", "MOCK_parameters.pdf", "MOCK_pv_none.pdf",
+         "MOCK_pvslices_none.pdf"]

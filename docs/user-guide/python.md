@@ -85,6 +85,7 @@ res.plot_pvslices()               # <prefix>_pvslices_<norm>.pdf: PV slices at s
 res.plot_kinmaps()                # <prefix>_maps_<norm>.pdf: moment maps of data, model and residuals
 res.plot_asymdrift()              # <prefix>_asymmetricdrift.pdf (ADRIFT)
 res.plot_chanmaps(model="local")  # another model of res.models
+res.write_allplots()              # all of them as PDF files (the names of the command line), nothing else
 ```
 
 They are the functions of `bbarolo.plots` (`plot_parameters`, `plot_chanmaps`, ...), which draw a plot from
@@ -153,7 +154,8 @@ writes nothing; `f.optimize(freepar=...)` instead finds the best fit by a classi
 likelihood, with the errors of the Laplace approximation. Then `f.print_stats()`, `f.outri` (the best-fit
 rings), `f.ring_errors()`, `f.corner_plot()` and `f.plot_profiles()` give the results in memory, as do
 `f.plot_parameters()`, `f.plot_chanmaps()`, `f.plot_pvs()`, `f.plot_pvslices()` and `f.plot_kinmaps()`, the
-plots of the best model that the task writes (its model and maps are computed for the first of them), and
+plots of the best model that the task writes (its model and maps are computed for the first of them;
+`f.write_allplots()` writes them as PDF files), and
 `f.write(outfolder=None, plots=None)` writes what the BAYESIAN3DFIT task writes: the best model with its
 maps and slices, the rings with their errors, the samples and the plots. See
 {doc}`../tasks/bayesian3dfit/index`.

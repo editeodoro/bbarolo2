@@ -104,7 +104,7 @@ them in memory as attributes of the {class}`~bbarolo.Result`, and `res.write()` 
 | `maps/` | `maps` | moment maps 0, 1 and 2 of the data and of the model |
 | `pvs/` | `pvs` | position–velocity slices of the data, the model and the mask, major (`_a`) and minor (`_b`) axes |
 | `_2drings.txt`, `_map_1st.fits` | | the 2D fit of the velocity field used to refine the initial position angle |
-| `*.pdf`, `plotscripts/` | | the plots of the fit: parameters, moment maps, PV diagrams and channel maps, and the scripts that make them ({ref}`PLOTS <par-all-plots>`; in Python, `res.write(plots=...)`, and in memory `res.plot_parameters()`, `plot_kinmaps()`, `plot_pvs()`, `plot_pvslices()`, `plot_chanmaps()`, `plot_asymdrift()`) |
+| `*.pdf`, `plotscripts/` | | the plots of the fit: parameters, moment maps, PV diagrams and channel maps, and the scripts that make them ({ref}`PLOTS <par-all-plots>`; in Python, `res.write(plots=...)`, and in memory `res.plot_parameters()`, `plot_kinmaps()`, `plot_pvs()`, `plot_pvslices()`, `plot_chanmaps()`, `plot_asymdrift()`; `res.write_allplots()` writes only the PDF files) |
 | `_asymdrift.txt` | `asymdrift` | the asymmetric drift correction ({ref}`ADRIFT <par-3dfit-adrift>`) |
 | `_params.par` | | all the parameters of the run, defaults included |
 

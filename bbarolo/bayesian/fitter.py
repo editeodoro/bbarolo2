@@ -55,6 +55,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
     corner_plot(...), plot_profiles(...), print_stats(...), print_priors(), chi2_reduced()
     plot_parameters(), plot_chanmaps(), plot_pvs(), plot_pvslices(), plot_kinmaps(): the plots of the
                              best model written by write(), as matplotlib Figures (nothing is written).
+    write_allplots(outfolder): those plots as PDF files, without the other outputs.
     model_outputs(norm):     the best model with its maps and PV slices, in memory.
     ring_errors(param):      1-sigma errors of a ring parameter in each ring of the best fit.
     save_results(outfile), load_results(inputfile, sampler)

@@ -395,7 +395,9 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   figures carry the style of BBarolo (`StyledFigure`): it holds whenever they are drawn, and the rcParams of the
   session are not changed. The plotting scripts written in `plotscripts/` contain the source of the same functions,
   the settings of the run and the code that reads the files, so they are still standalone (no bbarolo needed) and
-  can be edited and run again; their PDF files are the same as before. `res.plot_rings()`, `plot_maps()` and
+  can be edited and run again; their PDF files are the same as before. `res.write_allplots(outfolder=None)` (also
+  `FitMod3D.write_allplots` and `Bayesian3DFIT.write_allplots`) writes all these plots as PDF files with the names
+  of the command line, drawn in memory, without the other outputs. `res.plot_rings()`, `plot_maps()` and
   `plot_pv()` remain as quick plots for any task.
 
 - **BAYESIAN3DFIT and BAYESIANWIND: fits by minimisation** (`SAMPLER OPTIMISE`, or `OPTIMIZE`, in parameter files;

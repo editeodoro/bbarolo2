@@ -1069,6 +1069,19 @@ class Result:
         bbarolo.plots.plot_kinmaps)."""
         return self._fit3d_plots().kinmaps(model)
 
+    def write_allplots(self, outfolder=None):
+        """Write all the plots of 3DFIT or BAYESIAN3DFIT as PDF files in outfolder, drawn from the outputs in memory,
+        with the names of the command line: <prefix>_parameters.pdf, <prefix>_asymmetricdrift.pdf (ADRIFT), and for
+        each model <prefix>_chanmaps_<norm>.pdf, _pv_<norm>.pdf, _pvslices_<norm>.pdf and _maps_<norm>.pdf. Nothing
+        else is written (write() writes all the outputs, with the plotting scripts). outfolder: by default the
+        folder of the last write(), otherwise that of write() (OUTFOLDER, or ./output/<OBJECT>/). Returns the files
+        written."""
+        plots = self._fit3d_plots()
+        p = (self._cube if self._cube is not None else plots.gf.cin).pars()
+        if outfolder in (None, ""):
+            outfolder = self.outfolder or p.outFolder
+        return plots.write_all(outfolder, p.outPrefix)
+
 
 def _add_data(res, c):
     """res.data (the cube that was analysed, after CONTSUB if any) and res.residual (data - model,
@@ -1437,6 +1450,13 @@ class Task:
         if self.result is None:
             raise RuntimeError(f"{type(self).__name__}: nothing to write, run() first.")
         return self.result.write(outfolder, plots)
+
+    def write_allplots(self, outfolder=None):
+        """Write all the plots of the last run() as PDF files (see Result.write_allplots). Returns the files
+        written."""
+        if self.result is None:
+            raise RuntimeError(f"{type(self).__name__}: no plots to write, run() first.")
+        return self.result.write_allplots(outfolder)
 
 
 def _truthy(v):
