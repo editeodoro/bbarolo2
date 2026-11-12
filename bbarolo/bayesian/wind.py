@@ -80,7 +80,7 @@ from ..bbutils import BBaroloError, getCenterCoordinates, DeltaVel
 from ..windmodel import WindModel, WindCells, WindPars, Boxes
 from .emission import (log_marginal, log_marginal_diag, log_profile, log_marginal_gauss, log_marginal_gauss_diag,
                        log_detection)
-from .common import vprint, get_distribution, show_bar, SIGMA_QUANTILES
+from .common import vprint, banner, get_distribution, show_bar, SIGMA_QUANTILES
 from .sampling import sample, sampler_options
 from .optimize import SAMPLER_NAMES, sampler_options as optimize_options
 
@@ -872,6 +872,7 @@ class BayesianWind(Task):
         self.time = dt
         self._best_fit()
         vprint(verbose, f" BAYESIANWIND: done in {dt / 60.:.1f} minutes.")
+        vprint(verbose, banner())
         return self
 
     def optimize(self, freepar=None, method="L-BFGS-B", threads=None, *, like_kwargs: dict = {}, x0=None,
@@ -922,6 +923,7 @@ class BayesianWind(Task):
         self.params = np.asarray(res.x, float).copy()
         self.time = res.time
         self._best_fit()
+        vprint(verbose, banner())
         return self
 
     def _fit_options(self, freepar, like_kwargs, dflt):
@@ -949,6 +951,7 @@ class BayesianWind(Task):
     def _prepare_fit(self, freepar, verbose):
         """The setup of a fit (run, optimize): the free parameters with the hyperparameters of the emission, the setup
         and a check of the likelihood at the centre of the priors."""
+        vprint(verbose, banner("BAYESIANWIND"))
         freepar = self._with_hyper(freepar, verbose)
         self._setup(freepar, verbose=verbose)
         theta0 = self._prior_transform(np.full(self.ndim, 0.5))

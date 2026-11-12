@@ -11,7 +11,7 @@ from scipy import stats
 
 from ..tasks import FitMod3D, build_param, _checked
 from ..bbutils import BBaroloError
-from .common import vprint, get_distribution, show_bar, SIGMA_QUANTILES
+from .common import vprint, banner, get_distribution, show_bar, SIGMA_QUANTILES
 from .rings import _RingDict
 from .likelihood import LikelihoodMixin
 from .density import DensityMixin
@@ -753,6 +753,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         self._set_like_options({**dflt.get('LIKEOPTS', {}), **like_kwargs}, custom=custom or own)
         like_kwargs = self._like_kwargs                      # (those of each call of the log-likelihood)
         useBBres = self.like_kwargs['bbres']
+        vprint(kwargs.get('verbose', True), banner("BAYESIAN3DFIT"))
         self._setup(freepar, **kwargs)
         self._log_like_func = log_like if log_like is not None else self._log_likelihood
         verbose = kwargs.get('verbose', True)
@@ -841,6 +842,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             dp = self.dens_profile
             print(f"Deconvolved density profile: errors from {dp['nsamples']} posterior samples (geometry) and "
                   f"{dp['nmc']} noise realisations (see f.dens_profile, print_stats)")
+        vprint(verbose, banner())
         return self
 
     def _check_likelihood(self, like_kwargs, custom, verbose=True):

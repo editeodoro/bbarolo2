@@ -603,6 +603,8 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **BAYESIAN3DFIT and BAYESIANWIND open and close the output of a fit with a banner**, as 3DFIT
+  (`=========================== BAYESIAN3DFIT ===========================`, 69 characters), in `run` and `optimize`.
 - **The description of the likelihood printed by BAYESIAN3DFIT and BAYESIANWIND is a short table** (sigma, model
   error, log L factor, voxels, side), one item per line, in place of one long line; the measured noise correlation
   shows the factor used (pixels x channels) and, when the beam area takes over, the measured spatial value.

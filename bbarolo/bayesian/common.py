@@ -40,6 +40,12 @@ def show_bar(fitter):
 vprint = lambda verbose, *args, **kwargs: print(*args, **kwargs) if verbose else None
 
 
+def banner(task=None):
+    """The line that opens (with the name of the task) or closes (task None) the output of a fit, 69 characters wide
+    as that of 3DFIT."""
+    return "\n" + f" {task} ".center(69, "=") if task else "=" * 69 + "\n"
+
+
 def isIterable(p):
     """Check if p is an iteratable (list,tuple or numpy array). """
     return isinstance(p, (list, tuple, np.ndarray))
