@@ -74,10 +74,26 @@ them, and `res.keys()` gives their names. `print(res)` shows them with their typ
 - The engine of the task (`res.galfit`, `res.diskmodel`, ...) gives access to the rest.
 - `res["model"]` and `"model" in res` work as for a dict.
 
-A Result also makes quick plots, each a matplotlib Figure: `res.plot_rings()` the ring parameters against
-radius, with their errors (`plot_rings(["vrot", "inc"])` for some of them), and, for the models of 3DFIT and
-GALMOD, `res.plot_maps()` the moment maps of the data and of the model and `res.plot_pv()` the
-position–velocity slices along the major and the minor axis.
+A Result also makes plots, each a matplotlib Figure, with nothing written. For 3DFIT and BAYESIAN3DFIT these
+are the plots of the command line ({ref}`the PDF files <outputs-plots>`), drawn from the outputs in memory:
+
+```python
+res.plot_parameters()             # <prefix>_parameters.pdf: the rings against radius, with their errors
+res.plot_chanmaps()               # <prefix>_chanmaps_<norm>.pdf: channel maps of data and model
+res.plot_pvs()                    # <prefix>_pv_<norm>.pdf: PV slices along the major and minor axes
+res.plot_pvslices()               # <prefix>_pvslices_<norm>.pdf: PV slices at several angles and offsets
+res.plot_kinmaps()                # <prefix>_maps_<norm>.pdf: moment maps of data, model and residuals
+res.plot_asymdrift()              # <prefix>_asymmetricdrift.pdf (ADRIFT)
+res.plot_chanmaps(model="local")  # another model of res.models
+```
+
+They are the functions of `bbarolo.plots` (`plot_parameters`, `plot_chanmaps`, ...), which draw a plot from
+arrays, and the plotting scripts written with the PDF files contain the same functions, to edit and run again.
+Each figure keeps the style of BBarolo (it does not change the rcParams of the session). For any task with
+rings or a model, `res.plot_rings()` is a quick plot of the ring parameters against radius, with their errors
+(`plot_rings(["vrot", "inc"])` for some of them), and, for the models of 3DFIT and GALMOD, `res.plot_maps()`
+shows the moment maps of the data and of the model and `res.plot_pv()` the position–velocity slices along the
+major and the minor axis.
 
 ## Writing: write()
 
@@ -135,7 +151,9 @@ the outputs in memory and the files written in `res.files`.
 but it keeps its results itself: there is no Result. `f.run(freepar=..., ...)` samples the posterior and
 writes nothing; `f.optimize(freepar=...)` instead finds the best fit by a classic minimisation of the same
 likelihood, with the errors of the Laplace approximation. Then `f.print_stats()`, `f.outri` (the best-fit
-rings), `f.ring_errors()`, `f.corner_plot()` and `f.plot_profiles()` give the results in memory, and
+rings), `f.ring_errors()`, `f.corner_plot()` and `f.plot_profiles()` give the results in memory, as do
+`f.plot_parameters()`, `f.plot_chanmaps()`, `f.plot_pvs()`, `f.plot_pvslices()` and `f.plot_kinmaps()`, the
+plots of the best model that the task writes (its model and maps are computed for the first of them), and
 `f.write(outfolder=None, plots=None)` writes what the BAYESIAN3DFIT task writes: the best model with its
 maps and slices, the rings with their errors, the samples and the plots. See
 {doc}`../tasks/bayesian3dfit/index`.

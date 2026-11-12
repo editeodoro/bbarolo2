@@ -74,6 +74,7 @@ f.run(freepar="VROT VDISP_SINGLE SIGMA", threads=4, method="dynesty",
 f.print_stats()           # the median and the 68% interval of each free parameter
 f.corner_plot()           # the figure below
 f.plot_profiles()         # the rings against radius, with their errors
+f.plot_pvs()              # the plots of the PDF files, in memory (also plot_parameters, plot_chanmaps, ...)
 f.write()                 # the files of BAYESIAN3DFIT, in output/ngc2403/
 ```
 :::
@@ -164,7 +165,7 @@ outputs, and `f.save_results(file)` only the samples.
 | `_<sampler>_results.npy` | `save_results(file)`, `load_results(file)` | the samples and their weights, the free parameters, the rings, the priors and the options (after `optimize()`: `_optimize_results.npy`, with the best fit and the draws of the Laplace approximation) |
 | `maps/`, `pvs/` | `write_bestmodel()` | moment maps and position–velocity slices of the data and of the model |
 | `_corner.pdf` | `corner_plot()` | the corner plot (in Python it returns the figure) |
-| `_maps_none.pdf`, `_parameters.pdf`, `plotscripts/` | `write_bestmodel()` | the plots of 3DFIT: moment maps, the parameters of the rings against radius with their errors, and the scripts that make them. The surface-density panel shows the observed face-on profile and that of the model (deconvolved, or the fitted DENS), with its errors. In Python `plot_profiles()` returns a figure of the rings against radius (not written) |
+| `_maps_none.pdf`, `_parameters.pdf`, `plotscripts/` | `write_bestmodel()` | the plots of 3DFIT: moment maps, the parameters of the rings against radius with their errors, and the scripts that make them. The surface-density panel shows the observed face-on profile and that of the model (deconvolved, or the fitted DENS), with its errors. In Python `plot_parameters()`, `plot_kinmaps()`, `plot_pvs()`, `plot_pvslices()` and `plot_chanmaps()` return these plots as figures (not written), and `plot_profiles()` a figure of the rings against radius |
 | `_params.par` | | all the parameters of the run, defaults included (parameter files only) |
 
 The rings file has the columns of the 3DFIT rings file (radius in arcsec, VROT and VDISP in km/s, INC and PA

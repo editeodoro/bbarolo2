@@ -7,6 +7,8 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **3DFIT and BAYESIAN3DFIT with one ring: no plots of the channel maps, PV slices and maps (C++).** The scripts read
+  the ring file of a single ring as 0-d arrays and failed (`numpy.AxisError`); the plots are now made.
 - **BAYESIAN3DFIT and BAYESIANWIND: the warning on the correlation of the noise printed several times.** When the
   correlation could not be measured (too few voxels without emission), the failure was not remembered: the
   measure was tried again, and the warning printed again, at the reading of the cube and at every setup of the
@@ -383,6 +385,18 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   an error; they are unreadable values, as in C++.
 
 ### Added
+
+- **The plots of 3DFIT and BAYESIAN3DFIT in Python, without files.** Each plot is a function of the new package
+  `bbarolo.plots` (`plot_parameters`, `plot_chanmaps`, `plot_pvs`, `plot_pvslices`, `plot_kinmaps`,
+  `plot_asymdrift`) that draws it from arrays and returns a matplotlib Figure. `Result.plot_parameters()`,
+  `plot_chanmaps(model=None)`, ... draw the plots of a fit from its outputs in memory, and so do the same methods of
+  `Bayesian3DFIT` after its fit (`Bayesian3DFIT.model_outputs()` gives its best model with its maps and PV slices,
+  in memory; the Result of BAYESIAN3DFIT now has `model`, `densprof`, `maps` and `pvs`, computed when used). The
+  figures carry the style of BBarolo (`StyledFigure`): it holds whenever they are drawn, and the rcParams of the
+  session are not changed. The plotting scripts written in `plotscripts/` contain the source of the same functions,
+  the settings of the run and the code that reads the files, so they are still standalone (no bbarolo needed) and
+  can be edited and run again; their PDF files are the same as before. `res.plot_rings()`, `plot_maps()` and
+  `plot_pv()` remain as quick plots for any task.
 
 - **BAYESIAN3DFIT and BAYESIANWIND: fits by minimisation** (`SAMPLER OPTIMISE`, or `OPTIMIZE`, in parameter files;
   `Bayesian3DFIT.optimize()` and `BayesianWind.optimize()` in Python): the best fit by a classic minimisation of the

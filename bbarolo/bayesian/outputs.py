@@ -117,17 +117,7 @@ class OutputsMixin(object):
             with self._errors_in_outputs():
                 self._galfit.writeModel("AZIM", plots)
         else:
-            if self.useNorm:
-                self._set_density(self.outri)
-            ell = self._observed_profile(self.outri)        # <prefix>_densprof.txt (outputs only)
-            model = self._calculate_model(self.outri, fullcube=True)[0]
-            if model.ndim == 4:             # (non-convolved, convolved) models
-                model = model[-1]
-            if self.useNorm:
-                model = self._normalize_model(model, self.data, self.mask, norm)
-            from ..cube import Cube
-            c = self._cube_obj
-            mod = Cube.fromArray(np.asarray(model, dtype=np.float32), c.Head(), c.pars())
+            mod, ell = self._best_model_cube(norm)
             with self._errors_in_outputs():
                 self._galfit._model_dens_profile = self._model_dens_profile() if plots else None
                 try:
@@ -137,6 +127,38 @@ class OutputsMixin(object):
             if self.useNorm:
                 self._write_deconvolved_profile()
         vprint(verbose, "Done!")
+
+    def _best_model_cube(self, norm='AZIM'):
+        """ The best model as a Cube (normalised as norm if the density is not fitted, see write_bestmodel) and
+        the observed profile along the best rings (the Ellprof of <prefix>_densprof.txt). If DENS is not fitted,
+        the densities of the best rings are set to the deconvolved profile first. """
+        if self.useNorm:
+            self._set_density(self.outri)
+        ell = self._observed_profile(self.outri)        # <prefix>_densprof.txt (outputs only)
+        model = self._calculate_model(self.outri, fullcube=True)[0]
+        if model.ndim == 4:             # (non-convolved, convolved) models
+            model = model[-1]
+        if self.useNorm:
+            model = self._normalize_model(model, self.data, self.mask, norm)
+        from ..cube import Cube
+        c = self._cube_obj
+        return Cube.fromArray(np.asarray(model, dtype=np.float32), c.Head(), c.pars()), ell
+
+    def model_outputs(self, norm='AZIM'):
+        """ The best model and its outputs in memory, those that write_bestmodel writes: a galfit_out.ModelOutputs
+        with the model (models: {'none': Cube}, or {'azim': Cube} with useBBres), the observed profile
+        (densprof()), the moment maps (maps()) and the PV slices (pvs()) of the data and of the model. norm: as for
+        write_bestmodel. Needs run() or load_results(). """
+        if not self.modCalculated:
+            raise ValueError("BAYESIAN3DFIT: no best model yet: run() (or load_results()) first.")
+        if self.useBBres:
+            return self._galfit.model_outputs("AZIM")
+        from ..galfit_out import ModelOutputs
+        mod, ell = self._best_model_cube(norm)
+        mod.Head().setMinMax(0., 0.)
+        mod.Head().setName(self._cube_obj.pars().outPrefix + "mod")
+        gf = self._galfit
+        return ModelOutputs(self._cube_obj, gf.outr, gf.mask, ell, {"none": mod}, fluxconv=True)
 
     def _write_deconvolved_profile(self):
         """ <prefix>_densprof_deconvolved.txt in the output folder: radius, the density profile of the
@@ -354,6 +376,38 @@ class OutputsMixin(object):
             if a == 'vrot':
                 ax[i].set_ylim(0, None)
         return fig
+
+    # ------------------------------------------------------------------ the plots of the best model (as 3DFIT)
+    def _fit3d_plots(self):
+        from ..plots.inmemory import from_bayes
+        return from_bayes(self)
+
+    def plot_parameters(self):
+        """ The parameters of the best-fit rings against radius, with their errors, and the surface density of the
+        model and of the data: the plot <prefix>_parameters.pdf written by write(). Returns a matplotlib Figure
+        (see bbarolo.plots.plot_parameters). The best model and its maps are computed for the first of these
+        plots (model_outputs) and kept for the others. """
+        return self._fit3d_plots().parameters()
+
+    def plot_chanmaps(self):
+        """ Channel maps of the data and of the best model: the plot <prefix>_chanmaps_none.pdf. Returns a
+        matplotlib Figure (see bbarolo.plots.plot_chanmaps). """
+        return self._fit3d_plots().chanmaps()
+
+    def plot_pvs(self):
+        """ Position-velocity slices of the data and of the best model along the major and minor axes: the plot
+        <prefix>_pv_none.pdf. Returns a matplotlib Figure (see bbarolo.plots.plot_pvs). """
+        return self._fit3d_plots().pvs()
+
+    def plot_pvslices(self):
+        """ Position-velocity slices of the data and of the best model at several angles and offsets: the plot
+        <prefix>_pvslices_none.pdf. Returns a matplotlib Figure (see bbarolo.plots.plot_pvslices). """
+        return self._fit3d_plots().pvslices()
+
+    def plot_kinmaps(self):
+        """ The moment maps of the data, of the best model and of the residuals: the plot <prefix>_maps_none.pdf.
+        Returns a matplotlib Figure (see bbarolo.plots.plot_kinmaps). """
+        return self._fit3d_plots().kinmaps()
 
     def print_stats(self, quantiles=SIGMA_QUANTILES):
         """ Print the median and 1-sigma errors of the posteriors (and the maximum likelihood) """

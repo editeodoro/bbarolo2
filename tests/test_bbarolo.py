@@ -2229,13 +2229,18 @@ def test_plot_scripts_ring_columns():
     """The plotting scripts read the ring files by the names of their columns (galfit.RING_COLUMNS), not by
     fixed numbers: with the columns of C++ two scripts read past the last column (or the errors)."""
     import re
+    import inspect
     import bbarolo.plotscripts as ps
+    from bbarolo.plots import fit3d
     from bbarolo.galfit import RING_COLUMNS
     src = open(ps.__file__).read()
     assert not re.findall(r"(?:rings_final[12]\.txt'|frile),usecols=\(\d", src)
-    for k, name in zip(ps._RING_KEYS, ("RAD(", "VROT(", "DISP(", "INC(", "P.A.(", "Z0(", "DENS(", "XPOS(",
-                                       "YPOS(", "VSYS(", "VRAD(")):
+    names = ("RAD(", "VROT(", "DISP(", "INC(", "P.A.(", "Z0(", "DENS(", "XPOS(", "YPOS(", "VSYS(", "VRAD(")
+    for k, name in zip(ps._RING_KEYS, names):
         assert RING_COLUMNS[int(ps._uc(k)[1:-1])].startswith(name)
+    # read_rings (copied in the scripts) reads the columns in the order of RING_COLUMNS
+    keys = re.search(r"keys = (\(.*?\))", inspect.getsource(fit3d.read_rings)).group(1)
+    assert eval(keys) == fit3d.RING_KEYS == ps._RING_KEYS
 
 
 @needs_data
@@ -2401,7 +2406,7 @@ def test_bayesian_parameters_plot_density(tmp_path):
     f.run(freepar=['vrot_single'], **run)
     f.write_bestmodel(plots=True, verbose=False)
     txt = script.read_text()
-    assert "usecols=(0,9)" in txt and "label='observed'" in txt and "label='deconvolved'" in txt
+    assert "'_densprof.txt', (0, 9))" in txt and 'label="observed"' in txt and "sd_label = 'deconvolved'" in txt
     assert (tmp_path / "bbb" / "MOCK_parameters.pdf").is_file()
     assert getattr(f._galfit, "_model_dens_profile", None) is None
     mp = f._model_dens_profile()
@@ -2415,13 +2420,14 @@ def test_bayesian_parameters_plot_density(tmp_path):
     with f._errors_in_outputs():
         f._galfit._model_dens_profile = mp
         writeScripts_Python(f._galfit)
-    assert "label='fitted'" in script.read_text()
+    assert "sd_label = 'fitted'" in script.read_text()
 
 
 def test_bayesian_rings_beyond_radmax(tmp_path, capsys):
     """With RADMAX as the edge of the disk, the rings beyond it are marked: in_disk, INDISK = 0 in
     rings_final1.txt, a note of print_stats and the region beyond RADMAX shaded in the plots of the
     parameters. load_results keeps the output folder given to the object."""
+    import re
     pytest.importorskip("dynesty")
     from bbarolo.plotscripts import writeScripts_Python
     from bbarolo.tasks import read_table
@@ -2439,7 +2445,8 @@ def test_bayesian_rings_beyond_radmax(tmp_path, capsys):
     assert "Ring 4 (R = 140) lies beyond it" in capsys.readouterr().out.replace("\n", " ")
     with f._errors_in_outputs():
         writeScripts_Python(f._galfit)
-    assert "axvspan(radmax" in (tmp_path / "bbb" / "plotscripts" / "plot_parameters.py").read_text()
+    txt = (tmp_path / "bbb" / "plotscripts" / "plot_parameters.py").read_text()
+    assert "axvspan(radmax" in txt and float(re.search(r"^radmax = (\S+)", txt, re.M).group(1)) == f.disk_edge
     f.save_results(str(tmp_path / "res.npy"))
     g = _bayes_mock(tmp_path, outfolder=str(tmp_path / "other"))
     g.load_results(str(tmp_path / "res.npy"))
@@ -3488,8 +3495,8 @@ def test_chanmaps_mask_padded_as_data(tmp_path):
     f._setup(['vrot_single'])
     writeScripts_Python(f._galfit)
     txt = "".join(open(fn).read() for fn in glob.glob(str(tmp_path / "bbb" / "plotscripts" / "*.py")))
-    assert "z = np.pad(data[chan,:,:],(pad_y, pad_x)" in txt
-    assert "z_mas = np.pad(data_mas[chan],(pad_y, pad_x)" in txt and "contour(data_mas[chan]" not in txt
+    assert "z = np.pad(data[chan, :, :], (pad_y, pad_x)" in txt
+    assert "z_mas = np.pad(mask[chan], (pad_y, pad_x)" in txt and "contour(mask[chan]" not in txt
 
 
 def test_bayesian_noisecorr_conservative(tmp_path):
@@ -4066,7 +4073,7 @@ def test_3dfit_deconvolved_profile(tmp_path):
     txt = (tmp_path / "out" / "MOCK_densprof_deconvolved.txt").read_text()
     assert txt.startswith("# 3DFIT deconvolved profile") and "SDENS_FO_OBS" in txt
     script = (tmp_path / "out" / "plotscripts" / "plot_parameters.py").read_text()
-    assert "_densprof_deconvolved.txt" in script and "label='observed'" in script
+    assert "_densprof_deconvolved.txt" in script and 'label="observed"' in script
 
 
 def test_bayesian_radmax_default_prior(tmp_path):
@@ -4098,3 +4105,104 @@ def test_bayesian_radmax_default_prior(tmp_path):
     g2._set_like_options(dict(radmax='ring'))
     g2._setup(['vrot_single', 'radmax'])                     # the last ring moves: no extension
     assert g2._inri.nr == base.nr
+
+
+def _fit3d_mock(tmp_path, **kw):
+    """3DFIT of the mock cube (_mock_cube) in memory: its Result."""
+    from bbarolo import FitMod3D
+    fn = str(tmp_path / "mock.fits")
+    if not os.path.isfile(fn):
+        _mock_cube(tmp_path)
+    prm = dict(radii=[20, 60, 100, 140], xpos=31.5, ypos=31.5, vsys=0, vrot=120, vdisp=10, z0=0, inc=60, pa=45,
+               free="VROT", mask="SEARCH", norm="AZIM", verbose=0, threads=1)
+    return FitMod3D(fn, **{**prm, **kw}).run()
+
+
+def test_plots_in_memory(tmp_path):
+    """The plots of 3DFIT are functions (bbarolo.plots) that Result draws from its outputs in memory
+    (plot_parameters, ...): matplotlib Figures, nothing written and the rcParams of the session unchanged. A
+    figure keeps its style when it is drawn outside the function, whatever the rcParams then (StyledFigure)."""
+    import io
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
+    res = _fit3d_mock(tmp_path, flagerrors=True, adrift=True, twostage=True)
+    before = sorted(os.listdir(tmp_path))
+    rc = dict(mpl.rcParams)
+    naxes = dict(parameters=9, asymdrift=3, chanmaps=30, pvs=5, pvslices=22, kinmaps=15)
+    for name, n in naxes.items():
+        fig = getattr(res, "plot_" + name)()
+        assert isinstance(fig, mpl.figure.Figure) and len(fig.axes) == n, name
+        plt.close(fig)
+    assert dict(mpl.rcParams) == rc and sorted(os.listdir(tmp_path)) == before
+    with pytest.raises(ValueError, match="No model 'local'.*'azim'"):
+        res.plot_chanmaps(model="local")
+
+    def png(fig):
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=30)
+        plt.close(fig)
+        return plt.imread(io.BytesIO(buf.getvalue()))
+    with mpl.rc_context({"font.size": 20, "xtick.direction": "out", "mathtext.default": "it", "xtick.top": False}):
+        other = png(res.plot_parameters())
+    assert np.array_equal(png(res.plot_parameters()), other)
+    with pytest.raises(ValueError, match="No plots of 3DFIT"):
+        bbarolo.GalMod(str(tmp_path / "mock.fits"), radii=[20, 60], xpos=31.5, ypos=31.5, vsys=0, vrot=120, vdisp=10,
+                       z0=0, inc=60, pa=45, verbose=0).run().plot_parameters()
+
+
+def test_plot_scripts_standalone(tmp_path):
+    """The plotting scripts of 3DFIT contain the source of the functions of bbarolo.plots (the plots of
+    Result.plot_parameters etc.), import nothing from bbarolo, and can be run again from any folder."""
+    import inspect
+    from bbarolo.plots import fit3d, utils
+    res = _fit3d_mock(tmp_path)
+    out = tmp_path / "out"
+    res.write(outfolder=str(out), plots=True)
+    for pdf in ("parameters", "chanmaps_azim", "pv_azim", "pvslices_azim", "maps_azim"):
+        assert (out / f"MOCK_{pdf}.pdf").is_file(), pdf
+    sc = out / "plotscripts"
+    for name, func in (("plot_parameters.py", fit3d.plot_parameters), ("plot_chanmaps.py", fit3d.plot_chanmaps),
+                       ("plot_pvs.py", fit3d.plot_pvs), ("plot_pvslices.py", fit3d.plot_pvslices),
+                       ("plot_kinmaps.py", fit3d.plot_kinmaps)):
+        txt = (sc / name).read_text()
+        assert inspect.getsource(func) in txt and inspect.getsource(fit3d.read_rings) in txt, name
+        assert "import bbarolo" not in txt and "from bbarolo" not in txt, name
+    assert inspect.getsource(utils.StyledFigure) in (sc / "plot_utils.py").read_text()
+    (out / "MOCK_parameters.pdf").unlink()
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    env["MPLBACKEND"] = "Agg"
+    r = subprocess.run([sys.executable, str(sc / "plot_parameters.py")], cwd=str(tmp_path), env=env,
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert (out / "MOCK_parameters.pdf").is_file()
+
+
+def test_plot_scripts_one_ring(tmp_path):
+    """With one ring, the plots of the channel maps, the PV slices and the maps are made: the scripts read the
+    ring file as 0-d arrays and failed (C++)."""
+    res = _fit3d_mock(tmp_path, radii=[60])
+    out = tmp_path / "out"
+    res.write(outfolder=str(out), plots=True)
+    for pdf in ("parameters", "chanmaps_azim", "pv_azim", "pvslices_azim", "maps_azim"):
+        assert (out / f"MOCK_{pdf}.pdf").is_file(), pdf
+
+
+def test_bayesian_plots_in_memory(tmp_path):
+    """Bayesian3DFIT draws the plots of write() in memory (plot_parameters, ...), with the best model computed
+    once (model_outputs); bbarolo.run gives a Result with the same plots."""
+    pytest.importorskip("dynesty")
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
+    f = _bayes_mock(tmp_path)
+    with pytest.raises(ValueError, match="run"):
+        f.plot_parameters()
+    f.run(freepar=['vrot_single'], threads=1, verbose=False, dynamic=False, sampler_kwargs=dict(nlive=15, seed=1),
+          run_kwargs=dict(maxiter=60))
+    for name, n in dict(parameters=9, chanmaps=30, pvs=5, pvslices=22, kinmaps=15).items():
+        fig = getattr(f, "plot_" + name)()
+        assert isinstance(fig, mpl.figure.Figure) and len(fig.axes) == n, name
+        plt.close(fig)
+    mo = f._plots_cache[1]["mo"]
+    plt.close(f.plot_pvs())
+    assert f._plots_cache[1]["mo"] is mo and list(mo.models) == ["none"]
+    assert not (tmp_path / "bbb").exists()

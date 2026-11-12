@@ -42,6 +42,28 @@ the files of the command line (see {doc}`../user-guide/python`).
 .. autofunction:: emptyfits
 ```
 
+## Plots
+
+The plots of 3DFIT and BAYESIAN3DFIT: each function draws one from arrays and returns a matplotlib Figure.
+`Result.plot_parameters()`, `plot_chanmaps()`, ... (and the same methods of `Bayesian3DFIT`) call them with
+the outputs in memory; the plotting scripts written with the PDF files contain a copy of them.
+
+```{eval-rst}
+.. currentmodule:: bbarolo.plots
+
+.. autofunction:: plot_parameters
+.. autofunction:: plot_asymdrift
+.. autofunction:: plot_chanmaps
+.. autofunction:: plot_pvs
+.. autofunction:: plot_pvslices
+.. autofunction:: plot_kinmaps
+.. autofunction:: read_rings
+.. autofunction:: read_cube
+.. autofunction:: read_map
+.. autofunction:: read_columns
+.. autoclass:: StyledFigure
+```
+
 ## Position–velocity slices
 
 ```{eval-rst}

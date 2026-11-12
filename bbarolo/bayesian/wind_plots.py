@@ -16,7 +16,8 @@ as there is no ring file of a wind. They can be edited and run again from their 
 import math
 import numpy as np
 
-from ..plotscripts import _plot_utils_text, run_scripts
+from ..plotscripts import run_scripts
+from ..plots.scripts import plot_utils_text as _plot_utils_text
 from ..bbutils import DeltaVel, AlltoVel, FluxtoJy
 
 

@@ -62,6 +62,7 @@ The maps and the PV slices of 3DFIT and GALMOD are those of the data (in the mas
 them to check a fit. The maps written by the map tasks (`_map_0th.fits`, ...) are described in
 {doc}`../tasks/maps/index`.
 
+(outputs-plots)=
 ### Plots and `plotscripts/`
 
 With the default {ref}`PLOTS <par-all-plots>` `1`, 3DFIT writes the
@@ -69,9 +70,13 @@ plots as PDF files: `_parameters.pdf` (the rings against radius), `_maps_<norm>.
 the data and of the model), `_pv_<norm>.pdf` and `_pvslices_<norm>.pdf` (PV slices) and
 `_chanmaps_<norm>.pdf` (channel maps). Each plot is made by a Python script in `plotscripts/`
 (`plot_parameters.py`, `plot_kinmaps.py`, `plot_pvs.py`, `plot_pvslices.py`, `plot_chanmaps.py`), and
-`plotscripts/plot_all.py` runs them all. To change a plot, edit its script and run it, **from the folder
-where BBarolo was run**: the scripts read the cube with the name given in FITSFILE (a relative path
-too) and the other files from the output folder.
+`plotscripts/plot_all.py` runs them all. A script holds the function that draws its plot, the settings of the
+run (the region shown, the lowest contour, the units, ...) and, at the bottom, the code that reads the files and
+saves the PDF; it needs numpy, matplotlib, astropy and scipy, and `plot_utils.py` (in the same folder), not
+bbarolo. To change a plot, edit its script and run it, **from the folder where BBarolo was run**: the scripts
+read the cube with the name given in FITSFILE (a relative path too) and the other files from the output folder.
+In Python the same functions are in `bbarolo.plots`, and `res.plot_parameters()`, `res.plot_chanmaps()`, ...
+draw the plots of a fit from its outputs in memory (see {doc}`python`).
 
 ```bash
 python3 output/ngc2403/plotscripts/plot_all.py

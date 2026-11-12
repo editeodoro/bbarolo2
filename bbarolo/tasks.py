@@ -179,6 +179,7 @@ def _model_results(out, mo, want):
         nonoise = [k for k in models if k != "noise"]
         want = nonoise[-1] if nonoise else list(models)[-1]
     out["model"] = models[want]
+    out["_model_norm"] = want
     if len(models) > 1:
         out["models"] = models
     out["densprof"] = Lazy(mo.densprof, "Table")
@@ -255,7 +256,15 @@ def _compute_bayesian(c, par):
     f = run_task(c, par)
     mpar, errors = f._posterior_errors()
     extra = None if f.disk_edge is None else {"indisk": np.asarray(f.in_disk, bool)}
-    return Outputs(rings=ring_table(f.outri.object, mpar, errors, extra=extra), bayes=f, galfit=f._galfit)
+    out = Outputs(rings=ring_table(f.outri.object, mpar, errors, extra=extra), bayes=f, galfit=f._galfit)
+    # The best model and its outputs, computed when used (by the plots, e.g.); write() computes them again
+    out["model"] = Lazy(lambda: list(out["_model_outputs"].model_hdus().values())[0], "HDU")
+    out["densprof"] = Lazy(lambda: out["_model_outputs"].densprof(), "Table")
+    out["maps"] = Lazy(lambda: out["_model_outputs"].maps(), "dict of HDUs")
+    out["pvs"] = Lazy(lambda: out["_model_outputs"].pvs(), "dict of HDUs")
+    out["_model_outputs"] = Lazy(f.model_outputs)
+    out["_model_norm"] = Lazy(lambda: list(out["_model_outputs"].models)[0])
+    return out
 
 
 def _write_bayesian(c, par, out):
@@ -1012,6 +1021,53 @@ class Result:
             ax.set_title("Major axis" if k == "pv_a" else "Minor axis")
         fig.tight_layout()
         return fig
+
+    # ------------------------------------------------------------------ the plots of 3DFIT and BAYESIAN3DFIT
+    def _output(self, key):
+        """An output of the tasks run that is not an attribute (a key starting with '_', e.g. _model_outputs)."""
+        for _, out in reversed(self._steps):
+            if key in out:
+                return out[key]
+        raise ValueError(f"No {key} in this Result of {self.task}.")
+
+    def _fit3d_plots(self):
+        from .plots.inmemory import from_result
+        return from_result(self)
+
+    def plot_parameters(self):
+        """The parameters of the rings against radius, with their errors, and the surface density profile (3DFIT,
+        BAYESIAN3DFIT): the plot <prefix>_parameters.pdf of the command line, from the outputs in memory.
+        Returns a matplotlib Figure (see bbarolo.plots.plot_parameters)."""
+        return self._fit3d_plots().parameters()
+
+    def plot_asymdrift(self):
+        """The asymmetric drift correction (3DFIT with ADRIFT): the plot <prefix>_asymmetricdrift.pdf. Returns a
+        matplotlib Figure (see bbarolo.plots.plot_asymdrift)."""
+        return self._fit3d_plots().asymdrift()
+
+    def plot_chanmaps(self, model=None):
+        """Channel maps of the data and of the model (3DFIT, BAYESIAN3DFIT): the plot <prefix>_chanmaps_<norm>.pdf.
+        model: the name of the model, a key of models ('azim', 'local', 'noise'), or None for model. Returns a
+        matplotlib Figure (see bbarolo.plots.plot_chanmaps)."""
+        return self._fit3d_plots().chanmaps(model)
+
+    def plot_pvs(self, model=None):
+        """Position-velocity slices of the data and of the model along the major and minor axes, following the
+        rings (3DFIT, BAYESIAN3DFIT): the plot <prefix>_pv_<norm>.pdf. model: as for plot_chanmaps. Returns a
+        matplotlib Figure (see bbarolo.plots.plot_pvs)."""
+        return self._fit3d_plots().pvs(model)
+
+    def plot_pvslices(self, model=None):
+        """Position-velocity slices of the data and of the model at several angles and offsets (3DFIT,
+        BAYESIAN3DFIT): the plot <prefix>_pvslices_<norm>.pdf. model: as for plot_chanmaps. Returns a matplotlib
+        Figure (see bbarolo.plots.plot_pvslices)."""
+        return self._fit3d_plots().pvslices(model)
+
+    def plot_kinmaps(self, model=None):
+        """The moment maps of the data, of the model and of the residuals (3DFIT, BAYESIAN3DFIT): the plot
+        <prefix>_maps_<norm>.pdf. model: as for plot_chanmaps (not 'noise'). Returns a matplotlib Figure (see
+        bbarolo.plots.plot_kinmaps)."""
+        return self._fit3d_plots().kinmaps(model)
 
 
 def _add_data(res, c):
