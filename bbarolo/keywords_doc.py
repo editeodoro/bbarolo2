@@ -720,8 +720,9 @@ volume of the noise; `LIKEOPTS` changes these choices, `PRIORS` the priors, `SAM
 The best fit is the median of the posterior. BBarolo writes the outputs of `3DFIT` for it (model,
 maps, PV diagrams, `<prefix>_rings_final1.txt` with the errors from the 16th and 84th percentiles,
 `<prefix>_densprof.txt` and, when `DENS` is not free, `<prefix>_densprof_deconvolved.txt`), the samples
-in `<prefix>_<sampler>_results.npy`, with `PLOTS` the corner plot `<prefix>_corner.pdf` and the radial
-profiles `<prefix>_profiles.pdf`, and with `VERBOSE` the statistics of the posterior. `3DFIT` and
+in `<prefix>_<sampler>_results.npy`, with `PLOTS` the plots of `3DFIT` (the radial profiles with their errors
+in `<prefix>_parameters.pdf`) and the corner plot `<prefix>_corner.pdf`, and with `VERBOSE` the statistics of
+the posterior. `3DFIT` and
 `GALMOD` cannot run with it and are turned off. In Python the same fit is `bbarolo.Bayesian3DFIT`.
 """),
     'GALMOD': dict(

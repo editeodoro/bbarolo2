@@ -584,6 +584,10 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **BAYESIAN3DFIT no longer writes `<prefix>_profiles.pdf`.** It showed the same rings and errors as
+  `<prefix>_parameters.pdf`, the plot of 3DFIT written with the best model, which also has the observed and model
+  surface density with their units, VRAD, the region beyond RADMAX shaded and a script to edit it
+  (`plotscripts/plot_parameters.py`). `Bayesian3DFIT.plot_profiles()` still returns the figure in Python.
 - **BAYESIANWIND `LIKEOPTS emission=voxel` (the weighting of MoKA-3D) has a likelihood of the detections.** The flux
   of the model is still the data wherever the cone reaches, but the cone is no longer scored by the χ² of the voxels
   it does not reach, which never penalised a cone too large (it fitted even the noise of every voxel it reached), so

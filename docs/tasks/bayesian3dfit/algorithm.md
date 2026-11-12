@@ -571,7 +571,7 @@ The task writes in {ref}`OUTFOLDER <par-all-outfolder>`, with the prefix
 
 - `<prefix>_rings_final1.txt`: the best-fit rings with their errors;
 - `<prefix>_mod_none.fits`, the best model, with its moment maps, position–velocity slices and the plots of
-  3DFIT (with the posterior errors) as for 3DFIT;
+  3DFIT (with the posterior errors) as for 3DFIT: `<prefix>_parameters.pdf` shows the rings against radius;
 - `<prefix>_densprof.txt`: the observed profile, the face-on average of the total intensity map of the
   voxels of the likelihood along the best-fit rings (an output only);
 - `<prefix>_densprof_deconvolved.txt` (DENS not free): the deconvolved profile with its lower and upper
@@ -579,13 +579,13 @@ The task writes in {ref}`OUTFOLDER <par-all-outfolder>`, with the prefix
 - `<prefix>_<sampler>_results.npy`: the samples and their weights (and the results of dynesty), the free
   parameters, the initial rings, the parameters, the priors and the options of the likelihood;
 - with {ref}`PLOTS <par-all-plots>`, `<prefix>_corner.pdf` (the one- and two-dimensional marginal
-  posteriors, with the 15.87th, 50th and 84.13th percentiles) and `<prefix>_profiles.pdf` (VROT, VDISP, DENS,
-  INC, PA, Z0, XPOS, YPOS and VSYS against radius, with their errors).
+  posteriors, with the 15.87th, 50th and 84.13th percentiles).
 
 With `PLOTS -1` only the rings and the samples are written, no model. With
 {ref}`VERBOSE <par-all-verbose>` the statistics of the posterior are printed. In Python, `run()` writes
 nothing, and `write(outfolder=None, plots=None)` writes these files as the task does. `write_bestmodel`
-writes only the best model with its outputs and the rings; `corner_plot` and `plot_profiles` return the
+writes only the best model with its outputs and the rings; `corner_plot` and `plot_profiles` (VROT, VDISP,
+DENS, INC, PA, Z0, XPOS, YPOS and VSYS against radius, with their errors; not written by `write`) return the
 figures; `print_stats`,
 `ring_errors` and `chi2_reduced` give the statistics; `save_results` writes the samples, and `load_results`
 reads them back into an object made with the same cube (`Bayesian3DFIT(cube)`, since the cube is

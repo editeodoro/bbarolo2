@@ -31,9 +31,10 @@ class OutputsMixin(object):
         """ Write the outputs of the fit in outfolder (default: OUTFOLDER, or ./output/<OBJECT>/), as the
         BAYESIAN3DFIT task does: with plots >= 0 (default PLOTS) the best model and its outputs
         (write_bestmodel: model, maps, PV diagrams, <prefix>_rings_final1.txt with the errors,
-        <prefix>_densprof.txt, ...; plots > 0: the plots of 3DFIT), otherwise only the rings; the samples
-        (<prefix>_<sampler>_results.npy, see load_results); with plots > 0 also the corner plot
-        (<prefix>_corner.pdf) and the radial profiles (<prefix>_profiles.pdf). Returns the files written. """
+        <prefix>_densprof.txt, ...; plots > 0: the plots of 3DFIT, with the radial profiles and their errors
+        in <prefix>_parameters.pdf), otherwise only the rings; the samples (<prefix>_<sampler>_results.npy, see
+        load_results); with plots > 0 also the corner plot (<prefix>_corner.pdf). plot_profiles() draws the
+        radial profiles in Python (not written). Returns the files written. """
         from ..cube import write_outputs
         from ..tasks import _snapshot, _written, _input_copy
         from ..bbutils import shortpath
@@ -69,33 +70,31 @@ class OutputsMixin(object):
         return _written(of, before)
 
     def _save_plots(self, of, pre, verbose):
-        """ The corner plot and the radial profiles, as PDF files. """
+        """ The corner plot, as a PDF file (none for an optimisation without errors: no distribution to plot).
+        The radial profiles are in <prefix>_parameters.pdf, the plot of 3DFIT written by write_bestmodel. """
         import logging
         import warnings
         import matplotlib.pyplot as plt
         from ..bbutils import shortpath
-        plots = (("corner", lambda: self.corner_plot(plot_dynesty=(self._method == 'dynesty'))),
-                 ("profiles", self.plot_profiles))
         if self._method == 'optimize' and self.optimum.get('cov') is None:
-            plots = plots[1:]                     # (an optimisation without errors: no distribution to plot)
-        for name, make in plots:
-            out = os.path.join(of, f"{pre}_{name}.pdf")
-            root = logging.getLogger()
-            level = root.level
-            try:
-                # (no warnings of the plotting packages, e.g. for a posterior on very few samples)
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    root.setLevel(logging.ERROR)
-                    fig = make()
-                    fig.savefig(out, bbox_inches='tight')
-                plt.close(fig)
-                vprint(verbose, f"Plot written in {shortpath(out)}")
-            except Exception as e:
-                plt.close('all')
-                print(f"BAYESIAN3DFIT WARNING: no {name} plot ({e})")
-            finally:
-                root.setLevel(level)
+            return
+        out = os.path.join(of, f"{pre}_corner.pdf")
+        root = logging.getLogger()
+        level = root.level
+        try:
+            # (no warnings of the plotting packages, e.g. for a posterior on very few samples)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                root.setLevel(logging.ERROR)
+                fig = self.corner_plot(plot_dynesty=(self._method == 'dynesty'))
+                fig.savefig(out, bbox_inches='tight')
+            plt.close(fig)
+            vprint(verbose, f"Plot written in {shortpath(out)}")
+        except Exception as e:
+            plt.close('all')
+            print(f"BAYESIAN3DFIT WARNING: no corner plot ({e})")
+        finally:
+            root.setLevel(level)
 
     def write_bestmodel(self, plots=True, norm='AZIM', **kwargs):
         """ Write the best model, its moment maps, PV diagrams and plots in the output folder.

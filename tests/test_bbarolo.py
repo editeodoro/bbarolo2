@@ -1192,8 +1192,9 @@ def test_bayesian_task(tmp_path, capsys):
     assert "Beam size is" in out and "Initial parameters" in out and "Fitting #4(i) rings of width 40.00(i)" in out
     cli = tmp_path / "cli"
     for name in ("MOCK_rings_final1.txt", "MOCK_densprof.txt", "MOCK_densprof_deconvolved.txt", "MOCK_mod_none.fits",
-                 "MOCK_dynesty_results.npy", "MOCK_corner.pdf", "MOCK_profiles.pdf", "MOCK_parameters.pdf"):
+                 "MOCK_dynesty_results.npy", "MOCK_corner.pdf", "MOCK_parameters.pdf"):
         assert (cli / name).is_file(), name
+    assert not (cli / "MOCK_profiles.pdf").exists()        # (the profiles are in MOCK_parameters.pdf)
     head = open(cli / "MOCK_rings_final1.txt").readline().split()
     assert head[11:] == ["E_VROT1", "E_VROT2", "E_DISP1", "E_DISP2", "E_DENS1", "E_DENS2"]
     g = Bayesian3DFIT(fn, outfolder=str(tmp_path / "re"))
