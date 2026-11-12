@@ -528,9 +528,9 @@ class BayesianWind(Task):
         self._setup_disk()
         self._setup_key = (tuple(self.freepar_names), basis, size)
         if verbose:
-            vprint(verbose, f" BAYESIANWIND: {cells.ncell} {basis} ({cells.npoints} quadrature points), region of "
-                            f"{int(self._region2d.sum())} pixels x {self._lim[5] - self._lim[4]} channels, "
-                            f"likelihood x {self.likefactor:.3g} ({self._likefactor_note})")
+            vprint(verbose, f" BAYESIANWIND: {cells.ncell} {basis} ({cells.npoints} quadrature points), region "
+                            f"{int(self._region2d.sum())} pix x {self._lim[5] - self._lim[4]} chan\n"
+                            f"  log L x      {self._likefactor_note}")
 
     def _shell_range(self, base):
         """The range of the values of a shell parameter allowed by the priors (free) or given (fixed)."""

@@ -603,6 +603,9 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **The description of the likelihood printed by BAYESIAN3DFIT and BAYESIANWIND is a short table** (sigma, model
+  error, log L factor, voxels, side), one item per line, in place of one long line; the measured noise correlation
+  shows the factor used (pixels x channels) and, when the beam area takes over, the measured spatial value.
 - **BAYESIAN3DFIT no longer writes `<prefix>_profiles.pdf`.** It showed the same rings and errors as
   `<prefix>_parameters.pdf`, the plot of 3DFIT written with the best model, which also has the observed and model
   surface density with their units, VRAD, the region beyond RADMAX shaded and a script to edit it

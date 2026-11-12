@@ -160,8 +160,7 @@ class LikelihoodMixin(object):
             h = self._cube_obj.Head()
             bpix = abs(h.Bmaj() / h.Cdelt(0)) if h.Bmaj() and h.Cdelt(0) else 1.
             lm, self._maskmode = dilate_mask(m, nbeam * bpix, nchan), 2
-            self._likemask_note = (f"data in the mask dilated by {nbeam:g} beam (radius {nbeam * bpix:.1f} pixels) "
-                                   f"and +-{nchan} channels")
+            self._likemask_note = f"mask dilated by {nbeam:g} beam = {nbeam * bpix:.1f} pix, +-{nchan} chan"
         else:
             lm, self._maskmode = np.ones(m.shape, bool), 2
             self._likemask_note = "all the voxels of the region"
@@ -242,13 +241,13 @@ class LikelihoodMixin(object):
         Sets likefactor (3D likelihood) and likefactor2d (total intensity map). """
         mode = self.like_kwargs['noisecorr']
         A = A2 = max(self.beam_area, 1.)
-        self._likefactor_note = f"1/beam area in pixels = 1/{self.beam_area:.2f}"
+        self._likefactor_note = f"1/{A:.2f} (beam area)"
         self._corr_below_beam = False                  # (set by 'measured' only: not kept from a previous setup)
         if isinstance(mode, (int, float, np.integer, np.floating)) and not isinstance(mode, (bool, np.bool_)):
             if not (np.isfinite(mode) and mode > 0):
                 raise ValueError(f"ERROR! noisecorr must be 'beam', 'measured' or a number > 0, not {mode!r}.")
             A = A2 = float(mode)
-            self._likefactor_note = f"1/{A:g} (noisecorr given: voxels per independent noise value)"
+            self._likefactor_note = f"1/{A:g} (given)"
         elif str(mode).lower() == 'measured':
             # (measured once: a failure is remembered too, in _noisecorr_failed, and reported once)
             if self.noise_correlation is None and not getattr(self, '_noisecorr_failed', False):
@@ -263,15 +262,16 @@ class LikelihoodMixin(object):
                           "noise:\n         using the beam area (like_kwargs noisecorr='beam').")
             nc = self.noise_correlation
             if nc is None:
-                self._likefactor_note += " (the correlation of the noise could not be measured)"
+                self._likefactor_note = f"1/{A:.2f} (beam area: noise correlation not measurable)"
             else:
-                sp = max(nc['spatial'], nc.get('spatial_core', nc['spatial']), self.beam_area)
+                spm = max(nc['spatial'], nc.get('spatial_core', nc['spatial']))
+                sp = max(spm, self.beam_area)
                 sz = max(nc['spectral'], nc.get('spectral_core', nc['spectral']), 1.)
                 A, A2 = sp * sz, sp
                 self._corr_below_beam = nc['spatial'] < 0.5 * self.beam_area
-                self._likefactor_note = (f"1/{A:.2f} (measured noise correlation: {sp:.2f} pixels x {sz:.2f} "
-                                         f"channels, at least one beam area, {self.beam_area:.2f} pixels; sum of the "
-                                         f"autocorrelation {nc['spatial']:.2f} pixels x {nc['spectral']:.2f} channels)")
+                self._likefactor_note = f"1/{A:.2f} = 1/({sp:.2f} pix x {sz:.2f} chan), measured noise correlation"
+                if spm < self.beam_area:
+                    self._likefactor_note += f" (spatial: beam area, measured {spm:.2f})"
         elif str(mode).lower() != 'beam':
             raise ValueError(f"ERROR! noisecorr must be 'beam', 'measured' or a number, not {mode!r}.")
         self.likefactor = 1. / A

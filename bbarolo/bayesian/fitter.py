@@ -763,34 +763,34 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                                        subsequent_indent="  "))
             print(f"Fitting {self.ndim} parameters: {self.freepar_names}")
             if custom and not useBBres and log_like is None:
-                print(f"\nLikelihood: user-defined residuals (_calculate_residuals); log-likelihood x "
-                      f"{self._likefactor_note}")
+                print("\nLikelihood\n  residuals    user-defined (_calculate_residuals)\n"
+                      f"  log L x      {self._likefactor_note}")
             elif (not useBBres and log_like is None) or log_like == self._log_likelihood_geometry:
+                geom = log_like == self._log_likelihood_geometry
                 sg = like_kwargs.get('sigma')
-                sg = "free parameter" if 'sigma' in self.freepar_idx else \
-                    (f"{sg:.4g} (given)" if sg is not None else f"{self.noiserms:.4g} (measured noise rms)")
-                if log_like == self._log_likelihood_geometry:
-                    fc = f"1/{1. / self.likefactor2d:.4g} (spatial correlation of the noise)"
-                else:
-                    fc = self._likefactor_note
+                sg = "free" if 'sigma' in self.freepar_idx else \
+                    (f"{sg:.4g} (given)" if sg is not None else f"{self.noiserms:.4g} (measured rms)")
+                lines = ["\nLikelihood (total intensity map)" if geom else "\nLikelihood", f"  sigma        {sg}"]
                 fe = like_kwargs.get('fracerr')
-                fe = "; model error: fractional, free parameter 'fracerr'" if 'fracerr' in self.freepar_idx else \
-                    (f"; model error: fractional, fracerr = {fe:.4g} (given)" if fe else "")
-                if log_like == self._log_likelihood_geometry:
-                    print(f"\nLikelihood: total intensity map ({self._likemask_note}), noise per voxel sigma = "
-                          f"{sg}{fe}; log-likelihood x {fc}")
+                if 'fracerr' in self.freepar_idx:
+                    lines.append("  model error  fractional, 'fracerr' free")
+                elif fe:
+                    lines.append(f"  model error  fractional, fracerr = {fe:.4g} (given)")
+                if geom:
+                    lines += [f"  log L x      1/{1. / self.likefactor2d:.4g} (spatial noise correlation)",
+                              f"  voxels       {self._likemask_note}"]
                 else:
-                    print(f"\nLikelihood: noise per voxel sigma = {sg}{fe}; log-likelihood x {fc}; "
-                          f"{self.nvox} voxels ({self._likemask_note})")
+                    lines += [f"  log L x      {self._likefactor_note}",
+                              f"  voxels       {self.nvox} ({self._likemask_note})"]
+                if self._side() is not None:
+                    lines.append(f"  side         {'approaching' if self._side() == 'A' else 'receding'} half (SIDE)")
+                print("\n".join(lines))
                 if getattr(self, '_corr_below_beam', False) and str(self.like_kwargs['noisecorr']).lower() == \
-                        'measured' and log_like != self._log_likelihood_geometry:
+                        'measured' and not geom:
                     print("WARNING: the sum of the autocorrelation of the noise is less than half the beam area: "
                           "the noise has\n         a negative ring (synthesis images without short spacings), or "
                           "the beam in the header\n         is wrong. The likelihood counts one independent value "
                           "per beam area at most.")
-                if self._side() is not None:
-                    print(f"           the {'approaching' if self._side() == 'A' else 'receding'} half of the "
-                          "galaxy only (SIDE), divided by the minor axis of the initial rings")
             if self.useNorm and not useBBres:
                 print(f"Density profile: deconvolved (fit of the total intensity map with the beam-convolved "
                       f"rings, smoothness {self.like_kwargs['densprof_smooth']:g})")

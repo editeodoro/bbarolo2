@@ -690,7 +690,7 @@ def test_bayesian_noisecorr_failure_once(tmp_path, monkeypatch, capsys):
     f._setup(['vrot_single'])
     assert len(calls) == 1
     assert capsys.readouterr().out.count("too few voxels without emission") == 1
-    assert f.likefactor == pytest.approx(1. / f.beam_area) and "could not be measured" in f._likefactor_note
+    assert f.likefactor == pytest.approx(1. / f.beam_area) and "not measurable" in f._likefactor_note
 
 
 @needs_data
