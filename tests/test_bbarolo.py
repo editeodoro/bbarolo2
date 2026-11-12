@@ -4207,6 +4207,17 @@ def test_plot_scripts_one_ring(tmp_path):
         assert (out / f"MOCK_{pdf}.pdf").is_file(), pdf
 
 
+def test_plot_pvs_minor_axis_range(tmp_path):
+    """The PV slice along the minor axis has the offset range of the major axis, to compare the two on one scale
+    (C++: R_max sin i, wider than the projected minor axis R_max cos i, and empty for a face-on disc)."""
+    import matplotlib.pyplot as plt
+    fig = _fit3d_mock(tmp_path).plot_pvs()
+    pv = [ax for ax in fig.axes if ax.get_xlabel() == "Offset (arcsec)"]
+    assert len(pv) == 2
+    assert pv[1].get_xlim() == pytest.approx(pv[0].get_xlim()) and pv[0].get_xlim()[1] > 140
+    plt.close(fig)
+
+
 def test_bayesian_plots_in_memory(tmp_path):
     """Bayesian3DFIT draws the plots of write() in memory (plot_parameters, ...), with the best model computed
     once (model_outputs); bbarolo.run gives a Result with the same plots."""

@@ -7,6 +7,9 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **The PV slice along the minor axis in `_pv_<norm>.pdf` had a wrong offset range (C++).** It was ±1.3 R_max sin i,
+  wider than the projected minor axis (R_max cos i) at most inclinations and empty (zero width) for a face-on disc.
+  It now has the range of the major axis, so the two slices can be compared on the same scale.
 - **3DFIT and BAYESIAN3DFIT with one ring: no plots of the channel maps, PV slices and maps (C++).** The scripts read
   the ring file of a single ring as 0-d arrays and failed (`numpy.AxisError`); the plots are now made.
 - **BAYESIAN3DFIT and BAYESIANWIND: the warning on the correlation of the noise printed several times.** When the

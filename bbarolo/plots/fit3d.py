@@ -348,8 +348,8 @@ def plot_chanmaps(data, model, rings, mask=None, *, box, cont, pixscale, cdelt3,
 
 def plot_pvs(data, model, rings, mom0, mom1, mask=None, *, box, cont, pixscale, vrange, gname="", plotmask=False):
     """Position-velocity slices of the data (grey scale, blue contours) and of a model (red contours) along the
-    major axis (top; the gold points are the rotation curve of the rings, projected) and the minor axis (bottom),
-    following the position angles of the rings, beside the total intensity and velocity maps of the data with the
+    major axis (top; the gold points are the rotation curve of the rings, projected) and the minor axis (bottom, on
+    the offset range of the major axis), following the position angles of the rings, beside the total intensity and velocity maps of the data with the
     paths of the slices (<prefix>_pv_<norm>.pdf).
 
     data, model, mask, rings, box, cont, pixscale, gname, plotmask: as for plot_chanmaps; mom0, mom1: the total
@@ -432,7 +432,7 @@ def plot_pvs(data, model, rings, mom0, mom1, mask=None, *, box, cont, pixscale, 
         axes = np.ravel(axes)
 
         # Major axis
-        s, x, y, slen_maj = plot_pv(axes[0], rad, xcen_m, ycen_m, pa)
+        s, x, y, _ = plot_pv(axes[0], rad, xcen_m, ycen_m, pa)
         axes[0].text(0, 1.05, gname, transform=axes[0].transAxes, fontsize=32)
 
         fig.canvas.draw()
@@ -474,9 +474,8 @@ def plot_pvs(data, model, rings, mom0, mom1, mask=None, *, box, cont, pixscale, 
         ax_m.plot(x[m] + pad_x[0], y[m] + pad_y[0], "--", lw=1.5, c="navy")
         ax_m.plot(x[~m] + pad_x[0], y[~m] + pad_y[0], "--", lw=1.5, c="navy", alpha=0.3)
 
-        # length along the curved major-axis slice, in place of R_max
-        xran_min = slen_maj * np.sin(np.radians(inc_m))
-        axes[1].set_xlim(-1.3 * xran_min, 1.3 * xran_min)
+        # the same offset range as the major axis, to compare the two slices on one scale
+        axes[1].set_xlim(axes[0].get_xlim())
     return fig
 
 
