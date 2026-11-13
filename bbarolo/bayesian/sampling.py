@@ -286,7 +286,10 @@ def _sample(fitter, like_kwargs, method, threads, dynamic, sampler_kwargs, run_k
             nautilus = _nautilus_module(method)
             skw = _nautilus_kwargs(pool, threads, sampler_kwargs)
             fitter.sampler = nautilus.Sampler(prior, loglike, n_dim=fitter.ndim, **skw)
-            fitter.sampler.run(**{'verbose': verbose, **run_kwargs})
+            # (nautilusbb: its line of progress, with the time left, updated in place on a terminal with SHOWBAR,
+            # otherwise a line at intervals)
+            nverbose = ((verbose and 'lines') if method == 'nautilusbb' and not common.show_bar(fitter) else verbose)
+            fitter.sampler.run(**{'verbose': nverbose, **run_kwargs})
             samples, logw, _ = fitter.sampler.posterior()
             weights = np.exp(logw - logw.max())
             fitter.results = None

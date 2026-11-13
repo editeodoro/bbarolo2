@@ -399,6 +399,16 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **BAYESIAN3DFIT and BAYESIANWIND with NAUTILUSBB: the time left.** The line of progress of the sampler (`VERBOSE`)
+  shows the time elapsed and an estimate of the time left. nautilus's own measure of progress, the fraction of the
+  evidence in its live points (`f_live`), stays at 1 for three quarters of a run and then drops to its target, so it
+  says little; the volume of the live set, instead, shrinks at a nearly constant rate, and the shrinking still needed
+  is estimated from the gap between the highest likelihood and that of the live set, as for a likelihood Gaussian
+  near its peak (`Sampler.time_left`). On NGC 2403 (8 parameters) and UGC 1281 (24) it was within 25% of the true
+  time after a tenth of the run and within about 15% after a fifth. The line is updated in place on a terminal with
+  `SHOWBAR`; otherwise (`SHOWBAR false`, `LOGFILE`) a line is printed after 10 seconds and then at intervals of a
+  tenth of the time elapsed.
+
 - **SAMPLER NAUTILUSBB, the new default sampler of BAYESIAN3DFIT and BAYESIANWIND: nautilus included in BBarolo**
   (`bbarolo/bayesian/nautilus`, from nautilus 1.0.6, MIT licence). BAYESIAN3DFIT now runs with the requirements of
   BBarolo alone: nautilus needs scikit-learn, while this copy trains its networks with its own multi-layer

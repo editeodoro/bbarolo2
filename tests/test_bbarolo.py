@@ -2080,6 +2080,24 @@ def test_bayesian_nautilusbb(tmp_path, capsys, monkeypatch):
     samples = f.samples.copy()
     f.run(**run)
     assert np.array_equal(f.samples, samples)
+    # its line of progress: updated in place with SHOWBAR (on a terminal), otherwise lines at intervals
+    import functools
+    seen = []
+    orig = nautilusbb.Sampler.run
+
+    @functools.wraps(orig)                                  # (the options are checked against its signature)
+    def spy(self, **kw):
+        seen.append(kw['verbose'])
+        return orig(self, **kw)
+    monkeypatch.setattr(nautilusbb.Sampler, "run", spy)
+    for showbar in (True, False):
+        f._task_showbar = showbar
+        f.run(**{**run, 'verbose': True})
+    assert seen == [True, 'lines']
+    out = capsys.readouterr().out
+    assert "| Time    | Left" in out and "\r" not in out          # (pytest: not a terminal)
+    monkeypatch.undo()
+    del f._task_showbar
     files = f.write(plots=-1, verbose=False)
     res = [x for x in files if x.endswith("_nautilusbb_results.npy")]
     assert len(res) == 1

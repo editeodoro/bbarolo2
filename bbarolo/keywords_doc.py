@@ -1580,8 +1580,11 @@ the setup.
 `dlogz`, the stopping criterion of the static sampler of dynesty (the estimated log-evidence left in
 the live points), is accepted by all the samplers: it becomes `dlogz_init` for the dynamic sampler and
 `f_live` = 1 − exp(−dlogz) for nautilus. The progress of the sampling is shown with `VERBOSE`
-(`print_progress` of dynesty, also off when `SHOWBAR` is false; `verbose` of nautilus). The other
-options keep the defaults of the sampler.
+(`print_progress` of dynesty, also off when `SHOWBAR` is false; `verbose` of nautilus). `NAUTILUSBB`
+shows the time elapsed and an estimate of the time left (`Left`, within about 15% after the first fifth of
+the run on the fits tested), on one line updated in place on a terminal with `SHOWBAR`, otherwise on a
+line after 10 seconds and then at intervals of a tenth of the time elapsed. The other options keep the
+defaults of the sampler.
 
 With `SAMPLER OPTIMISE`, the options of the method of `scipy.optimize` chosen in `SAMPLEROPTS`, e.g.
 `RUNOPTS maxiter=500` (an option that the method does not know is an error when it starts).

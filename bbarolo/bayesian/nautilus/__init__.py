@@ -11,7 +11,10 @@ changes of BBarolo (SAMPLER NAUTILUSBB), MIT licence (LICENSE in this folder):
 - the networks drop the state of their training, and the processes of a pool that sample a bound
   return only the points: much less data through the pool;
 - the verbose run does not ask to report issues to the nautilus repository (problems of this copy are
-  BBarolo's).
+  BBarolo's);
+- the line of progress shows the time elapsed and an estimate of the time left (`Sampler.time_left`):
+  updated in place on a terminal, otherwise (or with verbose='lines') printed at intervals; it has no
+  columns of ellipsoids and networks.
 
 The SAMPLER NAUTILUS of BBarolo uses the package nautilus-sampler instead.
 """

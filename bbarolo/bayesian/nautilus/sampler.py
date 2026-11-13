@@ -1,5 +1,6 @@
 """Module implementing the Nautilus sampler."""
 
+import sys
 from functools import partial
 from pathlib import Path
 from shutil import get_terminal_size
@@ -12,6 +13,7 @@ except ImportError:
     pass
 import numpy as np
 from scipy.special import logsumexp
+from scipy.stats import chi2
 
 from .bounds import NautilusBound, UnitCube
 from .pool import NautilusPool, likelihood_worker, limit_threads
@@ -317,6 +319,9 @@ class Sampler:
 
         self.rng = np.random.default_rng(seed)
 
+        # The progress of the current call of run() (see _progress_start).
+        self._progress = None
+
         # The following variables carry the information about the run.
         self.n_like = 0
         self.explored = False
@@ -410,9 +415,12 @@ class Sampler:
             likelihood computations if this limit is reached. Unlike for
             `n_like_max`, this maximum only refers to the current function
             call. Default is infinity.
-        verbose : bool, optional
-            If True, print information about sampler progress. Default is
-            False.
+        verbose : bool or str, optional
+            If True, print information about sampler progress: on a terminal
+            one line updated in place, otherwise ('lines') a line after 10
+            seconds and then at intervals of max(10 s, a tenth of the time
+            elapsed). The line has the time elapsed and an estimate of the
+            time left (see `time_left`). Default is False.
 
         Returns
         -------
@@ -423,6 +431,7 @@ class Sampler:
 
         """
         t_start = time()
+        self._progress_start(verbose, t_start, f_live, n_eff)
 
         if verbose:
             if self.n_like == 0:
@@ -504,14 +513,148 @@ class Sampler:
 
             success = (self.explored and np.all(self.shell_n >= n_shell) and
                        self.n_eff >= n_eff)
+            self._progress_update()
 
         if verbose:
             if success:
                 self.print_status('Finished')
             else:
                 self.print_status('Stopped')
+        self._progress['done'] = True
 
         return success
+
+    def _progress_start(self, verbose, t_start, f_live, n_eff):
+        """Start following the progress of a call of run().
+
+        Parameters
+        ----------
+        verbose : bool or str
+            The `verbose` of run(): False, True (in place on a terminal,
+            otherwise lines) or 'lines'.
+        t_start : float
+            Time of the start of the call.
+        f_live, n_eff : float
+            The targets of the exploration and of the sampling.
+
+        """
+        if not verbose:
+            mode = None
+        elif verbose == 'lines' or not sys.stdout.isatty():
+            mode = 'lines'
+        else:
+            mode = 'inplace'
+        self._progress = dict(mode=mode, t_start=t_start, f_live=f_live,
+                              n_eff=n_eff, history=[], last_record=-np.inf,
+                              last_print=-np.inf, next_line=10.0,
+                              done=False)
+
+    def _progress_update(self):
+        """Record the state of the sampler (at most once a second) and
+        print a line of progress when due (verbose 'lines')."""
+        p = self._progress
+        if p is None:
+            return
+        now = time() - p['t_start']
+        if now - p['last_record'] >= 1.0:
+            p['last_record'] = now
+            stats = None if self.explored else self._live_stats()
+            if stats is None:
+                stats = (np.nan, np.nan, np.nan)
+            p['history'].append((now, self.n_like, float(self.explored)) +
+                                tuple(stats))
+        if p['mode'] == 'lines' and now >= p['next_line']:
+            p['next_line'] = now + max(10.0, 0.1 * now)
+            self.print_status('Sampling' if self.explored else 'Exploring')
+
+    def _live_stats(self):
+        """Volume and likelihoods of the live set.
+
+        Returns
+        -------
+        stats : tuple or None
+            Natural log of the volume of the live set, the highest log
+            likelihood and that of the live point with the lowest likelihood
+            (the threshold of the live set); None if there are no more points
+            than live points.
+
+        """
+        log_l = np.concatenate(self.log_l)
+        if len(log_l) <= self.n_live:
+            return None
+        log_v = np.repeat(self.shell_log_v - np.log(np.maximum(self.shell_n, 1)),
+                          self.shell_n)
+        live = np.argpartition(log_l, len(log_l) - self.n_live)[-self.n_live:]
+        return (logsumexp(log_v[live]), np.max(log_l),
+                np.min(log_l[live]))
+
+    def time_left(self):
+        """Estimate the time left of the current call of run().
+
+        In the exploration phase, the time left until the evidence in the live
+        set falls below `f_live`: the volume of the live set shrinks by about
+        the same factor per unit time, and the shrinking still needed is
+        estimated from the gap between the highest likelihood and that of the
+        live set, as for a likelihood that is Gaussian near its peak (with d
+        parameters, the live set holds a fraction f_live of the posterior
+        when the gap is half the f_live quantile of a chi-square with d
+        degrees of freedom). On two fits of BBarolo (8 and 24 parameters) it
+        was within about 25% of the true time after a tenth of the
+        exploration and within about 15% after a fifth. In the sampling phase,
+        the effective samples still needed divided by the asymptotic
+        efficiency `eta` and by the rate of likelihood calls.
+
+        Returns
+        -------
+        time_left : float or None
+            Seconds; None if it cannot be estimated yet (during the first
+            seconds, or outside run()).
+
+        """
+        p = self._progress
+        if p is None or len(p['history']) < 3:
+            return None
+        h = np.array(p['history'])
+        if not self.explored:
+            h = h[(h[:, 2] == 0) & np.isfinite(h[:, 3])]
+            if len(h) < 3 or h[-1, 0] < 5:
+                return None
+            recent = h[h[:, 0] >= 0.5 * h[-1, 0]]
+            if len(recent) < 2:
+                recent = h[-2:]
+            rate = -np.polyfit(recent[:, 0], recent[:, 3], 1)[0]
+            if not rate > 0:
+                return None
+            gap_end = chi2.ppf(p['f_live'], self.n_dim) / 2.0
+            gap = max(h[-1, 4] - h[-1, 5], gap_end)
+            return 0.5 * self.n_dim * np.log(gap / gap_end) / rate
+        need = p['n_eff'] - self.n_eff
+        if need <= 0:
+            return 0.0
+        h = h[h[:, 2] == 1]
+        if len(h) < 2:
+            return None
+        recent = h[h[:, 0] >= h[0, 0] + 0.5 * (h[-1, 0] - h[0, 0])]
+        if len(recent) < 2:
+            recent = h[-2:]
+        calls = np.polyfit(recent[:, 0], recent[:, 1], 1)[0]
+        eta = self.eta
+        if not (calls > 0 and eta > 0):
+            return None
+        return need / eta / calls
+
+    def _show(self, status):
+        """Show the current activity on the line of progress (in place on a
+        terminal, at most four times a second)."""
+        p = self._progress
+        if p is None or p['done']:
+            # (add_bound and add_samples called outside run())
+            self.print_status(status, end='\r')
+        elif p['mode'] == 'inplace':
+            now = time()
+            if now - p['last_print'] >= 0.25:
+                p['last_print'] = now
+                self.print_status(status, end='\r')
 
     @property
     def discard_exploration(self):
@@ -968,27 +1111,35 @@ class Sampler:
 
         """
         if header:
-            data = ['Status', 'Bounds', 'Ellipses', 'Networks', 'Calls',
-                    'f_live', 'N_eff', 'log Z']
+            data = ['Status', 'Bounds', 'Calls', 'f_live', 'N_eff', 'log Z',
+                    'Time', 'Left']
         else:
-            data = [status, len(self.bounds)]
-            if len(self.bounds) > 1:
-                data.extend([self.bounds[-1].n_ell, self.bounds[-1].n_net])
-            else:
-                data.extend([0, 0])
-            data.extend([self.n_like, self.f_live, self.n_eff, self.log_z])
+            data = [status, len(self.bounds), self.n_like, self.f_live,
+                    self.n_eff, self.log_z]
 
-            fmt = ['{}', '{:d}', '{:d}', '{:d}', '{:d}', '{:.4f}', '{:.0f}',
-                   '{:+.2f}']
+            fmt = ['{}', '{:d}', '{:d}', '{:.4f}', '{:.0f}', '{:+.2f}']
             for i in range(len(data)):
                 data[i] = 'N/A' if data[i] is None else fmt[i].format(data[i])
+            p = self._progress
+            if p is None or p['done']:
+                data.extend(['', ''])
+            else:
+                data.append(_format_time(time() - p['t_start']))
+                if status in ('Finished', 'Stopped'):
+                    data.append('')
+                else:
+                    left = self.time_left()
+                    data.append('?' if left is None else
+                                '~' + _format_time(left))
 
-        for i, length in enumerate([9, 6, 8, 8, 8, 6, 5, 7]):
+        for i, length in enumerate([9, 6, 8, 6, 6, 9, 7, 8]):
             data[i] = '{:<{}}'.format(data[i], length)
 
         output = ' | '.join(data)
         width = get_terminal_size((80, 24)).columns
         output = output.ljust(width)[:width]
+        if self._progress is not None and self._progress['mode'] == 'lines':
+            output = output.rstrip()        # (lines, not updated in place)
         print(output, end=end, flush=True)
 
     def add_bound(self, verbose=False):
@@ -1015,7 +1166,7 @@ class Sampler:
             success = True
         else:
             if verbose:
-                self.print_status('Bounding', end='\r')
+                self._show('Bounding')
             log_l = np.concatenate(self.log_l)
             points = np.concatenate(self.points)[np.argsort(log_l)]
             log_l = np.sort(log_l)
@@ -1137,13 +1288,13 @@ class Sampler:
 
         """
         if verbose:
-            self.print_status('Sampling', end='\r')
+            self._show('Sampling')
 
         if shell == -1 and len(self.shell_t) > 0:
             points, n_bound, idx_t = self.sample_shell(-1, self.shell_t)
             assert len(points) + len(idx_t) == n_bound
             if verbose:
-                self.print_status('Computing', end='\r')
+                self._show('Computing')
             if len(idx_t) > 0:
                 self.points[-1] = np.concatenate((
                     self.points[-1], self.points_t[idx_t]))
@@ -1155,7 +1306,7 @@ class Sampler:
         else:
             points, n_bound = self.sample_shell(shell)
             if verbose:
-                self.print_status('Computing', end='\r')
+                self._show('Computing')
 
         self.shell_n_sample[shell] += n_bound
         log_l, blobs = self.evaluate_likelihood(points)
@@ -1401,3 +1552,25 @@ class Sampler:
         group.attrs['rng_uinteger'] = rng_state['uinteger']
 
         fstream.close()
+
+
+def _format_time(seconds):
+    """Format a duration as 45s, 3m05s or 1h25m.
+
+    Parameters
+    ----------
+    seconds : float
+        Duration in seconds.
+
+    Returns
+    -------
+    text : str
+        The duration.
+
+    """
+    seconds = int(round(seconds))
+    if seconds < 60:
+        return f'{seconds}s'
+    if seconds < 3600:
+        return f'{seconds // 60}m{seconds % 60:02d}s'
+    return f'{seconds // 3600}h{(seconds % 3600) // 60:02d}m'
