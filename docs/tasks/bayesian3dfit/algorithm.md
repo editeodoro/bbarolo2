@@ -440,8 +440,13 @@ is shaded in the plots of the parameters, `print_stats` names them, and in Pytho
 
 {ref}`SAMPLER <par-bayesian3dfit-sampler>` chooses the sampler:
 
-- `NAUTILUS` (the default; Lange 2023): importance nested sampling with boundaries learnt by neural
-  networks;
+- `NAUTILUSBB` (the default) and `NAUTILUS` (Lange 2023): importance nested sampling with boundaries learnt by
+  neural networks. `NAUTILUSBB` is the copy of nautilus 1.0.6 included in BBarolo (`bbarolo.bayesian.nautilus`,
+  MIT licence), changed to need no other package: its networks and the Gaussian mixtures that split its bounds
+  are compiled with numba instead of being scikit-learn's, and less data goes through the pool of processes.
+  `NAUTILUS` is the package nautilus-sampler. Both train the networks for at most 20 epochs (`neural_network_kwargs` `max_iter=20`; nautilus trains until
+  10 epochs bring no improvement): on a fit with 24 parameters and 64 processes this halved the time, for 14%
+  more likelihood calls and the same posterior;
 - `DYNESTY` (Speagle 2020): the static nested sampler, with multi-ellipsoid bounds (`bound=multi`, Feroz et
   al. 2009) and the other defaults of dynesty; `SAMPLEROPTS dynamic=true` selects the dynamic sampler.
 
@@ -453,10 +458,11 @@ by both samplers.
 
 The sampling runs on {ref}`THREADS <par-all-threads>` processes (in Python, `run(threads=n)`; default 1,
 or THREADS if given). The pool is started by fork: the workers inherit the fitter, with the cube and the
-setup, and receive only the parameter vectors. dynesty evaluates 4 proposals per process at a time. Each
-process runs the model on one thread and limits BLAS and OpenMP to one thread: the small matrices of the
-density profile are slower with many threads (on NGC 2403 with the geometry free, 22 ms per call instead
-of 37 ms). A Python script launched with `mpirun` or `mpiexec` uses an MPI pool instead (it needs mpi4py
+setup, and receive only the parameter vectors. dynesty evaluates 4 proposals per process at a time, nautilus
+at least 4 points per process in each step (its `n_batch`; its default, at least 100 points, holds up to 33
+processes). Each process runs the model on one thread and limits BLAS and OpenMP to one thread: the small
+matrices of the density profile are slower with many threads (on NGC 2403 with the geometry free, 22 ms per
+call instead of 37 ms). A Python script launched with `mpirun` or `mpiexec` uses an MPI pool instead (it needs mpi4py
 and schwimmbad).
 
 ## Fit of the geometry on the total intensity map (Python only)

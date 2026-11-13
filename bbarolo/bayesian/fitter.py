@@ -11,12 +11,12 @@ from scipy import stats
 
 from ..tasks import FitMod3D, build_param, _checked
 from ..bbutils import BBaroloError
-from .common import vprint, banner, get_distribution, show_bar, SIGMA_QUANTILES
+from .common import vprint, banner, get_distribution, fast_ppf, resample_equal, show_bar, SIGMA_QUANTILES
 from .rings import _RingDict
 from .likelihood import LikelihoodMixin
 from .density import DensityMixin
 from .outputs import OutputsMixin
-from .sampling import sample, sampler_options, dyfunc
+from .sampling import sample, sampler_options
 from .optimize import SAMPLER_NAMES, sampler_options as optimize_options
 
 # the default functions of radius of VROT_FUNC, VDISP_FUNC and DENS_FUNC (Bayesian3DFIT.funcs)
@@ -48,7 +48,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
     -------
     update(**params):        change BBarolo parameters (and the rings).
     run(freepar, method, threads, log_like, like_kwargs, sampler_kwargs, run_kwargs, verbose,
-        dynamic, **params):  sample the posterior ('dynesty' or 'nautilus'); nothing is written.
+        dynamic, **params):  sample the posterior ('nautilusbb', 'nautilus' or 'dynesty'); nothing is written.
     run_geometry(freepar, **kwargs): fit only the geometry on the total intensity map.
     write(outfolder, plots): write all the outputs, as the BAYESIAN3DFIT task.
     write_bestmodel(plots, norm, **kwargs): write the best model, maps, PVs and plots.
@@ -132,7 +132,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         return self
 
     def _keyword_option(self, name, value):
-        """ The value of FREE (list of free parameters), SAMPLER ('dynesty', 'nautilus' or 'optimise'),
+        """ The value of FREE (list of free parameters), SAMPLER ('nautilusbb', 'nautilus', 'dynesty' or 'optimise'),
         PRIORS (dict of priors), SAMPLEROPTS, RUNOPTS or LIKEOPTS (dict of options), from a
         string as in a parameter file. Raises ValueError. """
         from ..params import bayes_freepar, bayes_priors, bayes_options, bayes_likeopts, BAYES_FUNC_PARS
@@ -147,8 +147,8 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             if name == "SAMPLER":
                 m = s.strip().lower()
                 m = "optimise" if m == "optimize" else m
-                if m not in ("dynesty", "nautilus", "optimise"):
-                    raise ValueError(f"unknown sampler {s.strip()} (NAUTILUS, DYNESTY or OPTIMISE)")
+                if m not in ("nautilusbb", "nautilus", "dynesty", "optimise"):
+                    raise ValueError(f"unknown sampler {s.strip()} (NAUTILUSBB, NAUTILUS, DYNESTY or OPTIMISE)")
                 return m
             return bayes_options(s)
         except ValueError as e:
@@ -553,10 +553,11 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             return None
 
     def _prior_transform(self, u):
-        """ Transform the unit cube into the parameter space using the prior distributions """
+        """ Transform the unit cube into the parameter space using the prior distributions (their ppf, as
+        common.fast_ppf computes it: the same values, faster) """
         p = np.zeros_like(u)
         for key in self.freepar_idx:
-            p[self.freepar_idx[key]] = self.prior_distr[key].ppf(u[self.freepar_idx[key]])
+            p[self.freepar_idx[key]] = fast_ppf(self.prior_distr[key])(u[self.freepar_idx[key]])
         return p
 
     def run(self, freepar=None, method=None, threads=None, *, log_like=None, like_kwargs: dict = {},
@@ -572,7 +573,8 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                                 ['vrot','vdisp_single','inc_single','sigma'], or a string as FREE in
                                 a parameter file ('VROT VDISP_SINGLE INC_SINGLE SIGMA'). Names are
                                 case-insensitive (PA is phi, DISP is vdisp)
-          method (str):         'nautilus' or 'dynesty' (default: SAMPLER if given, otherwise 'nautilus');
+          method (str):         'nautilusbb' (the copy of nautilus in BBarolo), 'nautilus' (the package
+                                nautilus-sampler) or 'dynesty' (default: SAMPLER if given, otherwise 'nautilusbb');
                                 'optimise' (or 'optimize'): optimize(), with sampler_kwargs its arguments
                                 (method, x0, posterior, errors, nstart, seed, step, nsamples) and run_kwargs
                                 the options of its method (SAMPLER OPTIMISE in parameter files)
@@ -606,7 +608,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             self.update(**params)
         kwargs = {k: v for k, v in kwargs.items() if k in ('verbose', 'dynamic')}
         dflt = self._run_defaults()
-        method = str(dflt.get('SAMPLER', 'nautilus') if method is None else method).lower()
+        method = str(dflt.get('SAMPLER', 'nautilusbb') if method is None else method).lower()
         sampler_kwargs = {**dflt.get('SAMPLEROPTS', {}), **sampler_kwargs}
         if method in SAMPLER_NAMES:                  # (SAMPLER OPTIMISE: the optimisation)
             okw = optimize_options(sampler_kwargs, {**dflt.get('RUNOPTS', {}), **run_kwargs})
@@ -614,7 +616,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                                  verbose=kwargs.get('verbose', True), **okw)
         if 'dynamic' in sampler_kwargs:              # dynesty: static (default) or dynamic sampler
             kwargs.setdefault('dynamic', bool(sampler_kwargs.pop('dynamic')))
-        if method == 'dynesty' and 'seed' in sampler_kwargs:     # (nautilus: its own option seed)
+        if method == 'dynesty' and 'seed' in sampler_kwargs:     # (nautilus(bb): its own option seed)
             seed = sampler_kwargs.pop('seed')
             sampler_kwargs.setdefault('rstate', np.random.default_rng(None if seed is None else int(seed)))
         run_kwargs = {**dflt.get('RUNOPTS', {}), **run_kwargs}
@@ -900,12 +902,9 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         self.weights = weights / np.nansum(weights)
         # effective number of independent samples of the posterior
         self.ess = float(1. / np.nansum(self.weights ** 2))
-        # equal-weight posterior samples (fixed seed, so that statistics are reproducible)
-        if dyfunc is not None:
-            self.samples_equal = dyfunc.resample_equal(self.samples, self.weights, rstate=np.random.default_rng(42))
-        else:
-            idx = np.random.default_rng(42).choice(len(samples), size=len(samples), p=self.weights)
-            self.samples_equal = samples[idx]
+        # equal-weight posterior samples (fixed seed, so that statistics are reproducible): dynesty's systematic
+        # resampling, whether dynesty is installed or not
+        self.samples_equal = resample_equal(self.samples, self.weights, np.random.default_rng(42))
         self.modCalculated = True
         self.quantiles = np.quantile(self.samples_equal, SIGMA_QUANTILES, axis=0)
         self.params = self.quantiles[1]

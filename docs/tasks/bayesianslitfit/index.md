@@ -3,8 +3,8 @@
 BAYESIANSLITFIT fits the kinematics of a rotating disk to a **long-slit spectrum**: a 2D image of the position
 along the slit and the spectral axis (wavelength, frequency or velocity). It samples the posterior distribution of
 the rotation curve, the velocity dispersion (and the radial motions) in rings, the systemic velocity and the centre
-along the slit with nested sampling (nautilus or dynesty), or finds the best fit by a minimisation of the same
-likelihood (`SAMPLER OPTIMISE`).
+along the slit with nested sampling (the nautilus included in BBarolo, `SAMPLER NAUTILUSBB`, the default; nautilus
+or dynesty), or finds the best fit by a minimisation of the same likelihood (`SAMPLER OPTIMISE`).
 
 The model is a GALMOD disk, as in 3DFIT and BAYESIAN3DFIT, built with the pixels and the channels of the slit and
 seen through the slit: the light of the disk smoothed by the seeing that falls in the slit, with the lines
@@ -12,8 +12,8 @@ broadened by the instrumental resolution. Several lines (e.g. Hα and the [NII] 
 the same velocities. A slit does not constrain the geometry of the disk: the inclination, the angle between the
 slit and the major axis and the distance of the slit from the centre are given, not fitted.
 
-In Python: {class}`bbarolo.BayesianSlitFit`. It needs the package of the sampler (`pip install "bbarolo[bayesian]"`;
-not for `SAMPLER OPTIMISE`).
+In Python: {class}`bbarolo.BayesianSlitFit`. The default sampler needs nothing more than BBarolo; `SAMPLER NAUTILUS`
+and `DYNESTY` need their packages (`pip install "bbarolo[bayesian]"`).
 
 ## Example
 
@@ -42,7 +42,6 @@ CONTFIT          true
 SKYRESID         true
 NORM             LOCAL
 FREE             VROT VDISP VSYS XPOS
-SAMPLER          NAUTILUS
 THREADS          32
 ```
 :::
@@ -56,7 +55,7 @@ from bbarolo import BayesianSlitFit
 f = BayesianSlitFit("2masxj1022_SALT.fits", slitwidth=1, beam=1.5, specres=1.04, inc=71, redshift=0.09143,
                     restwave=[6564.61, 6549.86, 6585.27], relint=[1, 0.117, 0.35], contfit=True,
                     skyresid=True, norm="LOCAL")
-f.run(freepar="VROT VDISP VSYS XPOS", method="nautilus", threads=32)
+f.run(freepar="VROT VDISP VSYS XPOS", threads=32)
 f.print_stats()
 f.plot_pv()                   # the slit, the best model and the residuals, as a matplotlib Figure
 f.write("output/2masxj1022/")

@@ -1,7 +1,7 @@
 """
 Bayesian BBarolo (BBB): fit a 3D tilted-ring model to a datacube by sampling the
-posterior distribution of the ring parameters with nested sampling (dynesty or
-nautilus). Pure-Python port of bayesian.py of the original C++-based pyBBarolo (BBB 0.2).
+posterior distribution of the ring parameters with nested sampling (nautilus, included in
+nautilus/, or dynesty). Pure-Python port of bayesian.py of the original C++-based pyBBarolo (BBB 0.2).
 
 The interface follows the other bbarolo tasks (it builds on bbarolo.FitMod3D): the
 cube and any BBarolo parameter are given to the constructor, the rings with the usual
@@ -91,8 +91,9 @@ Differences from the original module (other than running without the C++ library
 
 The package: fitter.py (Bayesian3DFIT: parameters, rings, priors, setup, run), likelihood.py (the
 voxels, the region and the noise of the likelihood, the log-likelihoods), density.py (the deconvolved
-density profile), sampling.py (dynesty, nautilus and the process pool), outputs.py (files, plots,
-statistics, save and load), noise.py (the correlation of the noise), rings.py, task.py (BAYESIAN3DFIT).
+density profile), sampling.py (nautilusbb, nautilus, dynesty and the process pool), outputs.py (files,
+plots, statistics, save and load), noise.py (the correlation of the noise), rings.py, task.py
+(BAYESIAN3DFIT), nautilus/ (the copy of nautilus 1.0.6 of SAMPLER NAUTILUSBB, MIT licence).
 """
 
 ########################################################################

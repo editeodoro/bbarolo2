@@ -703,7 +703,8 @@ GALMOD is turned off.
 Fits a 3D tilted-ring model to the datacube by sampling the posterior distribution of the free
 parameters with nested sampling (see `SAMPLER`), instead of minimising the residuals as `3DFIT` does.
 `true` runs the task. It needs the free parameters in `FREE` (e.g. `FREE VROT VDISP_SINGLE INC_SINGLE`)
-and the Python package of the sampler (`pip install "bbarolo[bayesian]"` installs dynesty and nautilus).
+The default sampler (`SAMPLER NAUTILUSBB`) is part of BBarolo; `SAMPLER NAUTILUS` and `DYNESTY` need
+their packages (`pip install "bbarolo[bayesian]"` installs both).
 
 The rings are given as in `3DFIT`. The parameters that are not free stay fixed, and the geometry that
 is not given (rings, `XPOS`, `YPOS`, `VSYS`, `VROT`, `INC`, `PA`) is estimated as in `3DFIT`
@@ -1485,7 +1486,12 @@ and BAYESIAN3DFIT: the contours are at 1, 2, 4, ..., 64 times this value, plus o
         doc="""\
 The nested sampler of `BAYESIAN3DFIT` and `BAYESIANWIND` (case-insensitive):
 
-- `NAUTILUS` (the default): the nautilus package (`nautilus-sampler` on PyPI).
+- `NAUTILUSBB` (the default): nautilus (Lange 2023) as included in BBarolo, in `bbarolo.bayesian.nautilus`:
+  version 1.0.6 of the package, changed to need no other package (its neural networks and the splitting of
+  its bounds are BBarolo's, compiled with numba, instead of scikit-learn's) and to waste less time with many
+  processes. The same algorithm and options as `NAUTILUS`; on NGC 2403 and UGC 1281 the posteriors agreed
+  within the scatter between seeds, 9-18% faster on 64 processes.
+- `NAUTILUS`: the nautilus package (`nautilus-sampler` on PyPI).
 - `DYNESTY`: the dynesty package, with its static sampler and multi-ellipsoid bounds (`bound=multi`);
   `SAMPLEROPTS dynamic=true` selects its dynamic sampler.
 - `OPTIMISE` (or `OPTIMIZE`): no sampling, but the best fit by a classic minimisation of the same
@@ -1550,9 +1556,10 @@ the defaults follow the initial wind (see the BAYESIANWIND page).
         doc="""\
 Options of the sampler of `BAYESIAN3DFIT`, as `key=value` separated by spaces, e.g.
 `SAMPLEROPTS nlive=200 seed=1`: the arguments of `dynesty.NestedSampler` (or
-`dynesty.DynamicNestedSampler`) or of `nautilus.Sampler`. The values are read as integers, numbers,
-`true`/`false`, `none` or strings; values separated by commas form a tuple. An option that the sampler
-does not accept is an error before the setup, with the list of the accepted ones.
+`dynesty.DynamicNestedSampler`) or of `nautilus.Sampler` (also for `NAUTILUSBB`, whose networks take the
+options of scikit-learn's `MLPRegressor` that apply to them in `neural_network_kwargs`). The values are
+read as integers, numbers, `true`/`false`, `none` or strings; values separated by commas form a tuple. An
+option that the sampler does not accept is an error before the setup, with the list of the accepted ones.
 
 Some options are handled by BBarolo:
 
@@ -1561,8 +1568,10 @@ Some options are handled by BBarolo:
   own `seed`);
 - `nlive`: the number of live points, accepted also by nautilus (where it is `n_live`).
 
-The other options keep the defaults of the sampler, apart from `bound=multi` for dynesty. With
-several processes (`THREADS`) BBarolo gives the sampler its pool of processes.
+The other options keep the defaults of the sampler, apart from `bound=multi` for dynesty and, for
+nautilus, a training of at most 20 epochs for the networks of its bounds (`neural_network_kwargs`
+`max_iter=20`, much faster with a small change of the efficiency) and at least 4 points per process in
+each step (`n_batch`). With several processes (`THREADS`) BBarolo gives the sampler its pool of processes.
 
 With `SAMPLER OPTIMISE`, the options are those of the minimisation:
 
@@ -1591,8 +1600,11 @@ the setup.
 `dlogz`, the stopping criterion of the static sampler of dynesty (the estimated log-evidence left in
 the live points), is accepted by all the samplers: it becomes `dlogz_init` for the dynamic sampler and
 `f_live` = 1 − exp(−dlogz) for nautilus. The progress of the sampling is shown with `VERBOSE`
-(`print_progress` of dynesty, also off when `SHOWBAR` is false; `verbose` of nautilus). The other
-options keep the defaults of the sampler.
+(`print_progress` of dynesty, also off when `SHOWBAR` is false; `verbose` of nautilus). `NAUTILUSBB`
+shows the time elapsed and an estimate of the time left (`Left`, within about 15% after the first fifth of
+the run on the fits tested), on one line updated in place on a terminal with `SHOWBAR`, otherwise on a
+line after 10 seconds and then at intervals of a tenth of the time elapsed. The other options keep the
+defaults of the sampler.
 
 With `SAMPLER OPTIMISE`, the options of the method of `scipy.optimize` chosen in `SAMPLEROPTS`, e.g.
 `RUNOPTS maxiter=500` (an option that the method does not know is an error when it starts).

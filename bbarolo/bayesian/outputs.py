@@ -506,8 +506,8 @@ class OutputsMixin(object):
                 for k, f in self.funcs.items() if k in used}
 
     def load_results(self, inputfile, sampler=None):
-        """ Load results saved with save_results() (dynesty, nautilus or optimize: the sampler of the fit, or
-        'dynesty' for files that do not record it): the samples, the priors, the rings and the parameters of the fit
+        """ Load results saved with save_results() (nautilusbb, nautilus, dynesty or optimize: the sampler of the
+        fit, or 'dynesty' for files that do not record it): the samples, the priors, the rings and the parameters of the fit
         (BEAM included). The output folder is that of the fit unless this object has one (outfolder given). A fit with functions of radius of its own (funcs) needs the same functions in funcs
         (functions are not saved): BBaroloError otherwise. """
         from ..bbutils import BBaroloError
@@ -559,7 +559,7 @@ class OutputsMixin(object):
             self.results = r['results']
             weights = np.exp(self.results.logwt - self.results.logz[-1])
             self._set_sampling_stats(self.results.samples, weights)
-        elif sampler in ('dynesty', 'nautilus') and r.get('weights') is not None:
+        elif sampler in ('dynesty', 'nautilus', 'nautilusbb') and r.get('weights') is not None:
             self.results = None
             self._set_sampling_stats(r['samples'], r['weights'])
         elif sampler == 'optimize' and r.get('optimum') is not None:

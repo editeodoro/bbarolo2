@@ -173,7 +173,8 @@ Python-only options that existed in the old pyBBarolo and are gone or renamed: `
 - **BAYESIAN3DFIT** is a task of the parameter files (`BBarolo -p file.par`), with the keywords above. In
   1.8 the Bayesian fit was the Python module `pyBBarolo.bayesian`, built on the C++ library. See
   {doc}`../tasks/bayesian3dfit/index`. The likelihood, the priors, the sampler defaults and RADMAX differ
-  from that module: the list is in {doc}`../tasks/bayesian3dfit/algorithm`. Requires dynesty or nautilus
+  from that module: the list is in {doc}`../tasks/bayesian3dfit/algorithm`. Its default sampler,
+  nautilus, is included (`SAMPLER NAUTILUSBB`); the packages dynesty and nautilus-sampler are optional
   (`pip install "bbarolo[bayesian]"`).
 - **GalMod3D** (Python only): model cubes from 3D fields of the density and velocity of the gas, e.g.
   thick lagging disks, bars and spiral arms. See {doc}`../tasks/galmod3d/index`.

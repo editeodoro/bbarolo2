@@ -512,6 +512,55 @@ def test_analytic_residuals_match_mc(tmp_path):
     assert (f[6.][0] < f[25.][0]) == (f[6.][1] < f[25.][1])
 
 
+def test_fast_ppf():
+    # the prior transforms use common.fast_ppf: the values of scipy's ppf, bit by bit, with the same shapes and
+    # types, at least 3x faster for the usual priors (scipy's ppf took ~35 us a call, 4 calls a point)
+    import time
+    from bbarolo.bayesian.common import fast_ppf, get_distribution
+    rng = np.random.default_rng(0)
+    for name, kw in [('uniform', dict(loc=1, scale=250)), ('norm', dict(loc=60, scale=5)),
+                     ('truncnorm', dict(a=-2, b=3, loc=10, scale=2)), ('loguniform', dict(a=1e-3, b=10)),
+                     ('halfnorm', dict(scale=3)), ('gamma', dict(a=2, scale=3)),
+                     ('beta', dict(a=2, b=5, loc=40, scale=40)),
+                     ('t', dict(df=3)), ('norm', dict(loc=[1., 2., 3.], scale=1))]:
+        d = get_distribution(name, **kw)
+        f = fast_ppf(d)
+        assert fast_ppf(d) is f                                     # cached
+        qs = [rng.uniform(size=3), np.array([0., 0.3, 1.]), np.array([-0.1, 0.5, 1.1])]
+        if np.ndim(kw.get('loc', 0)) == 0:
+            qs += [rng.uniform(), np.float64(0.25), np.array(0.5), rng.uniform(size=1), rng.uniform(size=(3, 2)),
+                   0., 1.]
+        for q in qs:
+            a, b = f(q), d.ppf(q)
+            assert type(a) is type(b) and np.shape(a) == np.shape(b)
+            assert np.array_equal(a, b, equal_nan=True), (name, q)
+    d = get_distribution('uniform', loc=1, scale=250)
+    q = rng.uniform(size=1)
+    t = time.perf_counter(); [d.ppf(q) for _ in range(2000)]; t_scipy = time.perf_counter() - t
+    t = time.perf_counter(); [fast_ppf(d)(q) for _ in range(2000)]; t_fast = time.perf_counter() - t
+    assert t_fast < t_scipy / 3
+    # distributions that are not continuous ones of scipy keep their ppf
+    disc = get_distribution('poisson', mu=3)
+    assert fast_ppf(disc) == disc.ppf
+
+
+def test_bayesian_resample_equal(monkeypatch):
+    # the equal-weight samples of BBB (and so its medians and errors) are dynesty's systematic resampling, also
+    # without dynesty (they were a different random draw then, so the results depended on the packages installed)
+    import types
+    from bbarolo.bayesian import common, fitter
+    monkeypatch.setattr(fitter, 'dyfunc', None, raising=False)          # (as without dynesty)
+    rng = np.random.default_rng(1)
+    samples, weights = rng.normal(size=(3000, 4)), rng.random(3000) ** 6
+    f = types.SimpleNamespace()
+    fitter.Bayesian3DFIT._set_sampling_stats(f, samples, weights)
+    assert np.array_equal(f.samples_equal, common.resample_equal(samples, weights / weights.sum(),
+                                                                 np.random.default_rng(42)))
+    dynesty = pytest.importorskip("dynesty")
+    assert np.array_equal(f.samples_equal, dynesty.utils.resample_equal(samples, weights / weights.sum(),
+                                                                        rstate=np.random.default_rng(42)))
+
+
 @needs_data
 def test_bayesian_quick(tmp_path):
     pytest.importorskip("dynesty")
@@ -1978,6 +2027,85 @@ def test_bayesian_rings_do_not_carry_over(tmp_path):
     assert np.allclose(np.load(str(tmp_path / "res.npy"), allow_pickle=True).item()['inrings']['vrot'], 120.)
 
 
+def test_bayesian_nautilusbb(tmp_path, capsys, monkeypatch):
+    """SAMPLER NAUTILUSBB (the default): the copy of nautilus in bbarolo.bayesian.nautilus, which needs neither
+    scikit-learn nor the package nautilus-sampler (that is SAMPLER NAUTILUS). Its options are checked before the run,
+    also those of its networks; a seeded run on a pool is reproducible; its results are written and loaded."""
+    import pathlib
+    from bbarolo.params import Param
+    from bbarolo.bbutils import BBaroloError
+    from bbarolo.bayesian import sampling
+    from bbarolo.bayesian import nautilus as nautilusbb
+    assert Param().gf.SAMPLER == "NAUTILUSBB"
+    for s in ("nautilusbb", "NAUTILUS", "dynesty", "optimise"):
+        p = Param()
+        p.readParamString(f"FITSFILE m.fits\nBAYESIAN3DFIT true\nSAMPLER {s}\n")
+        assert p.checkPars(quiet=True)
+    p = Param()
+    p.readParamString("FITSFILE m.fits\nBAYESIAN3DFIT true\nSAMPLER emcee\n")
+    assert not p.checkPars() and "(NAUTILUSBB, NAUTILUS, DYNESTY or OPTIMISE)" in capsys.readouterr().out
+    # without the packages of the samplers (and with folders of their names, as tests/nautilusbb here): NAUTILUSBB
+    # needs none, NAUTILUS needs nautilus-sampler
+    import importlib.util
+    find_spec = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: None if name in ("nautilus", "dynesty",
+                                                                                         "nautilusbb")
+                        else find_spec(name, *a))
+    wind = ("FREE VWIND_SINGLE\nXPOS 1\nYPOS 1\nVSYS 0\nINC 60\nPHI 0\nOPENANG 30\nVWIND 100\n"
+            "CONELEN 10\n")
+    for task, more in (("BAYESIAN3DFIT", ""), ("BAYESIANWIND", wind)):
+        p = Param()
+        p.readParamString(f"FITSFILE m.fits\n{task} true\n{more}")
+        assert p.gf.SAMPLER == "NAUTILUSBB" and p.checkPars(quiet=True)
+        p = Param()
+        p.readParamString(f"FITSFILE m.fits\n{task} true\n{more}SAMPLER NAUTILUS\n")
+        assert not p.checkPars()
+        assert (f"{task} error: SAMPLER NAUTILUS needs the Python package nautilus-sampler "
+                "(pip install nautilus-sampler)") in capsys.readouterr().out
+    monkeypatch.undo()
+    src = pathlib.Path(nautilusbb.__file__).parent
+    assert not any("import sklearn" in f.read_text() or "from sklearn" in f.read_text() for f in src.rglob("*.py"))
+    assert (src / "LICENSE").read_text().startswith("MIT License")
+    skw, rkw = sampling.sampler_options('nautilusbb', False, dict(nlive=50, neural_network_kwargs=dict(alpha=0.)),
+                                        dict(dlogz=0.5))
+    assert skw['n_live'] == 50 and np.isclose(rkw['f_live'], 1 - np.exp(-0.5))
+    with pytest.raises(BBaroloError, match="activation of the networks of nautilusbb"):
+        sampling.sampler_options('nautilusbb', False, dict(neural_network_kwargs=dict(activation='tanh')), {})
+    f = _bayes_mock(tmp_path, sampler="NAUTILUSBB")
+    run = dict(freepar=['vrot_single', 'vdisp_single'], threads=2, verbose=False,
+               sampler_kwargs=dict(n_live=60, seed=3), run_kwargs=dict(n_like_max=1200))
+    f.run(**run)
+    assert f._method == 'nautilusbb' and isinstance(f.sampler, nautilusbb.Sampler)
+    assert len(f.sampler.bounds) > 1 and np.all(np.isfinite(f.params))
+    samples = f.samples.copy()
+    f.run(**run)
+    assert np.array_equal(f.samples, samples)
+    # its line of progress: updated in place with SHOWBAR (on a terminal), otherwise lines at intervals
+    import functools
+    seen = []
+    orig = nautilusbb.Sampler.run
+
+    @functools.wraps(orig)                                  # (the options are checked against its signature)
+    def spy(self, **kw):
+        seen.append(kw['verbose'])
+        return orig(self, **kw)
+    monkeypatch.setattr(nautilusbb.Sampler, "run", spy)
+    for showbar in (True, False):
+        f._task_showbar = showbar
+        f.run(**{**run, 'verbose': True})
+    assert seen == [True, 'lines']
+    out = capsys.readouterr().out
+    assert "| Time    | Left" in out and "\r" not in out          # (pytest: not a terminal)
+    monkeypatch.undo()
+    del f._task_showbar
+    files = f.write(plots=-1, verbose=False)
+    res = [x for x in files if x.endswith("_nautilusbb_results.npy")]
+    assert len(res) == 1
+    g = _bayes_mock(tmp_path, outfolder=str(tmp_path / "re"))
+    g.load_results(res[0])
+    assert g._method == 'nautilusbb' and np.allclose(g.params, f.params)
+
+
 def test_bayesian_priors_and_options(tmp_path):
     """A prior given as a distribution survives update(); the slope of a parametric function may be
     negative (only the values of the rings must be positive); unknown sampler and run options are
@@ -2037,6 +2165,42 @@ def test_bayesian_pool_and_loaded_likelihood(tmp_path):
     class FakeMPIPool:
         size = 7
     assert sampling._queue_size(FakeMPIPool(), 1) == 28 and sampling._queue_size(None, 3) == 12
+    # nautilus: at least 4 evaluations per worker in each step, otherwise its default (a multiple of the workers
+    # that is at least 100)
+    assert [sampling._nautilus_batch(None, n) for n in (1, 3, 16, 25, 32, 33, 34, 64)] == [100, 102, 112, 100, 128,
+                                                                                             132, 136, 256]
+    assert sampling._nautilus_batch(FakeMPIPool(), 64) == 105
+    # nautilus: the training of its networks stops at NAUTILUS_MAX_ITER epochs; the options of the user win
+    skw = sampling._nautilus_kwargs(None, 1, {'n_live': 500})
+    assert skw == dict(pass_dict=False, n_live=500, neural_network_kwargs={'max_iter': sampling.NAUTILUS_MAX_ITER})
+    skw = sampling._nautilus_kwargs(None, 1, {'neural_network_kwargs': {'hidden_layer_sizes': (10,), 'max_iter': 99}})
+    assert skw['neural_network_kwargs'] == {'hidden_layer_sizes': (10,), 'max_iter': 99}
+    assert sampling._nautilus_kwargs(None, 1, {'neural_network_kwargs': {'alpha': 1}})['neural_network_kwargs'] == \
+        {'max_iter': sampling.NAUTILUS_MAX_ITER, 'alpha': 1}
+    assert sampling._nautilus_kwargs("pool", 64, {})['n_batch'] == 256
+    # ... and its ConvergenceWarning (one per network) is not shown, also by the processes of the pool
+    import warnings
+    from sklearn.exceptions import ConvergenceWarning
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter('always')
+        with sampling._quiet_training('nautilus'):
+            warnings.warn("not converged", ConvergenceWarning)
+            ctx = sampling.mp.get_context("fork")
+            with ctx.Pool(1) as p:
+                assert p.apply(_warns_convergence) == 0
+        with sampling._quiet_training('dynesty'):
+            warnings.warn("not converged", ConvergenceWarning)
+    assert [x.category for x in w if x.category is ConvergenceWarning] == [ConvergenceWarning]     # (dynesty's)
+
+
+def _warns_convergence():
+    """ (in a process of the pool of test_bayesian_pool_and_loaded_likelihood) the warnings shown by a
+    ConvergenceWarning """
+    import warnings
+    from sklearn.exceptions import ConvergenceWarning
+    with warnings.catch_warnings(record=True) as w:
+        warnings.warn("not converged", ConvergenceWarning)
+    return len([x for x in w if x.category is ConvergenceWarning])
 
 
 def test_bayesian_one_blas_thread(tmp_path):

@@ -14,8 +14,8 @@ kinematics accounts for every distribution of the emission that the data allow. 
 also penalises cones wider and winds faster than the data need, which the best-fit emission alone does
 not do (see {doc}`algorithm`).
 
-In Python: {class}`bbarolo.BayesianWind`. It needs the package of the sampler
-(`pip install "bbarolo[bayesian]"`).
+In Python: {class}`bbarolo.BayesianWind`. The default sampler (`SAMPLER NAUTILUSBB`) is part of BBarolo;
+`NAUTILUS` and `DYNESTY` need their packages (`pip install "bbarolo[bayesian]"`).
 
 ## Example
 

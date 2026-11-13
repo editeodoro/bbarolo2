@@ -27,7 +27,7 @@ BBVERSION = __version__
 
 TASKS_LIST = [
     ("3DFIT",         "Fit a 3D tilted-ring model to an emission-line datacube."),
-    ("BAYESIAN3DFIT", "Fit a 3D tilted-ring model by nested sampling of the posterior (needs dynesty or nautilus)."),
+    ("BAYESIAN3DFIT", "Fit a 3D tilted-ring model by nested sampling of the posterior."),
     ("GALMOD",        "Make a 3D model observation datacube of an emission line."),
     ("SEARCH",        "Search for sources in a 3D datacube or in a 2D image."),
     ("2DFIT",         "Fit a 2D tilted-ring model to a velocity field."),
@@ -193,7 +193,7 @@ class GalfitPar(GalmodPar):
     PLOTMINCON: float = -1.0
     # BAYESIAN3DFIT (Bayesian3DFIT)
     flagBAYESIAN: bool = False
-    SAMPLER: str = "NAUTILUS"
+    SAMPLER: str = "NAUTILUSBB"
     PRIORS: str = ""
     SAMPLEROPTS: str = ""
     RUNOPTS: str = ""
@@ -545,14 +545,13 @@ class Param:
             gf.SAMPLER = gf.SAMPLER.strip().upper()
             if gf.SAMPLER == "OPTIMIZE":
                 gf.SAMPLER = "OPTIMISE"
-            if gf.SAMPLER not in ("DYNESTY", "NAUTILUS", "OPTIMISE"):
-                out(f"BAYESIAN3DFIT error: unknown SAMPLER {gf.SAMPLER} (NAUTILUS, DYNESTY or OPTIMISE).")
+            if gf.SAMPLER not in ("NAUTILUSBB", "NAUTILUS", "DYNESTY", "OPTIMISE"):
+                out(f"BAYESIAN3DFIT error: unknown SAMPLER {gf.SAMPLER} (NAUTILUSBB, NAUTILUS, DYNESTY or OPTIMISE).")
                 good = False
             elif gf.SAMPLER == "OPTIMISE":
                 good = _check_optimise(gf, "BAYESIAN3DFIT", out) and good
-            elif importlib.util.find_spec(gf.SAMPLER.lower()) is None:
-                out(f"BAYESIAN3DFIT error: SAMPLER {gf.SAMPLER} needs the Python package {gf.SAMPLER.lower()} "
-                    f"(pip install {gf.SAMPLER.lower()}).")
+            elif pkg := _sampler_missing(gf.SAMPLER):
+                out(f"BAYESIAN3DFIT error: SAMPLER {gf.SAMPLER} needs the Python package {pkg} (pip install {pkg}).")
                 good = False
             for key, check in (("FREE", bayes_freepar), ("PRIORS", bayes_priors), ("SAMPLEROPTS", bayes_options),
                                ("RUNOPTS", bayes_options), ("LIKEOPTS", bayes_likeopts)):
@@ -700,14 +699,13 @@ class Param:
             gf.SAMPLER = gf.SAMPLER.strip().upper()
             if gf.SAMPLER == "OPTIMIZE":
                 gf.SAMPLER = "OPTIMISE"
-            if gf.SAMPLER not in ("DYNESTY", "NAUTILUS", "OPTIMISE"):
-                out(f"BAYESIANWIND error: unknown SAMPLER {gf.SAMPLER} (NAUTILUS, DYNESTY or OPTIMISE).")
+            if gf.SAMPLER not in ("NAUTILUSBB", "NAUTILUS", "DYNESTY", "OPTIMISE"):
+                out(f"BAYESIANWIND error: unknown SAMPLER {gf.SAMPLER} (NAUTILUSBB, NAUTILUS, DYNESTY or OPTIMISE).")
                 good = False
             elif gf.SAMPLER == "OPTIMISE":
                 good = _check_optimise(gf, "BAYESIANWIND", out) and good
-            elif importlib.util.find_spec(gf.SAMPLER.lower()) is None:
-                out(f"BAYESIANWIND error: SAMPLER {gf.SAMPLER} needs the Python package {gf.SAMPLER.lower()} "
-                    f"(pip install {gf.SAMPLER.lower()}).")
+            elif pkg := _sampler_missing(gf.SAMPLER):
+                out(f"BAYESIANWIND error: SAMPLER {gf.SAMPLER} needs the Python package {pkg} (pip install {pkg}).")
                 good = False
             if "FREE" not in getattr(self, "_given", {}):
                 out("BAYESIANWIND error: FREE is not an optional parameter. Give the free parameters, e.g. "
@@ -832,14 +830,13 @@ class Param:
         gf.SAMPLER = gf.SAMPLER.strip().upper()
         if gf.SAMPLER == "OPTIMIZE":
             gf.SAMPLER = "OPTIMISE"
-        if gf.SAMPLER not in ("DYNESTY", "NAUTILUS", "OPTIMISE"):
-            out(f"BAYESIANSLITFIT error: unknown SAMPLER {gf.SAMPLER} (NAUTILUS, DYNESTY or OPTIMISE).")
+        if gf.SAMPLER not in ("NAUTILUSBB", "NAUTILUS", "DYNESTY", "OPTIMISE"):
+            out(f"BAYESIANSLITFIT error: unknown SAMPLER {gf.SAMPLER} (NAUTILUSBB, NAUTILUS, DYNESTY or OPTIMISE).")
             good = False
         elif gf.SAMPLER == "OPTIMISE":
             good = _check_optimise(gf, "BAYESIANSLITFIT", out) and good
-        elif importlib.util.find_spec(gf.SAMPLER.lower()) is None:
-            out(f"BAYESIANSLITFIT error: SAMPLER {gf.SAMPLER} needs the Python package {gf.SAMPLER.lower()} "
-                f"(pip install {gf.SAMPLER.lower()}).")
+        elif pkg := _sampler_missing(gf.SAMPLER):
+            out(f"BAYESIANSLITFIT error: SAMPLER {gf.SAMPLER} needs the Python package {pkg} (pip install {pkg}).")
             good = False
         for key, check in (("FREE", slit_freepar), ("PRIORS", slit_priors), ("SAMPLEROPTS", bayes_options),
                            ("RUNOPTS", bayes_options), ("LIKEOPTS", slit_likeopts)):
@@ -1256,6 +1253,21 @@ def bayes_priors(priors, ring_pars=BAYES_RING_PARS, other_pars=BAYES_OTHER_PARS,
         out[key] = dict(name=dname, **args)
     _check_gap(s[pos:], fmt)
     return out
+
+
+# The Python package of each sampler of BAYESIAN3DFIT and BAYESIANWIND: (module, name on PyPI); NAUTILUSBB is part
+# of BBarolo (bbarolo.bayesian.nautilus)
+SAMPLER_PACKAGES = {"NAUTILUS": ("nautilus", "nautilus-sampler"), "DYNESTY": ("dynesty", "dynesty")}
+
+
+def _sampler_missing(sampler):
+    """ The PyPI name of the package of SAMPLER sampler if it is not installed, otherwise None (also for the
+    samplers that need no package). A folder with the name of the module is not the package (no origin). """
+    pkg = SAMPLER_PACKAGES.get(sampler)
+    if pkg is None:
+        return None
+    spec = importlib.util.find_spec(pkg[0])
+    return pkg[1] if spec is None or spec.origin is None else None
 
 
 def _check_optimise(gf, task, out):

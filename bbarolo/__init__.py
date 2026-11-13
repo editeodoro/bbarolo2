@@ -20,7 +20,7 @@ Tasks: FitMod3D (3DFIT), GalMod (GALMOD), GalWind (GALWIND), Search (SEARCH),
 FitMod2D (2DFIT), Ellprof (ELLPROF), Smooth (SMOOTH), SmoothSpec (SMOOTHSPEC),
 Maps (TOTALMAP, VELOCITYMAP, ...), PVSlice (PVSLICE), SpacePar (SPACEPAR),
 Rend3D (REND3D), ContSub (CONTSUB), Stats (STATS), MakeMask (MAKEMASK),
-Bayesian3DFIT (BAYESIAN3DFIT: 3D fit with nested sampling; needs dynesty or nautilus).
+Bayesian3DFIT (BAYESIAN3DFIT: 3D fit with nested sampling).
 
     >>> bbarolo.run("ngc2403.par", threads=8)     # a parameter file, as the command line (writes)
     >>> bbarolo.help("free")                      # one parameter; help("3DFIT"): a task

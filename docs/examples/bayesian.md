@@ -47,7 +47,8 @@ corner plot, and widen the prior if the posterior piles up against one of its li
 
 ### Sampler
 
-The sampler is [nautilus](https://nautilus-sampler.readthedocs.io), with 500 live points. Its run stops
+The sampler is [nautilus](https://nautilus-sampler.readthedocs.io) as included in BBarolo (`NAUTILUSBB`, the
+default), with 500 live points. Its run stops
 when the effective sample size of the posterior reaches `n_eff`, which we set to 3000 (the default, 10000,
 would take a long time here). The dynesty alternative is discussed at the end of the page.
 
@@ -71,7 +72,7 @@ PA              123.7
 Z0              10
 FREE            VROT VDISP_SINGLE INC_SINGLE PA_SINGLE SIGMA RADMAX
 PRIORS          VROT=(uniform,loc=50,scale=200) VDISP=(uniform,loc=0,scale=30) INC=(uniform,loc=40,scale=25) PA=(uniform,loc=110,scale=30)
-SAMPLER         NAUTILUS
+SAMPLER         NAUTILUSBB
 SAMPLEROPTS     nlive=500 seed=1
 RUNOPTS         n_eff=3000
 MASK            SEARCH
@@ -95,14 +96,14 @@ f.priors["vrot"] = dict(name="uniform", loc=50, scale=200)      # km/s
 f.priors["vdisp"] = dict(name="uniform", loc=0, scale=30)       # km/s
 f.priors["inc"] = dict(name="uniform", loc=40, scale=25)        # degrees
 f.priors["phi"] = dict(name="uniform", loc=110, scale=30)       # degrees (phi is PA)
-f.run(freepar="VROT VDISP_SINGLE INC_SINGLE PA_SINGLE SIGMA RADMAX", threads=4, method="nautilus",
+f.run(freepar="VROT VDISP_SINGLE INC_SINGLE PA_SINGLE SIGMA RADMAX", threads=4, method="nautilusbb",
       sampler_kwargs=dict(nlive=500, seed=1), run_kwargs=dict(n_eff=3000))
 f.print_stats()
 ```
 :::
 ::::
 
-The fit took 11 minutes (655 seconds). In Python the parameter PA is called `phi` in `priors` and in the printed
+The fit took 9 minutes (563 seconds). In Python the parameter PA is called `phi` in `priors` and in the printed
 statistics.
 
 ### Result
@@ -111,14 +112,14 @@ statistics.
 
 | Parameter | Median | 68% interval |
 |---|---|---|
-| VROT, ring 1 (300 arcsec) | 118.14 km/s | −0.35, +0.36 |
-| VROT, ring 2 (600 arcsec) | 130.23 km/s | −0.45, +0.44 |
-| VROT, ring 3 (900 arcsec) | 132.82 km/s | −0.95, +0.90 |
-| VDISP, all rings | 12.86 km/s | −0.11, +0.12 |
-| INC | 59.11° | −0.21, +0.21 |
-| PA | 125.14° | −0.09, +0.11 |
+| VROT, ring 1 (300 arcsec) | 118.17 km/s | −0.36, +0.35 |
+| VROT, ring 2 (600 arcsec) | 130.14 km/s | −0.44, +0.45 |
+| VROT, ring 3 (900 arcsec) | 132.75 km/s | −0.97, +0.96 |
+| VDISP, all rings | 12.82 km/s | −0.12, +0.12 |
+| INC | 59.27° | −0.30, +0.14 |
+| PA | 125.12° | −0.11, +0.10 |
 | SIGMA | 0.0117 Jy/beam | −0.0001, +0.0001 |
-| RADMAX | 958.95 arcsec | −0.61, +0.28 |
+| RADMAX | 958.95 arcsec | −0.62, +0.28 |
 
 SIGMA is 25 times the noise of the cube: it is the rms of the residuals, so it measures how far the model is
 from the data, and the reduced χ² of the best fit is 1.00 by construction. The errors are therefore the
@@ -202,11 +203,11 @@ The numbers, in km/s:
 
 | Ring (arcsec) | BAYESIAN3DFIT | 3DFIT, INC and PA free | 3DFIT at the posterior INC, PA |
 |---|---|---|---|
-| 300 | 118.1 ± 0.4 | 122.5 | 120.0 |
-| 600 | 130.2 ± 0.4 | 130.4 | 128.2 |
-| 900 | 132.8 ± 0.9 | 138.5 | 135.3 |
+| 300 | 118.2 ± 0.4 | 122.5 | 121.0 |
+| 600 | 130.1 ± 0.4 | 130.4 | 128.2 |
+| 900 | 132.8 ± 1.0 | 138.5 | 135.4 |
 
-3DFIT, with INC and PA free, found INC = 56.5° and PA = 124.2° (the posterior has 59.1° and 125.1°), and the
+3DFIT, with INC and PA free, found INC = 56.5° and PA = 124.2° (the posterior has 59.3° and 125.1°), and the
 rotation curve rises more steeply in the outer rings. Fixing 3DFIT at the posterior geometry brings its
 rotation curve closer, as expected, because the rotation velocity scales as 1/sin INC, but the two codes
 still differ by 2 to 3 km/s, several times the intervals of the posterior. The two methods fit the data in
@@ -219,13 +220,13 @@ better measure of the systematic uncertainty of the curve: about 3 km/s, 2% of V
 `save_results` writes the samples, the weights, the free parameters, the rings, the priors and the options
 of the likelihood in one file. A new object reads them with `load_results`, with no sampling: it repeats
 the setup, recomputes the best-fit rings and the density profile, and gives back all the outputs. The cube must be
-given to the new object, as it is not saved. With nautilus, say it in `sampler`:
+given to the new object, as it is not saved. The file records the sampler of the fit:
 
 ```python
 f.save_results("bayes_results.npy")
 
 g = Bayesian3DFIT("ngc2403.fits", outfolder="output/ngc2403/")
-g.load_results("bayes_results.npy", sampler="nautilus")      # about 6 seconds
+g.load_results("bayes_results.npy")                          # about 6 seconds
 g.print_stats()                                               # the same statistics
 g.ring_errors("vrot"), g.in_disk, g.disk_edge                 # and the other outputs
 g.write()                                                     # the files of the task, see below
@@ -239,7 +240,9 @@ density profile, the samples, and, with `plots=1`, the corner plot and the profi
 
 ## dynesty or nautilus
 
-The sampler is chosen by `method` (`SAMPLER` in a parameter file). Both are nested samplers.
+The sampler is chosen by `method` (`SAMPLER` in a parameter file). Both are nested samplers. nautilus comes in
+two versions with the same algorithm and options: `nautilusbb` (`NAUTILUSBB`, the default), included in
+BBarolo, and `nautilus` (`NAUTILUS`), the package nautilus-sampler.
 
 - **dynesty** stops when the remaining evidence is below `dlogz` (1 in the examples of the
   task page).
@@ -249,7 +252,7 @@ The sampler is chosen by `method` (`SAMPLER` in a parameter file). Both are nest
 `nlive` (`n_live` in nautilus), `dlogz` and `seed` have the same name in both. As a test, on a different set of
 rings (160, 320 and 480 arcsec, so the model was missing the outer disk and INC was low, 47°; not shown
 here), the same 8 parameters with the same priors took 506 seconds with dynesty (`nlive=100`, `dlogz=1`) and
-323 seconds with nautilus (`nlive=500`, `dlogz=1`, default `n_eff`). The medians agreed to within 0.1 of
+323 seconds with the package nautilus (`nlive=500`, `dlogz=1`, default `n_eff`). The medians agreed to within 0.1 of
 the interval (VROT of ring 1: 108.04 and 108.09 km/s), and the effective sample sizes were 467 and 10021. These
 runs shared the machine with other jobs, so the times are indicative only, and one run of each is not a
 benchmark. If a fit takes too long, reduce the number of rings, shrink the priors to what the data need, and

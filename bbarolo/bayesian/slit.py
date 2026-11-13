@@ -1,7 +1,7 @@
 """
 BayesianSlitFit (the task BAYESIANSLITFIT): fit the kinematics of a rotating disk to a long-slit spectrum (a 2D image,
-position along the slit x wavelength), by sampling the posterior with nested sampling (nautilus or dynesty) or by a
-minimisation of the same likelihood (SAMPLER OPTIMISE).
+position along the slit x wavelength), by sampling the posterior with nested sampling (the nautilus included in
+BBarolo, NAUTILUSBB, the default; nautilus or dynesty) or by a minimisation of the same likelihood (SAMPLER OPTIMISE).
 
 The model is a GALMOD disk (rings of VROT, VDISP, VRAD; INC and Z0 fixed) built on a thin 3D grid around the slit,
 with the spatial and spectral sampling of the slit, and seen through the slit: the seeing (BEAM, a circular Gaussian)
@@ -17,7 +17,7 @@ ranges (MASKWAVE), a noise map and the correlation of the noise.
     >>> from bbarolo import BayesianSlitFit
     >>> f = BayesianSlitFit("slit.fits", slitwidth=1, beam=1.5, specres=2.44, inc=71, redshift=0.09143,
     ...                     restwave=[6564.61, 6549.86, 6585.27], relint=[1, 0.34, 1], contfit=True)
-    >>> f.run(method='nautilus', threads=16)
+    >>> f.run(threads=16)
     >>> f.print_stats(); f.write()
 
 Free parameters (FREE): VROT, VDISP, VRAD (one value per ring, NAME_SINGLE one value for all, NAME_FUNC a function of
@@ -44,7 +44,7 @@ import numpy as np
 
 from ..tasks import Task, build_param, _checked
 from ..bbutils import BBaroloError
-from .common import vprint, banner, get_distribution, show_bar, SIGMA_QUANTILES
+from .common import vprint, banner, get_distribution, fast_ppf, show_bar, SIGMA_QUANTILES
 from .sampling import sample, sampler_options
 from .optimize import SAMPLER_NAMES, sampler_options as optimize_options
 
@@ -247,8 +247,8 @@ class BayesianSlitFit(Task):
             if name == "SAMPLER":
                 m = s.strip().lower()
                 m = "optimise" if m == "optimize" else m
-                if m not in ("dynesty", "nautilus", "optimise"):
-                    raise ValueError(f"unknown sampler {s.strip()} (NAUTILUS, DYNESTY or OPTIMISE)")
+                if m not in ("nautilusbb", "nautilus", "dynesty", "optimise"):
+                    raise ValueError(f"unknown sampler {s.strip()} (NAUTILUSBB, NAUTILUS, DYNESTY or OPTIMISE)")
                 return m
             from ..params import bayes_options
             return bayes_options(s)
@@ -554,9 +554,10 @@ class BayesianSlitFit(Task):
                 raise ValueError(f"BAYESIANSLITFIT: something is wrong in the prior of {key}: {d}")
 
     def _prior_transform(self, u):
+        """ The unit cube into the parameter space with the priors (their ppf, as common.fast_ppf computes it). """
         p = np.zeros_like(u)
         for key, idx in self.freepar_idx.items():
-            p[idx] = self.prior_distr[key].ppf(u[idx])
+            p[idx] = fast_ppf(self.prior_distr[key])(u[idx])
         return p
 
     def _bounds(self, key):
@@ -738,8 +739,9 @@ class BayesianSlitFit(Task):
     def run(self, freepar=None, method=None, threads=None, *, like_kwargs: dict = {}, sampler_kwargs: dict = {},
             run_kwargs: dict = {}, verbose=True, dynamic=False, **params):
         """Sample the posterior of the free parameters freepar (names as in FREE; default FREE, or VROT VDISP VSYS XPOS)
-        with method ('nautilus', default, or 'dynesty'; SAMPLER), in threads processes (default THREADS, or 1), with the
-        options of the likelihood like_kwargs (LIKEOPTS), of the sampler (SAMPLEROPTS) and of its run (RUNOPTS).
+        with method ('nautilusbb', default: the nautilus included in BBarolo, 'nautilus' or 'dynesty'; SAMPLER), in
+        threads processes (default THREADS, or 1), with the options of the likelihood like_kwargs (LIKEOPTS), of the
+        sampler (SAMPLEROPTS) and of its run (RUNOPTS).
         Nothing is written (see write). method 'optimise' (or 'optimize'; SAMPLER OPTIMISE) runs optimize instead, with
         sampler_kwargs its arguments (method, x0, posterior, errors, nstart, seed, step, nsamples) and run_kwargs the
         options of its method. Returns self."""
@@ -747,7 +749,7 @@ class BayesianSlitFit(Task):
             self.update(**params)
         dflt = self._run_defaults()
         freepar = self._fit_options(freepar, like_kwargs, dflt)
-        method = (method or dflt.get("SAMPLER") or "nautilus").lower()
+        method = (method or dflt.get("SAMPLER") or "nautilusbb").lower()
         threads = self._threads(threads)
         skw = {**dflt.get("SAMPLEROPTS", {}), **dict(sampler_kwargs or {})}
         rkw = {**dflt.get("RUNOPTS", {}), **dict(run_kwargs or {})}

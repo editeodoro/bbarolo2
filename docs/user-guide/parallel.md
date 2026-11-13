@@ -92,7 +92,8 @@ before starting BBarolo, and use `THREADS` to choose the parallelism.
 {doc}`BAYESIAN3DFIT <../tasks/bayesian3dfit/index>` samples the posterior with `THREADS` **processes**, not
 threads: the model engine of one likelihood runs on one thread. The pool is started with the `fork` method, so
 the workers inherit the fitter without copying it, and the sampler (dynesty or nautilus) sends them only the
-parameter vectors. dynesty evaluates four proposals per process at a time. Two consequences:
+parameter vectors. dynesty evaluates four proposals per process at a time, nautilus at least four points per
+process in each step (`n_batch`, at least 100 points). Two consequences:
 
 - the pool needs `fork`: on Windows, which has no `fork`, the task prints a warning
   (`WARNING: process pools need the 'fork' start method, not available on this system. Running serially.`)
