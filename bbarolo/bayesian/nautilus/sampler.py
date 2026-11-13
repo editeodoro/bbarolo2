@@ -429,7 +429,6 @@ class Sampler:
                 print('Starting the nautilus sampler...')
             else:
                 print('Resuming nautilus run...')
-            print('Please report issues at github.com/johannesulf/nautilus.')
             self.print_status(header=True)
 
         if len(self.bounds) == 0:

@@ -9,7 +9,9 @@ changes of BBarolo (SAMPLER NAUTILUSBB), MIT licence (LICENSE in this folder):
 - a faster minimum-volume enclosing ellipsoid (rank-one updates of the inverse, same result);
 - one cached ThreadpoolController (`pool.limit_threads`) instead of a new one at every batch;
 - the networks drop the state of their training, and the processes of a pool that sample a bound
-  return only the points: much less data through the pool.
+  return only the points: much less data through the pool;
+- the verbose run does not ask to report issues to the nautilus repository (problems of this copy are
+  BBarolo's).
 
 The SAMPLER NAUTILUS of BBarolo uses the package nautilus-sampler instead.
 """
