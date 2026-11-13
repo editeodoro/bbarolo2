@@ -6,8 +6,9 @@ together with nested sampling, and gives the median and the 68% credible interva
 the correlations between them. Use it when the uncertainties matter, for example on data of low
 signal-to-noise ratio or with few resolution elements, or when a parameter such as the inclination is shared
 by all the rings and should be constrained by the whole disk. It also allows priors on the parameters. It is
-slower than 3DFIT (minutes to hours instead of seconds), and it needs the package
-[dynesty](https://dynesty.readthedocs.io) or [nautilus](https://nautilus-sampler.readthedocs.io).
+slower than 3DFIT (minutes to hours instead of seconds). Its default sampler,
+[nautilus](https://nautilus-sampler.readthedocs.io) (`SAMPLER NAUTILUSBB`), is part of BBarolo; the package
+nautilus-sampler (`SAMPLER NAUTILUS`) and [dynesty](https://dynesty.readthedocs.io) can be used instead.
 
 In Python: {class}`bbarolo.Bayesian3DFIT`.
 

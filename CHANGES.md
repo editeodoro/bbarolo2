@@ -7,6 +7,12 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **BAYESIAN3DFIT: the medians and errors depended on whether dynesty was installed.** The equal-weight samples
+  from which they come were dynesty's systematic resampling with dynesty, and a different random draw without
+  it. `common.resample_equal` now gives dynesty's samples (the same, in the same order) in both cases, so the
+  results do not change when dynesty is installed.
+- **`pip install .` left out the package `bbarolo.plots`** (the plots of 3DFIT and BAYESIAN3DFIT): it was missing
+  from the packages of `pyproject.toml`. It is there now, with the bundled nautilus (`bbarolo.bayesian.nautilus`).
 - **Initial estimates: the warning on the minor axis longer than the major axis printed twice (C++).** The
   inclination is estimated twice, before and after the 2D tilted-ring tuning of the centre and position angle,
   and each estimate printed the warning. It is now printed once, after the estimates, and only if it holds for
@@ -393,6 +399,20 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **SAMPLER NAUTILUSBB, the new default sampler of BAYESIAN3DFIT and BAYESIANWIND: nautilus included in BBarolo**
+  (`bbarolo/bayesian/nautilus`, from nautilus 1.0.6, MIT licence). BAYESIAN3DFIT now runs with the requirements of
+  BBarolo alone: nautilus needs scikit-learn, while this copy trains its networks with its own multi-layer
+  perceptron (`mlp.py`, compiled with numba: the model, initialisation, Adam optimiser, mini-batches and stopping
+  rule of scikit-learn's `MLPRegressor`, 2-3x faster) and splits its bounds with its own two-component Gaussian
+  mixture (`gmm.py`, as scikit-learn's `GaussianMixture`). It is also faster with many processes: the minimum-volume
+  ellipsoids use rank-one updates (same result, 1.4-4.6x faster), threadpoolctl is set up once instead of at every
+  batch, the networks drop the state of their training (bounds of 0.4 MB instead of 1.1 MB through the pool), and
+  the processes that sample a bound send back only the points (672 -> 51 ms a call with 64 processes). On 64
+  processes, side by side with the package: NGC 2403 (7 parameters) 102 s instead of 112 s, UGC 1281
+  (`examples/ugc1281_BBB.par`, 24 parameters) 328 s instead of 400 s, with the same number of likelihood calls and
+  posteriors that agree within the scatter between seeds (means within 0.015 sigma, widths within 1%). Its options
+  are those of nautilus (`SAMPLEROPTS`); `neural_network_kwargs` takes the options of `MLPRegressor` that apply
+  (checked before the run). The tests of nautilus run on it (`tests/nautilusbb`).
 - **The plots of 3DFIT and BAYESIAN3DFIT in Python, without files.** Each plot is a function of the new package
   `bbarolo.plots` (`plot_parameters`, `plot_chanmaps`, `plot_pvs`, `plot_pvslices`, `plot_kinmaps`,
   `plot_asymdrift`) that draws it from arrays and returns a matplotlib Figure. `Result.plot_parameters()`,
@@ -607,6 +627,29 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **The default sampler of BAYESIAN3DFIT and BAYESIANWIND is NAUTILUSBB** (the nautilus included in BBarolo, see
+  Added), in parameter files and in Python (`run(method=...)`: `'nautilusbb'`). The outputs are named after it
+  (`<prefix>_nautilusbb_results.npy`). `SAMPLER NAUTILUS` is now the package nautilus-sampler, which must be
+  installed (the extra `bayesian`); results saved with `nautilus` load as before. Results of the default sampler
+  change at the level of a different seed.
+- **BAYESIAN3DFIT and BAYESIANWIND with nautilus: the neural networks of its bounds train for at most 20 epochs**
+  (`neural_network_kwargs={'max_iter': 20}`; nautilus trains until 10 epochs bring no improvement, ~80 epochs).
+  The training was most of nautilus's own time, and the pool of processes waits during it: on UGC 1281
+  (`examples/ugc1281_BBB.par`, 24 parameters, 64 processes) a run took 385 s instead of 882 s, for 14% more
+  likelihood calls, with the posterior means within 0.01 sigma, the widths within 1% and log Z 0.04 lower (two seeds
+  of the same setup differ by as much); on NGC 2403 (7 parameters) the calls did not change. Results change at the
+  level of a different seed. The keys of `neural_network_kwargs` given in Python (`sampler_kwargs`) override it;
+  scikit-learn's warning that the training stopped at `max_iter` is not shown.
+- **BAYESIAN3DFIT and BAYESIANWIND with nautilus on more than 33 processes: at least 4 likelihood evaluations
+  per process in each step** (nautilus's `n_batch`; `SAMPLEROPTS n_batch=N` still sets it). nautilus's default,
+  the smallest multiple of the processes that is at least 100, gave 2 points per process with 64 processes, and
+  the sampler's own work between the steps (serial, while the processes wait) took a larger share: on NGC 2403
+  (7 parameters, 64 processes) the run took 9% longer. Up to 33 processes nothing changes.
+- **BAYESIAN3DFIT and BAYESIANWIND: faster prior transform, same values.** The samplers call it for every point,
+  serially in the main process while the pool of processes waits, and `nautilus` again for every posterior sample.
+  The ppf of scipy's frozen distributions spent most of its time checking its arguments: with VROT VDISP_SINGLE
+  INC_SINGLE SIGMA, 280 us a point, 28 s for 100,000 points (twice with nautilus). `common.fast_ppf` computes the
+  same values, bit by bit, and the transform now takes 30 us a point.
 - **BAYESIAN3DFIT and BAYESIANWIND open and close the output of a fit with a banner**, as 3DFIT
   (`=========================== BAYESIAN3DFIT ===========================`, 69 characters), in `run` and `optimize`.
 - **The description of the likelihood printed by BAYESIAN3DFIT and BAYESIANWIND is a short table** (sigma, model

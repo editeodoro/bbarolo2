@@ -27,8 +27,15 @@ BBarolo 2 needs these packages, which are installed with it and have their own l
 | [numba](https://numba.pydata.org) | compiled numerical kernels |
 
 The optional extra `bayesian` adds [dynesty](https://dynesty.readthedocs.io) and
-[nautilus-sampler](https://nautilus-sampler.readthedocs.io) (the nested samplers of BAYESIAN3DFIT), corner
-and threadpoolctl; the extra `mpi` adds mpi4py and schwimmbad.
+[nautilus-sampler](https://nautilus-sampler.readthedocs.io) (the nested samplers DYNESTY and NAUTILUS of
+BAYESIAN3DFIT), corner and threadpoolctl; the extra `mpi` adds mpi4py and schwimmbad.
+
+## nautilus
+
+BBarolo includes a modified copy of [nautilus](https://github.com/johannesulf/nautilus) 1.0.6 (Lange 2023),
+the sampler `NAUTILUSBB`, in `bbarolo/bayesian/nautilus`. nautilus is released under the MIT licence,
+Copyright (c) 2022 Johannes U. Lange; the licence is in `bbarolo/bayesian/nautilus/LICENSE`, and the changes
+are listed in `bbarolo/bayesian/nautilus/__init__.py`.
 
 ## The source finder
 

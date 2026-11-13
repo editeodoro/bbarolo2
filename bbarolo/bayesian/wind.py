@@ -1,6 +1,6 @@
 """
 BayesianWind (the task BAYESIANWIND): fit a bi-conical wind to a datacube by sampling the posterior of its
-geometry and kinematics with nested sampling (dynesty or nautilus), the emission of the wind marginalised.
+geometry and kinematics with nested sampling (nautilus or dynesty), the emission of the wind marginalised.
 
 The model is that of GALWIND (bbarolo.windmodel: the cones along the rotation axis of a disk of inclination INC and
 position angle PA, opening angles OPENIN to OPENANG, out to CONELEN, a radial velocity VWIND, a dispersion VDISP and a
@@ -80,7 +80,7 @@ from ..bbutils import BBaroloError, getCenterCoordinates, DeltaVel
 from ..windmodel import WindModel, WindCells, WindPars, Boxes
 from .emission import (log_marginal, log_marginal_diag, log_profile, log_marginal_gauss, log_marginal_gauss_diag,
                        log_detection)
-from .common import vprint, banner, get_distribution, show_bar, SIGMA_QUANTILES
+from .common import vprint, banner, get_distribution, fast_ppf, show_bar, SIGMA_QUANTILES
 from .sampling import sample, sampler_options
 from .optimize import SAMPLER_NAMES, sampler_options as optimize_options
 
@@ -273,8 +273,8 @@ class BayesianWind(Task):
             if name == "SAMPLER":
                 m = s.strip().lower()
                 m = "optimise" if m == "optimize" else m
-                if m not in ("dynesty", "nautilus", "optimise"):
-                    raise ValueError(f"unknown sampler {s.strip()} (NAUTILUS, DYNESTY or OPTIMISE)")
+                if m not in ("nautilusbb", "nautilus", "dynesty", "optimise"):
+                    raise ValueError(f"unknown sampler {s.strip()} (NAUTILUSBB, NAUTILUS, DYNESTY or OPTIMISE)")
                 return m
             from ..params import bayes_options
             return bayes_options(s)
@@ -475,9 +475,10 @@ class BayesianWind(Task):
                 raise ValueError(f"BAYESIANWIND: something is wrong in the prior of {key}: {d}")
 
     def _prior_transform(self, u):
+        """ The unit cube into the parameter space with the priors (their ppf, as common.fast_ppf computes it). """
         p = np.zeros_like(u)
         for key, idx in self.freepar_idx.items():
-            p[idx] = self.prior_distr[key].ppf(u[idx])
+            p[idx] = fast_ppf(self.prior_distr[key])(u[idx])
         return p
 
     def _bounds(self, key):
@@ -842,16 +843,16 @@ class BayesianWind(Task):
     def run(self, freepar=None, method=None, threads=None, *, like_kwargs: dict = {}, sampler_kwargs: dict = {},
             run_kwargs: dict = {}, verbose=True, dynamic=False, **params):
         """Sample the posterior of the free parameters freepar (names as in FREE; default FREE) with method
-        ('nautilus', default, or 'dynesty'; SAMPLER), in threads processes (default THREADS, or 1), with the options of
-        the likelihood like_kwargs (LIKEOPTS), of the sampler (SAMPLEROPTS) and of its run (RUNOPTS). Nothing is
-        written (see write). method 'optimise' (or 'optimize'; SAMPLER OPTIMISE) runs optimize instead, with
+        ('nautilusbb', default, 'nautilus' or 'dynesty'; SAMPLER), in threads processes (default THREADS, or 1), with
+        the options of the likelihood like_kwargs (LIKEOPTS), of the sampler (SAMPLEROPTS) and of its run (RUNOPTS).
+        Nothing is written (see write). method 'optimise' (or 'optimize'; SAMPLER OPTIMISE) runs optimize instead, with
         sampler_kwargs its arguments (method, x0, posterior, errors, nstart, seed, step, nsamples) and run_kwargs the
         options of its method. Returns self."""
         if params:
             self.update(**params)
         dflt = self._run_defaults()
         freepar = self._fit_options(freepar, like_kwargs, dflt)
-        method = (method or dflt.get("SAMPLER") or "nautilus").lower()
+        method = (method or dflt.get("SAMPLER") or "nautilusbb").lower()
         threads = self._threads(threads)
         skw = {**dflt.get("SAMPLEROPTS", {}), **dict(sampler_kwargs or {})}
         rkw = {**dflt.get("RUNOPTS", {}), **dict(run_kwargs or {})}
@@ -859,7 +860,7 @@ class BayesianWind(Task):
             okw = optimize_options(skw, rkw, task="BAYESIANWIND")
             return self.optimize(freepar, threads=threads, like_kwargs=like_kwargs, verbose=verbose, **okw)
         dynamic = bool(skw.pop("dynamic", dynamic))
-        if method == "dynesty" and "seed" in skw:          # (nautilus: its own option seed)
+        if method == "dynesty" and "seed" in skw:          # (nautilus(bb): its own option seed)
             seed = skw.pop("seed")
             skw.setdefault("rstate", np.random.default_rng(None if seed is None else int(seed)))
         skw, rkw = sampler_options(method, dynamic, skw, rkw)

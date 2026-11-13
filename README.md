@@ -12,7 +12,7 @@ kernels are compiled at run time with numba; the rest uses numpy, scipy, astropy
 every task with its parameters and how it works, examples, and the differences from BBarolo 1.8.
 
 ```bash
-pip install .                     # pip install ".[bayesian]" adds the samplers for BAYESIAN3DFIT
+pip install .                     # pip install ".[bayesian]" adds dynesty, nautilus-sampler, corner
 BBarolo -p param.par              # a parameter file, as with the C++ BBarolo
 ```
 

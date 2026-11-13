@@ -55,7 +55,7 @@ f.priors['vdisp'] = dict(name='uniform', loc=0, scale=40)         # 0-40 km/s
 # mock cubes, VDISP and INC are then unbiased (see the README).
 freepar = ['vrot', 'vdisp_single', 'inc_single', 'sigma']
 
-f.run(freepar=freepar, threads=args.threads, method='nautilus',
+f.run(freepar=freepar, threads=args.threads, method='nautilusbb',
       sampler_kwargs=dict(n_live=500), run_kwargs=dict(f_live=0.01))
 
 f.print_stats()

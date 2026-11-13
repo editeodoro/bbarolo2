@@ -25,8 +25,12 @@ likelihood. Read the relevant section of it before changing behaviour.
 - `bbarolo/galfit.py` + `galfit_out.py`: 3DFIT. `bbarolo/bayesian/`: `Bayesian3DFIT`
   (BAYESIAN3DFIT): `fitter.py` (the class: parameters, rings, priors, `_setup` steps, `run`) with the
   mixins `likelihood.py`, `density.py` (deconvolved profile) and `outputs.py`; `sampling.py`
-  (dynesty, nautilus, process pool), `noise.py`, `rings.py`, `task.py`. The other modules map
+  (nautilusbb, nautilus, dynesty, process pool), `noise.py`, `rings.py`, `task.py`. The other modules map
   one-to-one to C++ sources: see the section "Map of the C++ sources" of `README_cowork.md`.
+- `bbarolo/bayesian/nautilus/`: a modified copy of nautilus 1.0.6 (MIT licence: keep its `LICENSE`), the
+  default sampler (`SAMPLER NAUTILUSBB`; `SAMPLER NAUTILUS` is the PyPI package). No scikit-learn: `mlp.py`
+  (numba network) and `gmm.py` (Gaussian mixture) replace it. List every change in its `__init__.py`.
+  Its upstream tests are in `tests/nautilusbb/` (~2 minutes).
 - `bin/BBarolo`, `run_bbarolo.py`: launchers that need no install. `examples/`: tutorial and
   C++ comparison scripts. `performance/`: 3DFIT accuracy suite and Bayesian coverage, with the
   report in `performance/report/`.

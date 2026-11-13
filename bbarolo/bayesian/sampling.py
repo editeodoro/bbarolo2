@@ -1,5 +1,8 @@
 """
-The samplers of Bayesian3DFIT (dynesty, nautilus) and the parallel pool.
+The samplers of Bayesian3DFIT (nautilusbb, nautilus, dynesty) and the parallel pool.
+
+nautilusbb (SAMPLER NAUTILUSBB, the default) is the copy of nautilus in bbarolo/bayesian/nautilus, changed to
+need no scikit-learn and to be faster with a pool; nautilus (SAMPLER NAUTILUS) is the package nautilus-sampler.
 
 Parallel sampling (threads > 1) uses a fork-based process pool: the workers inherit the fitter, so
 only the parameter vectors are sent to them (nothing big is pickled), and it also works on macOS.
@@ -12,6 +15,7 @@ import sys
 import math
 import contextlib
 import time
+import warnings
 import multiprocessing as mp
 import numpy as np
 
@@ -76,6 +80,51 @@ def _queue_size(pool, threads):
     return 4 * int(getattr(pool, 'size', None) or threads)
 
 
+def _nautilus_batch(pool, threads):
+    """ The number of likelihood evaluations of each step of nautilus (its n_batch) with a pool: at least 4 per
+    worker, as the proposals of dynesty, otherwise nautilus's default (the smallest multiple of the workers that is
+    at least 100), so it differs only above 33 workers. With 2 points per worker (64 workers), the work of the
+    sampler between the steps, serial in the main process while the workers wait, took 9% more time on NGC 2403.
+    (the size of an MPI pool, otherwise the number of processes, threads) """
+    size = int(getattr(pool, 'size', None) or threads)
+    return max(-(-100 // size) * size, 4 * size)
+
+
+# The training of the neural networks of nautilus's bounds: at most NAUTILUS_MAX_ITER epochs (nautilus: 10000, with
+# early stopping after 10 epochs without improvement, which took ~80 epochs). On UGC 1281 (24 parameters, 64
+# processes) the run took 2.3x less time (training 600 s -> 90 s) for 14% more likelihood calls, with posterior means
+# within 0.01 sigma and widths within 1% (as two seeds); on NGC 2403 (7 parameters) the calls did not change.
+NAUTILUS_MAX_ITER = 20
+
+
+def _nautilus_kwargs(pool, threads, sampler_kwargs):
+    """ The arguments of nautilus.Sampler (but the prior, the likelihood and n_dim): the pool and its n_batch
+    (_nautilus_batch) if there is a pool, at most NAUTILUS_MAX_ITER epochs for the training of the networks, then
+    the options of the user (sampler_kwargs; the keys of its neural_network_kwargs update those of BBarolo). """
+    skw = dict(pass_dict=False)
+    if pool is not None:
+        skw.update(pool=pool, n_batch=_nautilus_batch(pool if isMPI else None, threads))
+    skw.update(sampler_kwargs)
+    nn = sampler_kwargs.get('neural_network_kwargs') or {}
+    skw['neural_network_kwargs'] = {'max_iter': NAUTILUS_MAX_ITER, **nn}
+    return skw
+
+
+@contextlib.contextmanager
+def _quiet_training(method):
+    """ A context without the ConvergenceWarning of scikit-learn, which nautilus's networks give when their
+    training stops at max_iter (NAUTILUS_MAX_ITER: on purpose), one per network. The process pool started in it
+    inherits the filter. """
+    with warnings.catch_warnings():
+        if method == 'nautilus':
+            try:
+                from sklearn.exceptions import ConvergenceWarning
+                warnings.simplefilter('ignore', ConvergenceWarning)
+            except ImportError:
+                pass
+        yield
+
+
 def _make_pool(fitter, like_kwargs, nproc):
     key = id(fitter)
     _WORKER_REGISTRY[key] = (fitter, like_kwargs)
@@ -86,6 +135,19 @@ def _make_pool(fitter, like_kwargs, nproc):
               "Running serially.")
         return None
     return ctx.Pool(nproc, initializer=_worker_init, initargs=(key,))
+
+
+def _nautilus_module(method):
+    """ The nautilus of method: the copy in bbarolo (nautilusbb) or the package nautilus-sampler (nautilus). """
+    if method == 'nautilusbb':
+        from . import nautilus as nautilusbb
+        return nautilusbb
+    try:
+        import nautilus
+    except ImportError:
+        raise ImportError("SAMPLER NAUTILUS (method='nautilus') needs the package nautilus-sampler "
+                          "(pip install nautilus-sampler); NAUTILUSBB, the default, needs nothing else.")
+    return nautilus
 
 
 def sampler_options(method, dynamic, sampler_kwargs, run_kwargs):
@@ -105,18 +167,15 @@ def sampler_options(method, dynamic, sampler_kwargs, run_kwargs):
         runf, own = Sampler.run_nested, {'loglikelihood', 'prior_transform', 'ndim'}
         if dynamic and 'dlogz' in run_kwargs:
             run_kwargs.setdefault('dlogz_init', run_kwargs.pop('dlogz'))
-    elif method == 'nautilus':
-        try:
-            import nautilus
-        except ImportError:
-            raise ImportError("Bayesian3DFIT requires the package nautilus when method='nautilus'.")
-        Sampler, runf, own = nautilus.Sampler, nautilus.Sampler.run, {'prior', 'likelihood', 'n_dim'}
+    elif method in ('nautilusbb', 'nautilus'):
+        Sampler = _nautilus_module(method).Sampler
+        runf, own = Sampler.run, {'prior', 'likelihood', 'n_dim'}
         if 'nlive' in sampler_kwargs:
             sampler_kwargs.setdefault('n_live', sampler_kwargs.pop('nlive'))
         if 'dlogz' in run_kwargs:
             run_kwargs.setdefault('f_live', 1. - math.exp(-float(run_kwargs.pop('dlogz'))))
     else:
-        raise ValueError(f"ERROR! Unknown method '{method}' (dynesty or nautilus).")
+        raise ValueError(f"ERROR! Unknown method '{method}' (nautilusbb, nautilus or dynesty).")
     for what, func, opts in (("SAMPLEROPTS", Sampler, sampler_kwargs), ("RUNOPTS", runf, run_kwargs)):
         ok = set(inspect.signature(func).parameters) - {'self'} - own
         bad = sorted(set(opts) - ok)
@@ -124,17 +183,24 @@ def sampler_options(method, dynamic, sampler_kwargs, run_kwargs):
             kind = (" (dynamic sampler)" if dynamic else " (static sampler)") if method == 'dynesty' else ""
             raise BBaroloError(f"BAYESIAN3DFIT: {what}: unknown option(s) {', '.join(bad)} of {method}{kind}. "
                                f"Options: {', '.join(sorted(ok))}.")
+    if method == 'nautilusbb':          # (its networks take the options of scikit-learn's that apply to them)
+        from .nautilus.mlp import MLPRegressor
+        ok = set(inspect.signature(MLPRegressor).parameters) - {'random_state'}
+        bad = sorted(set(sampler_kwargs.get('neural_network_kwargs') or {}) - ok)
+        if bad:
+            raise BBaroloError(f"BAYESIAN3DFIT: SAMPLEROPTS: unknown option(s) {', '.join(bad)} of the networks of "
+                               f"nautilusbb (neural_network_kwargs). Options: {', '.join(sorted(ok))}.")
     return sampler_kwargs, run_kwargs
 
 
 def sample(fitter, like_kwargs, method, threads, dynamic, sampler_kwargs, run_kwargs, verbose):
     """ Samples the posterior of the fitter (its _log_like_func with like_kwargs, its _prior_transform,
-    its ndim) with method ('dynesty' or 'nautilus', the options checked by sampler_options), in
+    its ndim) with method ('nautilusbb', 'nautilus' or 'dynesty', the options checked by sampler_options), in
     threads processes (or an MPI pool), with one BLAS thread in each (common.blas_threads). The
     pool is closed, or terminated if the sampling fails, and no workers are left running. Sets
-    fitter.sampler (as soon as it exists) and fitter.results (dynesty; None for nautilus). Returns
+    fitter.sampler (as soon as it exists) and fitter.results (dynesty; None for nautilus and nautilusbb). Returns
     the samples, their weights and the time of the sampling (seconds). """
-    with common.blas_threads():
+    with common.blas_threads(), _quiet_training(method):
         return _sample(fitter, like_kwargs, method, threads, dynamic, sampler_kwargs, run_kwargs, verbose)
 
 
@@ -217,11 +283,8 @@ def _sample(fitter, like_kwargs, method, threads, dynamic, sampler_kwargs, run_k
             samples = fitter.results.samples
             weights = np.exp(fitter.results.logwt - fitter.results.logz[-1])
         else:
-            import nautilus
-            skw = dict(pass_dict=False)
-            if pool is not None:
-                skw['pool'] = pool
-            skw.update(sampler_kwargs)
+            nautilus = _nautilus_module(method)
+            skw = _nautilus_kwargs(pool, threads, sampler_kwargs)
             fitter.sampler = nautilus.Sampler(prior, loglike, n_dim=fitter.ndim, **skw)
             fitter.sampler.run(**{'verbose': verbose, **run_kwargs})
             samples, logw, _ = fitter.sampler.posterior()

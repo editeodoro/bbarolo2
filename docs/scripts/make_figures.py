@@ -684,7 +684,7 @@ def fig_bayesian():
     f.priors["inc"] = dict(name="uniform", loc=40, scale=25)        # degrees
     f.priors["phi"] = dict(name="uniform", loc=110, scale=30)       # degrees
     t0 = time.time()
-    f.run(freepar="VROT VDISP_SINGLE INC_SINGLE PA_SINGLE SIGMA RADMAX", threads=4, method="nautilus",
+    f.run(freepar="VROT VDISP_SINGLE INC_SINGLE PA_SINGLE SIGMA RADMAX", threads=4, method="nautilusbb",
           sampler_kwargs=dict(nlive=500, seed=1), run_kwargs=dict(dlogz=1, n_eff=3000))
     print(f"    fit: {time.time() - t0:.0f} s")
     f.print_stats()

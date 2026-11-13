@@ -34,7 +34,11 @@ Issues = "https://github.com/editeodoro/bbarolo2/issues"
 Changelog = "https://bbarolo.readthedocs.io/en/latest/reference/changes.html"
 
 [tool.setuptools]
-packages = ["bbarolo", "bbarolo.bayesian"]
+packages = ["bbarolo", "bbarolo.bayesian", "bbarolo.bayesian.nautilus", "bbarolo.bayesian.nautilus.bounds",
+            "bbarolo.plots"]
+
+[tool.setuptools.package-data]
+"bbarolo.bayesian.nautilus" = ["LICENSE"]
 
 [tool.setuptools.dynamic]
 version = {attr = "bbarolo._version.__version__"}
