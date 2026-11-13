@@ -26,9 +26,9 @@ from scipy.special import erf
 from ..bbutils import BBaroloError
 
 
-def _gauss_pix(sig, half):
-    """The Gaussian of dispersion sig (pixels) integrated over the pixels -half..half."""
-    k = np.arange(-half, half + 1, dtype=float)
+def _gauss_pix(sig, half, shift=0.):
+    """The Gaussian of dispersion sig (pixels), centred at shift (pixels), integrated over the pixels -half..half."""
+    k = np.arange(-half, half + 1, dtype=float) - shift
     s = math.sqrt(2.) * max(sig, 1e-6)
     g = 0.5 * (erf((k + 0.5) / s) - erf((k - 0.5) / s))
     return g / g.sum()
@@ -46,6 +46,12 @@ class SlitModel:
                   the side 90 degrees counterclockwise from the direction of increasing position).
     Methods: rings(rd) the Rings object of the template from a _RingDict (XPOS in pixels of the slit); model(rings)
     the model (nz, npos) of a Rings object; basis(rings) the models of each ring with unit density (nr, nz, npos).
+
+    XPOS in sub-pixels: the clouds of GALMOD fall in the nearest pixel, so a model built at any XPOS would jump each
+    time a cloud crosses the edge of a pixel (a staircase in XPOS of tiny steps, on which minimisers stall). The
+    model is built at the whole pixel of the template below XPOS (the same pattern of clouds for any XPOS), and the
+    rest, a fraction of a pixel (rings: xshift), shifts the seeing along the slit, the Gaussian centred at that
+    fraction: a model smooth in XPOS, and equal to the model one pixel further at a whole pixel.
     """
 
     def __init__(self, prep, par, region, slitwidth, beam_fwhm, yoffset=0., ringmode=None):
@@ -108,7 +114,9 @@ class SlitModel:
         y = (np.arange(ny) - self.yc) * pt
         s = math.sqrt(2.) * self.sigma
         self.wy = 0.5 * (erf((y + 0.5 * self.width) / s) - erf((y - 0.5 * self.width) / s))
-        self.kx = _gauss_pix(self.sigma / pt, int(math.ceil(4. * self.sigma / pt)) + 1)
+        self._khalf = int(math.ceil(4. * self.sigma / pt)) + 2
+        self.kx = _gauss_pix(self.sigma / pt, self._khalf)
+        self._kshift = (0., self.kx)
         self.sig_instr = self.disk.setup.sig_instr / 1000.       # km/s
         self._sr_key = None
 
@@ -119,31 +127,42 @@ class SlitModel:
 
     def rings(self, rd):
         """The Rings object of the template for the rings rd (a _RingDict: XPOS in pixels of the slit, PHI the model
-        position angle, already 90 - SLITANGLE). YPOS of rd is not used (the offset of the slit, yoffset)."""
+        position angle, already 90 - SLITANGLE). YPOS of rd is not used (the offset of the slit, yoffset). XPOS is
+        that of the template less the fraction of a pixel of its first ring, kept as xshift (applied by the
+        projection, see the class documentation)."""
         r = rd.object.copy()
-        r.xpos = self.xpos_template(r.xpos)
+        xt = np.asarray(self.xpos_template(r.xpos), float)
+        r.xshift = float(xt.flat[0] - math.floor(xt.flat[0]))
+        r.xpos = xt - r.xshift
         r.ypos = np.full(r.nr, self.yc - self.yoffset / self.pt)
         if getattr(rd.object, "edge", None) is not None:
             r.edge, r.edgewidth = rd.object.edge, rd.object.edgewidth
         return r
 
     # ------------------------------------------------------------------ models
-    def project(self, m):
-        """The projection of a template model m (ny, nx, nz) on the slit: (nz, npos) for the positions of the region."""
+    def _kernel(self, shift):
+        """The seeing along the slit (pixels of the template), centred at shift (a fraction of a pixel)."""
+        if self._kshift[0] != shift:
+            self._kshift = (shift, _gauss_pix(self.sigma / self.pt, self._khalf, shift))
+        return self._kshift[1]
+
+    def project(self, m, shift=0.):
+        """The projection of a template model m (ny, nx, nz) on the slit: (nz, npos) for the positions of the region,
+        moved along the slit by shift (pixels of the template, the xshift of the rings)."""
         p = np.tensordot(self.wy, m, axes=(0, 0))                 # (nx, nz)
         from scipy.ndimage import convolve1d
-        p = convolve1d(p, self.kx, axis=0, mode="constant")
+        p = convolve1d(p, self._kernel(shift), axis=0, mode="constant")
         if self.f > 1:
             p = p.reshape(self.nxs, self.f, self.nz).sum(axis=1)
         ext = self.p0 - self.tx0
         return np.ascontiguousarray(p[ext:ext + self.p1 - self.p0].T)
 
-    def project_maps(self, maps):
+    def project_maps(self, maps, shift=0.):
         """The projection on the slit of maps of the template (n, ny, nx), e.g. the total intensity maps of the rings
-        (DiskModel.ring_maps): (n, npos) for the positions of the region."""
+        (DiskModel.ring_maps): (n, npos) for the positions of the region, moved along the slit by shift (as project)."""
         from scipy.ndimage import convolve1d
         p = np.tensordot(maps, self.wy, axes=(1, 0))              # (n, nx)
-        p = convolve1d(p, self.kx, axis=1, mode="constant")
+        p = convolve1d(p, self._kernel(shift), axis=1, mode="constant")
         if self.f > 1:
             p = p.reshape(p.shape[0], self.nxs, self.f).sum(axis=2)
         ext = self.p0 - self.tx0
@@ -152,7 +171,7 @@ class SlitModel:
     def model(self, rings):
         """The model of the rings (a Rings object of the template, see rings) seen through the slit: (nz, npos)."""
         m = self.disk.array(rings, final=True, layout="yxz", threads=1)
-        return self.project(m)
+        return self.project(m, getattr(rings, "xshift", 0.))
 
     def _subrings(self, rings):
         """The sub-rings of the model of the rings with unit densities and the weights of each ring in them (cached by
@@ -191,6 +210,6 @@ class SlitModel:
             sr[5] = dens0 * w
             buf[...] = 0.
             _galmod_analytic(buf, sr, int(idx[0]), int(idx[-1]) + 1, *args)
-            out[r] = self.project(buf)
+            out[r] = self.project(buf, getattr(rings, "xshift", 0.))
         sr[5] = dens0
         return out

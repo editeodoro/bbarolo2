@@ -7,6 +7,14 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **BAYESIANSLITFIT with XPOS free: the minimiser stopped near the start (ABNORMAL).** The
+  clouds of GALMOD fall in their nearest pixel, so the model, and the density profile of NORM AZIM and LOCAL, jumped
+  each time XPOS moved a cloud across the edge of a pixel: a staircase of tiny steps in XPOS (jumps of ~0.1 in
+  ln L every few thousandths of a pixel), on which the numerical gradient of XPOS was noise. The model is now built at
+  the whole pixel below XPOS and the fraction of a pixel moves the seeing along the slit, the Gaussian centred at that
+  fraction: the model is smooth in XPOS and moves with it exactly. On 2MASX J1022 with NORM AZIM, L-BFGS-B now
+  converges (it stopped at ln L -2440.1, now -2433.0); the maps of the rings of NORM AZIM and LOCAL are computed
+  once per whole pixel of XPOS.
 - **BAYESIAN3DFIT: the medians and errors depended on whether dynesty was installed.** The equal-weight samples
   from which they come were dynesty's systematic resampling with dynesty, and a different random draw without
   it. `common.resample_equal` now gives dynesty's samples (the same, in the same order) in both cases, so the

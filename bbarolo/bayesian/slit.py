@@ -655,13 +655,15 @@ class BayesianSlitFit(Task):
 
     def _profile_basis(self, rt):
         """The flux along the slit of each ring with unit density and of an exterior annulus (two seeing FWHM beyond the
-        outer edge), (nr + 1, npos), and the radii of their centres (cached by the centre and the radii)."""
+        outer edge), (nr + 1, npos), and the radii of their centres (the maps of the rings cached by the whole pixel
+        of the centre and the radii; the fraction of a pixel, rt.xshift, moves their projection)."""
         from ..galmod import outer_edge
         from ..rings import Rings
+        m = self._model
         key = (float(rt.xpos[0]), tuple(rt.radii))
         if self._ringmap_key == key:
-            return self._ringmap
-        m = self._model
+            K, Rc = self._ringmap
+            return m.project_maps(K, getattr(rt, "xshift", 0.)), Rc
         K = m.disk.ring_maps(rt)
         edge = outer_edge(rt, m.ringmode)
         w = 2. * self._beam
@@ -669,10 +671,9 @@ class BayesianSlitFit(Task):
         ext = Rings().setRings(radii=[rext], xpos=rt.xpos[-1], ypos=rt.ypos[-1], vsys=rt.vsys[-1], vrot=rt.vrot[-1],
                                vdisp=rt.vdisp[-1], z0=rt.z0[-1], inc=rt.inc[-1], phi=rt.phi[-1], dens=1., radsep=w)
         K = np.concatenate([K, m.disk.ring_maps(ext, ringmode="CENTRED")])
-        A = m.project_maps(K)
-        self._ringmap = (A, np.r_[np.asarray(rt.radii, float), rext])
+        self._ringmap = (K, np.r_[np.asarray(rt.radii, float), rext])
         self._ringmap_key = key
-        return self._ringmap
+        return m.project_maps(K, getattr(rt, "xshift", 0.)), self._ringmap[1]
 
     def _azim_density(self, rt):
         """The densities of the rings whose model reproduces the flux of the lines along the slit (NORM AZIM, LOCAL)."""

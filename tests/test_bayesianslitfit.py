@@ -296,6 +296,41 @@ def test_slit_smooth(mock_slit):
     assert pen > 0 and f.log_likelihood(th) == pytest.approx(l0 - pen)
 
 
+def test_slit_xpos_smooth(mock_slit):
+    """The model is smooth in XPOS: it is built at the whole pixel of the template below XPOS and the fraction of a
+    pixel moves the seeing along the slit. (The clouds of GALMOD fall in their nearest pixel: a model built at any XPOS
+    was a staircase of tiny steps in XPOS, whose numerical gradient was noise, and L-BFGS-B stopped near the start,
+    ABNORMAL.) The model moves by the step of XPOS and is continuous at a whole pixel."""
+    fname, R = mock_slit
+    f = _fit(fname, radii=list(R), free="VROT VDISP_SINGLE VSYS XPOS")
+    f._fit_options(None, {}, f._run_defaults())
+    f._setup(f._run_defaults()["FREE"], verbose=False)
+    th = f._initial_theta()
+    ix = f.freepar_idx["xpos"][0]
+    th[ix] += 0.7                                           # (off the best XPOS: a clear slope)
+
+    def at(dx):
+        t = th.copy()
+        t[ix] += dx
+        return t
+    L = lambda dx: f.log_likelihood(at(dx))
+    g = [(L(h) - L(-h)) / (2 * h) for h in (0.1, 0.01, 0.001)]
+    assert abs(g[0]) > 1 and np.allclose(g, g[0], rtol=0.02), g
+    steps = np.diff([L(dx) for dx in np.linspace(-0.02, 0.02, 21)])
+    assert np.all(np.sign(steps) == np.sign(g[0])), steps
+
+    def model(dx):
+        rd = f._update_rings(f._work, at(dx))
+        rt = f._model.rings(rd)
+        rt.dens = np.ones(rt.nr)
+        return f._model.model(rt).sum(axis=0)
+    cen = lambda M: float(np.sum(M * np.arange(M.size)) / np.sum(M))
+    assert cen(model(0.3)) - cen(model(0.)) == pytest.approx(0.3, abs=1e-3)
+    xt = float(f._model.xpos_template(at(0.)[ix]))
+    dn = (math.ceil(xt) - xt) / f._model.f                 # (to the next whole pixel of the template)
+    assert np.allclose(model(dn - 1e-9), model(dn + 1e-9), rtol=0, atol=1e-6 * model(dn).max())
+
+
 def test_slit_parameter_listing():
     """The parameters of BAYESIANSLITFIT in the lists of BBarolo -d BAYESIANSLITFIT (the defaults of the task: FREE,
     NORM AZIM) and of a parameter file (VERBOSE 2: the values given; CONTSUB is that of the slit, not of a cube)."""
