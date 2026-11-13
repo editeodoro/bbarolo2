@@ -9,19 +9,75 @@ from scipy import stats
 BLAS_THREADS = 1
 
 
+# Apple Accelerate (the BLAS of numpy on macOS): threadpoolctl does not know it, and its threads (GCD) do not survive a
+# fork: a worker of a fork-based pool whose parent ran a threaded BLAS product crashed in its first one (SIGSEGV in
+# cblas_dgemv -> dispatch_apply), and the pool waited forever. macOS 15+ has a switch, BLASSetThreading (vecLib
+# thread_api.h: BLAS_THREADING_MULTI_THREADED = 0, BLAS_THREADING_SINGLE_THREADED = 1).
+_ACCELERATE_SINGLE = 1
+_accelerate_lib = []
+
+
+def _accelerate():
+    """ Accelerate's BLASGetThreading and BLASSetThreading (a ctypes library), or None (not macOS, or macOS < 15). """
+    if not _accelerate_lib:
+        lib = None
+        import sys
+        if sys.platform == "darwin":
+            try:
+                import ctypes
+                lib = ctypes.CDLL("/System/Library/Frameworks/Accelerate.framework/Accelerate")
+                lib.BLASGetThreading.restype, lib.BLASGetThreading.argtypes = ctypes.c_uint, []
+                lib.BLASSetThreading.restype, lib.BLASSetThreading.argtypes = ctypes.c_int, [ctypes.c_uint]
+            except (OSError, AttributeError):
+                lib = None
+        _accelerate_lib.append(lib)
+    return _accelerate_lib[0]
+
+
+class _BlasLimits:
+    """ BLAS and OpenMP limited to n threads from the creation of the object (as threadpoolctl's threadpool_limits),
+    restored by restore() or at the end of a with block: threadpoolctl (OpenBLAS, MKL, OpenMP), and Accelerate on
+    macOS when n is 1 (it has only single and multi-threaded). """
+
+    def __init__(self, n):
+        self._tp = self._acc = None
+        try:
+            from threadpoolctl import threadpool_limits
+            self._tp = threadpool_limits(limits=int(n))
+        except ImportError:
+            pass
+        acc = _accelerate()
+        if acc is not None and int(n) == 1:
+            self._acc = (acc, int(acc.BLASGetThreading()))
+            acc.BLASSetThreading(_ACCELERATE_SINGLE)
+
+    def restore(self):
+        if self._acc is not None:
+            acc, old = self._acc
+            acc.BLASSetThreading(old)
+            self._acc = None
+        if self._tp is not None:
+            self._tp.restore_original_limits()
+            self._tp = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.restore()
+        return False
+
+
 def blas_threads():
-    """ A context in which BLAS and OpenMP use BLAS_THREADS threads, set with threadpoolctl (if it is
-    installed; otherwise nothing changes). The linear algebra of the likelihood (the deconvolved
-    density profile) works on small matrices, for which many threads are slower: with MKL on 224
-    cores, the likelihood with a free geometry took 1.6-2.2 times longer, and the processes of a
-    parallel sampling competed for the cores. The values do not change. """
+    """ A context in which BLAS and OpenMP use BLAS_THREADS threads, from its creation: with threadpoolctl (if it is
+    installed) and, on macOS, Accelerate single-threaded when BLAS_THREADS is 1 (see _accelerate). The linear algebra
+    of the likelihood (the deconvolved density profile) works on small matrices, for which many threads are slower:
+    with MKL on 224 cores, the likelihood with a free geometry took 1.6-2.2 times longer, and the processes of a
+    parallel sampling competed for the cores. The process pools fork in it, so that the workers inherit one thread
+    (Accelerate's threads do not survive a fork). The values do not change. """
     if BLAS_THREADS is None:
         return contextlib.nullcontext()
-    try:
-        from threadpoolctl import threadpool_limits
-    except ImportError:
-        return contextlib.nullcontext()
-    return threadpool_limits(limits=int(BLAS_THREADS))
+    return _BlasLimits(BLAS_THREADS)
 
 def show_bar(fitter):
     """ SHOWBAR for the progress bars of a fit (Bayesian3DFIT, BayesianWind): the value of its task (_task_showbar, set

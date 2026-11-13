@@ -125,6 +125,62 @@ def _quiet_training(method):
         yield
 
 
+from ..bbutils import BBaroloError
+
+
+class WorkerDied(BBaroloError):
+    """ A worker process of the pool died (a crash or a kill) while it computed the likelihood (a BBaroloError: the
+    command line prints the message, with what to do). """
+
+
+class _ForkPool:
+    """ A fork-based multiprocessing.Pool whose map raises WorkerDied when a worker dies. (multiprocessing.Pool
+    replaces a dead worker, but the task it was computing is lost and map() waits for it forever: so it went on macOS,
+    where workers crashed in Accelerate.) map waits for the results in steps, checking the workers started with the
+    pool (they never exit while the pool is open). After a death close() terminates the pool (a closed pool would
+    wait for the lost task when joined). The rest is that of the pool (terminate, join, _processes, ...). """
+    _CHECK = 0.5                        # (seconds between the checks of the workers)
+
+    def __init__(self, ctx, nproc, key):
+        self._pool = ctx.Pool(nproc, initializer=_worker_init, initargs=(key,))
+        self._workers = list(self._pool._pool)
+        self._broken = False
+
+    def map(self, func, iterable, chunksize=None):
+        res = self._pool.map_async(func, iterable, chunksize)
+        while not res.ready():
+            res.wait(self._CHECK)
+            dead = [w for w in self._workers if w.exitcode is not None]
+            if dead and not res.ready():
+                self._broken = True
+                raise WorkerDied(_died_message(dead))
+        return res.get()
+
+    def close(self):
+        (self._pool.terminate if self._broken else self._pool.close)()
+
+    def __getattr__(self, name):
+        if name in ("_pool", "_workers"):              # (not set: the pool did not start)
+            raise AttributeError(name)
+        return getattr(self._pool, name)
+
+
+def _died_message(dead):
+    import signal
+    how = []
+    for w in dead:
+        c = w.exitcode
+        try:
+            how.append(f"signal {signal.Signals(-c).name}" if c < 0 else f"exit code {c}")
+        except ValueError:
+            how.append(f"exit code {c}")
+    mac = (" On macOS this is Apple's Accelerate (the BLAS of numpy), whose threads do not survive the fork of the "
+           "workers: run with VECLIB_MAXIMUM_THREADS=1 in the environment, or THREADS 1.") \
+        if sys.platform == "darwin" else ""
+    return (f"THREADS > 1: a worker process of the pool died while it computed the likelihood "
+            f"({', '.join(sorted(set(how)))}): its work was lost, so the fit stopped.{mac}")
+
+
 def _make_pool(fitter, like_kwargs, nproc):
     key = id(fitter)
     _WORKER_REGISTRY[key] = (fitter, like_kwargs)
@@ -134,7 +190,7 @@ def _make_pool(fitter, like_kwargs, nproc):
         print("WARNING: process pools need the 'fork' start method, not available on this system. "
               "Running serially.")
         return None
-    return ctx.Pool(nproc, initializer=_worker_init, initargs=(key,))
+    return _ForkPool(ctx, nproc, key)
 
 
 def _nautilus_module(method):

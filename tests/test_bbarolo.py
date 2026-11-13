@@ -2010,6 +2010,78 @@ def _bayes_mock(tmp_path, **kw):
     return Bayesian3DFIT(fn, **{**prm, **kw})
 
 
+def test_blas_threads_accelerate(monkeypatch):
+    """blas_threads() makes Apple's Accelerate (the BLAS of numpy on macOS, which threadpoolctl does not know)
+    single-threaded and restores it after, also when the context is only created (the initializer of the workers):
+    its threads do not survive the fork of the workers of a pool, which crashed in their first threaded product
+    (SIGSEGV in cblas_dgemv). Accelerate has only single and multi-threaded: BLAS_THREADS > 1 leaves it alone. A
+    stand-in of the library here; on macOS 15+ also the real one."""
+    from bbarolo.bayesian import common
+
+    class Fake:
+        state = 0
+
+        def BLASGetThreading(self):
+            return self.state
+
+        def BLASSetThreading(self, v):
+            self.state = v
+            return 0
+    fake = Fake()
+    monkeypatch.setattr(common, "_accelerate", lambda: fake)
+    with common.blas_threads():
+        assert fake.state == 1
+    assert fake.state == 0
+    b = common.blas_threads()
+    assert fake.state == 1
+    b.restore()
+    assert fake.state == 0
+    monkeypatch.setattr(common, "BLAS_THREADS", 4)
+    with common.blas_threads():
+        assert fake.state == 0
+    monkeypatch.undo()
+    acc = common._accelerate()
+    if sys.platform != "darwin":
+        assert acc is None
+    elif acc is not None:
+        old = acc.BLASGetThreading()
+        with common.blas_threads():
+            assert acc.BLASGetThreading() == 1
+        assert acc.BLASGetThreading() == old
+
+
+def test_pool_worker_death_raises():
+    """A worker of the process pool that dies (a crash, as in Accelerate on macOS; here SIGKILL) makes the
+    evaluations raise WorkerDied with the signal, and the pool is terminated, instead of waiting forever for its
+    lost task (multiprocessing.Pool replaces the worker and loses the task). In a subprocess with a timeout: the
+    previous code hung."""
+    import textwrap
+    code = textwrap.dedent(f"""
+        import os, signal, sys
+        sys.path.insert(0, {ROOT!r})
+        from bbarolo.bayesian.sampling import evaluator, WorkerDied
+        PARENT = os.getpid()
+        class F:
+            def _log_like_func(self, theta, **kw):
+                if os.getpid() != PARENT and theta[0] > 0.5:
+                    os.kill(os.getpid(), signal.SIGKILL)
+                return -float(theta[0])
+            def _prior_transform(self, u):
+                return u
+        try:
+            with evaluator(F(), {{}}, 2) as L:
+                print("OK", L([[0.25], [0.5]]).tolist(), flush=True)
+                L([[0.25], [0.75], [0.5]])
+            print("NO ERROR")
+        except WorkerDied as e:
+            print("RAISED", e)
+    """)
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120)
+    out = r.stdout + r.stderr
+    assert "OK [-0.25, -0.5]" in r.stdout and "RAISED THREADS > 1: a worker process" in r.stdout, out
+    assert "signal SIGKILL" in r.stdout, out
+
+
 def test_bayesian_rings_do_not_carry_over(tmp_path):
     """The likelihood evaluations of a run do not change the initial rings: the parameters fixed in a
     second run (and the rings saved with the results) are the initial ones, not the last sample."""

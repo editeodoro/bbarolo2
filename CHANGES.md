@@ -7,6 +7,14 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **macOS: the fits with THREADS > 1 hung (BAYESIANSLITFIT, and any Bayesian fit whose likelihood has a large
+  matrix-vector product).** numpy on macOS uses Apple's Accelerate, whose threads (GCD) do not survive a fork: the
+  parent ran a threaded product during the setup (the ring maps of the slit), and the forked workers crashed
+  (SIGSEGV) in their first one. `multiprocessing.Pool` then replaced the dead workers and waited forever for their
+  lost tasks. Now the context that limits BLAS to one thread around the samplings and the optimisations, in which
+  the workers are forked, also switches Accelerate to single-threaded (`BLASSetThreading`, macOS 15+; threadpoolctl
+  does not know Accelerate), and restores it after; and a worker that dies stops the fit with an error that says
+  so (with the signal, and on macOS what to do: `VECLIB_MAXIMUM_THREADS=1` or `THREADS 1`) instead of hanging.
 - **BAYESIANSLITFIT with XPOS free: the minimiser stopped near the start (ABNORMAL).** The
   clouds of GALMOD fall in their nearest pixel, so the model, and the density profile of NORM AZIM and LOCAL, jumped
   each time XPOS moved a cloud across the edge of a pixel: a staircase of tiny steps in XPOS (jumps of ~0.1 in
