@@ -1652,15 +1652,18 @@ run, and `none` gives the default. The options, with their defaults in brackets:
   not free.
 - `fracerr` (0): a fixed fractional model error, when `FRACERR` is not free: the variance of a voxel is
   sigma² + (fracerr × model)².
-- `lambdas` (none): smoothness penalties of the ring parameters free in each ring, as `key=value` pairs
-  in brackets, e.g. `lambdas=(vrot=3000, vdisp=1000)`: each adds λ/2 times the sum of the squared second
-  derivatives of the parameter with respect to radius to −log L (see the algorithm page). The keys are
-  the ring parameters (`vrot`, `vdisp`, `dens`, `z0`, `inc`, `pa`, `xpos`, `ypos`, `vsys`, `vrad`,
-  `vvert`, `dvdz`, `zcyl`); in Python, `like_kwargs=dict(lambdas={'vrot': 3000})`.
+- `smooth` (none): smoothness priors of the ring parameters free in each ring, as `key=value` pairs in
+  brackets, e.g. `smooth=(vrot=5, vdisp=3)`: the bend (1σ) allowed to each profile over one beam, in the
+  units of the parameter (km/s, degrees for `inc` and `pa`, arcsec, pixels; dex for `dens`). A bend of
+  that size across one beam of radius costs ½ in ln L, whatever the number of rings (see the algorithm page);
+  `print_stats` shows the bends of the best fit and the effective number of independent values of each
+  profile. The keys are the ring parameters (`vrot`, `vdisp`, `dens`, `z0`, `inc`, `pa`, `xpos`, `ypos`,
+  `vsys`, `vrad`, `vvert`, `dvdz`, `zcyl`); in Python, `like_kwargs=dict(smooth={'vrot': 5})`.
 
 BAYESIANSLITFIT has `noisecorr` (`measured`, or a number of pixels N ≥ 1), `densprof_smooth` (the
 density profile deconvolved from the flux of the lines along the slit, `NORM AZIM` and `LOCAL`), `sigma` (a
-fixed factor of the noise map, default 1) and `lambdas` (as above; the keys `vrot`, `vdisp`, `vrad`, `dens`).
+fixed factor of the noise map, default 1) and `smooth` (as above, over the seeing FWHM; the keys `vrot`,
+`vdisp`, `vrad`, `dens`).
 
 BAYESIANWIND has its own options: `emission` (cells, shells, cone, spaxel or voxel), `cellsize`,
 `marginal`, `prior` (gauss or exp), `noisecorr`, `sigma`, `datafrac`, `grow`, `emscale`, `emclump`,

@@ -271,20 +271,17 @@ def test_slit_contsub(tmp_path):
         _fit(fn, exclwind="10-30")._load()
 
 
-def test_slit_lambdas(mock_slit):
-    """LIKEOPTS lambdas (as BAYESIAN3DFIT): the smoothness penalty of the parameters free in each ring is subtracted
-    from log L; the keys are the ring parameters of the slit."""
+def test_slit_smooth(mock_slit):
+    """LIKEOPTS smooth (as BAYESIAN3DFIT): the smoothness prior of the parameters free in each ring, over one seeing
+    FWHM, is subtracted from log L; the keys are the ring parameters of the slit."""
     from bbarolo.bayesian.slit import slit_likeopts
     from bbarolo.bayesian.common import smoothness_penalty
-    assert slit_likeopts("lambdas=(vrot=3000, disp=100) noisecorr=1") == \
-        {"lambdas": {"vrot": 3000., "vdisp": 100.}, "noisecorr": 1.}
+    assert slit_likeopts("smooth=(vrot=5, disp=3) noisecorr=1") == \
+        {"smooth": {"vrot": 5., "vdisp": 3.}, "noisecorr": 1.}
     with pytest.raises(ValueError, match="ring parameter"):
-        slit_likeopts("lambdas=(inc=10)")
-    # the penalty: lam/2 times the squared second derivatives on the radii, VROT from 0 at R = 0
-    x, v = np.array([1., 2., 4.]), np.array([10., 30., 35.])
-    d2 = [2 * ((30 - 10) / 1 - (10 - 0) / 1) / 2, 2 * ((35 - 30) / 2 - (30 - 10) / 1) / 3]
-    assert smoothness_penalty(x, v, 2., from_zero=True) == pytest.approx(sum(np.square(d2)))
-    assert smoothness_penalty(x, v, 2.) == pytest.approx(d2[1] ** 2)
+        slit_likeopts("smooth=(inc=10)")
+    with pytest.raises(ValueError, match="unknown"):
+        slit_likeopts("lambdas=(vrot=10)")
     fname, R = mock_slit
     f = _fit(fname, radii=list(R), free="VROT VDISP_SINGLE VSYS XPOS")
     f._fit_options(None, {}, f._run_defaults())
@@ -292,10 +289,11 @@ def test_slit_lambdas(mock_slit):
     th = f._initial_theta()
     th[f.freepar_idx["vrot"]] += np.random.default_rng(3).normal(0, 20, len(R))
     l0 = f.log_likelihood(th)
-    f._fit_options(None, {"lambdas": {"vrot": 50., "vdisp": 1e6}}, f._run_defaults())
-    assert f._lambdas() == {"vrot": 50.}                 # (VDISP_SINGLE: one value, no penalty)
+    f._fit_options(None, {"smooth": {"vrot": 5., "vdisp": 1.}}, f._run_defaults())
+    assert f._smooth_used() == {"vrot": 5.}                 # (VDISP_SINGLE: one value, no prior)
     rad = np.asarray(f._fit0.r["radii"], float)
-    assert f.log_likelihood(th) == pytest.approx(l0 - smoothness_penalty(rad, th[f.freepar_idx["vrot"]], 50., True))
+    pen = smoothness_penalty(rad, th[f.freepar_idx["vrot"]], 5., f._beam, True)
+    assert pen > 0 and f.log_likelihood(th) == pytest.approx(l0 - pen)
 
 
 def test_slit_parameter_listing():
@@ -332,7 +330,8 @@ def test_slit_keywords():
     for extra, ok in (("BEAM 1.5 1.0 0\n", False), ("SLITWIDTH 0\n", False), ("3DFIT true\n", False),
                       ("SLITANGLE abc\n", False), ("NORM LOCAL\n", True), ("MASKWAVE 1 2 3\n", False),
                       ("CONTSUB true\nCONTORDER 2\nEXCLWIND 10:20\n", True),
-                      ("LIKEOPTS lambdas=(vrot=100)\n", True), ("LIKEOPTS lambdas=(xpos=100)\n", False)):
+                      ("LIKEOPTS smooth=(vrot=5)\n", True), ("LIKEOPTS smooth=(xpos=1)\n", False),
+                      ("LIKEOPTS lambdas=(vrot=100)\n", False)):
         p = Param()
         p.readParamString("FITSFILE a.fits\nBAYESIANSLITFIT true\nINC 60\nSLITWIDTH 1\nBEAM 1.5\n" + extra)
         assert p.checkPars(quiet=True) == ok, extra

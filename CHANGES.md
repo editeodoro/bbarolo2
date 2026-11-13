@@ -411,7 +411,7 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   (`SKYRESID`) subtracted, masked ranges (`MASKWAVE`), a noise map and the correlation of the noise. `NORM AZIM`
   (default) deconvolves the densities from the flux of the lines along the slit, `NORM LOCAL` adds one amplitude per
   position, marginalised in the likelihood (for asymmetric disks), `NORM NONE` uses DENS. Sampling with NAUTILUSBB
-  (default), NAUTILUS or DYNESTY, or `SAMPLER OPTIMISE`; `LIKEOPTS lambdas` adds the smoothness penalties of
+  (default), NAUTILUS or DYNESTY, or `SAMPLER OPTIMISE`; `LIKEOPTS smooth` adds the smoothness priors of
   BAYESIAN3DFIT to the per-ring parameters. Outputs: the rings with their errors, the FITS files of the slit, its
   model and residuals, and the plots with their scripts (`bbarolo.plots.slitfit`: the PV plot shows the Gaussian fits
   of the lines, the rotation velocities of the rings where they cross the slit with their errors, and the systemic
@@ -478,7 +478,7 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 - **BAYESIAN3DFIT: smoothness penalties in parameter files**: `LIKEOPTS lambdas=(vrot=3000, vdisp=1000)`, until
   now only in Python (`like_kwargs=dict(lambdas=...)`). The options of `SAMPLEROPTS`, `RUNOPTS` and `LIKEOPTS`
   accept `key=value` pairs in brackets as a value. A key of `lambdas` that is not a ring parameter is now an
-  error (it was ignored), also in Python.
+  error (it was ignored), also in Python. (`lambdas` is now `smooth`: see Changed.)
 - **BAYESIAN3DFIT: the radii of the rings** (arcsec) are printed before the free parameters.
 - **BAYESIAN3DFIT: the density of the model in the plot of the parameters.** The surface-density panel of
   `<prefix>_parameters.pdf` showed only the observed profile; it now shows, as in 3DFIT, the observed face-on
@@ -656,6 +656,17 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **BAYESIAN3DFIT and BAYESIANSLITFIT: `LIKEOPTS smooth` replaces `lambdas`.** The smoothness penalties are now given
+  as the bend (1σ) allowed to each profile over one beam (the seeing FWHM for the slit), in the units of the
+  parameter: `smooth=(vrot=5, vdisp=3)` lets the rotation curve depart from a straight line by about 5 km/s across
+  a beam. λ was in arcsec⁴ per squared unit and its effect changed with the beam, the pixel size and the number of
+  rings (the penalty doubled when the rings halved); the new penalty counts each bend once per beam of radius, so
+  the same value means the same thing for any ring spacing. DENS is smoothed in dex. `print_stats` (and
+  `smoothness_stats()`) shows the rms bend over a beam of the best fit, the penalty and the effective number of
+  independent values of each smoothed profile (from the posterior covariance, or the Laplace one after
+  `optimize`). `lambdas` is now an unknown option and `f.lambdas` is gone; results saved with `lambdas` load
+  without them. The old `lambdas=(vrot=λ)` with equal rings of separation h is `smooth=(vrot=s)` with
+  s = (h B³ / 64 λ)^½: the example UGC 1281 (B = h = 30″) had λ = 3000 and 1000, s = 2 and 3.6 km/s.
 - **The ANALYTIC GALMOD models skip the clouds outside the box of the model before computing their line profile**
   (they were skipped only when deposited): the same models, faster when the box is a small part of the disk (the
   model of a slit, the likelihood box of BAYESIAN3DFIT).

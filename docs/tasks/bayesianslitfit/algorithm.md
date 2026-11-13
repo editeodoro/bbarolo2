@@ -69,9 +69,10 @@ two seeing FWHM of any XPOS of the prior, with the noise map (times `SIGMA` if f
   favours narrower lines less than the profile likelihood does.
 - `NORM NONE`: the model of the rings with their densities.
 
-The smoothness penalties of `LIKEOPTS lambdas` are subtracted from ln L, as in BAYESIAN3DFIT: for each parameter free
-in each ring, λ/2 times the sum of its squared second derivatives with respect to radius on the radii of the rings
-(VROT from 0 at R = 0), not divided by the number of pixels per independent measurement.
+The smoothness priors of `LIKEOPTS smooth` are subtracted from ln L, as in BAYESIAN3DFIT (see its
+[smoothness priors](../bayesian3dfit/algorithm.md#smoothness-priors)), with the seeing FWHM as the beam: for each
+parameter free in each ring, half the sum of (bend over a seeing FWHM / s)² over the inner rings, one term per FWHM
+of radius (VROT from 0 at R = 0; DENS in dex), not divided by the number of pixels per independent measurement.
 
 The sampling and the minimisation are those of BAYESIAN3DFIT (bbarolo/bayesian/sampling.py and optimize.py).
 

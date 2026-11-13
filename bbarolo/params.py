@@ -1352,7 +1352,7 @@ def bayes_options(opts, none=True):
     dynamic=false' -> {'nlive': 200, 'bound': 'multi', 'dynamic': False}. Values are
     integers, numbers, true/false, none (None; a string with none=False), strings, or several
     of them separated by commas (a tuple: 'dilation=1,3' -> (1, 3)), or key=value pairs in brackets (a dict:
-    'lambdas=(vrot=3000, vdisp=1000)' -> {'vrot': 3000, 'vdisp': 1000}). Raises ValueError."""
+    'smooth=(vrot=5, vdisp=3)' -> {'vrot': 5, 'vdisp': 3}). Raises ValueError."""
     s = re.sub(r"\s*([=,])\s*", r"\1", str(opts).strip())
     toks, start, depth = [], 0, 0                    # split at spaces, ';' and ',key=', outside brackets
     for i, c in enumerate(s):
@@ -1378,10 +1378,10 @@ def bayes_options(opts, none=True):
 
 
 # Options of the likelihood (Bayesian3DFIT.run(like_kwargs=...), LIKEOPTS) and their defaults.
-# Those of LIKE_SETUP set up the likelihood; sigma, fracerr and lambdas are passed to the
+# Those of LIKE_SETUP set up the likelihood; sigma, fracerr and smooth are passed to the
 # log-likelihood at each call (None: not given).
 LIKE_OPTIONS = dict(likemask="dilated", dilation=(1., 3), noisecorr="measured", densprof_smooth=0.1, bbres=False,
-                    radmax="edge", radmax_width=None, sigma=None, fracerr=None, lambdas=None)
+                    radmax="edge", radmax_width=None, sigma=None, fracerr=None, smooth=None)
 LIKE_SETUP = ("likemask", "dilation", "noisecorr", "densprof_smooth", "bbres", "radmax", "radmax_width")
 _LIKE_ALIASES = {"usebbres": "bbres", "likemask_dilation": "dilation"}
 
@@ -1408,8 +1408,10 @@ def bayes_like_option(name, value):
                        quarter of the beam FWHM)
       sigma            fixed noise per voxel (default: the measured noise rms)
       fracerr          fixed fractional model error (default 0)
-      lambdas          dict of smoothness penalties of the ring parameters, e.g. {'vrot': 1}
-                       (LIKEOPTS: lambdas=(vrot=1, vdisp=0.5))"""
+      smooth           dict of the smoothness tolerances of the ring parameters free in each ring,
+                       e.g. {'vrot': 5, 'vdisp': 3} (LIKEOPTS: smooth=(vrot=5, vdisp=3)): the
+                       bend (1 sigma) allowed to each profile over one beam, in the units of the
+                       parameter (km/s, deg, ...; DENS in dex)"""
     import numpy as np
     key = _LIKE_ALIASES.get(str(name).strip().lower(), str(name).strip().lower())
     if key not in LIKE_OPTIONS:
@@ -1458,21 +1460,22 @@ def bayes_like_option(name, value):
         if v not in ("ring", "edge", "taper"):
             raise ValueError(f"radmax: 'ring', 'edge' or 'taper', not {value!r}")
         return key, v
-    if key == "lambdas":
+    if key == "smooth":
         if isinstance(value, str):
             value = _optvalue(value.strip())
         if not isinstance(value, dict):
-            raise ValueError(f"lambdas: smoothness penalties of ring parameters, e.g. (vrot=3000, vdisp=1000) or "
-                             f"{{'vrot': 3000}}, not {value!r}")
+            raise ValueError(f"smooth: the bends allowed over a beam to ring parameters, e.g. (vrot=5, vdisp=3) or "
+                             f"{{'vrot': 5}}, not {value!r}")
         out = {}
         for k, v in value.items():
             name = bayes_name(k)
             if name not in BAYES_RING_PARS:
-                raise ValueError(f"lambdas: '{k}' is not a ring parameter (" + ", ".join(BAYES_RING_PARS) + ")")
+                raise ValueError(f"smooth: '{k}' is not a ring parameter (" + ", ".join(BAYES_RING_PARS) + ")")
             try:
-                out[name] = number(v)
+                out[name] = number(v, positive=True)
             except ValueError:
-                raise ValueError(f"lambdas: {k}: expected a number >= 0, not {v!r}") from None
+                raise ValueError(f"smooth: {k}: expected a number > 0 (the bend allowed over a beam, in the units "
+                                 f"of the parameter), not {v!r}") from None
         return key, out
     return key, number(value, positive=(key == "sigma"))         # densprof_smooth, sigma, fracerr, radmax_width
 
@@ -1480,8 +1483,8 @@ def bayes_like_option(name, value):
 def bayes_likeopts(opts):
     """The options of the likelihood of BAYESIAN3DFIT from LIKEOPTS (as in a parameter file):
     'likemask=none noisecorr=beam dilation=1.5,4' -> {'likemask': 'none', 'noisecorr': 'beam',
-    'dilation': (1.5, 4)}; 'lambdas=(vrot=3000, vdisp=1000)' -> {'lambdas': {'vrot': 3000.,
-    'vdisp': 1000.}}. The options are those of bayes_like_option. Raises ValueError."""
+    'dilation': (1.5, 4)}; 'smooth=(vrot=5, vdisp=3)' -> {'smooth': {'vrot': 5.,
+    'vdisp': 3.}}. The options are those of bayes_like_option. Raises ValueError."""
     out = {}
     for k, v in bayes_options(opts, none=False).items():
         kv = bayes_like_option(k, v)

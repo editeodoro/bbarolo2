@@ -130,15 +130,84 @@ def fast_ppf(distr):
 SIGMA_QUANTILES = (0.15865, 0.50, 0.84135)
 
 
-def smoothness_penalty(radii, values, lam, from_zero=False):
-    """The smoothness penalty of a ring parameter (LIKEOPTS lambdas): lam/2 times the sum of the squared second
-    derivatives of values with respect to radii (arcsec), on the radii of the rings; from_zero: the parameter starts
-    from 0 at R = 0 (VROT). Subtracted from log L, not multiplied by the factor of the correlation of the noise."""
+# the units of the smoothness tolerances (LIKEOPTS smooth): those of the ring parameters, DENS in dex
+SMOOTH_UNITS = dict(vrot="km/s", vdisp="km/s", vrad="km/s", vsys="km/s", vvert="km/s", dvdz="km/s/arcsec",
+                    inc="deg", phi="deg", xpos="pix", ypos="pix", z0="arcsec", zcyl="arcsec", dens="dex")
+
+
+def smoothness_bends(radii, values, beam, from_zero=False, log=False):
+    """The bends over one beam of a ring profile (LIKEOPTS smooth) at its inner rings, and their weights.
+
+    The bend at a ring is p'' B^2/8: the departure of the profile from the straight line through its values half a
+    beam either side (p'' the second derivative with respect to radius on the radii of the rings, B the beam FWHM, both
+    in arcsec). The weight of an inner ring j is the fraction of a beam of radius it stands for, (h_j + h_{j+1})/2/B
+    (h the separations of the rings), so that the sum over the rings does not depend on their number.
+
+    values: one profile (n,) or profiles in columns (n, m) (the bends are linear in them); from_zero: the profile
+    starts from 0 at R = 0 (VROT: a node is added, so that a rise linear from the centre is not penalised); log: the
+    bends of log10 of the values (DENS, in dex; values below 1e-6 of the largest count as that). Returns (bends,
+    weights), empty with fewer than 3 nodes."""
     v, x = np.asarray(values, float), np.asarray(radii, float)
+    if log:
+        top = np.max(v, axis=0)
+        v = np.log10(np.maximum(v, np.maximum(1e-6 * top, 1e-300)))
     if from_zero:
-        v, x = np.concatenate([[0.0], v]), np.concatenate([[0.0], x])
-    if v.size < 3:
-        return 0.
-    d1, d2 = np.diff(x)[:-1], np.diff(x)[1:]
-    d2v = 2. * ((v[2:] - v[1:-1]) / d2 - (v[1:-1] - v[:-2]) / d1) / (d1 + d2)
-    return 0.5 * lam * float(np.sum(d2v ** 2))
+        v, x = np.concatenate([np.zeros((1,) + v.shape[1:]), v]), np.concatenate([[0.0], x])
+    if v.shape[0] < 3:
+        return np.zeros((0,) + v.shape[1:]), np.zeros(0)
+    h1, h2 = np.diff(x)[:-1], np.diff(x)[1:]
+    sh = (-1,) + (1,) * (v.ndim - 1)
+    d2v = 2. * ((v[2:] - v[1:-1]) / h2.reshape(sh) - (v[1:-1] - v[:-2]) / h1.reshape(sh)) / (h1 + h2).reshape(sh)
+    return d2v * beam ** 2 / 8., (h1 + h2) / (2. * beam)
+
+
+def smoothness_penalty(radii, values, s, beam, from_zero=False, log=False):
+    """The smoothness penalty of a ring parameter (LIKEOPTS smooth), subtracted from ln L: half the sum over the inner
+    rings of (bend / s)^2, each weighted by the fraction of a beam it stands for (see smoothness_bends). It is a
+    Gaussian prior of standard deviation s on the bend of the profile over each beam of radius, whatever the number of
+    rings. s in the units of the parameter (dex with log, DENS), beam the FWHM (arcsec). Not multiplied by the factor
+    of the correlation of the noise."""
+    b, w = smoothness_bends(radii, values, beam, from_zero, log)
+    return 0.5 * float(np.sum(w * b * b)) / (s * s)
+
+
+def smoothness_summary(radii, values, s, beam, from_zero=False, log=False, cov=None):
+    """What the smoothness prior of a ring parameter (LIKEOPTS smooth) does to a fit, at the profile values: a dict
+    with n (the rings), bend (the rms bend over a beam, weighted as in the penalty, in the units of s), penalty (in
+    ln L) and ndof: with cov (the posterior covariance of the values of the rings, n x n) the effective number of
+    independent values of the profile, n - trace(cov H), H the Hessian of the penalty (with log, linearised at the
+    values): n when the data alone fix the rings, 2 (a straight line; 1 from_zero) when the prior does; None
+    without cov."""
+    v = np.asarray(values, float)
+    n = v.size
+    b, w = smoothness_bends(radii, v, beam, from_zero, log)
+    out = dict(n=n, penalty=0.5 * float(np.sum(w * b * b)) / (s * s),
+               bend=float(np.sqrt(np.sum(w * b * b) / np.sum(w))) if w.size else 0., ndof=None)
+    if cov is not None and w.size:
+        D = smoothness_bends(radii, np.eye(n), beam, from_zero)[0]        # (inner rings, n): linear in the values
+        if log:
+            D = D / (np.maximum(v, max(1e-6 * v.max(), 1e-300)) * np.log(10.))[None, :]
+        H = D.T @ (w[:, None] * D) / (s * s)
+        out["ndof"] = float(min(max(n - np.sum(np.asarray(cov, float).reshape(n, n) * H), 0.), n))
+    return out
+
+
+def smoothness_text(used, beam, given=None, stats=None):
+    """Lines describing the smoothness priors (LIKEOPTS smooth). used: {parameter: s} of the parameters free in each
+    ring; given: all those given (the others are listed as not used); stats: {parameter: smoothness_summary} after a
+    fit (one line each with the bend, the penalty and the number of independent values). beam: FWHM (arcsec)."""
+    lines = []
+    unit = lambda k: SMOOTH_UNITS.get(k, "")
+    if stats is None:
+        if used:
+            lines.append(", ".join(f"{k} {v:g} {unit(k)}" for k, v in used.items()) + f" over a beam ({beam:.3g} "
+                         "arcsec)")
+        unused = [k for k in (given or {}) if k not in used]
+        if unused:
+            lines.append(f"smooth of {', '.join(unused)} not used (not free in each ring)")
+        return lines
+    for k, st in stats.items():
+        nd = "" if st["ndof"] is None else f", {st['ndof']:.1f} independent values of {st['n']} rings"
+        lines.append(f"{k:>6s}: s {used[k]:g} {unit(k)}, bend over a beam {st['bend']:.3g} {unit(k)} rms, "
+                     f"penalty {st['penalty']:.3g} (ln L){nd}")
+    return lines

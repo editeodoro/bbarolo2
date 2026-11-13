@@ -61,8 +61,8 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
     save_results(outfile), load_results(inputfile, sampler)
 
     Attributes: priors (dict of prior definitions, see the module documentation), funcs
-    (parametric functions of radius), lambdas (smoothness penalties), like_kwargs (the options
-    of the likelihood of the fit, with the defaults), params (best-fit values of the free
+    (parametric functions of radius), like_kwargs (the options of the likelihood of the fit,
+    with the defaults; smooth: the smoothness priors of the profiles), params (best-fit values of the free
     parameters), samples, samples_equal, quantiles, outri (best-fit rings).
     """
 
@@ -163,7 +163,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         """ The options of the likelihood (run(like_kwargs=...) and LIKEOPTS; see
         bbarolo.params.bayes_like_option), checked and with the defaults. Sets like_kwargs (all
         the options of the fit) and _like_kwargs (those passed to the log-likelihood at each
-        call: sigma, fracerr, lambdas and, with user-defined residuals or log-likelihood
+        call: sigma, fracerr, smooth and, with user-defined residuals or log-likelihood
         (custom=True), any other keyword; otherwise an unknown option raises ValueError). """
         from ..params import bayes_like_option, LIKE_OPTIONS, LIKE_SETUP
         out = {k: LIKE_OPTIONS[k] for k in LIKE_SETUP}
@@ -377,9 +377,6 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
 
         if self.prior_distr is None:            # (the distributions given are kept; those frozen by _setup are
             self.prior_distr = {}               # frozen again when their definition in priors changes)
-        # Lambda parameters for the smoothness penalty in the likelihood
-        if not hasattr(self, 'lambdas'):
-            self.lambdas = {key: 0.0 for key in ['vrot', 'vdisp', 'dens', 'vrad', 'phi', 'inc', 'xpos', 'ypos', 'z0']}
 
     def _setup(self, freepar, **kwargs):
         """ The setup of a fit with the free parameters freepar and the options of the likelihood in
@@ -592,8 +589,10 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                                 densprof_smooth (smoothness of the deconvolved density profile,
                                 default 0.1), bbres (True: BBarolo's 3DFIT residuals instead of
                                 the Gaussian likelihood), sigma and fracerr (fixed noise per voxel
-                                and fractional model error, when not free), lambdas (smoothness
-                                penalties); with user-defined residuals or log_like, also their
+                                and fractional model error, when not free), smooth (the bend
+                                allowed over a beam to the profiles free in each ring, e.g.
+                                dict(vrot=5, vdisp=3), in the units of the parameters, DENS in
+                                dex); with user-defined residuals or log_like, also their
                                 own keywords
           sampler_kwargs (dict): arguments for the sampler (e.g. nlive), added to SAMPLEROPTS if
                                 given (there, dynamic=True: the dynamic sampler of dynesty; seed=N:
@@ -787,6 +786,11 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                               f"  voxels       {self.nvox} ({self._likemask_note})"]
                 if self._side() is not None:
                     lines.append(f"  side         {'approaching' if self._side() == 'A' else 'receding'} half (SIDE)")
+                if like_kwargs.get('smooth') and not geom:
+                    from .common import smoothness_text
+                    sm = smoothness_text(self._smooth_used(like_kwargs['smooth']), self._smooth_beam(),
+                                         like_kwargs['smooth'])
+                    lines += [f"  {'smoothness' if i == 0 else '':13s}{t}" for i, t in enumerate(sm)]
                 print("\n".join(lines))
                 if getattr(self, '_corr_below_beam', False) and str(self.like_kwargs['noisecorr']).lower() == \
                         'measured' and not geom:

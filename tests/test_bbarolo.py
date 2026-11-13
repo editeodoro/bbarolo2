@@ -1100,14 +1100,14 @@ def test_bayesian_keywords(capsys):
     from bbarolo.params import bayes_likeopts
     assert bayes_likeopts("LIKEMASK=None, noisecorr = 2.5 dilation=(1.5, 4) sigma=0.01 usebbres=false") == \
         dict(likemask='none', noisecorr=2.5, dilation=(1.5, 4), sigma=0.01, bbres=False)
-    for bad in ("likemask=mask", "noisecorr=0", "dilation=1", "factor=1", "sigma=0", "lambdas=1", "bbres=2",
-                "lambdas=(vrot=-1)", "lambdas=(foo=1)", "lambdas=(vrot=1"):
+    for bad in ("likemask=mask", "noisecorr=0", "dilation=1", "factor=1", "sigma=0", "smooth=1", "bbres=2",
+                "smooth=(vrot=-1)", "smooth=(vrot=0)", "smooth=(foo=1)", "smooth=(vrot=1", "lambdas=(vrot=1)"):
         with pytest.raises(ValueError):
             bayes_likeopts(bad)
-    # the smoothness penalties: key=value pairs in brackets (PA -> phi), written back as they are read
+    # the smoothness priors: key=value pairs in brackets (PA -> phi), written back as they are read
     from bbarolo.params import bayes_value_string
-    lk = bayes_likeopts("likemask=none lambdas = (vrot=3000, VDISP=1e3,PA=2) dilation=1.5,4")
-    assert lk == dict(likemask='none', lambdas=dict(vrot=3000., vdisp=1000., phi=2.), dilation=(1.5, 4))
+    lk = bayes_likeopts("likemask=none smooth = (vrot=5, VDISP=3,PA=2) dilation=1.5,4")
+    assert lk == dict(likemask='none', smooth=dict(vrot=5., vdisp=3., phi=2.), dilation=(1.5, 4))
     assert bayes_likeopts(bayes_value_string("LIKEOPTS", lk)) == lk
     # Param: the values as given, the checks, the printing, the task list and the help
     p = Param()
@@ -1219,7 +1219,7 @@ def test_bayesian_task(tmp_path, capsys):
                    "YPOS 31.5\nVSYS 0\nVROT 120\nVDISP 15\nZ0 0\nINC 60\nPA 45\nMASK SEARCH\nGALMODTYPE ANALYTIC\n"
                    "LINEAR 0\nFREE VROT_SINGLE VDISP_SINGLE\nPRIORS vrot=(uniform,100,100) vdisp=(uniform,1,30)\n"
                    "SAMPLER DYNESTY\nSAMPLEROPTS nlive=20 dynamic=false seed=2\nRUNOPTS dlogz=1\nTHREADS 1\nPLOTS true\n"
-                   "LIKEOPTS likemask=dilated dilation=1,3 noisecorr=measured lambdas=(vrot=3000, vdisp=1000)\n")
+                   "LIKEOPTS likemask=dilated dilation=1,3 noisecorr=measured smooth=(vrot=5, vdisp=3)\n")
     # the fitter: the parameters as given, the data of the cube read by BBarolo (here changed in memory)
     p = Param(str(par))
     assert p.checkPars(quiet=True)
@@ -1231,11 +1231,12 @@ def test_bayesian_task(tmp_path, capsys):
     assert not any(k in f._params for k in ("FITSFILE", "BAYESIAN3DFIT", "3DFIT"))
     assert f._par.gf.flagGALFIT and not f._par.gf.flagBAYESIAN and f._par.gf.FREE == "VROT VDISP INC PA"
     assert f._run_defaults()['FREE'] == ['vrot_single', 'vdisp_single']
-    assert f._run_defaults()['LIKEOPTS']['lambdas'] == dict(vrot=3000., vdisp=1000.)
+    assert f._run_defaults()['LIKEOPTS']['smooth'] == dict(vrot=5., vdisp=3.)
     # the command line
     assert main(["-p", str(par)]) == 0
     out = capsys.readouterr().out
     assert "Rings: 4, radii (arcsec): 20 60 100 140\nFitting 2 parameters: ['vrot', 'vdisp']" in out
+    assert "smoothness   smooth of vrot, vdisp not used (not free in each ring)" in out
     assert "Best-fit parameters" in out and "Deconvolved density profile" in out
     # the cube and the initial parameters, as 3DFIT shows them (rings given: NRADII and RADSEP (i))
     assert "Beam size is" in out and "Initial parameters" in out and "Fitting #4(i) rings of width 40.00(i)" in out
@@ -1251,7 +1252,7 @@ def test_bayesian_task(tmp_path, capsys):
     assert g.freepar_names == ['vrot', 'vdisp'] and 100 < g.params[0] < 200
     assert g.like_kwargs == dict(likemask='dilated', dilation=(1., 3), noisecorr='measured', densprof_smooth=0.1,
                                  bbres=False, radmax='edge', radmax_width=None,
-                                 lambdas=dict(vrot=3000., vdisp=1000.))
+                                 smooth=dict(vrot=5., vdisp=3.))
     capsys.readouterr()
     # bbarolo.run (the same parameters, quiet, no plots): a Result with the fitter
     res = bbarolo.run(str(par), outfolder=str(tmp_path / "run"), verbose=False, plots=False,
@@ -2109,7 +2110,7 @@ def test_bayesian_nautilusbb(tmp_path, capsys, monkeypatch):
 def test_bayesian_priors_and_options(tmp_path):
     """A prior given as a distribution survives update(); the slope of a parametric function may be
     negative (only the values of the rings must be positive); unknown sampler and run options are
-    errors; dlogz works with the dynamic sampler of dynesty (as dlogz_init); one ring with lambdas."""
+    errors; dlogz works with the dynamic sampler of dynesty (as dlogz_init); one ring with smooth."""
     pytest.importorskip("dynesty")
     from scipy import stats
     from bbarolo.bbutils import BBaroloError
@@ -2131,7 +2132,7 @@ def test_bayesian_priors_and_options(tmp_path):
     assert np.isfinite(f.params[0])
     g = _bayes_mock(tmp_path, radii=[60.], outfolder=str(tmp_path / "one"))
     g._setup(['vrot'])
-    assert np.isfinite(g._log_likelihood(np.array([150.]), lambdas=dict(vrot=1.)))
+    assert np.isfinite(g._log_likelihood(np.array([150.]), smooth=dict(vrot=1.)))
 
 
 def test_bayesian_pool_and_loaded_likelihood(tmp_path):
@@ -3121,18 +3122,79 @@ def test_profile_annulus_starts_at_radmax(synthetic_cube):
 
 @needs_data
 def test_bayesian_smoothness_penalty_spacing(tmp_path):
-    """The smoothness penalties (lambdas) are second derivatives on the radii of the rings, with VROT 0 at
+    """The smoothness priors (LIKEOPTS smooth) are second derivatives on the radii of the rings, with VROT 0 at
     R = 0: a rotation curve rising linearly from the centre has no penalty, also with uneven rings (the first
-    separation was used for all the rings, and the zero of VROT put one separation inside the first ring)."""
+    separation was used for all the rings, and the zero of VROT put one separation inside the first ring); a bend
+    costs (bend over a beam / s)^2 / 2 per beam of radius."""
     from bbarolo.bayesian import Bayesian3DFIT
     f = Bayesian3DFIT(N2403, radii=[60., 120., 240., 300.], xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
                       inc=60, pa=123.7, z0=10, mask="SEARCH", outfolder=str(tmp_path) + "/")
     f._setup(['vrot', 'vdisp_single'])
     th = np.array([30., 60., 120., 150., 10.])
     L0 = f._log_likelihood(th, sigma=1.)
-    assert np.isclose(f._log_likelihood(th, sigma=1., lambdas=dict(f.lambdas, vrot=1.)), L0, rtol=0, atol=1e-9)
+    assert np.isclose(f._log_likelihood(th, sigma=1., smooth=dict(vrot=1.)), L0, rtol=0, atol=1e-9)
     th2 = np.array([30., 60., 90., 150., 10.])
-    assert f._log_likelihood(th2, sigma=1., lambdas=dict(f.lambdas, vrot=1.)) < f._log_likelihood(th2, sigma=1.)
+    B = f._beam_fwhm()
+    d2 = np.array([2 * ((90 - 60) / 120 - (60 - 30) / 60) / 180,       # (VROT'' at R = 120 and 240)
+                   2 * ((150 - 90) / 60 - (90 - 60) / 120) / 180])
+    pen = 0.5 * (180 / 2 / B) * np.sum((d2 * B ** 2 / 8 / 5.) ** 2)
+    assert np.isclose(f._log_likelihood(th2, sigma=1., smooth=dict(vrot=5.)), f._log_likelihood(th2, sigma=1.) - pen,
+                      rtol=0, atol=1e-9)
+
+
+def test_smoothness_prior_scale():
+    """The smoothness prior (LIKEOPTS smooth): s is the bend (1 sigma) allowed over one beam, p'' B^2/8, counted once
+    per beam of radius, so that the penalty of a profile does not grow with the number of rings (the lambdas it
+    replaces doubled when the rings halved); DENS in dex; the effective number of independent values runs from the
+    number of rings (no prior) to 2 (a straight line), 1 for VROT (from 0 at R = 0)."""
+    from bbarolo.bayesian.common import smoothness_penalty, smoothness_summary, smoothness_bends
+    B = 30.
+    pens = []
+    for h in (30., 15., 7.5):
+        R = np.arange(h, 300. + 1e-9, h)
+        v = 0.01 * R ** 2                                              # p'' = 0.02: a bend of 2.25 over a beam
+        st = smoothness_summary(R, v, 5., B)
+        assert np.isclose(st["bend"], 0.02 * B ** 2 / 8) and np.isclose(st["penalty"], smoothness_penalty(R, v, 5., B))
+        pens.append(st["penalty"])
+    span = 300. - 2 * np.array([30., 15., 7.5])                        # (n - 2 inner rings, one separation each)
+    assert np.allclose(pens, 0.5 * (2.25 / 5.) ** 2 * span / B)
+    # DENS in dex: an exponential profile has no bend in log10
+    R = np.arange(15., 300., 15.)
+    assert smoothness_penalty(R, 3. * np.exp(-R / 60.), 0.1, B, log=True) < 1e-20
+    assert smoothness_penalty(R, 3. * np.exp(-(R / 60.) ** 2), 0.1, B, log=True) > 1.
+    # the independent values: n - trace(C H), C the covariance of the rings with the prior
+    n, v = R.size, np.linspace(50., 150., R.size)
+    for from_zero, floor in ((False, 2.), (True, 1.)):
+        D, w = smoothness_bends(R, np.eye(n), B, from_zero)
+        for s, nd in ((1e4, n), (5., None), (1e-4, floor)):
+            C = np.linalg.inv(np.eye(n) / 4. + D.T @ (w[:, None] * D) / s ** 2)
+            st = smoothness_summary(R, v, s, B, from_zero=from_zero, cov=C)
+            assert np.isclose(st["ndof"], np.trace(C) / 4.)              # (= trace(C H_data))
+            if nd is not None:
+                assert abs(st["ndof"] - nd) < 1e-3, (from_zero, s, st["ndof"])
+    assert smoothness_summary(R, v, 5., B)["ndof"] is None
+
+
+@needs_data
+def test_bayesian_smoothness_stats(tmp_path, capsys):
+    """print_stats shows what the smoothness priors do: the bend over a beam of the best fit, the penalty and the
+    effective number of independent values of each profile (from the Laplace covariance of optimize): the number of
+    rings with a loose prior, fewer with a stiff one (NGC 2403 fixes VROT to ~0.05 km/s: s = 0.01 km/s is stiff)."""
+    from bbarolo.bayesian import Bayesian3DFIT
+    kw = dict(radii=[90., 180., 270., 360.], xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10, inc=60, pa=123.7,
+              z0=10, mask="SEARCH", galmodtype="ANALYTIC", outfolder=str(tmp_path) + "/")
+    nd = {}
+    for s in (1e3, 0.01):
+        f = Bayesian3DFIT(N2403, **kw)
+        f.optimize(freepar=['vrot', 'vdisp_single'], like_kwargs=dict(smooth=dict(vrot=s, vdisp=1.)), verbose=False)
+        capsys.readouterr()
+        f.print_stats()
+        out = capsys.readouterr().out
+        assert "Smoothness priors (LIKEOPTS smooth; bends over a beam of" in out and "independent values of 4 rings" in out
+        st = f.smoothness_stats()
+        assert list(st) == ['vrot']                                    # (VDISP_SINGLE: one value, no prior)
+        nd[s] = st['vrot']['ndof']
+    assert nd[1e3] > 3.9 and nd[0.01] < 3.5, nd
 
 
 def test_checkpars_free_and_vdisp_limits(capsys):

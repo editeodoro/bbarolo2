@@ -533,8 +533,9 @@ class LikelihoodMixin(object):
 
         Accepted kwargs (the options of like_kwargs used at each call): sigma (fixed noise per
         voxel, default self.noiserms); fracerr (fixed fractional model error, default 0);
-        lambdas (dict of smoothness penalties, default self.lambdas, not multiplied by
-        likefactor); any keyword accepted by user-defined residuals (_calculate_residuals).
+        smooth (dict of the smoothness tolerances of the ring parameters, the bend allowed over a
+        beam: see common.smoothness_penalty; the penalties are not multiplied by likefactor);
+        any keyword accepted by user-defined residuals (_calculate_residuals).
         """
         rings = self._update_rings(self._work, theta)
         if self._negative(rings, theta):
@@ -558,16 +559,29 @@ class LikelihoodMixin(object):
         kwargs.setdefault('region', self._region[blo[1]:bhi[1], blo[0]:bhi[0]])
         logL = self.likefactor * self._calculate_residuals(model, data, mask, **kwargs)
 
-        # Smoothness penalty for ring-by-ring parameters
-        lambdas = kwargs.get('lambdas', self.lambdas)
-        if rings.nr > 1 and any(lambdas[key] > 0 for key in lambdas):
-            # second derivatives on the radii of the rings (pyBBarolo used the first separation for all the
-            # rings, and put the zero of VROT one separation inside the first ring, not at R = 0)
+        # the smoothness priors of the parameters free in each ring (LIKEOPTS smooth)
+        smooth = self._smooth_used(kwargs.get('smooth'))
+        if smooth:
             from .common import smoothness_penalty
-            for key in self.freepar_idx:
-                if key in lambdas and lambdas[key] > 0 and len(self.freepar_idx[key]) > 1:
-                    logL += smoothness_penalty(rings.r['radii'], rings.r[key], lambdas[key], from_zero=(key == 'vrot'))
+            beam = self._smooth_beam()
+            for key, s in smooth.items():
+                logL += smoothness_penalty(rings.r['radii'], rings.r[key], s, beam, from_zero=(key == 'vrot'),
+                                           log=(key == 'dens'))
         return -logL
+
+    def _smooth_used(self, smooth):
+        """ The smoothness tolerances used (LIKEOPTS smooth, {parameter: s}): those of the parameters free in
+        each ring (more than one value). """
+        return {k: float(s) for k, s in (smooth or {}).items() if len(self.freepar_idx.get(k, ())) > 1}
+
+    def _smooth_beam(self):
+        """ The beam FWHM (major axis, arcsec) over which the smoothness tolerances apply (LIKEOPTS smooth). """
+        b = self._beam_fwhm()
+        if not b > 0:
+            from ..bbutils import BBaroloError
+            raise BBaroloError("BAYESIAN3DFIT: LIKEOPTS smooth needs the beam of the cube (BEAM, or BMAJ in the "
+                               "header): the bends are measured over one beam.")
+        return b
 
     def _log_likelihood_geometry(self, theta, **kwargs):
         """ Likelihood on the total intensity map (geometry fit, Cannubi-style).

@@ -37,7 +37,7 @@ largest initial VROT; see Bayesian3DFIT._set_default_priors and the keyword PRIO
 The options of the likelihood are given in run(like_kwargs=...) (LIKEOPTS in parameter files;
 the options of the fit are in f.like_kwargs): likemask, dilation, noisecorr, densprof_smooth,
 bbres (BBarolo's 3DFIT residuals), radmax and radmax_width (what RADMAX is), sigma and fracerr
-(fixed values) and lambdas.
+(fixed values) and smooth (the smoothness priors of the profiles free in each ring).
 
 Correlated noise: the log-likelihood is multiplied by 1/(number of voxels per independent
 measurement). By default (noisecorr='measured') this is the correlation volume of the noise

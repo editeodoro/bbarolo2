@@ -383,22 +383,54 @@ of 15, and errors 1.8 times larger than with `beam`.
 The factor is exact for a signal smoother than the beam; for models with structure on the scale of the beam
 it is conservative (see [Validation](#validation)).
 
-### Smoothness penalties
+### Smoothness priors
 
-`LIKEOPTS lambdas=(vrot=λ, ...)` in parameter files, or `like_kwargs=dict(lambdas={'vrot': λ, ...})` (or
-`f.lambdas`) in Python, adds a penalty on the second
-derivative, with respect to radius, of the parameters that are free in each ring:
+`LIKEOPTS smooth=(vrot=5, vdisp=3)` in parameter files, or `like_kwargs=dict(smooth={'vrot': 5, 'vdisp': 3})`
+in Python, adds a smoothness prior to the parameters that are free in each ring. Each value $s_k$ is the bend
+(1σ) allowed to the profile of parameter $k$ over one beam, in the units of the parameter: km/s for the
+velocities, degrees for INC and PA, arcsec for Z0 and ZCYL, pixels for XPOS and YPOS, and dex for DENS (whose
+logarithm is smoothed). `smooth=(vrot=5)` means: across one beam, the rotation curve departs from a straight line
+by about 5 km/s.
+
+The bend of the profile at ring $j$ is the departure of the profile from the straight line through its values
+half a beam either side, $b_{k,j} = p''_{k,j}\,B^2/8$, with $B$ the FWHM of the beam (major axis, arcsec) and the
+second derivative on the radii of the rings,
 
 $$
-P(\boldsymbol\theta) = \frac{1}{2}\sum_k \lambda_k \sum_j
-\left[\frac{2}{h_j + h_{j+1}}\left(\frac{p_{k,j+1} - p_{k,j}}{h_{j+1}}
-- \frac{p_{k,j} - p_{k,j-1}}{h_j}\right)\right]^2 ,
+p''_{k,j} = \frac{2}{h_j + h_{j+1}}\left(\frac{p_{k,j+1} - p_{k,j}}{h_{j+1}}
+- \frac{p_{k,j} - p_{k,j-1}}{h_j}\right),
 $$
 
-where $p_{k,j}$ is parameter $k$ in ring $j$, $h_j = R_j - R_{j-1}$ (arcsec) and $j$ runs over the inner
-rings. For VROT a node $p_{k,0} = 0$ at $R_0 = 0$ is added, which pulls the rotation curve towards zero at the
-centre without penalising a curve that rises linearly from it. $\lambda_k \ge 0$ (default
-0) is in arcsec⁴ per squared unit of the parameter. The penalty is not multiplied by $f$.
+where $p_{k,j}$ is parameter $k$ in ring $j$, $h_j = R_j - R_{j-1}$ and $j$ runs over the inner rings. The
+penalty subtracted from ln L counts each bend once per beam of radius:
+
+$$
+P(\boldsymbol\theta) = \frac{1}{2}\sum_k \sum_j w_j \left(\frac{b_{k,j}}{s_k}\right)^2 , \qquad
+w_j = \frac{h_j + h_{j+1}}{2B} ,
+$$
+
+a Gaussian prior on the curvature of each profile. Its strength does not depend on the number of rings, on the
+pixel size or on the distance: the same $s_k$ means the same thing for half-beam or one-beam rings. For VROT a
+node $p_{k,0} = 0$ at $R_0 = 0$ is added, which pulls the rotation curve towards zero at the centre without
+penalising a curve that rises linearly from it. The penalty is not multiplied by $f$: it is a prior, in units of
+ln L.
+
+The prior matters only where the data fix the rings less well than $s_k$: a profile measured to a fraction of a
+km/s ring by ring is left alone by `smooth=(vrot=5)`, while at low S/N, where adjacent half-beam rings
+zigzag against each other, it removes the zigzag and keeps bends larger than $s_k$ over a beam. A few km/s for
+VROT and VDISP is a reasonable start. A sharp turnover of the rotation curve, bending by more than $s_k$ within
+a beam, is rounded off where the data are weak.
+
+After the fit, `print_stats()` (and `f.smoothness_stats()` in Python) shows for each smoothed profile the rms bend
+over a beam of the best fit, the penalty, and the effective number of independent values of the profile,
+
+$$
+n_\mathrm{eff} = n - \mathrm{tr}\left(\mathbf C\,\mathbf H_P\right),
+$$
+
+with $\mathbf C$ the posterior covariance of its rings (that of the Laplace approximation after `optimize`) and
+$\mathbf H_P$ the Hessian of the penalty: $n$ (the rings) when the data alone fix the rings, down to 2 (a straight
+line; 1 for VROT, a line from the centre) when the prior does.
 
 ### The residuals of 3DFIT (`bbres`)
 
@@ -672,8 +704,10 @@ on top of the C++ library. With respect to it:
 - `write` writes all the outputs of the task (the module had only `write_bestmodel` and `save_results`);
 - the default sampler is nautilus (it was dynesty), and dynesty runs its static sampler by default (it was
   the dynamic one);
-- the smoothness penalties (`lambdas`) are second derivatives on the radii of the rings, with VROT 0 at
-  $R = 0$ (they used the separation of the first two rings for all the rings, and put the zero of VROT one
+- the smoothness penalties (`lambdas`, λ in arcsec⁴ per squared unit of the parameter) are replaced by the
+  smoothness priors `smooth` (the bend allowed over a beam, in the units of the parameter; see
+  [Smoothness priors](#smoothness-priors)); the second derivatives are on the radii of the rings, with VROT 0 at
+  $R = 0$ (`lambdas` used the separation of the first two rings for all the rings, and put the zero of VROT one
   separation inside the first ring);
 - MC models in the box of the likelihood are crops of the model of the whole cube (the clouds outside the
   box drew no velocity deviates, so the rest of the disk was another realisation);

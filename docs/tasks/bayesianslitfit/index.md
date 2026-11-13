@@ -98,8 +98,10 @@ processes for the example above (28 free parameters), a good way to check a setu
 The rings are `RADII`, or `NRADII` and `RADSEP`; by default one every seeing FWHM out to the farthest emission
 along the slit. The values not given are estimated from Gaussian fits of the lines at each position. The default
 priors: VROT from 0 to twice the largest estimate, VDISP from 0 to three times, VSYS ± 150 km/s, XPOS ± two
-seeing FWHM; `PRIORS` changes them. The parameters free in each ring can be regularised by smoothness penalties,
-as in BAYESIAN3DFIT: `LIKEOPTS lambdas=(vrot=3000, vdisp=1000)` (the keys `vrot`, `vdisp`, `vrad`, `dens`).
+seeing FWHM; `PRIORS` changes them. The parameters free in each ring can be regularised by smoothness priors,
+as in BAYESIAN3DFIT: `LIKEOPTS smooth=(vrot=5, vdisp=3)` allows the profiles to bend by about 5 and 3 km/s over a
+seeing FWHM (the keys `vrot`, `vdisp`, `vrad` and `dens`, in dex). `print_stats` shows the bends of the best fit
+and the effective number of independent values of each profile.
 
 ## Normalisation
 

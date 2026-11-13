@@ -34,8 +34,9 @@ The normalisation of the model (NORM):
 
 Options of the likelihood (LIKEOPTS): noisecorr ('measured', default: the correlation of the noise along the slit and
 along the spectra, measured; or a number of pixels per independent measurement, 1 for independent pixels),
-densprof_smooth (default 0.1), sigma (a fixed factor of the noise map, default 1), lambdas (smoothness penalties of
-the parameters free in each ring, as BAYESIAN3DFIT: lambdas=(vrot=3000, vdisp=1000) in LIKEOPTS, a dict in Python).
+densprof_smooth (default 0.1), sigma (a fixed factor of the noise map, default 1), smooth (the smoothness priors of
+the parameters free in each ring, as BAYESIAN3DFIT: the bend allowed to each profile over one seeing FWHM, in the units
+of the parameter, DENS in dex: smooth=(vrot=5, vdisp=3) in LIKEOPTS, a dict in Python).
 """
 
 import os
@@ -45,7 +46,8 @@ import numpy as np
 
 from ..tasks import Task, build_param, _checked
 from ..bbutils import BBaroloError
-from .common import vprint, banner, get_distribution, fast_ppf, show_bar, smoothness_penalty, SIGMA_QUANTILES
+from .common import (vprint, banner, get_distribution, fast_ppf, show_bar, smoothness_penalty, smoothness_summary,
+                     smoothness_text, SIGMA_QUANTILES)
 from .sampling import sample, sampler_options
 from .optimize import SAMPLER_NAMES, sampler_options as optimize_options
 
@@ -62,7 +64,7 @@ DEFAULT_SLIT_FUNCS = dict(vrot=lambda R, p1, p2: 2. / np.pi * p1 * np.arctan(R /
                           vrad=lambda R, p1, p2: p1 + p2 * R,                            # linear
                           dens=lambda R, p1, p2: p1 * np.exp(-R / p2))                   # exponential
 
-SLIT_LIKE_OPTIONS = dict(noisecorr="measured", densprof_smooth=0.1, sigma=None, lambdas=None)
+SLIT_LIKE_OPTIONS = dict(noisecorr="measured", densprof_smooth=0.1, sigma=None, smooth=None)
 
 
 def slit_like_option(name, value):
@@ -84,14 +86,14 @@ def slit_like_option(name, value):
         if not x >= 1:
             raise ValueError(f"noisecorr: the number of pixels per independent value must be >= 1, not {value}")
         return k, x
-    if k == "lambdas":
+    if k == "smooth":
         from ..params import bayes_like_option
-        lam = bayes_like_option(k, value)[1]
-        bad = [n for n in lam if n not in SLIT_RING_PARS]
+        sm = bayes_like_option(k, value)[1]
+        bad = [n for n in sm if n not in SLIT_RING_PARS]
         if bad:
-            raise ValueError(f"lambdas: '{bad[0]}' is not a ring parameter of BAYESIANSLITFIT ("
+            raise ValueError(f"smooth: '{bad[0]}' is not a ring parameter of BAYESIANSLITFIT ("
                              + ", ".join(SLIT_RING_PARS) + ")")
-        return k, lam
+        return k, sm
     try:
         x = float(value)
     except (TypeError, ValueError):
@@ -707,7 +709,7 @@ class BayesianSlitFit(Task):
 
     def log_likelihood(self, theta, details=False):
         """The log-likelihood of the parameters theta (see the module documentation), minus the smoothness penalties
-        (LIKEOPTS lambdas); with details also a dict: the model (nz, npos of the region), the rings, the densities and,
+        (LIKEOPTS smooth); with details also a dict: the model (nz, npos of the region), the rings, the densities and,
         with NORM LOCAL, the amplitudes of the positions."""
         from scipy.special import log_ndtr
         theta = np.asarray(theta, float)
@@ -734,16 +736,39 @@ class BayesianSlitFit(Task):
                 M = U * amp[None, :]
         else:
             logl = float(-0.5 * np.sum(W * (d - M) ** 2)) + lognorm
-        for key, lam in self._lambdas().items():
-            logl -= smoothness_penalty(rd.r["radii"], rd.r[key], lam, from_zero=(key == "vrot"))
+        for key, sk in self._smooth_used().items():
+            logl -= smoothness_penalty(rd.r["radii"], rd.r[key], sk, self._beam, from_zero=(key == "vrot"),
+                                       log=(key == "dens"))
         if not details:
             return logl
         return logl, dict(model=M, rings=rd.copy(), dens=dens, amplitudes=amp, scale=k)
 
-    def _lambdas(self):
-        """The smoothness penalties used (LIKEOPTS lambdas): those > 0 of the parameters free in each ring."""
-        lam = self.like_kwargs.get("lambdas") or {}
-        return {k: float(v) for k, v in lam.items() if v > 0 and k in self.freepar_idx and self.freepar_idx[k].size > 1}
+    def _smooth_used(self):
+        """The smoothness tolerances used (LIKEOPTS smooth, {parameter: s}): those of the parameters free in each
+        ring."""
+        sm = self.like_kwargs.get("smooth") or {}
+        return {k: float(v) for k, v in sm.items() if k in self.freepar_idx and self.freepar_idx[k].size > 1}
+
+    def smoothness_stats(self):
+        """What the smoothness priors (LIKEOPTS smooth) do to the best fit: {parameter: dict(n, bend, penalty, ndof)}
+        (see common.smoothness_summary: the rms bend over a seeing FWHM of the best-fit profile, the penalty in ln L and
+        the effective number of independent values of the profile, from the posterior covariance of its rings, that of
+        the Laplace approximation after optimize); {} without smoothness priors."""
+        sm = self._smooth_used()
+        if not sm or not self.modCalculated or self.best is None:
+            return {}
+        rd = self.best["rings"]
+        opt = self.optimum if self._method == "optimize" else None
+        out = {}
+        for k, sk in sm.items():
+            idx = np.asarray(self.freepar_idx[k])
+            if opt is None:
+                cov = np.cov(np.asarray(self.samples)[:, idx].T, aweights=self.weights)
+            else:
+                cov = None if opt.cov is None else np.asarray(opt.cov)[np.ix_(idx, idx)]
+            out[k] = smoothness_summary(rd.r["radii"], rd.r[k], sk, self._beam, from_zero=(k == "vrot"),
+                                        log=(k == "dens"), cov=cov)
+        return out
 
     def _log_like_func(self, theta, **kwargs):
         try:
@@ -910,12 +935,8 @@ class BayesianSlitFit(Task):
             (f"(noise correlation: {corr['spectral']:.2f} channels x {corr['spatial']:.2f} positions)"
              if nc == "measured" else "(given)"))
         row("pixels", f"{self.nvalid}")
-        lam = self._lambdas()
-        if lam:
-            row("smoothness", ", ".join(f"{k} {v:g}" for k, v in lam.items()) + " (lambdas)")
-        unused = [k for k, v in (self.like_kwargs.get("lambdas") or {}).items() if v > 0 and k not in lam]
-        if unused:
-            row("", f"lambdas of {', '.join(unused)} not used (not free in each ring)")
+        for i, t in enumerate(smoothness_text(self._smooth_used(), self._beam, self.like_kwargs.get("smooth"))):
+            row("smoothness" if i == 0 else "", t.replace("over a beam", "over a seeing FWHM"))
         st.write("\nPriors\n")
         for key in self.freepar_idx:
             d = self.priors[key]
@@ -1021,6 +1042,11 @@ class BayesianSlitFit(Task):
             st.write(f"   {name:12s} = {val:12.4g}  -{med - lo:<10.3g} +{hi - med:<10.3g}\n")
         if self.best is not None:
             st.write(f"   reduced chi-square of the best fit: {self.best['chi2_reduced']:.3g}\n")
+        sm = self.smoothness_stats()
+        if sm:
+            st.write(f"\n Smoothness priors (LIKEOPTS smooth; bends over a seeing FWHM of {self._beam:.3g} arcsec):\n")
+            for line in smoothness_text(self._smooth_used(), self._beam, stats=sm):
+                st.write("   " + line.replace("over a beam", "over a FWHM") + "\n")
         st.write("\n")
 
     def corner_plot(self, labels=None, truths=None, quantiles=SIGMA_QUANTILES, **kwargs):

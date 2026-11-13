@@ -165,7 +165,9 @@ The keywords of the Python classes are those of the parameter files, case-insens
 (`pa` or `phi`, `errors` for FLAGERRORS, `fit3d` for 3DFIT, `polyn`, `deltaphi`).
 
 Python-only options that existed in the old pyBBarolo and are gone or renamed: `smooth=` of FitMod3D is
-`sm=`; `outfolder`, `ltype`, `deltainc`, `ftype`, `wfunc`, `bweight`, `tol`, `mask`, `norm`, `free`, `side`,
+`sm=`; the smoothness penalties `lambdas` of the Bayesian fit (`f.lambdas`, `like_kwargs=dict(lambdas=...)`, λ
+in arcsec⁴ per squared unit) are replaced by the smoothness priors `like_kwargs=dict(smooth=...)` (`LIKEOPTS
+smooth`: the bend allowed over a beam, in the units of the parameter); `outfolder`, `ltype`, `deltainc`, `ftype`, `wfunc`, `bweight`, `tol`, `mask`, `norm`, `free`, `side`,
 `twostage`, `startrad`, `redshift` and `restwave` keep their names.
 
 ## New tasks and features

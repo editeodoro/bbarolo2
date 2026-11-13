@@ -443,6 +443,13 @@ class OutputsMixin(object):
             d = np.diff(q[:, i])
             val = self.params[i] if opt is not None else q[1, i]       # (an optimisation: the best fit)
             print("  %10s = %10.3f %+10.3f %+10.3f" % (self.freepar_names[i], val, -d[0], d[1]))
+        sm = self.smoothness_stats()
+        if sm:
+            from .common import smoothness_text
+            print(f"\nSmoothness priors (LIKEOPTS smooth; bends over a beam of {self._smooth_beam():.3g} arcsec):")
+            for line in smoothness_text(self._smooth_used(self.like_kwargs.get('smooth')), self._smooth_beam(),
+                                        stats=sm):
+                print("  " + line)
         dp = getattr(self, 'dens_profile', None)
         if dp is not None:
             print("\nDeconvolved density profile (DENS, not fitted; errors from the geometry and the noise):")
@@ -467,6 +474,32 @@ class OutputsMixin(object):
             for i in range(len(self.freepar_names)):
                 print("  %10s = %10.3f " % (self.freepar_names[i], results.samples[max_index][i]))
 
+    def smoothness_stats(self):
+        """ What the smoothness priors (LIKEOPTS smooth) do to the best fit: {parameter: dict(n, bend, penalty,
+        ndof)} (see common.smoothness_summary: the rms bend over a beam of the best-fit profile, the penalty in ln L
+        and the effective number of independent values of the profile, from the posterior covariance of its rings,
+        that of the Laplace approximation after optimize); {} without smoothness priors (or with the residuals of
+        3DFIT, or a log-likelihood of the user). """
+        from .common import smoothness_summary
+        smooth = self._smooth_used((self.like_kwargs or {}).get('smooth'))
+        if not smooth or not self.modCalculated or self.like_kwargs.get('bbres') or \
+                getattr(self, '_log_like_kind', 'cube') != 'cube':
+            return {}
+        rings = getattr(self, 'outri', None)
+        if rings is None:
+            rings = self._update_rings(self._fit0.copy(), self.params)
+        opt = self.optimum if self._method == 'optimize' else None
+        out = {}
+        for k, sk in smooth.items():
+            idx = np.asarray(self.freepar_idx[k])
+            if opt is None:
+                cov = np.cov(np.asarray(self.samples)[:, idx].T, aweights=self.weights)
+            else:
+                cov = None if opt.get('cov') is None else np.asarray(opt['cov'])[np.ix_(idx, idx)]
+            out[k] = smoothness_summary(rings.r['radii'], rings.r[k], sk, self._smooth_beam(),
+                                        from_zero=(k == 'vrot'), log=(k == 'dens'), cov=cov)
+        return out
+
     def print_priors(self):
         """ Print the priors for each parameter """
         print("\nPrior distributions for free parameters:")
@@ -490,7 +523,7 @@ class OutputsMixin(object):
                       inrings=self._inri.r, options={k: str(v) if isinstance(v, _FromFile) else v
                                                      for k, v in self.parameters.items()},
                       priors=self.priors,
-                      prior_distr=self.prior_distr, lambdas=self.lambdas, like_kwargs=like,
+                      prior_distr=self.prior_distr, like_kwargs=like,
                       loglike=getattr(self, '_log_like_kind', 'cube'), method=self._method,
                       funcs=self._funcs_used())
         if self._method == 'optimize' and self.optimum is not None:
@@ -535,7 +568,7 @@ class OutputsMixin(object):
         FitMod3D.update(self, **opts)     # (not that of Bayesian3DFIT)
         self._cube_obj = None
         self._init_rings()
-        for k in ('priors', 'prior_distr', 'lambdas'):
+        for k in ('priors', 'prior_distr'):
             if r.get(k) is not None:
                 getattr(self, k).update(r[k])
         # the options of the likelihood of the saved fit (in files saved before like_kwargs existed:
@@ -548,6 +581,7 @@ class OutputsMixin(object):
                         densprof_smooth=r.get('densprof_smooth', 0.1))
         if 'radmax' not in like:                       # (files saved before the option: the last ring)
             like = dict(like, radmax='ring')
+        like = {k: v for k, v in like.items() if k != 'lambdas'}     # (files saved before smooth: not read)
         self._set_like_options(like, custom=True)
         self._setup(r['freepar_inp'])
         # the likelihood of the fit: of the cube, of the total intensity map (run_geometry), or one given
