@@ -6,7 +6,7 @@ The outputs of BAYESIANSLITFIT (BayesianSlitFit.write), in the output folder, na
   <prefix>_slit_model.fits            the best model (the positions of the likelihood; NaN elsewhere)
   <prefix>_slit_resid.fits            data - model
   <prefix>_slit_noise.fits            the noise map
-  <prefix>_slit_cont.fits             the continuum subtracted (CONTFIT)
+  <prefix>_slit_cont.fits             the continuum subtracted (CONTSUB)
   <prefix>_slitfit_<method>_results.npy   the samples of the posterior and the options of the fit
   <prefix>_slitfit_pv.pdf, <prefix>_slitfit_parameters.pdf, <prefix>_slitfit_corner.pdf   the plots (PLOTS > 0),
                                       with their scripts in plotscripts/
@@ -70,6 +70,58 @@ def los_curves(f, rings=None, npts=400):
     return curves, s, v
 
 
+def ring_points(f):
+    """The rotation velocities of the best rings where they cross the slit, in the spectral values of the first line:
+    (offsets (arcsec, from XPOS), spectral values, lower errors, upper errors), sorted by offset, from the 1-sigma
+    errors of VROT (0 if VROT is fixed). A ring crosses the slit at two offsets (one if it only touches it, none if the slit is beyond
+    it, YPOS)."""
+    rd = f.best["rings"]
+    r = rd.r
+    ini = f.initial
+    radii = np.asarray(r["radii"], float)
+    vrot, vrad = np.asarray(r["vrot"], float), np.asarray(r["vrad"], float)
+    t = f.ring_table()
+    elo = np.asarray(t["E_VROT_LO"], float) if "E_VROT_LO" in t.colnames else np.zeros(radii.size)
+    ehi = np.asarray(t["E_VROT_HI"], float) if "E_VROT_HI" in t.colnames else np.zeros(radii.size)
+    sini = math.sin(math.radians(float(np.median(r["inc"]))))
+    ci = math.cos(math.radians(float(np.median(r["inc"]))))
+    d = math.radians(ini["slitangle"])
+    yoff = ini["yoffset"]
+    vsys = float(np.median(r["vsys"]))
+    # R^2 = a s^2 + 2 b s + c along the slit (see los_curves)
+    a = math.cos(d) ** 2 + math.sin(d) ** 2 / ci ** 2
+    b = math.sin(d) * math.cos(d) * yoff * (1. - 1. / ci ** 2)
+    c = yoff ** 2 * (math.sin(d) ** 2 + math.cos(d) ** 2 / ci ** 2)
+    out = [[], [], [], []]
+    sp = f.prep.spec
+    for i, R in enumerate(radii):
+        disc = b * b - a * (c - R * R)
+        if disc < 0:
+            continue
+        for s_ in sorted({(-b - math.sqrt(disc)) / a, (-b + math.sqrt(disc)) / a}):
+            X = s_ * math.cos(d) + yoff * math.sin(d)
+            Y = (-s_ * math.sin(d) + yoff * math.cos(d)) / ci
+            caz, saz = (X / R, Y / R) if R > 0 else (0., 0.)
+            v = vsys + (vrot[i] * caz + vrad[i] * saz) * sini
+            lo, hi = (elo[i], ehi[i]) if caz >= 0 else (ehi[i], elo[i])
+            w, wlo, whi = (float(x) for x in sp.value(np.array([v, v - lo * abs(caz) * sini,
+                                                                v + hi * abs(caz) * sini]), 0))
+            out[0].append(s_)
+            out[1].append(w)
+            out[2].append(abs(w - wlo))
+            out[3].append(abs(whi - w))
+    o = np.argsort(out[0])
+    return tuple(np.asarray(x, float)[o] for x in out)
+
+
+def vsys_values(f):
+    """The spectral values of the systemic velocity of the best fit, one per line."""
+    sp = f.prep.spec
+    vsys = float(np.median(f.best["rings"].r["vsys"]))
+    nl = len(sp.rest) if sp.rest and sp.rest[0] is not None else 1
+    return [float(sp.value(vsys, l)) for l in range(nl)]
+
+
 def pv_inputs(f):
     """The arguments of plots.slitfit.plot_slit_pv for the best fit of f (positions of the likelihood)."""
     prep = f.prep
@@ -86,7 +138,8 @@ def pv_inputs(f):
     pts = ((np.arange(p0, p1)[ok] - xpos) * pix, prep.spec.value(L["v"][p0:p1][ok], 0)) if np.any(ok) else None
     sp = prep.spec
     return dict(data=data, model=model, resid=resid, offsets=offsets, spec=sp.values(), specunit=sp.cunit,
-                curves=curves, points=pts, gname=prep.slit.name, lines=_lines_text(f))
+                curves=curves, points=pts, rings=ring_points(f), vsys=vsys_values(f), gname=prep.slit.name,
+                lines=_lines_text(f))
 
 
 def _lines_text(f):
@@ -157,7 +210,7 @@ def write_outputs(f, outfolder=None, plots=None, verbose=True):
             fn = pre + f"_slit_{suffix}.fits"
             write_hdu(slit.to_hdu(arr, k0=prep.k0, extra=extra), fn)
             files.append(fn)
-        if f._par.contfit:
+        if f._par.contsub:
             fn = pre + "_slit_cont.fits"
             write_hdu(slit.to_hdu(prep.continuum, k0=prep.k0, extra=extra), fn)
             files.append(fn)
@@ -212,9 +265,16 @@ def _write_plots(f, of):
                 ("transposed", bool(f.prep.slit.transposed), "the spectral axis is NAXIS2"),
                 ("specunit", pin["specunit"], ""), ("gname", pin["gname"], ""), ("lines", pin["lines"], "")]
     from ..plots.scripts import Code
-    settings.append(("curves", Code("[" + ", ".join(f"(np.array({list(np.round(c[0], 5))}), "
-                                                   f"np.array({list(np.round(c[1], 6))}))" for c in curves) + "]"),
+    arr = lambda x, nd: f"np.array({[float(v) for v in np.round(np.asarray(x, float), nd)]})"
+    settings.append(("curves", Code("[" + ", ".join(f"({arr(c[0], 5)}, {arr(c[1], 6)})" for c in curves) + "]"),
                      "the velocities of the rings along the slit, per line"))
+    pts = pin["points"]
+    settings.append(("points", Code("None" if pts is None else f"({arr(pts[0], 5)}, {arr(pts[1], 6)})"),
+                     "the velocities of the Gaussian fits along the slit (first line)"))
+    rp = pin["rings"]
+    settings.append(("rings", Code("(" + ", ".join(arr(x, 6) for x in rp) + ")"),
+                     "the rotation velocities of the rings on the slit: offsets, values, errors (first line)"))
+    settings.append(("vsys", [round(v, 6) for v in pin["vsys"]], "the systemic velocity, per line"))
     body = ("def read(suffix):\n"
             "    with fits.open(outfolder + outprefix + '_slit_' + suffix + '.fits') as h:\n"
             "        a, hd = h[0].data.astype(float), h[0].header\n"
@@ -227,7 +287,7 @@ def _write_plots(f, of):
             "data, model, noise = data[:, p0:p1], model[:, p0:p1], noise[:, p0:p1]\n"
             "offsets = (np.arange(p0, p1) - xpos) * pix\n"
             "fig = plot_slit_pv(data, model, (data - model) / noise, offsets=offsets, spec=spec, specunit=specunit,\n"
-            "                   curves=curves, gname=gname, lines=lines)\n"
+            "                   curves=curves, points=points, rings=rings, vsys=vsys, gname=gname, lines=lines)\n"
             "fig.savefig(outfolder + outprefix + '_slitfit_pv.pdf', bbox_inches='tight')\n")
     fn = sd + "plot_slitfit_pv.py"
     with open(fn, "w") as fh:

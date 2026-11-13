@@ -8,8 +8,8 @@ prepared for the fit.
       A wavelength axis in metres is read in Angstrom (the unit of RESTWAVE and of the wavelengths of the keywords
       then); other units are kept. Blanks (NaN, or exactly 0) are not data;
     * the spectral window of the fit (WAVERANGE, or the lines over the velocity range of the emission, padded);
-    * the continuum (CONTFIT): a straight line per position, fitted in CONTWINDOWS (default: the window away from
-      the lines) with a 3-sigma clipping, and subtracted;
+    * the continuum (CONTSUB): a polynomial of degree CONTORDER (default 1, a straight line) per position, fitted in
+      the window away from the lines (and from the channels of EXCLWIND) with a 3-sigma clipping, and subtracted;
     * the residual sky (SKYRESID): the median of each column over the positions without line emission, subtracted;
     * the noise map, sigma^2(s, lambda) = sigma_col(lambda)^2 + sigma_obj(s)^2: the scatter of each column over the
       positions without line emission (the sky, larger at sky lines) plus that of each position in the continuum
@@ -214,31 +214,30 @@ class SlitData:
 
 
 # ---------------------------------------------------------------------------------------------- preparation
-def _linefit(y, x, w):
-    """Weighted straight line of y (n, npos) against x (n,) with weights w (n, npos), for each position: (a, b) with
-    y = a + b x (a = b = 0 where fewer than 3 points)."""
-    S0 = w.sum(0)
-    S1 = (w * x[:, None]).sum(0)
-    S2 = (w * x[:, None] ** 2).sum(0)
+def _polyfit(y, x, w, order):
+    """Weighted polynomial of degree order of y (n, npos) against x (n,) with weights w (n, npos), for each position:
+    its values (n, npos) (0 where fewer than order + 2 points)."""
+    V = np.vander(x, order + 1, increasing=True)                     # (n, order + 1)
     yw = np.where(w > 0, y, 0.)
-    T0 = (w * yw).sum(0)
-    T1 = (w * x[:, None] * yw).sum(0)
-    det = S0 * S2 - S1 * S1
-    ok = (S0 >= 3) & (det > 0)
-    a = np.where(ok, (T0 * S2 - T1 * S1) / np.where(ok, det, 1.), 0.)
-    b = np.where(ok, (S0 * T1 - S1 * T0) / np.where(ok, det, 1.), 0.)
-    return a, b
+    G = np.einsum("ip,ij,ik->pjk", w, V, V)                         # (npos, order + 1, order + 1)
+    b = np.einsum("ip,ij,ip->pj", w, V, yw)                         # (npos, order + 1)
+    ok = w.sum(0) >= order + 2
+    c = np.zeros_like(b)
+    if np.any(ok):
+        c[ok] = (np.linalg.pinv(G[ok]) @ b[ok][:, :, None])[:, :, 0]
+    return V @ c.T
 
 
-def fit_continuum(data, x, use, nclip=3):
-    """The continuum of each position: a straight line in x fitted to data (nspec, npos) in the channels use
-    (nspec,) bool, with 3-sigma clipping (nclip iterations). Returns the continuum (nspec, npos)."""
+def fit_continuum(data, x, use, order=1, nclip=3):
+    """The continuum of each position: a polynomial of degree order in x fitted to data (nspec, npos) in the channels
+    use (nspec,) bool, with 3-sigma clipping (nclip iterations). Returns the continuum (nspec, npos)."""
     good = np.isfinite(data) & use[:, None]
     w = good.astype(np.float64)
-    xc = x - np.mean(x[use]) if np.any(use) else x
+    xc = x - np.mean(x[use]) if np.any(use) else x - np.mean(x)
+    h = float(np.max(np.abs(xc[use]))) if np.any(use) else 1.
+    xc = xc / (h if h > 0 else 1.)                                  # (in [-1, 1] in the channels of the fit)
     for _ in range(nclip + 1):
-        a, b = _linefit(data, xc, w)
-        cont = a[None, :] + b[None, :] * xc[:, None]
+        cont = _polyfit(data, xc, w, int(order))
         r = np.where(good, data - cont, np.nan)
         with np.errstate(all="ignore"):
             med = np.nanmedian(r, axis=0)
@@ -361,12 +360,12 @@ class PreparedSlit:
       k0, k1      the channels of the window, [k0, k1)
       spec        the SpecAxis of the window
       data        (nz, npos) the data of the window, continuum and residual sky subtracted (NaN: blanks)
-      continuum   (nz, npos) the continuum subtracted (0 without CONTFIT)
+      continuum   (nz, npos) the continuum subtracted (0 without CONTSUB)
       sky         (nz,) the residual sky subtracted (0 without SKYRESID)
       noise       (nz, npos) the noise map
       valid       (nz, npos) bool: the pixels of the data (not blank, not in MASKWAVE)
       linechan    (nz,) bool: the channels of the lines (the velocity range of the emission)
-      contchan    (nz,) bool: the channels of the continuum fit (CONTWINDOWS)
+      contchan    (nz,) bool: the channels of the continuum (the window away from the lines, EXCLWIND and MASKWAVE)
       freepos     (npos,) bool: the positions without line emission
       lines       dict of the fits of the lines along the slit (see fit_lines), with pos (pixels)
       vrange      (vlo, vhi): the velocity range of the emission (km/s)
@@ -374,12 +373,15 @@ class PreparedSlit:
     """
 
 
-def prepare(slit, restwave, relint, redshift, veldef, sig_instr, beam_fwhm, contfit=False, contwindows=None,
-            waverange=None, skyresid=False, maskwave=None, verbose=True):
+def prepare(slit, restwave, relint, redshift, veldef, sig_instr, beam_fwhm, contsub=False, contorder=1,
+            exclwind=None, waverange=None, skyresid=False, maskwave=None, verbose=True):
     """Prepare the slit for the fit (see the module documentation). restwave: the rest wavelengths (or frequencies,
     for a frequency axis; ignored for a velocity axis) in the units of the axis; relint: their relative intensities;
-    sig_instr: the instrumental dispersion (km/s); beam_fwhm: the seeing (arcsec). contwindows, waverange, maskwave:
-    lists of values of the spectral axis (pairs). Returns a PreparedSlit."""
+    sig_instr: the instrumental dispersion (km/s); beam_fwhm: the seeing (arcsec); contsub, contorder: the continuum
+    subtracted, a polynomial of degree contorder; exclwind: the channels that are not continuum (EXCLWIND, channels
+    of the slit counted from 0); waverange, maskwave: lists of values of the spectral axis (pairs). Returns a
+    PreparedSlit."""
+    from ..cube import exclwind_channels
     spec = slit.spec
     sp = SpecAxis(spec.kind, spec.ctype, spec.cunit, spec.crval, spec.cdelt, spec.crpix, spec.n)
     if veldef and veldef != "auto":
@@ -403,6 +405,8 @@ def prepare(slit, restwave, relint, redshift, veldef, sig_instr, beam_fwhm, cont
     blank = ~np.isfinite(data)
     maskr = _pairs(maskwave, "MASKWAVE")
     masked = _ranges_mask(allv, maskr) if maskr else np.zeros(nsp, bool)
+    notcont = masked | exclwind_channels("NONE" if exclwind is None else exclwind, nsp,
+                                         "the spectral axis of the slit")
     # the channels near the lines (the search range)
     near = np.zeros(nsp, bool)
     for l in range(len(rest)):
@@ -432,18 +436,16 @@ def prepare(slit, restwave, relint, redshift, veldef, sig_instr, beam_fwhm, cont
         for l in range(len(rest)):
             c = np.sort(sp.chan_of_vel(np.array([-vex, vex]), l))
             vlines[max(int(np.floor(c[0])), 0):max(int(np.ceil(c[1])) + 1, 0)] = True
-        if np.sum(~vlines[sl1] & ~masked[sl1]) >= 20:
+        if np.sum(~vlines[sl1] & ~notcont[sl1]) >= 20:
             break
     x = allv
     cont = np.zeros_like(data)
-    if contfit:
-        use = ~vlines[sl1] & ~masked[sl1]
-        if contwindows:
-            use = _ranges_mask(allv[sl1], _pairs(contwindows, "CONTWINDOWS")) & ~masked[sl1]
-        if use.sum() < 10:
-            raise BBaroloError("BAYESIANSLITFIT: too few channels to fit the continuum: the spectrum is too short "
-                               "around the lines (give CONTWINDOWS)")
-        cont[sl1] = fit_continuum(data[sl1], x[sl1], use)
+    if contsub:
+        use = ~vlines[sl1] & ~notcont[sl1]
+        if use.sum() < max(10, 3 * (contorder + 1)):
+            raise BBaroloError("BAYESIANSLITFIT: too few channels to fit the continuum (CONTSUB): the spectrum is "
+                               "too short around the lines, or EXCLWIND and MASKWAVE leave out too many channels")
+        cont[sl1] = fit_continuum(data[sl1], x[sl1], use, contorder)
     work = np.where(masked[:, None], np.nan, data - cont)
     # the stacked lines and their fits along the slit
     vgrid = np.arange(-VSEARCH, VSEARCH + 0.5 * dvch, dvch)
@@ -456,7 +458,7 @@ def prepare(slit, restwave, relint, redshift, veldef, sig_instr, beam_fwhm, cont
     ok = fits_["ok"]
     if ok.sum() < 3:
         raise BBaroloError("BAYESIANSLITFIT: no line emission detected along the slit (check RESTWAVE, REDSHIFT and "
-                           "the spectral axis; CONTFIT true if the slit has a continuum)")
+                           "the spectral axis; CONTSUB true if the slit has a continuum)")
     # isolated detections are spurious: keep the positions with a detected neighbour; so are the velocities far
     # from those of the nearby positions (e.g. a line taken for another one of the stack)
     ok &= np.r_[False, ok[:-1]] | np.r_[ok[1:], False]
@@ -479,20 +481,16 @@ def prepare(slit, restwave, relint, redshift, veldef, sig_instr, beam_fwhm, cont
     kw = np.flatnonzero(inwin)
     k0, k1 = int(kw[0]), int(kw[-1]) + 1
     sl = slice(k0, k1)
-    # second pass of the continuum: the window away from the lines (or CONTWINDOWS)
+    # second pass of the continuum: the window away from the lines
     contchan = np.zeros(nsp, bool)
-    if contwindows:
-        contchan = _ranges_mask(allv, _pairs(contwindows, "CONTWINDOWS"))
-    else:
-        contchan[sl] = ~linechan[sl]
-    contchan &= ~masked
-    if contfit:
-        cl = np.flatnonzero(contchan)
-        if cl.size < 6:
-            raise BBaroloError("BAYESIANSLITFIT: too few channels to fit the continuum (CONTWINDOWS)")
-        lo2, hi2 = min(cl[0], k0), max(cl[-1] + 1, k1)
+    contchan[sl] = ~linechan[sl]
+    contchan &= ~notcont
+    if contsub:
+        if contchan.sum() < max(6, 3 * (contorder + 1)):
+            raise BBaroloError("BAYESIANSLITFIT: too few channels to fit the continuum (CONTSUB) in the window of the "
+                               "fit: widen WAVERANGE, or exclude fewer channels (EXCLWIND, MASKWAVE)")
         cont[:] = 0.
-        cont[lo2:hi2] = fit_continuum(data[lo2:hi2], x[lo2:hi2], contchan[lo2:hi2])
+        cont[sl] = fit_continuum(data[sl], x[sl], contchan[sl], contorder)
     # the positions without line emission: not detected, and more than one seeing FWHM from a detection
     bpix = beam_fwhm / slit.pix
     det = np.flatnonzero(ok)

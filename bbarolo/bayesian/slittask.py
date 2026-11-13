@@ -5,14 +5,15 @@ from .slit import BayesianSlitFit
 
 
 def _task_slit(c, par):
-    """The BayesianSlitFit of the BAYESIANSLITFIT task: the parameters of par as given (but the flags of the tasks and
-    the input files), the output folder of c and the slit of the parameter file (FITSFILE)."""
+    """The BayesianSlitFit of the BAYESIANSLITFIT task: the parameters of par as given (but the flags of the tasks other
+    than CONTSUB, the continuum of the slit, and the input files), the output folder of c and the slit of the parameter
+    file (FITSFILE)."""
     from ..keywords import lookup
     p = c.pars()
     prm = {}
     for k, v in getattr(par, "_given", {}).items():
         kw = lookup(k)
-        if kw is None or kw.flag or k in ("FITSFILE", "FITSLIST", "AUTO", "OUTFOLDER"):
+        if kw is None or (kw.flag and k != "CONTSUB") or k in ("FITSFILE", "FITSLIST", "AUTO", "OUTFOLDER"):
             continue
         prm[k] = _FromFile(v)
     prm["OUTFOLDER"] = p.outFolder

@@ -320,8 +320,6 @@ class Param:
         self.slitwidth = -1.0         # SLITWIDTH (arcsec)
         self.slitangle = "AUTO"       # SLITANGLE (degrees, or AUTO)
         self.waverange = []           # WAVERANGE
-        self.contfit = False          # CONTFIT
-        self.contwindows = []         # CONTWINDOWS
         self.skyresid = False         # SKYRESID
         self.maskwave = []            # MASKWAVE
 
@@ -820,7 +818,7 @@ class Param:
                                  ("BAYESIANWIND", gw.flagBAYESIAN), ("SEARCH", se.flagSearch),
                                  ("SPACEPAR", self.flagSpace), ("2DFIT", self.flagRing), ("ELLPROF", self.flagEllProf),
                                  ("SMOOTH", self.flagSmooth), ("SMOOTHSPEC", self.flagSmoothSpectral),
-                                 ("PVSLICE", self.flagPV), ("REND3D", self.flagRend3D), ("CONTSUB", self.contsub),
+                                 ("PVSLICE", self.flagPV), ("REND3D", self.flagRend3D),
                                  ("MAKEMASK", self.makeMask), ("STATS", self.flagStats), ("MAPS", self.getMaps()))
                   if f]
         if others:
@@ -876,8 +874,7 @@ class Param:
         if len(gf.NORM.split()) > 1:
             out("BAYESIANSLITFIT error: NORM is one of AZIM, LOCAL or NONE.")
             good = False
-        for name, vec in (("WAVERANGE", self.waverange), ("CONTWINDOWS", self.contwindows),
-                          ("MASKWAVE", self.maskwave)):
+        for name, vec in (("WAVERANGE", self.waverange), ("MASKWAVE", self.maskwave)):
             if len(vec) % 2 or (name == "WAVERANGE" and len(vec) not in (0, 2)):
                 out(f"BAYESIANSLITFIT error: {name} needs " + ("two values (a range)." if name == "WAVERANGE" else
                                                                 "pairs of values (ranges)."))
@@ -1544,7 +1541,7 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
     if isAll or p.flagStats or (defaults and whichtask == "STATS"):
         R("[STATS]", "Calculate and print statistics?", stringize(p.flagStats))
         R("[ITERNOISE]", "   Estimating noise with iterative algorithm?", stringize(se.iternoise))
-    if isAll or p.contsub or (defaults and whichtask == "CONTSUB"):
+    if isAll or (p.contsub and not p.flagBayesSlit) or (defaults and whichtask == "CONTSUB"):
         R("[CONTSUB]", "Subtract continuum from datacube?", stringize(p.contsub))
         R("[EXCLWIND]", "   Channel window(s) to exclude for continuum fit", p.exclude_windows)
         R("[CONTORDER]", "   Order of polynomial for continuum fit", p.cont_order)
@@ -1730,6 +1727,52 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
         typ = {0: "uniform", 1: "|cos(θ)|", 2: "cos(θ)^2", -1: "|sin(θ)|", -2: "sin(θ)^2"}.get(gf.WFUNC, "")
         R("[WFUNC]", "   Weighting function", typ)
         R("[FREEANGLE]", "   Angle around the minor axis left out (deg)", gf.FREEANGLE)
+
+    if isAll or p.flagBayesSlit or (defaults and whichtask == "BAYESIANSLITFIT"):
+        sd = _kw.TASK_DEFAULTS["BAYESIANSLITFIT"]
+        given = getattr(p, "_given", {})
+        vec = lambda v, none: " ".join(f"{x:g}" for x in v) if v else none
+        R("[BAYESIANSLITFIT]", "Fitting a long-slit spectrum?", stringize(p.flagBayesSlit))
+        R("[SLITWIDTH]", "   Width of the slit (arcsec)", p.slitwidth)
+        R("[SLITANGLE]", "   Slit to receding major axis (deg, or AUTO)", p.slitangle)
+        R("[REDSHIFT]", "   Redshift of the galaxy?", gf.REDSHIFT)
+        if gf.RESTWAVE[0] != -1 or defaults: R("[RESTWAVE]", "   Transition wavelength at rest?", " ".join(f"{v:.5f}" for v in gf.RESTWAVE))
+        if gf.RESTFREQ[0] != -1 or defaults: R("[RESTFREQ]", "   Transition frequency at rest?", " ".join(f"{v:.2f}" for v in gf.RESTFREQ))
+        if len(gf.RELINT) > 1 or defaults: R("[RELINT]", "   Relative intensities of lines?", " ".join(f"{v:.3g}" for v in gf.RELINT))
+        R("[SPECRES]", "   Spectral resolution in sigma (channels)", p.specres if p.specres != -1 else p.linear)
+        R("[WAVERANGE]", "   Spectral range of the fit", vec(p.waverange, "auto"))
+        R("[CONTSUB]", "   Subtracting the continuum?", stringize(p.contsub))
+        if p.contsub or defaults:
+            R("[CONTORDER]", "     Order of polynomial for continuum fit", p.cont_order)
+            R("[EXCLWIND]", "     Channels excluded from continuum fit", p.exclude_windows)
+        R("[SKYRESID]", "   Subtracting a residual sky?", stringize(p.skyresid))
+        R("[MASKWAVE]", "   Spectral ranges left out of the fit", vec(p.maskwave, "none"))
+        if defaults or gf.RADII == "-1":
+            if defaults: R("[RADII]", "   Radii for rings", gf.RADII)
+            R("[NRADII]", "   Number of radii", gf.NRADII)
+            R("[RADSEP]", "   Separation between radii (arcsec)", gf.RADSEP)
+        else:
+            R("[RADII]", "   Radii for rings", gf.RADII)
+        R("[XPOS]", "   Centre of the galaxy along the slit (pixel)", gf.XPOS)
+        R("[YPOS]", "   Distance of the slit from the centre (arcsec)",
+          gf.YPOS if str(gf.YPOS).strip() not in ("", "-1") else 0)
+        R("[VSYS]", "   Systemic velocity of the galaxy (km/s)", gf.VSYS)
+        R("[VROT]", "   Initial rotation velocity (km/s)", gf.VROT)
+        R("[VRAD]", "   Initial radial velocity (km/s)", gf.VRAD)
+        R("[VDISP]", "   Initial velocity dispersion (km/s)", gf.VDISP)
+        R("[INC]", "   Inclination (degrees)", gf.INC)
+        R("[Z0]", "   Scale height of the disk (arcsec)", gf.Z0)
+        R("[DENS]", "   Gas surface density", gf.DENS)
+        typ = {1: "gaussian", 2: "sech2", 3: "exponential", 4: "Lorentzian", 5: "box"}.get(gf.LTYPE, "")
+        R("[LTYPE]", "   Layer type along z direction", typ)
+        R("[RINGMODE]", "   Ring convention (CENTRED, NODES, SHIFTED)", p.ringmode)
+        R("[FREE]", "   Parameters to be fitted", gf.FREE if "FREE" in given and not defaults else sd["FREE"])
+        R("[NORM]", "   Type of normalization", gf.NORM if "NORM" in given and not defaults else sd["NORM"])
+        R("[SAMPLER]", "   Sampler (or OPTIMISE)", gf.SAMPLER)
+        R("[PRIORS]", "   Priors of the free parameters", gf.PRIORS or "default")
+        R("[SAMPLEROPTS]", "   Options of the sampler", gf.SAMPLEROPTS or "default")
+        R("[RUNOPTS]", "   Options of the sampling", gf.RUNOPTS or "default")
+        R("[LIKEOPTS]", "   Options of the likelihood", gf.LIKEOPTS or "default")
 
     if isAll or p.flagEllProf or (defaults and whichtask == "ELLPROF"):
         R("[ELLPROF]", "Deriving radial intensity profile?", stringize(p.flagEllProf))

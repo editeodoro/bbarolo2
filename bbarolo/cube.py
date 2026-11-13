@@ -51,6 +51,30 @@ def write_hdu(hdu, outfile):
         hdu.writeto(outfile, overwrite=True, output_verify="silentfix")
 
 
+
+def exclwind_channels(exclwind, nz, what="the cube"):
+    """The channels excluded from the continuum fit by EXCLWIND (single channels or ranges first:last or first~last,
+    counted from 0, separated by spaces or commas; NONE: none), as a bool array (nz,). Raises BBaroloError for a wrong
+    item, a channel beyond nz or all the channels excluded."""
+    import re
+    toex = np.zeros(nz, bool)
+    ex = str(exclwind).strip()
+    if ex.upper() in ("NONE", ""):
+        return toex
+    for w in ex.replace(",", " ").split():
+        m = re.fullmatch(r"(\d+)(?:[:~](\d+))?", w)
+        if m is None:
+            raise BBaroloError(f"EXCLWIND {ex}: {w} is not a channel or a range of channels (first:last), "
+                               "counted from 0.")
+        a, b = sorted((int(m.group(1)), int(m.group(2) or m.group(1))))
+        if b >= nz:
+            raise BBaroloError(f"EXCLWIND {ex}: channel {b} is outside {what} (channels 0 to {nz - 1}).")
+        toex[a:b + 1] = True
+    if toex.all():
+        raise BBaroloError(f"EXCLWIND {ex}: all the channels are excluded, no continuum to fit.")
+    return toex
+
+
 class Cube:
 
     def __init__(self, fname=None, par=None, printInfo=False, array=None, head=None):
@@ -865,21 +889,7 @@ class Cube:
         """Fit and subtract a polynomial continuum from each spectrum (vectorised)."""
         p = self.par
         nz = self.DimZ()
-        toex = np.zeros(nz, bool)
-        ex = str(p.exclude_windows).strip()
-        if ex.upper() != "NONE":
-            import re
-            for w in ex.replace(",", " ").split():
-                m = re.fullmatch(r"(\d+)(?:[:~](\d+))?", w)
-                if m is None:
-                    raise BBaroloError(f"EXCLWIND {ex}: {w} is not a channel or a range of channels (first:last), "
-                                       "counted from 0.")
-                a, b = sorted((int(m.group(1)), int(m.group(2) or m.group(1))))
-                if b >= nz:
-                    raise BBaroloError(f"EXCLWIND {ex}: channel {b} is outside the cube (channels 0 to {nz - 1}).")
-                toex[a:b + 1] = True
-            if toex.all():
-                raise BBaroloError(f"EXCLWIND {ex}: all the channels are excluded, no continuum to fit.")
+        toex = exclwind_channels(p.exclude_windows, nz)
         z = np.arange(nz, dtype=np.float64)
         ncoeff = p.cont_order + 1
         V = np.vander(z, ncoeff, increasing=True)

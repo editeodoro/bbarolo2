@@ -74,15 +74,16 @@ def _brute_slit(npos=90, nz=300, pix=0.3, width=1.0, fwhm=1.2, slitangle=0., yof
     return S * (100. / S.max()), crval, dlam, R
 
 
-def _write_slit(fname, S, crval, dlam, pix=0.3, noise=4., cont=40., seed=1, transpose=False, unit="Angstrom"):
-    """The FITS file of a slit (nz, npos) with a linear continuum and Gaussian noise: axis 1 the wavelength, axis 2
-    the position (transpose: the other way round); unit 'm' writes the wavelengths in metres."""
+def _write_slit(fname, S, crval, dlam, pix=0.3, noise=4., cont=40., seed=1, transpose=False, unit="Angstrom",
+                curv=0.):
+    """The FITS file of a slit (nz, npos) with a linear continuum (curv: plus a parabola) and Gaussian noise: axis 1
+    the wavelength, axis 2 the position (transpose: the other way round); unit 'm' writes the wavelengths in metres."""
     nz, npos = S.shape
     rng = np.random.default_rng(seed)
     lam = crval + dlam * np.arange(nz)
     prof = cont * np.exp(-0.5 * ((np.arange(npos) - npos / 2) * pix / 2.) ** 2)
-    data = S + prof[None, :] * (1 + 0.3 * (lam[:, None] - lam.mean()) / (lam[-1] - lam[0])) + \
-        rng.normal(0, noise, S.shape)
+    t = (lam[:, None] - lam.mean()) / (lam[-1] - lam[0])
+    data = S + prof[None, :] * (1 + 0.3 * t + curv * t * t) + rng.normal(0, noise, S.shape)
     arr = data if transpose else data.T
     hdu = fits.PrimaryHDU(data=np.ascontiguousarray(arr).astype(np.float32))
     h = hdu.header
@@ -105,7 +106,7 @@ def mock_slit(tmp_path_factory):
 
 def _fit(fname, **kw):
     from bbarolo.bayesian.slit import BayesianSlitFit
-    prm = dict(slitwidth=1., beam=1.2, specres=1.2, inc=60., redshift=Z, restwave=REST, relint=RELINT, contfit=True)
+    prm = dict(slitwidth=1., beam=1.2, specres=1.2, inc=60., redshift=Z, restwave=REST, relint=RELINT, contsub=True)
     prm.update(kw)
     return BayesianSlitFit(fname, **prm)
 
@@ -185,7 +186,7 @@ def test_slit_basis_and_local_marginal(mock_slit):
 
 
 def test_slit_prepare_and_noise(mock_slit):
-    """The preparation: the emission found along the slit, the continuum removed (CONTFIT), the noise map close to the
+    """The preparation: the emission found along the slit, the continuum removed (CONTSUB), the noise map close to the
     noise of the mock (pooled channels) and the noise uncorrelated."""
     fname, R = mock_slit
     f = _fit(fname)
@@ -212,6 +213,21 @@ def test_slit_fit_optimise(mock_slit):
     i, k = f.freepar_names.index("vsys"), f.freepar_names.index("xpos")
     assert abs(f.params[i] - 10.) < 2 and abs(f.params[k] - 45.3) < 0.3
     assert 0.8 < f.best["chi2_reduced"] < 1.2
+    # the PV plot: the rings where they cross the slit lie on the line-of-sight velocities of the rings, with the
+    # errors of VROT projected; the systemic velocity of each line
+    from bbarolo.bayesian.slit_outputs import ring_points, vsys_values, los_curves
+    s, w, elo, ehi = ring_points(f)
+    assert s.size == 2 * len(R) and np.all(np.diff(s) > 0)
+    cs, cw = los_curves(f, npts=4000)[0][0]
+    assert np.allclose(w, np.interp(s, cs, cw), atol=2e-3)
+    sp = f.prep.spec
+    dwdv = abs(float(sp.value(1., 0)) - float(sp.value(0., 0)))
+    sini = math.sin(math.radians(60.))
+    assert np.allclose(np.sort(np.r_[elo, ehi]),
+                       np.sort(np.r_[t["E_VROT_LO"], t["E_VROT_HI"], t["E_VROT_LO"], t["E_VROT_HI"]]) * sini * dwdv,
+                       rtol=1e-3)
+    vs = vsys_values(f)
+    assert len(vs) == 3 and vs[0] == pytest.approx(float(sp.value(f.params[i], 0)))
 
 
 def test_slit_task_parfile(mock_slit, tmp_path):
@@ -222,7 +238,7 @@ def test_slit_task_parfile(mock_slit, tmp_path):
     par = tmp_path / "slit.par"
     par.write_text(f"FITSFILE {fname}\nBAYESIANSLITFIT true\nSLITWIDTH 1\nBEAM 1.2\nSPECRES 1.2\nINC 60\n"
                    f"REDSHIFT {Z}\nRESTWAVE {' '.join(map(str, REST))}\nRELINT {' '.join(map(str, RELINT))}\n"
-                   f"CONTFIT true\nNORM LOCAL\nFREE VROT VDISP_SINGLE VSYS XPOS\nSAMPLER OPTIMISE\n"
+                   f"CONTSUB true\nNORM LOCAL\nFREE VROT VDISP_SINGLE VSYS XPOS\nSAMPLER OPTIMISE\n"
                    f"SAMPLEROPTS errors=false\nTHREADS 4\nPLOTS 1\nVERBOSE 0\nOUTFOLDER {tmp_path}/out\n")
     res = bbarolo.run(str(par))
     out = tmp_path / "out"
@@ -233,6 +249,73 @@ def test_slit_task_parfile(mock_slit, tmp_path):
     assert len(res["BAYESIANSLITFIT"].rings) == len(R)
     rings = np.loadtxt(out / "MOCKSLIT_slitfit_rings.txt")
     assert rings.shape[0] == len(R) and np.all(np.abs(rings[:, 2] - rings[0, 2]) < 1e-6)   # (VDISP_SINGLE)
+
+
+def test_slit_contsub(tmp_path):
+    """CONTSUB (the CONTSUB of datacubes, at each position of the slit): a polynomial of degree CONTORDER, fitted away
+    from the lines and from the channels of EXCLWIND, which are not continuum (nor in the noise)."""
+    S, crval, dlam, R = _brute_slit()
+    fn = _write_slit(str(tmp_path / "curved.fits"), S, crval, dlam, curv=3.)
+    off = {}
+    for order in (1, 2):
+        p = _fit(fn, contorder=order)._load()
+        j = int(np.argmax(p.continuum.sum(axis=0)))     # (the continuum channels at the brightest positions)
+        off[order] = float(np.mean(np.abs(np.nanmean(p.data[p.contchan][:, j - 3:j + 4], axis=1))))
+    assert off[2] < 1.5 < 2.2 < off[1]                   # (a straight line leaves the curvature; noise: ~1.2)
+    f = _fit(fn, contorder=2, exclwind="10:30 35")
+    p = f._load()
+    ch = np.arange(p.k0, p.k1)
+    assert not np.any(p.contchan[(ch >= 10) & (ch <= 30) | (ch == 35)])
+    assert np.any(p.contchan[ch < 10]) or p.k0 >= 10
+    with pytest.raises(BBaroloError, match="EXCLWIND"):
+        _fit(fn, exclwind="10-30")._load()
+
+
+def test_slit_lambdas(mock_slit):
+    """LIKEOPTS lambdas (as BAYESIAN3DFIT): the smoothness penalty of the parameters free in each ring is subtracted
+    from log L; the keys are the ring parameters of the slit."""
+    from bbarolo.bayesian.slit import slit_likeopts
+    from bbarolo.bayesian.common import smoothness_penalty
+    assert slit_likeopts("lambdas=(vrot=3000, disp=100) noisecorr=1") == \
+        {"lambdas": {"vrot": 3000., "vdisp": 100.}, "noisecorr": 1.}
+    with pytest.raises(ValueError, match="ring parameter"):
+        slit_likeopts("lambdas=(inc=10)")
+    # the penalty: lam/2 times the squared second derivatives on the radii, VROT from 0 at R = 0
+    x, v = np.array([1., 2., 4.]), np.array([10., 30., 35.])
+    d2 = [2 * ((30 - 10) / 1 - (10 - 0) / 1) / 2, 2 * ((35 - 30) / 2 - (30 - 10) / 1) / 3]
+    assert smoothness_penalty(x, v, 2., from_zero=True) == pytest.approx(sum(np.square(d2)))
+    assert smoothness_penalty(x, v, 2.) == pytest.approx(d2[1] ** 2)
+    fname, R = mock_slit
+    f = _fit(fname, radii=list(R), free="VROT VDISP_SINGLE VSYS XPOS")
+    f._fit_options(None, {}, f._run_defaults())
+    f._setup(f._run_defaults()["FREE"], verbose=False)
+    th = f._initial_theta()
+    th[f.freepar_idx["vrot"]] += np.random.default_rng(3).normal(0, 20, len(R))
+    l0 = f.log_likelihood(th)
+    f._fit_options(None, {"lambdas": {"vrot": 50., "vdisp": 1e6}}, f._run_defaults())
+    assert f._lambdas() == {"vrot": 50.}                 # (VDISP_SINGLE: one value, no penalty)
+    rad = np.asarray(f._fit0.r["radii"], float)
+    assert f.log_likelihood(th) == pytest.approx(l0 - smoothness_penalty(rad, th[f.freepar_idx["vrot"]], 50., True))
+
+
+def test_slit_parameter_listing():
+    """The parameters of BAYESIANSLITFIT in the lists of BBarolo -d BAYESIANSLITFIT (the defaults of the task: FREE,
+    NORM AZIM) and of a parameter file (VERBOSE 2: the values given; CONTSUB is that of the slit, not of a cube)."""
+    import io
+    from bbarolo.params import Param
+    s = io.StringIO()
+    Param().printDefaults(s, "BAYESIANSLITFIT")
+    txt = s.getvalue()
+    for k in ("[SLITWIDTH]", "[SLITANGLE]", "[CONTSUB]", "[CONTORDER]", "[EXCLWIND]", "[SKYRESID]", "[MASKWAVE]",
+              "[WAVERANGE]", "[SPECRES]", "[LIKEOPTS]"):
+        assert k in txt, k
+    assert "VROT VDISP VSYS XPOS" in txt and "[NORM]  =  AZIM" in txt.replace(".", "")
+    p = Param()
+    p.readParamString("FITSFILE a.fits\nBAYESIANSLITFIT true\nINC 60\nSLITWIDTH 1.5\nBEAM 1.5\nCONTSUB true\n"
+                      "CONTORDER 2\nNORM LOCAL\nMASKWAVE 7150 7152\n")
+    txt = str(p)
+    assert "Width of the slit (arcsec)" in txt and "1.5" in txt and "7150 7152" in txt
+    assert "[NORM]  =  LOCAL" in txt.replace(".", "") and "datacube" not in txt
 
 
 def test_slit_keywords():
@@ -247,7 +330,9 @@ def test_slit_keywords():
     p.readParamString("FITSFILE a.fits\nBAYESIANSLITFIT true\nINC 60\nSLITWIDTH 1\nBEAM 1.5\n")
     assert p.checkPars(quiet=True)
     for extra, ok in (("BEAM 1.5 1.0 0\n", False), ("SLITWIDTH 0\n", False), ("3DFIT true\n", False),
-                      ("SLITANGLE abc\n", False), ("NORM LOCAL\n", True), ("MASKWAVE 1 2 3\n", False)):
+                      ("SLITANGLE abc\n", False), ("NORM LOCAL\n", True), ("MASKWAVE 1 2 3\n", False),
+                      ("CONTSUB true\nCONTORDER 2\nEXCLWIND 10:20\n", True),
+                      ("LIKEOPTS lambdas=(vrot=100)\n", True), ("LIKEOPTS lambdas=(xpos=100)\n", False)):
         p = Param()
         p.readParamString("FITSFILE a.fits\nBAYESIANSLITFIT true\nINC 60\nSLITWIDTH 1\nBEAM 1.5\n" + extra)
         assert p.checkPars(quiet=True) == ok, extra

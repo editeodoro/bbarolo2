@@ -11,12 +11,12 @@ RELINT) are modelled together at the same velocities. The geometry is that of th
 the slit, in the direction of increasing position, to the receding half of the major axis; AUTO: 0 or 180, from the
 data), XPOS (the centre along the slit, pixels) and YPOS (the distance of the slit from the centre, arcsec, fixed);
 the position angle on the sky plays no role. The data are prepared first (bbarolo.bayesian.slitdata): a spectral
-window around the lines, an optional linear continuum (CONTFIT) and residual sky (SKYRESID) subtracted, masked
-ranges (MASKWAVE), a noise map and the correlation of the noise.
+window around the lines, an optional continuum (CONTSUB, a polynomial of degree CONTORDER at each position) and
+residual sky (SKYRESID) subtracted, masked ranges (MASKWAVE), a noise map and the correlation of the noise.
 
     >>> from bbarolo import BayesianSlitFit
     >>> f = BayesianSlitFit("slit.fits", slitwidth=1, beam=1.5, specres=2.44, inc=71, redshift=0.09143,
-    ...                     restwave=[6564.61, 6549.86, 6585.27], relint=[1, 0.34, 1], contfit=True)
+    ...                     restwave=[6564.61, 6549.86, 6585.27], relint=[1, 0.34, 1], contsub=True)
     >>> f.run(threads=16)
     >>> f.print_stats(); f.write()
 
@@ -34,7 +34,8 @@ The normalisation of the model (NORM):
 
 Options of the likelihood (LIKEOPTS): noisecorr ('measured', default: the correlation of the noise along the slit and
 along the spectra, measured; or a number of pixels per independent measurement, 1 for independent pixels),
-densprof_smooth (default 0.1), sigma (a fixed factor of the noise map, default 1).
+densprof_smooth (default 0.1), sigma (a fixed factor of the noise map, default 1), lambdas (smoothness penalties of
+the parameters free in each ring, as BAYESIAN3DFIT: lambdas=(vrot=3000, vdisp=1000) in LIKEOPTS, a dict in Python).
 """
 
 import os
@@ -44,7 +45,7 @@ import numpy as np
 
 from ..tasks import Task, build_param, _checked
 from ..bbutils import BBaroloError
-from .common import vprint, banner, get_distribution, fast_ppf, show_bar, SIGMA_QUANTILES
+from .common import vprint, banner, get_distribution, fast_ppf, show_bar, smoothness_penalty, SIGMA_QUANTILES
 from .sampling import sample, sampler_options
 from .optimize import SAMPLER_NAMES, sampler_options as optimize_options
 
@@ -61,7 +62,7 @@ DEFAULT_SLIT_FUNCS = dict(vrot=lambda R, p1, p2: 2. / np.pi * p1 * np.arctan(R /
                           vrad=lambda R, p1, p2: p1 + p2 * R,                            # linear
                           dens=lambda R, p1, p2: p1 * np.exp(-R / p2))                   # exponential
 
-SLIT_LIKE_OPTIONS = dict(noisecorr="measured", densprof_smooth=0.1, sigma=None)
+SLIT_LIKE_OPTIONS = dict(noisecorr="measured", densprof_smooth=0.1, sigma=None, lambdas=None)
 
 
 def slit_like_option(name, value):
@@ -83,6 +84,14 @@ def slit_like_option(name, value):
         if not x >= 1:
             raise ValueError(f"noisecorr: the number of pixels per independent value must be >= 1, not {value}")
         return k, x
+    if k == "lambdas":
+        from ..params import bayes_like_option
+        lam = bayes_like_option(k, value)[1]
+        bad = [n for n in lam if n not in SLIT_RING_PARS]
+        if bad:
+            raise ValueError(f"lambdas: '{bad[0]}' is not a ring parameter of BAYESIANSLITFIT ("
+                             + ", ".join(SLIT_RING_PARS) + ")")
+        return k, lam
     try:
         x = float(value)
     except (TypeError, ValueError):
@@ -165,7 +174,7 @@ class BayesianSlitFit(Task):
     BayesianSlitFit(slit, **params): the slit (FITS file, HDU or (data, header)) and any BBarolo parameter: SLITWIDTH,
     BEAM (the seeing), INC, SPECRES (or LINEAR) are required; REDSHIFT, RESTWAVE, RELINT for the lines; the rings
     (RADII or NRADII and RADSEP, VROT, VDISP, VRAD, VSYS, XPOS, YPOS, Z0, DENS: estimated from the data if not given);
-    SLITANGLE, NORM, CONTFIT, CONTWINDOWS, WAVERANGE, SKYRESID, MASKWAVE; and the options FREE, PRIORS, SAMPLER,
+    SLITANGLE, NORM, CONTSUB, CONTORDER, EXCLWIND, WAVERANGE, SKYRESID, MASKWAVE; and the options FREE, PRIORS, SAMPLER,
     SAMPLEROPTS, RUNOPTS and LIKEOPTS (the defaults of run()).
 
     Methods: run(freepar, method, threads, like_kwargs, sampler_kwargs, run_kwargs, verbose, dynamic, **params) samples
@@ -324,9 +333,9 @@ class BayesianSlitFit(Task):
         z = par.getRedshift()
         tmp.rest = [r * (1 + z) for r in rest] if sp.kind == "wave" else [r / (1 + z) for r in rest] or None
         sig_instr = self._nch * tmp.dv(0)
-        self.prep = prepare(slit, rest, relint, z, veldef, sig_instr, self._beam, contfit=par.contfit,
-                            contwindows=par.contwindows, waverange=par.waverange, skyresid=par.skyresid,
-                            maskwave=par.maskwave, verbose=verbose)
+        self.prep = prepare(slit, rest, relint, z, veldef, sig_instr, self._beam, contsub=par.contsub,
+                            contorder=max(int(par.cont_order), 0), exclwind=par.exclude_windows,
+                            waverange=par.waverange, skyresid=par.skyresid, maskwave=par.maskwave, verbose=verbose)
         self.prep.sig_instr = sig_instr
         self.noiserms = float(np.nanmedian(self.prep.noise[self.prep.valid]))
         self._init_rings()
@@ -335,7 +344,7 @@ class BayesianSlitFit(Task):
 
     def _init_rings(self):
         """The initial rings: the values given, or estimated from the fits of the lines along the slit (see
-        slitdata.fit_lines): XPOS the peak of the continuum (CONTFIT) or the kinematic centre, VSYS the mean of the
+        slitdata.fit_lines): XPOS the peak of the continuum (CONTSUB) or the kinematic centre, VSYS the mean of the
         velocities at the same distance on the two sides, SLITANGLE (AUTO) the side of the receding velocities, VROT
         and VDISP the deprojected velocities and the dispersions (minus the instrumental one) averaged in the rings;
         RADII every seeing FWHM out to the farthest emission (RADSEP and NRADII if given). Sets self.initial (a dict)
@@ -459,12 +468,12 @@ class BayesianSlitFit(Task):
                             estimated=est)
 
     def _estimate_xpos(self):
-        """The centre along the slit: the peak of the continuum (CONTFIT, if it stands out of the noise), otherwise the
+        """The centre along the slit: the peak of the continuum (CONTSUB, if it stands out of the noise), otherwise the
         kinematic centre (where the velocities cross their midrange, near the flux-weighted centre of the lines)."""
         prep = self.prep
         L = prep.lines
         ok = L["ok"]
-        if self._par.contfit:
+        if self._par.contsub:
             c = np.nanmedian(np.where(prep.contchan[:, None], prep.continuum, np.nan), axis=0)
             n = np.nanmedian(prep.noise) / math.sqrt(max(prep.contchan.sum(), 1))
             if np.any(np.isfinite(c)):
@@ -697,8 +706,9 @@ class BayesianSlitFit(Task):
         return float(self.like_kwargs.get("sigma") or 1.)
 
     def log_likelihood(self, theta, details=False):
-        """The log-likelihood of the parameters theta (see the module documentation); with details also a dict: the model
-        (nz, npos of the region), the rings, the densities and, with NORM LOCAL, the amplitudes of the positions."""
+        """The log-likelihood of the parameters theta (see the module documentation), minus the smoothness penalties
+        (LIKEOPTS lambdas); with details also a dict: the model (nz, npos of the region), the rings, the densities and,
+        with NORM LOCAL, the amplitudes of the positions."""
         from scipy.special import log_ndtr
         theta = np.asarray(theta, float)
         M, rd, dens = self.model_of(theta, details=True)
@@ -724,9 +734,16 @@ class BayesianSlitFit(Task):
                 M = U * amp[None, :]
         else:
             logl = float(-0.5 * np.sum(W * (d - M) ** 2)) + lognorm
+        for key, lam in self._lambdas().items():
+            logl -= smoothness_penalty(rd.r["radii"], rd.r[key], lam, from_zero=(key == "vrot"))
         if not details:
             return logl
         return logl, dict(model=M, rings=rd.copy(), dens=dens, amplitudes=amp, scale=k)
+
+    def _lambdas(self):
+        """The smoothness penalties used (LIKEOPTS lambdas): those > 0 of the parameters free in each ring."""
+        lam = self.like_kwargs.get("lambdas") or {}
+        return {k: float(v) for k, v in lam.items() if v > 0 and k in self.freepar_idx and self.freepar_idx[k].size > 1}
 
     def _log_like_func(self, theta, **kwargs):
         try:
@@ -843,47 +860,68 @@ class BayesianSlitFit(Task):
                                "initial rings and the priors)")
 
     def print_setup(self, stream=None):
-        """The data, the rings and the likelihood of the fit."""
+        """The data, the rings and the likelihood of the fit, in sections separated by blank lines."""
         import sys
         import textwrap
         st = stream or sys.stdout
-        prep, ini = self.prep, self.initial
+        prep, ini, par = self.prep, self.initial, self._par
         sp = prep.spec
         w0, w1 = sp.values([0, sp.n - 1])
-        st.write(f"\nSlit: {prep.slit.npos} positions of {prep.slit.pix:.4g} arcsec, window {w0:.6g} to {w1:.6g} "
-                 f"{sp.cunit} ({sp.n} channels of {sp.dv(0):.3g} km/s), positions {self.region[0]} to "
-                 f"{self.region[1] - 1} in the likelihood\n")
-        st.write(f"  emission along the slit at positions {int(np.flatnonzero(prep.lines['ok'])[0])} to "
-                 f"{int(np.flatnonzero(prep.lines['ok'])[-1])}, velocities {prep.vrange[0]:.0f} to "
-                 f"{prep.vrange[1]:.0f} km/s\n")
-        st.write(f"  seeing {self._beam:.3g} arcsec, slit {self._width:.3g} arcsec, instrumental dispersion "
-                 f"{prep.sig_instr:.3g} km/s ({self._nch:.3g} channels)\n")
-        st.write(f"  continuum: {'linear, subtracted' if self._par.contfit else 'none'}; residual sky: "
-                 f"{'subtracted' if self._par.skyresid else 'no'}\n")
+        det = np.flatnonzero(prep.lines["ok"])
+        row = lambda label, text: st.write(f"  {label:15s}{text}\n")
+        st.write("\nSlit\n")
+        row("positions", f"{prep.slit.npos} of {prep.slit.pix:.4g} arcsec; {self.region[0]} to {self.region[1] - 1} "
+                         "in the likelihood")
+        row("window", f"{w0:.6g} to {w1:.6g} {sp.cunit}: {sp.n} channels of {sp.dv(0):.3g} km/s")
+        row("emission", f"positions {int(det[0])} to {int(det[-1])}; velocities {prep.vrange[0]:.0f} to "
+                        f"{prep.vrange[1]:.0f} km/s")
+        row("seeing", f"{self._beam:.3g} arcsec (FWHM)")
+        row("slit width", f"{self._width:.3g} arcsec")
+        row("instrumental", f"{prep.sig_instr:.3g} km/s ({self._nch:.3g} channels, dispersion)")
+        order = max(int(par.cont_order), 0)
+        row("continuum", f"polynomial of degree {order}, subtracted" if par.contsub else "none")
+        ex = str(par.exclude_windows).strip()
+        if ex.upper() not in ("", "NONE"):
+            row("not continuum", f"channels {ex} (EXCLWIND)")
+        row("residual sky", "subtracted" if par.skyresid else "none")
+        if par.maskwave:
+            mw = par.maskwave
+            row("masked", ", ".join(f"{mw[k]:g} to {mw[k + 1]:g}" for k in range(0, len(mw) - 1, 2)) +
+                f" {sp.cunit} (MASKWAVE)")
         est = ini["estimated"]
         mark = lambda k: " (estimated)" if k in est else ""
-        st.write(f"Geometry: INC {ini['inc']:g}, SLITANGLE {ini['slitangle']:g}{mark('SLITANGLE')}, YPOS "
+        st.write(f"\nGeometry: INC {ini['inc']:g}, SLITANGLE {ini['slitangle']:g}{mark('SLITANGLE')}, YPOS "
                  f"{ini['yoffset']:g} arcsec; XPOS {ini['xpos']:.2f}{mark('XPOS')}, VSYS {ini['vsys']:.1f} km/s"
                  f"{mark('VSYS')}\n")
         radii = " ".join(f"{r:.4g}" for r in ini["radii"])
-        st.write(textwrap.fill(f"Rings: {len(ini['radii'])}, radii (arcsec): {radii}", width=110,
-                               subsequent_indent="  ") + "\n")
+        st.write("\n" + textwrap.fill(f"Rings: {len(ini['radii'])}, radii (arcsec): {radii}", width=110,
+                                      subsequent_indent="  ") + "\n")
         st.write(f"Fitting {self.ndim} parameters: {self.freepar_names}\n")
         nc = self.like_kwargs.get("noisecorr")
         corr = prep.corr
         st.write("\nLikelihood\n")
-        st.write(f"  normalisation  {self._norm()}\n")
-        st.write(f"  noise          map, median {self.noiserms:.4g}" +
-                 (", times SIGMA (free)" if "sigma" in self.freepar_idx else "") + "\n")
-        st.write(f"  log L x        1/{1 / self.likefactor:.3g} " +
-                 (f"(noise correlation: {corr['spectral']:.2f} channels x {corr['spatial']:.2f} positions)"
-                  if nc == "measured" else "(given)") + "\n")
-        st.write(f"  pixels         {self.nvalid}\n")
-        st.write("Priors\n")
+        row("normalisation", self._norm())
+        if self._norm() != "NONE":
+            row("density", f"deconvolved from the flux along the slit (smoothness "
+                           f"{self.like_kwargs.get('densprof_smooth') or 0.:g})")
+        row("noise", f"map, median {self.noiserms:.4g}" + (", times SIGMA (free)" if "sigma" in self.freepar_idx
+                                                            else ""))
+        row("log L x", f"1/{1 / self.likefactor:.3g} " +
+            (f"(noise correlation: {corr['spectral']:.2f} channels x {corr['spatial']:.2f} positions)"
+             if nc == "measured" else "(given)"))
+        row("pixels", f"{self.nvalid}")
+        lam = self._lambdas()
+        if lam:
+            row("smoothness", ", ".join(f"{k} {v:g}" for k, v in lam.items()) + " (lambdas)")
+        unused = [k for k, v in (self.like_kwargs.get("lambdas") or {}).items() if v > 0 and k not in lam]
+        if unused:
+            row("", f"lambdas of {', '.join(unused)} not used (not free in each ring)")
+        st.write("\nPriors\n")
         for key in self.freepar_idx:
             d = self.priors[key]
             args = ", ".join(f"{k}={v:.4g}" for k, v in d.items() if k != "name")
-            st.write(f"  {key:12s} {d['name']}({args})\n")
+            st.write(f"  {key:15s}{d['name']}({args})\n")
+        st.write("\n")
 
     def _initial_theta(self):
         """The free parameters at the initial rings (the value of each ring, or their median for NAME_SINGLE); SIGMA the

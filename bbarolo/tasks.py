@@ -501,7 +501,7 @@ def _write_rend3d(c, par, out):
 # (name, is it requested?, compute, write), in the order in which BBarolo runs them.
 # p is the Param of the cube (a copy of par, with the output folder and prefix).
 STEPS = [
-    ("CONTSUB", lambda par, p: par.contsub, _compute_contsub, _write_contsub),
+    ("CONTSUB", lambda par, p: par.contsub and not par.flagBayesSlit, _compute_contsub, _write_contsub),
     ("CHECKCUBE", lambda par, p: par.checkCube, _compute_checkcube, _write_checkcube),
     ("STATS", lambda par, p: par.flagStats, _compute_stats, _write_stats),
     ("MAKEMASK", lambda par, p: par.makeMask, _compute_makemask, _nothing),

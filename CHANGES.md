@@ -406,13 +406,16 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   and seen through the slit (`SLITWIDTH`) with the seeing (`BEAM`) by an exact separable projection, the lines
   broadened by `SPECRES`; several lines (`RESTWAVE`, `RELINT`) are modelled together. VROT, VDISP and VRAD are fitted
   per ring, VSYS and XPOS (the centre along the slit) as single values, the geometry is fixed. The data are prepared
-  first: the spectral window (`WAVERANGE`), a linear continuum (`CONTFIT`, `CONTWINDOWS`) and a residual sky
+  first: the spectral window (`WAVERANGE`), the continuum (`CONTSUB`, as for datacubes: a polynomial of degree
+  `CONTORDER` at each position, away from the lines and from the channels of `EXCLWIND`) and a residual sky
   (`SKYRESID`) subtracted, masked ranges (`MASKWAVE`), a noise map and the correlation of the noise. `NORM AZIM`
   (default) deconvolves the densities from the flux of the lines along the slit, `NORM LOCAL` adds one amplitude per
   position, marginalised in the likelihood (for asymmetric disks), `NORM NONE` uses DENS. Sampling with NAUTILUSBB
-  (default), NAUTILUS or DYNESTY, or `SAMPLER OPTIMISE`. Outputs: the rings with their errors, the FITS files of the
-  slit, its model and residuals, and the plots with their scripts (`bbarolo.plots.slitfit`). Validated on mock slits (pulls of rms
-  about 1). The SLITFIT task of BBarolo 1.8, which did not work (and was not ported), is replaced: SLITFIT is now an
+  (default), NAUTILUS or DYNESTY, or `SAMPLER OPTIMISE`; `LIKEOPTS lambdas` adds the smoothness penalties of
+  BAYESIAN3DFIT to the per-ring parameters. Outputs: the rings with their errors, the FITS files of the slit, its
+  model and residuals, and the plots with their scripts (`bbarolo.plots.slitfit`: the PV plot shows the Gaussian fits
+  of the lines, the rotation velocities of the rings where they cross the slit with their errors, and the systemic
+  velocity); `BBarolo -d BAYESIANSLITFIT` lists its parameters. Validated on mock slits (pulls of rms about 1). The SLITFIT task of BBarolo 1.8, which did not work (and was not ported), is replaced: SLITFIT is now an
   error that names BAYESIANSLITFIT.
 
 - **BAYESIAN3DFIT and BAYESIANWIND with NAUTILUSBB: the time left.** The line of progress of the sampler (`VERBOSE`)

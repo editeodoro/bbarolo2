@@ -36,8 +36,9 @@ The data are prepared once (bbarolo/bayesian/slitdata.py):
    stack peaks above 4 times its noise. Isolated detections and velocities far from those of the neighbouring
    positions (a line taken for another one) are rejected. The velocity range of the emission sets the line channels
    and the spectral window of the fit.
-2. The continuum (`CONTFIT`) is a straight line at each position, fitted with a 3σ clipping in the continuum windows,
-   and the residual sky (`SKYRESID`) the median of each channel over the positions without emission.
+2. The continuum (`CONTSUB`) is a polynomial of degree `CONTORDER` at each position, fitted with a 3σ clipping in the
+   continuum windows (the window away from the lines, `EXCLWIND` and `MASKWAVE`), and the residual sky (`SKYRESID`)
+   the median of each channel over the positions without emission.
 3. The noise: σ²(s, λ) = σ_col(λ)² + σ_obj(s)². σ_col is the robust scatter of each channel over the positions
    without emission, pooling neighbouring channels to at least 100 values (with 15 empty positions, the scatter of a
    single channel varies by 30% from channel to channel, which biases the likelihood: on a mock the pulls of the
@@ -67,6 +68,10 @@ two seeing FWHM of any XPOS of the prior, with the noise map (times `SIGMA` if f
   The integral, not the maximum over a_j (the profile likelihood), carries the Occam factor ½ ln(2π/g), which
   favours narrower lines less than the profile likelihood does.
 - `NORM NONE`: the model of the rings with their densities.
+
+The smoothness penalties of `LIKEOPTS lambdas` are subtracted from ln L, as in BAYESIAN3DFIT: for each parameter free
+in each ring, λ/2 times the sum of its squared second derivatives with respect to radius on the radii of the rings
+(VROT from 0 at R = 0), not divided by the number of pixels per independent measurement.
 
 The sampling and the minimisation are those of BAYESIAN3DFIT (bbarolo/bayesian/sampling.py and optimize.py).
 

@@ -38,7 +38,7 @@ INC              71
 REDSHIFT         0.09143
 RESTWAVE         6564.61 6549.86 6585.27
 RELINT           1 0.117 0.35
-CONTFIT          true
+CONTSUB          true
 SKYRESID         true
 NORM             LOCAL
 FREE             VROT VDISP VSYS XPOS
@@ -53,7 +53,7 @@ THREADS          32
 from bbarolo import BayesianSlitFit
 
 f = BayesianSlitFit("2masxj1022_SALT.fits", slitwidth=1, beam=1.5, specres=1.04, inc=71, redshift=0.09143,
-                    restwave=[6564.61, 6549.86, 6585.27], relint=[1, 0.117, 0.35], contfit=True,
+                    restwave=[6564.61, 6549.86, 6585.27], relint=[1, 0.117, 0.35], contsub=True,
                     skyresid=True, norm="LOCAL")
 f.run(freepar="VROT VDISP VSYS XPOS", threads=32)
 f.print_stats()
@@ -72,7 +72,7 @@ processes for the example above (28 free parameters), a good way to check a setu
 - **The slit**: a 2D FITS image. The spectral axis is the one with a spectral `CTYPE` (`WAVE`, `AWAV`, `FREQ`,
   `VELO`, `VRAD`, `VOPT`, `FELO`) or unit, the other one the position along the slit, whose scale (`CDELT` with
   `CUNIT` in arcsec, arcmin or deg) is required. Either order of the axes works. A wavelength axis in metres is
-  read in Angstrom (and `RESTWAVE`, `WAVERANGE`, `CONTWINDOWS`, `MASKWAVE` are then in Angstrom). Blank pixels
+  read in Angstrom (and `RESTWAVE`, `WAVERANGE`, `MASKWAVE` are then in Angstrom). Blank pixels
   (NaN, or 0) are not data.
 - **The resolution**: `BEAM`, the FWHM of the seeing (one value: a circular Gaussian), and `SPECRES`, the dispersion
   of the line spread function in channels. Both are required: a slit header carries neither.
@@ -98,7 +98,8 @@ processes for the example above (28 free parameters), a good way to check a setu
 The rings are `RADII`, or `NRADII` and `RADSEP`; by default one every seeing FWHM out to the farthest emission
 along the slit. The values not given are estimated from Gaussian fits of the lines at each position. The default
 priors: VROT from 0 to twice the largest estimate, VDISP from 0 to three times, VSYS ± 150 km/s, XPOS ± two
-seeing FWHM; `PRIORS` changes them.
+seeing FWHM; `PRIORS` changes them. The parameters free in each ring can be regularised by smoothness penalties,
+as in BAYESIAN3DFIT: `LIKEOPTS lambdas=(vrot=3000, vdisp=1000)` (the keys `vrot`, `vdisp`, `vrad`, `dens`).
 
 ## Normalisation
 
@@ -118,8 +119,9 @@ seeing FWHM; `PRIORS` changes them.
 
 - `WAVERANGE`: the spectral range of the fit (default: the lines over the velocity range of the emission, plus 600
   km/s on either side);
-- `CONTFIT`: a straight continuum fitted at each position in `CONTWINDOWS` (default: the range of the fit away from
-  the lines) and subtracted;
+- `CONTSUB`: the continuum (as for datacubes): a polynomial of degree `CONTORDER` (default 1, a straight line)
+  fitted at each position in the range of the fit away from the lines and from the channels of `EXCLWIND` (channels
+  of the slit, from 0), and subtracted;
 - `SKYRESID`: the median of the positions without line emission subtracted from each channel, for the residuals of
   the sky subtraction along the slit;
 - `MASKWAVE`: spectral ranges left out (e.g. strong sky lines).
@@ -133,12 +135,14 @@ bright centre).
 In the output folder, with the OBJECT of the slit as the prefix:
 
 - `_slitfit_rings.txt`: the rings of the best fit, with the 1σ errors of the free parameters;
-- `_slit_data.fits`, `_slit_model.fits`, `_slit_resid.fits`, `_slit_noise.fits` and (CONTFIT) `_slit_cont.fits`: the
+- `_slit_data.fits`, `_slit_model.fits`, `_slit_resid.fits`, `_slit_noise.fits` and (CONTSUB) `_slit_cont.fits`: the
   spectral window of the fit, with the axes of the input;
 - `_slitfit_<sampler>_results.npy`: the samples and the setup of the fit;
-- with `PLOTS`: `_slitfit_pv.pdf` (the data, the data with the contours of the model and the residuals, with the
-  velocities of the rings), `_slitfit_parameters.pdf` (the rings against radius) and `_slitfit_corner.pdf`, and their
-  scripts in `plotscripts/`.
+- with `PLOTS`: `_slitfit_pv.pdf` (the data, with the velocities of the Gaussian fits of the lines; the data with
+  the contours of the model and the rotation velocities of the rings where they cross the slit, with their errors;
+  the residuals; all with the line-of-sight velocities of the rings and the systemic velocity),
+  `_slitfit_parameters.pdf` (the rings against radius) and `_slitfit_corner.pdf`, and their scripts in
+  `plotscripts/`.
 
 ```{toctree}
 :hidden:

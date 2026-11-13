@@ -190,16 +190,21 @@ They are used for the noise of the cube (the thresholds of SEARCH, STATS, `SNMAP
 3DFIT), the `SMOOTH` and `NEGATIVE` masks and the RMS map. Blank voxels (0 or NaN) are excluded.
 """),
     'CONTSUB': dict(
-        group='Task',
+        group={'BAYESIANSLITFIT': 'Input', '*': 'Task'},
         doc="""\
 Subtracts the continuum: a polynomial of degree `CONTORDER` is fitted to each spectrum, excluding the
 channels of `EXCLWIND`, and subtracted from it. `true` runs it.
 
 It runs before all the other tasks, which then analyse the subtracted cube. The cube is written in
 `<prefix>_contsub.fits`. In Python: the `ContSub` class, or `contsub=True` given to any other task.
+
+BAYESIANSLITFIT: the continuum of each position of the slit (e.g. stellar light), a polynomial of degree
+`CONTORDER` fitted with a 3σ clipping in the spectral window of the fit away from the lines (found
+automatically) and from the channels of `EXCLWIND` and `MASKWAVE`, and subtracted. It is written in
+`<prefix>_slit_cont.fits`.
 """),
     'EXCLWIND': dict(
-        group='Options',
+        group={'BAYESIANSLITFIT': 'Input', '*': 'Options'},
         default='none (all the channels are used)',
         doc="""\
 The channels excluded from the continuum fit of `CONTSUB`, i.e. those with line emission: single
@@ -208,9 +213,14 @@ channels or ranges `first:last` (also `first~last`, both included), separated by
 error, as is a window that excludes all the channels.
 
 If not given, the continuum is fitted to all the channels, including those of the line.
+
+BAYESIANSLITFIT: channels of the slit (counted from 0 along its spectral axis) that are not continuum, in
+addition to the channels of the lines, which are found automatically: they are left out of the fit of the
+continuum (`CONTSUB`) and of the measure of the noise of each position (e.g. other emission or absorption
+lines in the window).
 """),
     'CONTORDER': dict(
-        group='Options',
+        group={'BAYESIANSLITFIT': 'Input', '*': 'Options'},
         doc="""\
 The degree of the polynomial fitted to each spectrum by `CONTSUB`: `0` a constant, `1` a straight
 line (the default), `2` a parabola, ... Negative values are set to 1.
@@ -948,7 +958,7 @@ the cube (see `GUESSTYPE`); GALMOD, ELLPROF and GALWIND need it. When `FREE` inc
 it within 10 pixels of the initial values.
 
 BAYESIANSLITFIT: the centre of the galaxy along the slit, a position of the slit in pixels (from 0); by
-default the peak of the continuum (`CONTFIT`) or the kinematic centre.
+default the peak of the continuum (`CONTSUB`) or the kinematic centre.
 """),
     'YPOS': dict(
         group={'GALWIND': 'Wind', 'BAYESIANWIND': 'Wind', '*': 'Rings'},
@@ -1648,6 +1658,10 @@ run, and `none` gives the default. The options, with their defaults in brackets:
   the ring parameters (`vrot`, `vdisp`, `dens`, `z0`, `inc`, `pa`, `xpos`, `ypos`, `vsys`, `vrad`,
   `vvert`, `dvdz`, `zcyl`); in Python, `like_kwargs=dict(lambdas={'vrot': 3000})`.
 
+BAYESIANSLITFIT has `noisecorr` (`measured`, or a number of pixels N ≥ 1), `densprof_smooth` (the
+density profile deconvolved from the flux of the lines along the slit, `NORM AZIM` and `LOCAL`), `sigma` (a
+fixed factor of the noise map, default 1) and `lambdas` (as above; the keys `vrot`, `vdisp`, `vrad`, `dens`).
+
 BAYESIANWIND has its own options: `emission` (cells, shells, cone, spaxel or voxel), `cellsize`,
 `marginal`, `prior` (gauss or exp), `noisecorr`, `sigma`, `datafrac`, `grow`, `emscale`, `emclump`,
 `emratio`, `emslope`, `prune` and `cones` (both, approaching or receding; see the BAYESIANWIND page).
@@ -1924,9 +1938,9 @@ out to the farthest emission): `VROT`, `VDISP` and `VRAD` per ring, `VSYS` (rela
 (`INC`, required, `Z0`, `SLITANGLE`, `YPOS` the distance of the slit from the centre) is fixed. The values
 not given are estimated from Gaussian fits of the lines along the slit.
 
-The data are prepared first: the spectral window of the fit (`WAVERANGE`), the continuum (`CONTFIT`,
-`CONTWINDOWS`) and the residual sky (`SKYRESID`) subtracted, ranges left out (`MASKWAVE`), and a noise map:
-the scatter of each channel over the positions without emission plus that of each position in the
+The data are prepared first: the spectral window of the fit (`WAVERANGE`), the continuum (`CONTSUB`,
+`CONTORDER`, `EXCLWIND`) and the residual sky (`SKYRESID`) subtracted, ranges left out (`MASKWAVE`), and a
+noise map: the scatter of each channel over the positions without emission plus that of each position in the
 continuum. The likelihood is Gaussian with that noise, divided by the number of pixels per independent
 measurement (the correlation of the noise along the slit and along the spectra, measured). The flux of the
 model is set by `NORM`: `AZIM` (default) the densities of the rings that reproduce the flux of the lines
@@ -1965,21 +1979,6 @@ It is not fitted: a misaligned slit not given as such biases VROT low (by about 
 The spectral range of the fit of `BAYESIANSLITFIT`: two values in the units of the spectral axis of the
 slit (Angstrom for an axis in metres). By default it covers the lines over the velocity range of the
 emission found along the slit, plus 600 km/s on either side for the continuum.
-"""),
-    'CONTFIT': dict(
-        group='Input',
-        doc="""\
-Whether `BAYESIANSLITFIT` fits and subtracts the continuum: a straight line at each position of the slit,
-fitted with a 3-sigma clipping in `CONTWINDOWS`. Use it for slits with a continuum (stellar light).
-"""),
-    'CONTWINDOWS': dict(
-        group='Input',
-        default='the spectral range of the fit away from the lines',
-        doc="""\
-The spectral ranges of the continuum of `BAYESIANSLITFIT` (`CONTFIT`), pairs of values in the units of the
-spectral axis (e.g. `CONTWINDOWS 7100 7130 7200 7230`). By default, the channels of the spectral range of
-the fit (`WAVERANGE`) outside the lines over the velocity range of the emission. They are also the channels
-where the noise of each position is measured.
 """),
     'SKYRESID': dict(
         group='Input',

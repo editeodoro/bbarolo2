@@ -26,18 +26,22 @@ def read_slit_rings(fname):
     return {n.split("(")[0].lower(): data[:, i] for i, n in enumerate(names)}
 
 
-def plot_slit_pv(data, model, resid, *, offsets, spec, specunit="", curves=(), points=None, cont=None, gname="",
-                 lines=""):
+def plot_slit_pv(data, model, resid, *, offsets, spec, specunit="", curves=(), points=None, rings=None, vsys=(),
+                 cont=None, gname="", lines=""):
     """The slit (<prefix>_slitfit_pv.pdf): the data (grey scale, blue contours), the data with the contours of the best
     model (red) and the residuals in units of the noise, against the offset along the slit from the centre (arcsec)
-    and the spectral axis, with the line-of-sight velocities of the best rings (gold lines, one per spectral line).
+    and the spectral axis, with the line-of-sight velocities of the best rings (gold lines, one per spectral line),
+    the systemic velocity (horizontal lines) and the centre (vertical line).
 
     data, model, resid: arrays (nspec, npos) (resid: (data - model) / noise); offsets: the offsets of the positions
     (arcsec); spec: the spectral values of the channels (specunit: their unit); curves: a list of (offsets, spectral
-    values) of the velocities of the rings, one per line; points: the velocities measured along the slit as (offsets,
-    spectral values) (the first line), or None; cont: the lowest contour (default 3 times the noise of the data,
-    estimated from the residuals); gname: the name of the galaxy; lines: a description of the lines. Returns the
-    Figure."""
+    values) of the velocities of the rings, one per line; points: the velocities measured along the slit by Gaussian
+    fits, as (offsets, spectral values) (the first line; green dots on the data), or None; rings: the rotation
+    velocities of the rings where they cross the slit, as (offsets, spectral values, lower errors, upper errors) (the
+    first line; gold dots with error bars on the data and the model), or None; vsys: the spectral values of the
+    systemic velocity, one per line; cont: the lowest contour (default 3 times the noise of the data, estimated from
+    the residuals); gname: the name of the galaxy; lines: a description of the lines. Returns the Figure."""
+    from matplotlib.lines import Line2D
     style = {"xtick.direction": "in", "xtick.top": True, "ytick.direction": "in", "ytick.right": True,
              "contour.negative_linestyle": "solid", "font.family": "sans-serif", "font.size": 12,
              "text.usetex": False, "mathtext.fontset": "cm", "mathtext.default": "regular"}
@@ -57,6 +61,7 @@ def plot_slit_pv(data, model, resid, *, offsets, spec, specunit="", curves=(), p
     fin = data[np.isfinite(data)]
     norm = ImageNormalize(vmin=max(cont / 3., np.percentile(fin, 1) if fin.size else 0.),
                           vmax=np.percentile(fin, 99.8) if fin.size else 1., stretch=PowerStretch(0.5))
+    cpt, crc = "#00C853", "gold"                                # (the measured velocities, the rings)
     with mpl.rc_context(style):
         fig = plt.figure(FigureClass=StyledFigure, style=style, figsize=(16, 6.5), dpi=150)
         axs = [fig.add_axes([0.06 + i * 0.31, 0.12, 0.27, 0.75]) for i in range(3)]
@@ -75,10 +80,24 @@ def plot_slit_pv(data, model, resid, *, offsets, spec, specunit="", curves=(), p
                 fig.colorbar(im, cax=cax)
             for k, (cs, cw) in enumerate(curves):
                 if i < 2:
-                    ax.plot(cs, cw, "-", color="gold", lw=1.5, alpha=0.9, zorder=5)
+                    ax.plot(cs, cw, "-", color=crc, lw=1.5, alpha=0.9, zorder=5)
+            handles = []
+            if i < 2 and len(curves):
+                handles.append(Line2D([], [], color=crc, lw=1.5, label="best rings (line of sight)"))
             if points is not None and i == 0:
-                ax.plot(points[0], points[1], ".", color="gold", ms=4, zorder=6)
+                ax.plot(points[0], points[1], "o", color=cpt, ms=3, mew=0, zorder=6)
+                handles.append(Line2D([], [], ls="", marker="o", color=cpt, ms=4, mew=0,
+                                      label="Gaussian fits of the lines"))
+            if rings is not None and i == 1 and len(rings[0]):
+                ax.errorbar(rings[0], rings[1], yerr=[rings[2], rings[3]], fmt="o", ms=5, color=crc, mec="k",
+                            mew=0.6, ecolor="k", elinewidth=0.8, capsize=0, zorder=7)
+                handles.append(Line2D([], [], ls="", marker="o", color=crc, mec="k", mew=0.6, ms=5,
+                                      label=r"V$_\mathrm{rot}$ of the rings ($\pm1\sigma$)"))
             ax.axvline(0, color="k", lw=0.6)
+            for v in np.atleast_1d(vsys):
+                ax.axhline(v, color="k", lw=0.6, ls="--")
+            if len(np.atleast_1d(vsys)):
+                handles.append(Line2D([], [], color="k", lw=0.6, ls="--", label="systemic velocity"))
             ax.set_xlim(ext[0], ext[1])
             ax.set_ylim(ext[2], ext[3])
             ax.set_title(titles[i], fontsize=13)
@@ -87,6 +106,8 @@ def plot_slit_pv(data, model, resid, *, offsets, spec, specunit="", curves=(), p
                 ax.set_ylabel(f"Spectral axis ({specunit})" if specunit else "Spectral axis")
             else:
                 ax.tick_params(labelleft=False)
+            if handles and i < 2:
+                ax.legend(handles=handles, loc="best", fontsize=9, framealpha=0.85, handlelength=1.8)
         fig.text(0.5, 0.95, f"{gname}" + (f"  ({lines})" if lines else ""), ha="center", fontsize=15)
     return fig
 
@@ -108,16 +129,17 @@ def plot_slit_parameters(rings, *, scalars=None, gname=""):
         return None if lo is None or hi is None else [lo, hi]
     panels = [("vrot", r"V$_\mathrm{rot}$ (km/s)"), ("vdisp", r"$\sigma_\mathrm{gas}$ (km/s)"),
               ("vrad", r"V$_\mathrm{rad}$ (km/s)"), ("dens", "Density of the model")]
+    shown = []
+    for key, label in panels:
+        y = rings.get(key)
+        if y is not None and key == "vrad" and not np.any(y) and err(key) is None:
+            y = None                                    # (VRAD fixed at 0)
+        if y is not None:
+            shown.append((key, label, y))
     with mpl.rc_context(style):
         fig = plt.figure(FigureClass=StyledFigure, style=style, figsize=(11, 8), dpi=150)
-        for i, (key, label) in enumerate(panels):
-            ax = fig.add_axes([0.08 + (i % 2) * 0.47, 0.55 - (i // 2) * 0.42, 0.38, 0.36])
-            y = rings.get(key)
-            if y is not None and key == "vrad" and not np.any(y) and err(key) is None:
-                y = None                                    # (VRAD fixed at 0)
-            if y is None:
-                ax.set_visible(False)
-                continue
+        for i, (key, label, y) in enumerate(shown):        # (a 2x2 grid, filled in order)
+            ax = fig.add_axes([0.08 + (i % 2) * 0.47, 0.51 - (i // 2) * 0.43, 0.38, 0.36])
             ax.errorbar(rad, y, yerr=err(key), fmt="o", color=color)
             ax.set_xlim(0, rmax)
             if key in ("vrot", "vdisp", "dens"):
@@ -127,7 +149,8 @@ def plot_slit_parameters(rings, *, scalars=None, gname=""):
                 ax.axhline(0, color="k", lw=0.5)
             ax.set_ylabel(label)
             ax.set_xlabel("Radius (arcsec)")
+        fig.text(0.5, 0.985, gname, ha="center", va="top", fontsize=14)
         if scalars:
-            fig.text(0.5, 0.965, "   ".join(f"{k} = {v}" for k, v in scalars.items()), ha="center", fontsize=11)
-        fig.text(0.5, 0.995, gname, ha="center", va="top", fontsize=14)
+            fig.text(0.5, 0.935, "   ".join(f"{k} = {v}" for k, v in scalars.items()), ha="center", va="top",
+                     fontsize=11)
     return fig

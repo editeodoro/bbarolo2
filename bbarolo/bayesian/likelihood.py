@@ -563,15 +563,10 @@ class LikelihoodMixin(object):
         if rings.nr > 1 and any(lambdas[key] > 0 for key in lambdas):
             # second derivatives on the radii of the rings (pyBBarolo used the first separation for all the
             # rings, and put the zero of VROT one separation inside the first ring, not at R = 0)
-            radii = np.asarray(rings.r['radii'], float)
+            from .common import smoothness_penalty
             for key in self.freepar_idx:
                 if key in lambdas and lambdas[key] > 0 and len(self.freepar_idx[key]) > 1:
-                    v, x = np.asarray(rings.r[key], float), radii
-                    if key == 'vrot':                     # force the rotation curve to start from zero
-                        v, x = np.concatenate([[0.0], v]), np.concatenate([[0.0], x])
-                    d1, d2 = np.diff(x)[:-1], np.diff(x)[1:]
-                    d2v = 2. * ((v[2:] - v[1:-1]) / d2 - (v[1:-1] - v[:-2]) / d1) / (d1 + d2)
-                    logL += 0.5 * lambdas[key] * np.sum(d2v ** 2)
+                    logL += smoothness_penalty(rings.r['radii'], rings.r[key], lambdas[key], from_zero=(key == 'vrot'))
         return -logL
 
     def _log_likelihood_geometry(self, theta, **kwargs):

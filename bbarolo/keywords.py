@@ -282,9 +282,10 @@ KEYWORDS = [
     K("AUTO", "flag", ["AUTO"], ALL, "Automated 3DFIT (same as BBarolo -f)"),
     K("FLUXCONVERT", "flag", ["fluxConvert"], ALL, "Whether to convert flux to Jy?"),
     K("FLAGROBUSTSTATS", "flag", ["flagRobustStats"], ALL, "Using robust statistics?", aliases=["robuststats"]),
-    K("CONTSUB", "flag", ["contsub"], ("CONTSUB",), "Subtract continuum from datacube?", flag=True),
-    K("EXCLWIND", "str", ["exclude_windows"], ("CONTSUB",), "Channel window(s) to exclude for continuum fit"),
-    K("CONTORDER", "int", ["cont_order"], ("CONTSUB",), "Order of polynomial for continuum fit"),
+    K("CONTSUB", "flag", ["contsub"], ("CONTSUB",) + SLIT, "Subtract continuum from datacube (BAYESIANSLITFIT: "
+      "from each position of the slit)?", flag=True),
+    K("EXCLWIND", "str", ["exclude_windows"], ("CONTSUB",) + SLIT, "Channel window(s) to exclude for continuum fit"),
+    K("CONTORDER", "int", ["cont_order"], ("CONTSUB",) + SLIT, "Order of polynomial for continuum fit"),
     K("MAKEMASK", "flag", ["makeMask"], ("MAKEMASK",), "Writing the mask to a fitsfile", flag=True),
     K("MASK", "str", ["MaskType"], ("MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "BAYESIANWIND", "GALMOD", "SPACEPAR",
                                     "2DFIT", "ELLPROF", "REND3D") + MAPSM,
@@ -519,9 +520,6 @@ KEYWORDS = [
       "the major axis, counterclockwise (degrees), or AUTO (0 or 180 from the data)"),
     K("WAVERANGE", "fvec", ["waverange"], SLIT, "Spectral range of the fit (two values in the units of the spectral "
       "axis; default: the lines over the velocity range of the emission)"),
-    K("CONTFIT", "flag", ["contfit"], SLIT, "Fitting and subtracting a linear continuum at each position?"),
-    K("CONTWINDOWS", "fvec", ["contwindows"], SLIT, "Spectral ranges of the continuum fit (pairs of values; default: "
-      "the spectral range of the fit away from the lines)"),
     K("SKYRESID", "flag", ["skyresid"], SLIT, "Subtracting the median of the positions without line emission from "
       "each channel (a residual sky)?"),
     K("MASKWAVE", "fvec", ["maskwave"], SLIT, "Spectral ranges left out of the fit (pairs of values, e.g. sky "

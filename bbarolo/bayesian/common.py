@@ -128,3 +128,17 @@ def fast_ppf(distr):
 # the quantiles of the median and of the 1-sigma interval (of a Gaussian), of the posteriors and of the errors of
 # the deconvolved profile (the tables used 0.16 and 0.84, print_stats and the corner plot these)
 SIGMA_QUANTILES = (0.15865, 0.50, 0.84135)
+
+
+def smoothness_penalty(radii, values, lam, from_zero=False):
+    """The smoothness penalty of a ring parameter (LIKEOPTS lambdas): lam/2 times the sum of the squared second
+    derivatives of values with respect to radii (arcsec), on the radii of the rings; from_zero: the parameter starts
+    from 0 at R = 0 (VROT). Subtracted from log L, not multiplied by the factor of the correlation of the noise."""
+    v, x = np.asarray(values, float), np.asarray(radii, float)
+    if from_zero:
+        v, x = np.concatenate([[0.0], v]), np.concatenate([[0.0], x])
+    if v.size < 3:
+        return 0.
+    d1, d2 = np.diff(x)[:-1], np.diff(x)[1:]
+    d2v = 2. * ((v[2:] - v[1:-1]) / d2 - (v[1:-1] - v[:-2]) / d1) / (d1 + d2)
+    return 0.5 * lam * float(np.sum(d2v ** 2))
