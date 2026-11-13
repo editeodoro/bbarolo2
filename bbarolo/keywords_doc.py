@@ -1655,10 +1655,10 @@ run, and `none` gives the default. The options, with their defaults in brackets:
 - `smooth` (none): smoothness priors of the ring parameters free in each ring, as `key=value` pairs in
   brackets, e.g. `smooth=(vrot=5, vdisp=3)`: the bend (1σ) allowed to each profile over one beam, in the
   units of the parameter (km/s, degrees for `inc` and `pa`, arcsec, pixels; dex for `dens`). A bend of
-  that size across one beam of radius costs ½ in ln L, whatever the number of rings (see the algorithm page);
-  `print_stats` shows the bends of the best fit and the effective number of independent values of each
-  profile. The keys are the ring parameters (`vrot`, `vdisp`, `dens`, `z0`, `inc`, `pa`, `xpos`, `ypos`,
-  `vsys`, `vrad`, `vvert`, `dvdz`, `zcyl`); in Python, `like_kwargs=dict(smooth={'vrot': 5})`.
+  that size across one beam of radius costs ½ in ln L, whatever the number of rings (see the algorithm
+  page); `print_stats` shows the effective number of independent values of each profile. The keys are
+  the ring parameters (`vrot`, `vdisp`, `dens`, `z0`, `inc`, `pa`, `xpos`, `ypos`, `vsys`, `vrad`,
+  `vvert`, `dvdz`, `zcyl`); in Python, `like_kwargs=dict(smooth={'vrot': 5})`.
 
 BAYESIANSLITFIT has `noisecorr` (`measured`, or a number of pixels N ≥ 1), `densprof_smooth` (the
 density profile deconvolved from the flux of the lines along the slit, `NORM AZIM` and `LOCAL`), `sigma` (a

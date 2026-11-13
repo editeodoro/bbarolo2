@@ -47,7 +47,7 @@ import numpy as np
 from ..tasks import Task, build_param, _checked
 from ..bbutils import BBaroloError
 from .common import (vprint, banner, get_distribution, fast_ppf, show_bar, smoothness_penalty, smoothness_summary,
-                     smoothness_text, SIGMA_QUANTILES)
+                     smoothness_text, smoothness_result, SIGMA_QUANTILES)
 from .sampling import sample, sampler_options
 from .optimize import SAMPLER_NAMES, sampler_options as optimize_options
 
@@ -935,8 +935,8 @@ class BayesianSlitFit(Task):
             (f"(noise correlation: {corr['spectral']:.2f} channels x {corr['spatial']:.2f} positions)"
              if nc == "measured" else "(given)"))
         row("pixels", f"{self.nvalid}")
-        for i, t in enumerate(smoothness_text(self._smooth_used(), self._beam, self.like_kwargs.get("smooth"))):
-            row("smoothness" if i == 0 else "", t.replace("over a beam", "over a seeing FWHM"))
+        if self.like_kwargs.get("smooth"):
+            row("smoothness", smoothness_text(self._smooth_used(), self.like_kwargs["smooth"], per="seeing FWHM"))
         st.write("\nPriors\n")
         for key in self.freepar_idx:
             d = self.priors[key]
@@ -1042,11 +1042,9 @@ class BayesianSlitFit(Task):
             st.write(f"   {name:12s} = {val:12.4g}  -{med - lo:<10.3g} +{hi - med:<10.3g}\n")
         if self.best is not None:
             st.write(f"   reduced chi-square of the best fit: {self.best['chi2_reduced']:.3g}\n")
-        sm = self.smoothness_stats()
+        sm = smoothness_result(self.smoothness_stats())
         if sm:
-            st.write(f"\n Smoothness priors (LIKEOPTS smooth; bends over a seeing FWHM of {self._beam:.3g} arcsec):\n")
-            for line in smoothness_text(self._smooth_used(), self._beam, stats=sm):
-                st.write("   " + line.replace("over a beam", "over a FWHM") + "\n")
+            st.write(f"   smoothness: {sm}\n")
         st.write("\n")
 
     def corner_plot(self, labels=None, truths=None, quantiles=SIGMA_QUANTILES, **kwargs):

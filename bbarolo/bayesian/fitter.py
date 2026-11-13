@@ -788,9 +788,8 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                     lines.append(f"  side         {'approaching' if self._side() == 'A' else 'receding'} half (SIDE)")
                 if like_kwargs.get('smooth') and not geom:
                     from .common import smoothness_text
-                    sm = smoothness_text(self._smooth_used(like_kwargs['smooth']), self._smooth_beam(),
-                                         like_kwargs['smooth'])
-                    lines += [f"  {'smoothness' if i == 0 else '':13s}{t}" for i, t in enumerate(sm)]
+                    lines.append("  smoothness   " + smoothness_text(self._smooth_used(like_kwargs['smooth']),
+                                                                     like_kwargs['smooth']))
                 print("\n".join(lines))
                 if getattr(self, '_corr_below_beam', False) and str(self.like_kwargs['noisecorr']).lower() == \
                         'measured' and not geom:

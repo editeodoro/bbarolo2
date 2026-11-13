@@ -100,8 +100,8 @@ along the slit. The values not given are estimated from Gaussian fits of the lin
 priors: VROT from 0 to twice the largest estimate, VDISP from 0 to three times, VSYS ± 150 km/s, XPOS ± two
 seeing FWHM; `PRIORS` changes them. The parameters free in each ring can be regularised by smoothness priors,
 as in BAYESIAN3DFIT: `LIKEOPTS smooth=(vrot=5, vdisp=3)` allows the profiles to bend by about 5 and 3 km/s over a
-seeing FWHM (the keys `vrot`, `vdisp`, `vrad` and `dens`, in dex). `print_stats` shows the bends of the best fit
-and the effective number of independent values of each profile.
+seeing FWHM (the keys `vrot`, `vdisp`, `vrad` and `dens`, in dex). `print_stats` shows the effective number of
+independent values of each profile.
 
 ## Normalisation
 

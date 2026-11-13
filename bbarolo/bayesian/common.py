@@ -192,22 +192,29 @@ def smoothness_summary(radii, values, s, beam, from_zero=False, log=False, cov=N
     return out
 
 
-def smoothness_text(used, beam, given=None, stats=None):
-    """Lines describing the smoothness priors (LIKEOPTS smooth). used: {parameter: s} of the parameters free in each
-    ring; given: all those given (the others are listed as not used); stats: {parameter: smoothness_summary} after a
-    fit (one line each with the bend, the penalty and the number of independent values). beam: FWHM (arcsec)."""
-    lines = []
-    unit = lambda k: SMOOTH_UNITS.get(k, "")
-    if stats is None:
-        if used:
-            lines.append(", ".join(f"{k} {v:g} {unit(k)}" for k, v in used.items()) + f" over a beam ({beam:.3g} "
-                         "arcsec)")
-        unused = [k for k in (given or {}) if k not in used]
-        if unused:
-            lines.append(f"smooth of {', '.join(unused)} not used (not free in each ring)")
-        return lines
-    for k, st in stats.items():
-        nd = "" if st["ndof"] is None else f", {st['ndof']:.1f} independent values of {st['n']} rings"
-        lines.append(f"{k:>6s}: s {used[k]:g} {unit(k)}, bend over a beam {st['bend']:.3g} {unit(k)} rms, "
-                     f"penalty {st['penalty']:.3g} (ln L){nd}")
-    return lines
+def smoothness_text(used, given=None, per="beam"):
+    """The line describing the smoothness priors (LIKEOPTS smooth) before a fit: the tolerances used ({parameter: s},
+    those of the parameters free in each ring) per beam (or per what), and those given but not used (given: all the
+    tolerances given), e.g. 'vrot 5, vdisp 3 km/s per beam (inc ignored: not free in each ring)'."""
+    items = list(used.items())
+    parts = []
+    for i, (k, v) in enumerate(items):
+        u = SMOOTH_UNITS.get(k, "")
+        last = i == len(items) - 1 or SMOOTH_UNITS.get(items[i + 1][0], "") != u
+        parts.append(f"{k} {v:g}" + (f" {u}" if last and u else ""))
+    txt = ", ".join(parts) + f" per {per}" if parts else "none"
+    unused = [k for k in (given or {}) if k not in used]
+    if unused:
+        txt += f" ({', '.join(unused)} ignored: not free in each ring)"
+    return txt
+
+
+def smoothness_result(stats):
+    """The line on the smoothness priors after a fit: the effective number of independent values of each smoothed
+    profile (stats: {parameter: smoothness_summary}), e.g. 'independent values vrot 4.9 of 8 rings, vdisp 5.0 of 8';
+    '' without them (no covariance)."""
+    parts = [f"{k} {st['ndof']:.1f} of {st['n']}" for k, st in stats.items() if st.get("ndof") is not None]
+    if not parts:
+        return ""
+    parts[0] += " rings"
+    return "independent values " + ", ".join(parts)

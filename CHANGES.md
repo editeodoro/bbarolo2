@@ -661,10 +661,10 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   parameter: `smooth=(vrot=5, vdisp=3)` lets the rotation curve depart from a straight line by about 5 km/s across
   a beam. λ was in arcsec⁴ per squared unit and its effect changed with the beam, the pixel size and the number of
   rings (the penalty doubled when the rings halved); the new penalty counts each bend once per beam of radius, so
-  the same value means the same thing for any ring spacing. DENS is smoothed in dex. `print_stats` (and
-  `smoothness_stats()`) shows the rms bend over a beam of the best fit, the penalty and the effective number of
-  independent values of each smoothed profile (from the posterior covariance, or the Laplace one after
-  `optimize`). `lambdas` is now an unknown option and `f.lambdas` is gone; results saved with `lambdas` load
+  the same value means the same thing for any ring spacing. DENS is smoothed in dex. The likelihood table shows the
+  values in one line, and `print_stats` one line with the effective number of independent values of each smoothed
+  profile (from the posterior covariance, or the Laplace one after `optimize`); `smoothness_stats()` gives also the
+  rms bend over a beam of the best fit and the penalty. `lambdas` is now an unknown option and `f.lambdas` is gone; results saved with `lambdas` load
   without them. The old `lambdas=(vrot=λ)` with equal rings of separation h is `smooth=(vrot=s)` with
   s = (h B³ / 64 λ)^½: the example UGC 1281 (B = h = 30″) had λ = 3000 and 1000, s = 2 and 3.6 km/s.
 - **The ANALYTIC GALMOD models skip the clouds outside the box of the model before computing their line profile**

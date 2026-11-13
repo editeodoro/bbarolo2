@@ -421,8 +421,8 @@ zigzag against each other, it removes the zigzag and keeps bends larger than $s_
 VROT and VDISP is a reasonable start. A sharp turnover of the rotation curve, bending by more than $s_k$ within
 a beam, is rounded off where the data are weak.
 
-After the fit, `print_stats()` (and `f.smoothness_stats()` in Python) shows for each smoothed profile the rms bend
-over a beam of the best fit, the penalty, and the effective number of independent values of the profile,
+After the fit, `print_stats()` shows the effective number of independent values of each smoothed profile (and
+`f.smoothness_stats()` in Python also the rms bend over a beam of the best fit and the penalty),
 
 $$
 n_\mathrm{eff} = n - \mathrm{tr}\left(\mathbf C\,\mathbf H_P\right),

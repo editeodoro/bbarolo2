@@ -1236,7 +1236,7 @@ def test_bayesian_task(tmp_path, capsys):
     assert main(["-p", str(par)]) == 0
     out = capsys.readouterr().out
     assert "Rings: 4, radii (arcsec): 20 60 100 140\nFitting 2 parameters: ['vrot', 'vdisp']" in out
-    assert "smoothness   smooth of vrot, vdisp not used (not free in each ring)" in out
+    assert "smoothness   none (vrot, vdisp ignored: not free in each ring)" in out
     assert "Best-fit parameters" in out and "Deconvolved density profile" in out
     # the cube and the initial parameters, as 3DFIT shows them (rings given: NRADII and RADSEP (i))
     assert "Beam size is" in out and "Initial parameters" in out and "Fitting #4(i) rings of width 40.00(i)" in out
@@ -3177,9 +3177,13 @@ def test_smoothness_prior_scale():
 
 @needs_data
 def test_bayesian_smoothness_stats(tmp_path, capsys):
-    """print_stats shows what the smoothness priors do: the bend over a beam of the best fit, the penalty and the
-    effective number of independent values of each profile (from the Laplace covariance of optimize): the number of
-    rings with a loose prior, fewer with a stiff one (NGC 2403 fixes VROT to ~0.05 km/s: s = 0.01 km/s is stiff)."""
+    """The smoothness priors in one line before the fit (the units once per group) and one after it (print_stats):
+    the effective number of independent values of each profile (from the Laplace covariance of optimize), the number
+    of rings with a loose prior, fewer with a stiff one (NGC 2403 fixes VROT to ~0.05 km/s: s = 0.01 km/s is stiff);
+    smoothness_stats() has also the bend over a beam of the best fit and the penalty."""
+    from bbarolo.bayesian.common import smoothness_text
+    assert smoothness_text(dict(vrot=5., vdisp=3., phi=2.), dict(vrot=5., vdisp=3., phi=2., inc=1.)) == \
+        "vrot 5, vdisp 3 km/s, phi 2 deg per beam (inc ignored: not free in each ring)"
     from bbarolo.bayesian import Bayesian3DFIT
     kw = dict(radii=[90., 180., 270., 360.], xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10, inc=60, pa=123.7,
               z0=10, mask="SEARCH", galmodtype="ANALYTIC", outfolder=str(tmp_path) + "/")
@@ -3190,9 +3194,10 @@ def test_bayesian_smoothness_stats(tmp_path, capsys):
         capsys.readouterr()
         f.print_stats()
         out = capsys.readouterr().out
-        assert "Smoothness priors (LIKEOPTS smooth; bends over a beam of" in out and "independent values of 4 rings" in out
         st = f.smoothness_stats()
         assert list(st) == ['vrot']                                    # (VDISP_SINGLE: one value, no prior)
+        assert f"\nSmoothness: independent values vrot {st['vrot']['ndof']:.1f} of 4 rings\n" in out
+        assert set(st['vrot']) == {'n', 'bend', 'penalty', 'ndof'}
         nd[s] = st['vrot']['ndof']
     assert nd[1e3] > 3.9 and nd[0.01] < 3.5, nd
 

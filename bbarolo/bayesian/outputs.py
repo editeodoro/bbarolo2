@@ -443,13 +443,10 @@ class OutputsMixin(object):
             d = np.diff(q[:, i])
             val = self.params[i] if opt is not None else q[1, i]       # (an optimisation: the best fit)
             print("  %10s = %10.3f %+10.3f %+10.3f" % (self.freepar_names[i], val, -d[0], d[1]))
-        sm = self.smoothness_stats()
+        from .common import smoothness_result
+        sm = smoothness_result(self.smoothness_stats())
         if sm:
-            from .common import smoothness_text
-            print(f"\nSmoothness priors (LIKEOPTS smooth; bends over a beam of {self._smooth_beam():.3g} arcsec):")
-            for line in smoothness_text(self._smooth_used(self.like_kwargs.get('smooth')), self._smooth_beam(),
-                                        stats=sm):
-                print("  " + line)
+            print(f"\nSmoothness: {sm}")
         dp = getattr(self, 'dens_profile', None)
         if dp is not None:
             print("\nDeconvolved density profile (DENS, not fitted; errors from the geometry and the noise):")
