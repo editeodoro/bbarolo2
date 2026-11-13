@@ -19,6 +19,35 @@ Its Bayesian fit, BAYESIAN3DFIT, samples the posterior of the ring parameters wi
 
 **Status:** under development.
 
+## Installation
+
+BBarolo 2 needs Python 3.9 or later. It is not on PyPI yet: install it from GitHub with ``pip``.
+
+```shell
+pip install git+https://github.com/editeodoro/bbarolo2
+```
+
+This installs the package `bbarolo` and the command `BBarolo`, with numpy, scipy, astropy, numba and
+matplotlib: everything the tasks need, BAYESIAN3DFIT included. The optional extra `bayesian` adds the samplers
+dynesty and nautilus-sampler (`SAMPLER DYNESTY` and `NAUTILUS`), corner (the corner plot) and threadpoolctl.
+
+```shell
+pip install "bbarolo[bayesian] @ git+https://github.com/editeodoro/bbarolo2"
+```
+
+To work on the code, install a copy of the repository in editable mode.
+
+```shell
+git clone https://github.com/editeodoro/bbarolo2
+cd bbarolo2
+pip install -e ".[bayesian,test]"
+```
+
+## Documentation
+
+You can find the documentation at [bbarolo.readthedocs.io](https://bbarolo.readthedocs.io): installation, a
+first fit, every task with its parameters and how it works, examples, and the differences from BBarolo 1.8.
+
 ## Example
 
 These examples use the HI datacube of NGC 2403 of the documentation
@@ -57,35 +86,6 @@ f.run(freepar="VROT VDISP_SINGLE INC_SINGLE PA_SINGLE SIGMA RADMAX", threads=4,
 f.print_stats()                   # the median and the 68% interval of each parameter
 f.corner_plot()                   # needs the package corner
 ```
-
-## Installation
-
-BBarolo 2 needs Python 3.9 or later. It is not on PyPI yet: install it from GitHub with ``pip``.
-
-```shell
-pip install git+https://github.com/editeodoro/bbarolo2
-```
-
-This installs the package `bbarolo` and the command `BBarolo`, with numpy, scipy, astropy, numba and
-matplotlib: everything the tasks need, BAYESIAN3DFIT included. The optional extra `bayesian` adds the samplers
-dynesty and nautilus-sampler (`SAMPLER DYNESTY` and `NAUTILUS`), corner (the corner plot) and threadpoolctl.
-
-```shell
-pip install "bbarolo[bayesian] @ git+https://github.com/editeodoro/bbarolo2"
-```
-
-To work on the code, install a copy of the repository in editable mode.
-
-```shell
-git clone https://github.com/editeodoro/bbarolo2
-cd bbarolo2
-pip install -e ".[bayesian,test]"
-```
-
-## Documentation
-
-You can find the documentation at [bbarolo.readthedocs.io](https://bbarolo.readthedocs.io): installation, a
-first fit, every task with its parameters and how it works, examples, and the differences from BBarolo 1.8.
 
 ## Attribution
 
