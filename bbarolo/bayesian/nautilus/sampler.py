@@ -1130,7 +1130,7 @@ class Sampler:
                 else:
                     left = self.time_left()
                     data.append('?' if left is None else
-                                '~' + _format_time(left))
+                                _format_time_left(left))
 
         for i, length in enumerate([9, 6, 8, 6, 6, 9, 7, 8]):
             data[i] = '{:<{}}'.format(data[i], length)
@@ -1574,3 +1574,26 @@ def _format_time(seconds):
     if seconds < 3600:
         return f'{seconds // 60}m{seconds % 60:02d}s'
     return f'{seconds // 3600}h{(seconds % 3600) // 60:02d}m'
+
+
+def _format_time_left(seconds):
+    """Format an estimate of the time left in minutes, as <1m, ~3m or
+    ~1h25m (a rough estimate: no seconds).
+
+    Parameters
+    ----------
+    seconds : float
+        Time left in seconds.
+
+    Returns
+    -------
+    text : str
+        The time left.
+
+    """
+    if seconds < 60:
+        return '<1m'
+    minutes = int(round(seconds / 60))
+    if minutes < 60:
+        return f'~{minutes}m'
+    return f'~{minutes // 60}h{minutes % 60:02d}m'

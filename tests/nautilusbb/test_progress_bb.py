@@ -3,7 +3,7 @@ import numpy as np
 from scipy.stats import chi2
 
 from bbarolo.bayesian.nautilus import Sampler
-from bbarolo.bayesian.nautilus.sampler import _format_time
+from bbarolo.bayesian.nautilus.sampler import _format_time, _format_time_left
 
 
 def likelihood(x):
@@ -13,6 +13,9 @@ def likelihood(x):
 def test_format_time():
     assert [_format_time(t) for t in (0, 44.6, 60, 185, 3599, 3600, 5100)] == [
         '0s', '45s', '1m00s', '3m05s', '59m59s', '1h00m', '1h25m']
+    # the time left: a rough estimate, in minutes
+    assert [_format_time_left(t) for t in (0, 59.9, 60, 89, 91, 185, 3569, 3599, 5100)] == [
+        '<1m', '<1m', '~1m', '~1m', '~2m', '~3m', '~59m', '~1h00m', '~1h25m']
 
 
 def test_time_left():
