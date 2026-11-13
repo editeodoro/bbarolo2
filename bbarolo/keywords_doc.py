@@ -945,6 +945,9 @@ one is a list or a file column, the other can be a single value in pixels, used 
 When it is not given, 3DFIT, BAYESIAN3DFIT, SPACEPAR and 2DFIT estimate it from the largest source in
 the cube (see `GUESSTYPE`); GALMOD, ELLPROF and GALWIND need it. When `FREE` includes XPOS, 3DFIT fits
 it within 10 pixels of the initial values.
+
+BAYESIANSLITFIT: the centre of the galaxy along the slit, a position of the slit in pixels (from 0); by
+default the peak of the continuum (`CONTFIT`) or the kinematic centre.
 """),
     'YPOS': dict(
         group={'GALWIND': 'Wind', 'BAYESIANWIND': 'Wind', '*': 'Rings'},
@@ -958,6 +961,10 @@ position for all the rings for world coordinates.
 When it is not given, 3DFIT, BAYESIAN3DFIT, SPACEPAR and 2DFIT estimate it from the largest source in
 the cube (see `GUESSTYPE`); GALMOD, ELLPROF and GALWIND need it. When `FREE` includes YPOS, 3DFIT fits
 it within 10 pixels of the initial values.
+
+BAYESIANSLITFIT: the distance of the slit from the centre of the galaxy, across the slit, in arcsec
+(default 0: the slit passes through the centre), positive on the side 90 degrees counterclockwise from the
+direction of increasing position. It is not fitted.
 """),
     'VSYS': dict(
         group={'GALWIND': 'Wind', 'BAYESIANWIND': 'Wind', '*': 'Rings'},
@@ -1105,6 +1112,10 @@ Several values, separated by spaces, model several lines at once (e.g. Hα and t
 the relative intensities `RELINT`: the velocities refer to the first line, and each line of a cloud is at
 its own rest wavelength times the same Doppler factor. On a velocity axis only one line is modelled,
 with a warning.
+
+BAYESIANSLITFIT reads a wavelength axis in metres in Angstrom: RESTWAVE is then in Angstrom. With a
+vacuum wavelength axis (CTYPE `WAVE`) give vacuum rest wavelengths, with an air axis (`AWAV`) air ones:
+the difference (about 1.8 Angstrom at Halpha) would otherwise shift `VSYS` by about 80 km/s.
 """),
     'RESTFREQ': dict(
         group='Spectral lines',
@@ -1269,6 +1280,11 @@ the shells, NAME_FUNC a function of radius (VWIND an arctangent rising to the te
 `XPOS`, `YPOS`, `VSYS`, `INC`, `PA`, `OPENANG`, `OPENIN`, `CONELEN`, `SIGMA` and the parameters of the prior
 of the emission `EMSCALE`, `EMCLUMP`, `EMRATIO` and `EMSLOPE` are single values; e.g. `FREE VWIND_SINGLE
 VDISP_SINGLE INC PA OPENANG` (EMSCALE, EMCLUMP, EMRATIO and EMSLOPE are added unless `LIKEOPTS` fixes them).
+
+BAYESIANSLITFIT: `VROT`, `VDISP`, `VRAD` (and `DENS` with `NORM NONE`) have one value per ring, NAME_SINGLE
+one for all the rings, NAME_FUNC a function of radius (as BAYESIAN3DFIT; VRAD a line); `VSYS`, `XPOS` and
+`SIGMA` (a factor of the noise map) are single values. The geometry is fixed. Default: `VROT VDISP VSYS
+XPOS`.
 """),
     'GUESSTYPE': dict(
         group='Rings',
@@ -1367,6 +1383,10 @@ GALMOD takes one value (the second, if more are given): `AZIM`, `LOCAL`, `NONE` 
 is the same as `AZIM`. Values not recognised become `LOCAL`, with a warning. SPACEPAR uses the first
 value, the normalisation of the first stage of 3DFIT (BBarolo 1.8 always used `LOCAL`).
 BAYESIAN3DFIT uses it only with `LIKEOPTS` `bbres=true`.
+
+BAYESIANSLITFIT takes one value (default `AZIM`): `AZIM`, the densities of the rings whose model reproduces
+the flux of the lines along the slit; `LOCAL`, that model times one amplitude per position of the slit,
+marginalised in the likelihood; `NONE`, the densities `DENS` (which can then be free).
 """),
     'REGTYPE': dict(
         group='Free parameters and fit',
@@ -1873,19 +1893,97 @@ The size of the window of `SMOOTHSPEC`, in channels: an odd integer for all the 
 in channels for `GAUSSIAN`. It must be positive. It also sets the number of channels averaged by
 `REDUCE` with `SMOOTHSPEC`, and the window of the mask `MASK SMOOTHSPEC&SEARCH`.
 """),
-    'SLITFIT': dict(
+    'BAYESIANSLITFIT': dict(
         group='Task',
         doc="""\
-The fit of long-slit spectroscopic data of the C++ BBarolo. It is not available in BBarolo 2 (it was
-broken in C++ too): `true` only prints a message. As in C++, it still needs `SLITWIDTH` > 0 (an error
-otherwise), and it is turned off, with a warning, when `3DFIT` runs.
+Fits the kinematics of a rotating disk to a long-slit spectrum, a 2D image of the position along the slit
+and the spectral axis (`FITSFILE`), by sampling the posterior distribution with nested sampling (see
+`SAMPLER`; `SAMPLER OPTIMISE`: the best fit by a minimisation of the same likelihood). `true` runs the
+task, which runs alone (the input is not a datacube).
+
+The model is a GALMOD disk with the pixels and the channels of the slit, built in the frame of the slit
+(the sky position angle plays no role: `SLITANGLE` sets the angle between the slit and the major axis), seen
+through the slit of width `SLITWIDTH` with the seeing `BEAM` (a circular Gaussian, its FWHM) and the
+instrumental resolution `SPECRES` (the dispersion of the line spread function in channels: required).
+Several lines (`RESTWAVE` with `RELINT`, at `REDSHIFT`) are modelled together at the same velocities.
+The ring parameters are fitted in the rings (`RADII`, or `NRADII` and `RADSEP`; by default every seeing FWHM
+out to the farthest emission): `VROT`, `VDISP` and `VRAD` per ring, `VSYS` (relative to REDSHIFT) and `XPOS`
+(the centre along the slit, pixels) single values (`FREE`, default `VROT VDISP VSYS XPOS`); the geometry
+(`INC`, required, `Z0`, `SLITANGLE`, `YPOS` the distance of the slit from the centre) is fixed. The values
+not given are estimated from Gaussian fits of the lines along the slit.
+
+The data are prepared first: the spectral window of the fit (`WAVERANGE`), the continuum (`CONTFIT`,
+`CONTWINDOWS`) and the residual sky (`SKYRESID`) subtracted, ranges left out (`MASKWAVE`), and a noise map:
+the scatter of each channel over the positions without emission plus that of each position in the
+continuum. The likelihood is Gaussian with that noise, divided by the number of pixels per independent
+measurement (the correlation of the noise along the slit and along the spectra, measured). The flux of the
+model is set by `NORM`: `AZIM` (default) the densities of the rings that reproduce the flux of the lines
+along the slit (deconvolved, as BAYESIAN3DFIT); `LOCAL` that model times one amplitude per position of the
+slit, marginalised (for asymmetric or clumpy disks: with AZIM, an asymmetric flux biases VSYS, XPOS and
+VROT); `NONE` the densities `DENS`.
+
+BBarolo writes the rings with the errors of the free parameters (`<prefix>_slitfit_rings.txt`), the data,
+model, residuals, noise and continuum of the window (`<prefix>_slit_*.fits`), the samples
+(`<prefix>_slitfit_<method>_results.npy`) and, with `PLOTS`, the slit with the model and the residuals, the
+parameters and the corner plot, with their scripts. In Python: `bbarolo.BayesianSlitFit`. It replaces the
+SLITFIT task of BBarolo 1.8, which did not work.
 """),
     'SLITWIDTH': dict(
-        group='Options',
+        group='Model',
+        default='none: required',
+        doc="""\
+The width of the slit of `BAYESIANSLITFIT`, in arcsec: the model is the light of the disk, smoothed by the
+seeing (`BEAM`), that falls in the slit. It must be positive.
+"""),
+    'SLITANGLE': dict(
+        group='Rings',
+        default='AUTO',
+        doc="""\
+The orientation of the disk with respect to the slit in `BAYESIANSLITFIT`: the angle, in degrees, from the
+direction of increasing position along the slit to the receding half of the major axis, counterclockwise
+(towards the side of the slit where `YPOS` is positive). 0 is a slit along the major axis with the receding
+side at increasing positions, 180 the same with the receding side at decreasing positions, and e.g. 10 or
+190 a slit 10 degrees off the major axis. `AUTO` takes 0 or 180, from the velocity gradient along the slit.
+It is not fitted: a misaligned slit not given as such biases VROT low (by about the cosine of the angle).
+"""),
+    'WAVERANGE': dict(
+        group='Input',
+        default='the lines over the velocity range of the emission, 600 km/s on either side',
+        doc="""\
+The spectral range of the fit of `BAYESIANSLITFIT`: two values in the units of the spectral axis of the
+slit (Angstrom for an axis in metres). By default it covers the lines over the velocity range of the
+emission found along the slit, plus 600 km/s on either side for the continuum.
+"""),
+    'CONTFIT': dict(
+        group='Input',
+        doc="""\
+Whether `BAYESIANSLITFIT` fits and subtracts the continuum: a straight line at each position of the slit,
+fitted with a 3-sigma clipping in `CONTWINDOWS`. Use it for slits with a continuum (stellar light).
+"""),
+    'CONTWINDOWS': dict(
+        group='Input',
+        default='the spectral range of the fit away from the lines',
+        doc="""\
+The spectral ranges of the continuum of `BAYESIANSLITFIT` (`CONTFIT`), pairs of values in the units of the
+spectral axis (e.g. `CONTWINDOWS 7100 7130 7200 7230`). By default, the channels of the spectral range of
+the fit (`WAVERANGE`) outside the lines over the velocity range of the emission. They are also the channels
+where the noise of each position is measured.
+"""),
+    'SKYRESID': dict(
+        group='Input',
+        doc="""\
+Whether `BAYESIANSLITFIT` subtracts a residual sky: from each channel, the median of the positions of the
+slit without line emission (more than one seeing FWHM from any detection). Use it when the sky
+subtraction left residuals along the slit (e.g. stripes at the sky lines): they otherwise bias the flux of
+the lines along the slit (`NORM AZIM`) and the fit. It needs at least 5 positions without emission.
+"""),
+    'MASKWAVE': dict(
+        group='Input',
         default='none',
         doc="""\
-The width of the slit for `SLITFIT` (arcsec in the C++ code). Not used: `SLITFIT` is not available in
-BBarolo 2, and `SLITWIDTH` is only checked to be positive when `SLITFIT` is `true`.
+Spectral ranges left out of the fit of `BAYESIANSLITFIT`, pairs of values in the units of the spectral axis
+(e.g. strong sky lines: `MASKWAVE 7156 7159 7178 7181`). The pixels there are not data, as the blanks
+(NaN or 0) of the slit.
 """),
     'PVSLICE': dict(
         group='Task',

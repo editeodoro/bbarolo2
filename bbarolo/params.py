@@ -39,7 +39,7 @@ TASKS_LIST = [
     ("GALWIND",       "Make a 3D emission-line model of a bi-conical outflow."),
     ("STATS",         "Simply calculate and print statistics for a cube."),
     ("CONTSUB",       "Subtract a polynomial continuum from a cube."),
-    ("SLITFIT",       "Fit the kinematics from long-slit data (NOT PORTED: broken in C++ too)."),
+    ("BAYESIANSLITFIT", "Fit the kinematics of a long-slit spectrum by nested sampling of the posterior."),
     ("GLOBALPROFILE", "Extract a total spectral profile from a datacube."),
     ("TOTALMAP",      "Compute a total intensity map from a datacube."),
     ("VELOCITYMAP",   "Compute a velocity field from a datacube."),
@@ -316,8 +316,14 @@ class Param:
         self.window_type = "HANNING"
         self.window_size = 3.0
 
-        self.flagSlitfit = False
-        self.slitwidth = -1.0
+        self.flagBayesSlit = False    # BAYESIANSLITFIT
+        self.slitwidth = -1.0         # SLITWIDTH (arcsec)
+        self.slitangle = "AUTO"       # SLITANGLE (degrees, or AUTO)
+        self.waverange = []           # WAVERANGE
+        self.contfit = False          # CONTFIT
+        self.contwindows = []         # CONTWINDOWS
+        self.skyresid = False         # SKYRESID
+        self.maskwave = []            # MASKWAVE
 
         self.flagSpace = False
         self.P1 = "VROT"
@@ -558,7 +564,7 @@ class Param:
                     out(f"BAYESIAN3DFIT error: {key}: {e}")
                     good = False
 
-        if gf.flagGALFIT or gf.flagBAYESIAN or self.flagSpace or gm.flagGALMOD or self.flagSlitfit:
+        if gf.flagGALFIT or gf.flagBAYESIAN or self.flagSpace or gm.flagGALMOD:
             msg = " is not an optional parameter. Please specify it in the input file or set flagSearch=true"
             if gf.flagGALFIT and gm.flagGALMOD:
                 out("3DFIT warning: 3DFIT and GALMOD can not be run at the same time. Turning off GALMOD.")
@@ -631,14 +637,6 @@ class Param:
                 out("3DFIT warning: Not valid argument for LTYPE parameter. Assuming 1 (gaussian layer).")
                 gf.LTYPE = 1
                 gm.LTYPE = 1
-
-            if self.flagSlitfit:
-                if gf.flagGALFIT:
-                    sys.stderr.write("3DFIT WARNING: Galfit and Slitfit cannot be run at the same time. Switching off Slitfit. \n")
-                    self.flagSlitfit = False
-                elif self.slitwidth < 0:
-                    sys.stderr.write("SLITFIT WARNING: SLITWIDTH has to be specified and > 0. \n")
-                    good = False
 
             for s in (gf, gm):
                 if len(s.RESTWAVE) == 0: s.RESTWAVE = [-1.0]
@@ -731,6 +729,9 @@ class Param:
             if gw.CONELEN == -1:
                 out("BAYESIANWIND error: CONELEN" + msg); good = False
 
+        if self.flagBayesSlit:
+            good = self._check_slitfit(out) and good
+
         if gw.flagGALWIND:
             msg = " is not an optional parameter. Please specify it in the input file."
             for k in ("XPOS", "YPOS", "VSYS", "VDISP", "INC", "PHI", "DENS", "OPENANG", "VWIND"):
@@ -810,6 +811,94 @@ class Param:
     # ------------------------------------------------------------------
     # Printing
     # ------------------------------------------------------------------
+    def _check_slitfit(self, out):
+        """The checks of BAYESIANSLITFIT (in checkPars): it runs alone (its input is a long-slit spectrum, not a
+        cube), with SLITWIDTH, BEAM and INC, and its options readable. Returns False if they are not."""
+        from .bayesian.slit import slit_freepar, slit_priors, slit_likeopts
+        gf, gm, gw, se = self.gf, self.gm, self.gw, self.se
+        good = True
+        others = [n for n, f in (("3DFIT", gf.flagGALFIT), ("BAYESIAN3DFIT", gf.flagBAYESIAN),
+                                 ("GALMOD", gm.flagGALMOD), ("GALWIND", gw.flagGALWIND),
+                                 ("BAYESIANWIND", gw.flagBAYESIAN), ("SEARCH", se.flagSearch),
+                                 ("SPACEPAR", self.flagSpace), ("2DFIT", self.flagRing), ("ELLPROF", self.flagEllProf),
+                                 ("SMOOTH", self.flagSmooth), ("SMOOTHSPEC", self.flagSmoothSpectral),
+                                 ("PVSLICE", self.flagPV), ("REND3D", self.flagRend3D), ("CONTSUB", self.contsub),
+                                 ("MAKEMASK", self.makeMask), ("STATS", self.flagStats), ("MAPS", self.getMaps()))
+                  if f]
+        if others:
+            out(f"BAYESIANSLITFIT error: {', '.join(others)} can not run with BAYESIANSLITFIT (its input is a long-slit "
+                "spectrum, a 2D image, not a datacube).")
+            good = False
+        gf.SAMPLER = gf.SAMPLER.strip().upper()
+        if gf.SAMPLER == "OPTIMIZE":
+            gf.SAMPLER = "OPTIMISE"
+        if gf.SAMPLER not in ("DYNESTY", "NAUTILUS", "OPTIMISE"):
+            out(f"BAYESIANSLITFIT error: unknown SAMPLER {gf.SAMPLER} (NAUTILUS, DYNESTY or OPTIMISE).")
+            good = False
+        elif gf.SAMPLER == "OPTIMISE":
+            good = _check_optimise(gf, "BAYESIANSLITFIT", out) and good
+        elif importlib.util.find_spec(gf.SAMPLER.lower()) is None:
+            out(f"BAYESIANSLITFIT error: SAMPLER {gf.SAMPLER} needs the Python package {gf.SAMPLER.lower()} "
+                f"(pip install {gf.SAMPLER.lower()}).")
+            good = False
+        for key, check in (("FREE", slit_freepar), ("PRIORS", slit_priors), ("SAMPLEROPTS", bayes_options),
+                           ("RUNOPTS", bayes_options), ("LIKEOPTS", slit_likeopts)):
+            if key == "FREE" and "FREE" not in getattr(self, "_given", {}):
+                continue
+            try:
+                check(getattr(gf, key))
+            except ValueError as e:
+                out(f"BAYESIANSLITFIT error: {key}: {e}")
+                good = False
+        msg = " is not an optional parameter. Please specify it in the input file."
+        if not self.slitwidth > 0:
+            out("BAYESIANSLITFIT error: SLITWIDTH (the width of the slit, arcsec, > 0)" + msg)
+            good = False
+        if self.beam is None:
+            out("BAYESIANSLITFIT error: BEAM (the seeing FWHM, arcsec)" + msg)
+            good = False
+        elif abs(self.beam[0] - self.beam[1]) > 1e-6 * self.beam[0]:
+            out(f"BAYESIANSLITFIT error: BEAM must be circular (one value, the seeing FWHM), not {self.beam[0]:g} x "
+                f"{self.beam[1]:g} arcsec.")
+            good = False
+        if gf.INC == "-1":
+            out("BAYESIANSLITFIT error: INC" + msg)
+            good = False
+        sa = str(self.slitangle).strip().upper()
+        if sa != "AUTO":
+            try:
+                float(sa)
+            except ValueError:
+                out(f"BAYESIANSLITFIT error: SLITANGLE must be AUTO or an angle in degrees, not {self.slitangle}.")
+                good = False
+        for n in gf.NORM.split():
+            if n not in ("NONE", "LOCAL", "AZIM", "AZIMUTHAL"):
+                out(f"BAYESIANSLITFIT error: unknown type of normalization NORM {n} (AZIM, LOCAL or NONE)")
+                good = False
+        gf.NORM = " ".join("AZIM" if n == "AZIMUTHAL" else n for n in gf.NORM.split())
+        if len(gf.NORM.split()) > 1:
+            out("BAYESIANSLITFIT error: NORM is one of AZIM, LOCAL or NONE.")
+            good = False
+        for name, vec in (("WAVERANGE", self.waverange), ("CONTWINDOWS", self.contwindows),
+                          ("MASKWAVE", self.maskwave)):
+            if len(vec) % 2 or (name == "WAVERANGE" and len(vec) not in (0, 2)):
+                out(f"BAYESIANSLITFIT error: {name} needs " + ("two values (a range)." if name == "WAVERANGE" else
+                                                                "pairs of values (ranges)."))
+                good = False
+        nl = len(gf.RESTWAVE) if gf.RESTWAVE and gf.RESTWAVE[0] != -1 else (
+            len(gf.RESTFREQ) if gf.RESTFREQ and gf.RESTFREQ[0] != -1 else 0)
+        if nl > 1 and gf.RELINT and gf.RELINT[0] != -1 and len(gf.RELINT) != nl:
+            out(f"BAYESIANSLITFIT error: RELINT must have one value per line ({nl}).")
+            good = False
+        for key in _RING_KEYS:
+            attr = "PHI" if key == "PA" else key
+            if hasattr(gf, attr):
+                prob = ring_value_problem(key, getattr(gf, attr))
+                if prob:
+                    out("INPUT error: " + prob)
+                    good = False
+        return good
+
     def __str__(self):
         s = io.StringIO()
         s.write("\n-------------------------- Parameters -------------------------\n\n")

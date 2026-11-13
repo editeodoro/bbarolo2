@@ -22,7 +22,8 @@ the links are in [the last section](#differences-by-task).
 
 ## What gives the same results
 
-Every task of 1.8 is available, except SLITFIT (see [Not ported](#not-ported)). The table compares the
+Every task of 1.8 is available; SLITFIT, which did not work, is replaced by the new task
+{doc}`BAYESIANSLITFIT <../tasks/bayesianslitfit/index>`. The table compares the
 outputs of the Python code with those of the C++ code on the example cubes of BBarolo (numbers from
 `README_cowork.md` of the repository, measured when the port was made).
 
@@ -155,7 +156,7 @@ RINGMODE, GUESSTYPE, FREEANGLE and SPECRES.
 | LINEAR of SMOOTH | removed (above); LINEAR of the models stays |
 | BMAJ, BMIN, BPA, BEAMFWHM, OBMAJ, OBMIN, OBPA | replaced by {ref}`BEAM <par-all-beam>` (the beam of the data, which replaces that of the header) and {ref}`NEWBEAM <par-smooth-newbeam>` (the new beam of SMOOTH and of the SMOOTH masks); the old keywords are errors that name BEAM. In Python, `beam=` is the keyword BEAM, and `Smooth(cube, newbeam=150)` replaces `bmaj=150, bmin=150, bpa=0` |
 | DVDZ of 2DFIT | no longer read; use FREEANGLE |
-| SLITFIT, SLITWIDTH, ... | the keywords are accepted, but the task is not ported |
+| SLITFIT | an error that names BAYESIANSLITFIT, the new task of the fit of long-slit spectra (SLITWIDTH is one of its keywords) |
 | NORM `AZIMUTHAL` | accepted before, but used as LOCAL; it is AZIM now |
 | the long forms of SIDE (`APPROACHING`, `RECEDING`, `BOTH`, `APP`, ...) | work in 3DFIT, 2DFIT, SPACEPAR and ELLPROF (1.8 ignored them) |
 | `POLYN` | still accepted, as an alias of REGTYPE (as in C++) |
@@ -329,8 +330,8 @@ The section *Differences from BBarolo 1.8* of the page *how it works* of each ta
 
 ## Not ported
 
-- **SLITFIT**: the task does not work in the C++ code either. Its keywords are accepted, but the task does
-  not run.
+- **SLITFIT**: the task did not work in the C++ code. It is replaced by the new
+  {doc}`BAYESIANSLITFIT <../tasks/bayesianslitfit/index>`.
 - **gnuplot output**: removed. All plots are made with matplotlib.
 - **The MPI executable `BBarolo_MPI`**: see above.
 - **The unfinished `BBauto` routine** of the C++ code.

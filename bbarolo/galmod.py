@@ -381,6 +381,14 @@ def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, 
                     gx[kz] = _lround(xpos + (xs - y * cpa) / cdelt0)
                     gy[kz] = _lround(ypos + (xc + y * spa) / cdelt1)
                 vplane = vsys0 + (vrot * caz + vrad * saz) * sinc + vvert * cinc
+                # (no vertical sample in the box: nothing to deposit, the line profile is not needed)
+                inbox = False
+                for kz in range(nzz):
+                    if blo0 <= gx[kz] < bhi0 and blo1 <= gy[kz] < bhi1:
+                        inbox = True
+                        break
+                if not inbox:
+                    continue
                 for nl in range(nlines):
                     a = relint[nl] * fluxsc
                     if not zdep:

@@ -393,6 +393,22 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **BAYESIANSLITFIT: the kinematics of a long-slit spectrum, in a Bayesian framework.** A new task (and the class
+  `bbarolo.BayesianSlitFit`) that fits a GALMOD disk to a 2D slit (position x wavelength, frequency or velocity):
+  the model is built on a thin grid around the slit with its pixels and channels, in the frame of the slit
+  (`SLITANGLE`, the angle between the slit and the major axis; `YPOS`, the distance of the slit from the centre),
+  and seen through the slit (`SLITWIDTH`) with the seeing (`BEAM`) by an exact separable projection, the lines
+  broadened by `SPECRES`; several lines (`RESTWAVE`, `RELINT`) are modelled together. VROT, VDISP and VRAD are fitted
+  per ring, VSYS and XPOS (the centre along the slit) as single values, the geometry is fixed. The data are prepared
+  first: the spectral window (`WAVERANGE`), a linear continuum (`CONTFIT`, `CONTWINDOWS`) and a residual sky
+  (`SKYRESID`) subtracted, masked ranges (`MASKWAVE`), a noise map and the correlation of the noise. `NORM AZIM`
+  (default) deconvolves the densities from the flux of the lines along the slit, `NORM LOCAL` adds one amplitude per
+  position, marginalised in the likelihood (for asymmetric disks), `NORM NONE` uses DENS. Sampling with nautilus or
+  dynesty, or `SAMPLER OPTIMISE`. Outputs: the rings with their errors, the FITS files of the slit, its model and
+  residuals, and the plots with their scripts (`bbarolo.plots.slitfit`). Validated on mock slits (pulls of rms
+  about 1). The SLITFIT task of BBarolo 1.8, which did not work (and was not ported), is replaced: SLITFIT is now an
+  error that names BAYESIANSLITFIT.
+
 - **The plots of 3DFIT and BAYESIAN3DFIT in Python, without files.** Each plot is a function of the new package
   `bbarolo.plots` (`plot_parameters`, `plot_chanmaps`, `plot_pvs`, `plot_pvslices`, `plot_kinmaps`,
   `plot_asymdrift`) that draws it from arrays and returns a matplotlib Figure. `Result.plot_parameters()`,
@@ -607,6 +623,9 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **The ANALYTIC GALMOD models skip the clouds outside the box of the model before computing their line profile**
+  (they were skipped only when deposited): the same models, faster when the box is a small part of the disk (the
+  model of a slit, the likelihood box of BAYESIAN3DFIT).
 - **BAYESIAN3DFIT and BAYESIANWIND open and close the output of a fit with a banner**, as 3DFIT
   (`=========================== BAYESIAN3DFIT ===========================`, 69 characters), in `run` and `optimize`.
 - **The description of the likelihood printed by BAYESIAN3DFIT and BAYESIANWIND is a short table** (sigma, model

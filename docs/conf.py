@@ -86,7 +86,8 @@ def _plain_docstring(app, what, name, obj, options, lines):
 # (folder of the task in tasks/, task name of the keywords, title); folder None: tasks/general.md
 PARAMETER_PAGES = [
     (None, "ALL", "General parameters"),
-    ("3dfit", "3DFIT", "3DFIT"), ("bayesian3dfit", "BAYESIAN3DFIT", "BAYESIAN3DFIT"), ("galmod", "GALMOD", "GALMOD"),
+    ("3dfit", "3DFIT", "3DFIT"), ("bayesian3dfit", "BAYESIAN3DFIT", "BAYESIAN3DFIT"),
+    ("bayesianslitfit", "BAYESIANSLITFIT", "BAYESIANSLITFIT"), ("galmod", "GALMOD", "GALMOD"),
     ("galwind", "GALWIND", "GALWIND"), ("2dfit", "2DFIT", "2DFIT"), ("spacepar", "SPACEPAR", "SPACEPAR"),
     ("search", "SEARCH", "SEARCH"), ("makemask", "MAKEMASK", "MAKEMASK"), ("smooth", "SMOOTH", "SMOOTH"),
     ("smoothspec", "SMOOTHSPEC", "SMOOTHSPEC"), ("contsub", "CONTSUB", "CONTSUB"), ("stats", "STATS", "STATS"),

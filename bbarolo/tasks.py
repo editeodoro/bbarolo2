@@ -439,9 +439,15 @@ def _write_reduce(c, par, out):
     write_hdu(out["cube"], _fn(c, "_red.fits"))
 
 
-def _compute_slitfit(c, par):
-    print(" SLITFIT task is not available in the Python version (it was broken in C++ BBarolo too).")
-    return Outputs()
+def _compute_bayesslit(c, par):
+    from .bayesian.slittask import run_task
+    f = run_task(c, par)
+    return Outputs(bayesslit=f, rings=f.ring_table())
+
+
+def _write_bayesslit(c, par, out):
+    from .bayesian.slittask import write_task
+    write_task(out["bayesslit"], c)
 
 
 def _compute_ellprof(c, par):
@@ -513,7 +519,7 @@ STEPS = [
     ("PVSLICE", lambda par, p: par.flagPV, _compute_pvslice, _write_pvslice),
     ("REDUCE", lambda par, p: par.getflagReduce() and not (par.flagSmooth or par.flagSmoothSpectral),
      _compute_reduce, _write_reduce),
-    ("SLITFIT", lambda par, p: par.flagSlitfit, _compute_slitfit, _nothing),
+    ("BAYESIANSLITFIT", lambda par, p: par.flagBayesSlit, _compute_bayesslit, _write_bayesslit),
     ("ELLPROF", lambda par, p: par.flagEllProf, _compute_ellprof, _write_ellprof),
     ("REND3D", lambda par, p: par.flagRend3D, _compute_rend3d, _write_rend3d),
 ]
@@ -618,6 +624,9 @@ def BBcore(par, collect=False):
     with _logfile(par, outfolder):
         if par.logFile:
             p.showbar = False
+        if par.flagBayesSlit:                    # (a long-slit spectrum, read by the task: not a cube)
+            out = run_steps(_slit_cube(c, p), par, collect)
+            return (out, c) if collect else True
         try:
             ok = c.readCube(p.imageFile)
         except BBaroloError:
@@ -630,6 +639,15 @@ def BBcore(par, collect=False):
             return False
         out = run_steps(c, par, collect)
     return (out, c) if collect else True
+
+
+def _slit_cube(c, p):
+    """The Cube of a BAYESIANSLITFIT run (BBcore): no data, the prefix of the outputs the OBJECT of the slit."""
+    from .header import read_fits_image, object_name
+    if p.outPrefix == "":
+        hdr, _ = read_fits_image(p.imageFile, data=False)
+        p.outPrefix = object_name(hdr.get("OBJECT", "NONE")) or "NONE"
+    return c
 
 
 def run_par(par, banner=True, collect=False):

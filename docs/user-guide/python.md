@@ -168,3 +168,13 @@ samples the posterior and writes nothing, and `f.optimize(freepar=...)` minimise
 `f.emission_errors()` and `f.corner_plot()`. `f.write(outfolder=None, plots=None)` writes what the task writes.
 `f.log_likelihood(theta)` evaluates the marginal likelihood of a vector of the free parameters. See
 {doc}`../tasks/bayesianwind/index`.
+
+## BayesianSlitFit
+
+{class}`bbarolo.BayesianSlitFit` (BAYESIANSLITFIT) fits a long-slit spectrum in the same way:
+`BayesianSlitFit("slit.fits", slitwidth=1, beam=1.5, specres=1.04, inc=71, ...)`, then `f.run(freepar=...)` samples
+the posterior and `f.optimize()` minimises the same likelihood, writing nothing. In memory are `f.print_stats()`,
+`f.ring_table()` (the rings with their errors, an astropy Table), `f.best` (the rings, the model of the slit and,
+with NORM LOCAL, the amplitudes of the positions), `f.prep` (the prepared slit: data, noise map, continuum, the
+fits of the lines along the slit), `f.plot_pv()`, `f.plot_parameters()` and `f.corner_plot()`.
+`f.write(outfolder=None, plots=None)` writes what the task writes. See {doc}`../tasks/bayesianslitfit/index`.

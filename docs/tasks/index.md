@@ -7,6 +7,7 @@ BBarolo is organised in **tasks**. A parameter file switches on one or more task
 - {doc}`3DFIT <3dfit/index>`: Fit a 3D tilted-ring model to an emission-line datacube.
 - {doc}`BAYESIAN3DFIT <bayesian3dfit/index>`: Fit a 3D tilted-ring model by nested sampling of the posterior (needs dynesty or nautilus).
 - {doc}`BAYESIANWIND <bayesianwind/index>`: Fit a bi-conical wind by nested sampling of the posterior, its patchy emission marginalised.
+- {doc}`BAYESIANSLITFIT <bayesianslitfit/index>`: Fit the kinematics of a long-slit spectrum by nested sampling of the posterior.
 - {doc}`2DFIT <2dfit/index>`: Fit a 2D tilted-ring model to a velocity field.
 - {doc}`SPACEPAR <spacepar/index>`: Compute the full 2D space for any pair of 3DFIT parameters.
 
@@ -41,6 +42,7 @@ general
 3dfit/index
 bayesian3dfit/index
 bayesianwind/index
+bayesianslitfit/index
 galmod/index
 galmod3d/index
 galwind/index
