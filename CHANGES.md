@@ -7,6 +7,10 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **Initial estimates: the warning on the minor axis longer than the major axis printed twice (C++).** The
+  inclination is estimated twice, before and after the 2D tilted-ring tuning of the centre and position angle,
+  and each estimate printed the warning. It is now printed once, after the estimates, and only if it holds for
+  the final geometry (GUESSTYPE LEGACY printed it also when the tuning had corrected the position angle).
 - **The PV slice along the minor axis in `_pv_<norm>.pdf` had a wrong offset range (C++).** It was ±1.3 R_max sin i,
   wider than the projected minor axis (R_max cos i) at most inclinations and empty (zero width) for a face-on disc.
   It now has the range of the major axis, so the two slices can be compared on the same scale.

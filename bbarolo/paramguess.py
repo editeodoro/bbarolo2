@@ -145,6 +145,7 @@ class ParamGuess:
         self.mode = "LEGACY"         # GUESSTYPE: LEGACY (as C++), ELLIPSE (C++ corrected) or FIT
         self.major_max = [0, 0]; self.major_min = [0, 0]
         self.minor_max = [0, 0]; self.minor_min = [0, 0]
+        self.axes_swapped = False    # findInclination: minor axis longer than the major axis
 
     def findAll(self):
         self.findSystemicVelocity()
@@ -153,6 +154,14 @@ class ParamGuess:
         self.findInclination()
         self.findRings()
         self.findRotationVelocity()
+        self.warnAxesSwapped()
+
+    def warnAxesSwapped(self):
+        if self.axes_swapped:
+            print("---------------> WARNING - Finding initial parameters <--------------\n"
+                  " The major axis is shorter than the minor axis. They will be swapped\n"
+                  " for estimating the inclination.\n"
+                  " The galaxy seems to be less elongated in the kinematical axis!!\n")
 
     def findCentre(self):
         o = self.obj
@@ -299,11 +308,10 @@ class ParamGuess:
         pmaj, pmin = self.setAxesLine(self.xcentre, self.ycentre, self.posang)
         axmaj, self.major_max, self.major_min = self.findAxisLength(pmaj)
         axmin, self.minor_max, self.minor_min = self.findAxisLength(pmin)
-        if axmin > axmaj:
-            print("---------------> WARNING - Finding initial parameters <--------------\n"
-                  " The major axis is shorter than the minor axis. They will be swapped\n"
-                  " for estimating the inclination.\n"
-                  " The galaxy seems to be less elongated in the kinematical axis!!\n")
+        # (the warning is printed once by warnAxesSwapped, for the last geometry: the inclination is
+        # estimated again after the tilted-ring tuning, and C++ printed it at each estimate)
+        self.axes_swapped = axmin > axmaj
+        if self.axes_swapped:
             axmin, axmaj = axmaj, axmin
         self.inclin = math.degrees(math.acos(axmin / axmaj)) if axmaj > 0 else 45.
         self.Rmax = axmaj * c.Head().PixScale() * arcsconv(c.Head().Cunit(0))
@@ -716,4 +724,5 @@ def EstimateInitial(c, p, beamrings=False):
     if verb:
         print("Done.")
     c.pars().verbose = verb
+    ip.warnAxesSwapped()
     return ip

@@ -1900,6 +1900,22 @@ def test_initial_estimates(tmp_path, guesstype):
     assert ip.inclin == 65 and ip.vsystem == 1
 
 
+def test_initial_estimates_axes_warning_once(tmp_path, capsys):
+    """The warning on the minor axis longer than the major axis is printed once, for the final geometry: the
+    inclination is estimated twice (before and after the tilted-ring tuning), and C++ printed it at each estimate."""
+    from bbarolo.paramguess import EstimateInitial
+    fn = _mock_disk(tmp_path)
+    for guesstype, nwarn in (("ELLIPSE", 1), ("LEGACY", 0)):
+        # PHI 130 is the minor axis of the disk (PA 40): ELLIPSE keeps it, LEGACY replaces it with the tuned PA
+        p = Param()
+        p.readParamString(f"FITSFILE {fn}\nGUESSTYPE {guesstype}\nPHI 130\nTHREADS 1\nVERBOSE false\n"
+                          f"OUTFOLDER {tmp_path}/\n")
+        assert p.checkPars(quiet=True)
+        capsys.readouterr()
+        ip = EstimateInitial(Cube(fn, par=p), p.gf)
+        assert ip.nrings > 3 and capsys.readouterr().out.count("less elongated in the kinematical axis") == nwarn
+
+
 def test_spatial_axes_in_arcsec(tmp_path):
     """Spatial axes in arcsec or arcmin (BMAJ in degrees, as in FITS) are converted to degrees on
     reading: the same results as in degrees (C++ mixed the units: the beam area, the estimated ring
