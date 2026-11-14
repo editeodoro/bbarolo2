@@ -3939,7 +3939,7 @@ def test_bayesian_side(tmp_path, capsys):
     f = _bayes_mock(tmp_path, side="R")
     f.sample(sampler='dynesty', freepar=['vrot_single'], threads=1, verbose=True, dynamic=False, sampler_kwargs=dict(nlive=15, seed=1),
           run_kwargs=dict(maxiter=40, print_progress=False))
-    assert "the receding half of the galaxy only (SIDE)" in capsys.readouterr().out
+    assert "  side         receding half (SIDE)" in capsys.readouterr().out
 
 
 def test_chanmaps_mask_padded_as_data(tmp_path):
