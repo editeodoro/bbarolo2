@@ -1,21 +1,25 @@
-# BAYESIANWIND
+# WINDFIT
 
-BAYESIANWIND fits a bi-conical wind to an emission-line datacube by sampling the posterior distribution of
-its geometry and kinematics with nested sampling (nautilus or dynesty). The wind is the model of
+WINDFIT fits a bi-conical wind to an emission-line datacube. By default (`METHOD GLOBAL`) it finds the maximum
+of the likelihood of its geometry and kinematics, with the errors of the Laplace approximation, in seconds; with
+`METHOD BAYESIAN` it samples their posterior distribution with nested sampling (nautilus or dynesty). The wind is the model of
 {doc}`GALWIND <../galwind/index>`: two opposite cones with their apex at the centre, along the rotation axis
 of a disk of inclination `INC` and position angle `PA`, between the opening angles `OPENIN` and `OPENANG`,
 out to `CONELEN`, with a radial velocity, a velocity dispersion and a rotation around the axis in each shell.
 
 The emission of the wind is **not assumed**. Winds are patchy: clumps and filaments fill the cones
-unevenly, and a smooth density law would bias the geometry. BAYESIANWIND describes the emission as a set
+unevenly, and a smooth density law would bias the geometry. WINDFIT describes the emission as a set
 of emissivities on cells of the cones (about one beam across, each cone its own). The emissivities are
 solved at every evaluation of the likelihood and marginalised over, so the posterior of the geometry and
 kinematics accounts for every distribution of the emission that the data allow. The marginalisation
 also penalises cones wider and winds faster than the data need, which the best-fit emission alone does
 not do (see {doc}`algorithm`).
 
-In Python: {class}`bbarolo.BayesianWind`. The default sampler (`SAMPLER NAUTILUSBB`) is part of BBarolo;
-`NAUTILUS` and `DYNESTY` need their packages (`pip install "bbarolo[bayesian]"`).
+In Python: {class}`bbarolo.WindFit` (`method="global"` by default); the engine behind it is
+{class}`bbarolo.BayesianWind`. The two METHODs share the free parameters, priors and options, as for
+{doc}`3DFIT <../3dfit/index>` (CLASSIC does not exist for WINDFIT, and WINDFIT cannot run together with 3DFIT). The
+default sampler of METHOD BAYESIAN (`SAMPLER NAUTILUSBB`) is part of BBarolo; `NAUTILUS` and `DYNESTY` need their
+packages (`pip install "bbarolo[bayesian]"`).
 
 ## Example
 
@@ -33,7 +37,8 @@ clumpiness, the ratio of the two cones and the radial slope of the prior of the 
 
 ```text
 FITSFILE      wind_mock.fits
-BAYESIANWIND  true
+WINDFIT       true
+METHOD        BAYESIAN      # the default is GLOBAL, a minimisation
 XPOS          23.5
 YPOS          23.5
 VSYS          0
@@ -52,27 +57,32 @@ THREADS       8
 :sync: py
 
 ```python
-from bbarolo import BayesianWind
+from bbarolo import WindFit
 
-f = BayesianWind("wind_mock.fits", xpos=23.5, ypos=23.5, vsys=0, inc=55, pa=30, openang=55, conelen=200,
-                 vwind=180, vdisp=20)
-f.run(freepar=["vwind_single", "inc", "openang"], threads=8)
-f.print_stats()
-f.write("output/wind/")
+f = WindFit("wind_mock.fits", method="bayesian", xpos=23.5, ypos=23.5, vsys=0, inc=55, pa=30, openang=55,
+            conelen=200, vwind=180, vdisp=20, free="VWIND_SINGLE INC OPENANG")
+res = f.run(threads=8)    # in memory; method="global" (the default) minimises instead
+res.parameters            # a Table: name, value, err_lo, err_hi
+res.shells                # the shells of the best fit
+res.samples               # the posterior samples (for GLOBAL, the Laplace draws)
+res.model                 # the model cube (an HDU)
+res.fitter.print_stats()  # the engine, a BayesianWind
+res.write("output/wind/")
 ```
 :::
 ::::
 
-`SAMPLER OPTIMISE` (in Python `f.optimize(freepar=...)`) finds the best fit by a classic minimisation of the same likelihood (the
-hyperparameters of the emission added as in `run`), in seconds, to test a sampling or a setup: L-BFGS-B by
-default, with the errors of the Laplace approximation (see {doc}`BAYESIAN3DFIT <../bayesian3dfit/index>` for the
-methods, `SAMPLEROPTS` and `RUNOPTS`, and the errors). On a clumpy mock wind with five free parameters and the four of the emission, L-BFGS-B
+`METHOD GLOBAL`, the default (in Python `WindFit(...).run()`, or `BayesianWind.optimize(freepar=...)`), finds the best
+fit by a classic minimisation of the same likelihood (the hyperparameters of the emission added as in the
+sampling), in seconds, to try a setup before a sampling: L-BFGS-B by default (`MINIMISER` chooses another), with the
+errors of the Laplace approximation (see {doc}`3DFIT <../3dfit/index>` for the minimisers, `SAMPLEROPTS` and
+`RUNOPTS`, and the errors). On a clumpy mock wind with five free parameters and the four of the emission, L-BFGS-B
 took 5 seconds on 16 processes and nautilus 15 minutes: the best fit was within 0.3σ of the medians of the
 posterior, and the errors within 10% of its widths.
 
 ## Free parameters
 
-`FREE` lists them, as for BAYESIAN3DFIT:
+`FREE` lists them, as for {doc}`3DFIT with METHOD GLOBAL or BAYESIAN <../3dfit/likelihood>`:
 
 - `VWIND`, `VDISP`, `VROT`: one value per shell (the shells are `RADII`, or `NLAYERS` shells, by default one per
   beam), `NAME_SINGLE` one value for all the shells, `NAME_FUNC` a function of radius (VWIND: an arctangent
@@ -83,7 +93,7 @@ posterior, and the errors within 10% of its widths.
   cone), its fractional scatter, the ratio of the mean of the approaching cone to that of the receding one
   (the far cone is often extincted), and its power-law slope in radius (the emission fades outwards). They
   are always fitted, added to the free parameters unless `LIKEOPTS` fixes them;
-- `SIGMA`: the noise, as BAYESIAN3DFIT.
+- `SIGMA`: the noise, as 3DFIT with METHOD GLOBAL or BAYESIAN.
 
 The default priors follow the initial wind (INC ± 15°, PA ± 20°, OPENANG ± 30°, VWIND 0 to twice the
 initial value, ...); `PRIORS` changes them, e.g. `PRIORS OPENANG=(uniform,20,100)`.
@@ -101,12 +111,12 @@ initial value, ...); `PRIORS` changes them, e.g. `PRIORS OPENANG=(uniform,20,100
 | `prior` | `gauss` (default: Gaussian emissivities, exact marginal likelihood) or `exp` (non-negative exponential emissivities, approximate) |
 | `emscale`, `emclump`, `emratio`, `emslope` | fixed values of EMSCALE, EMCLUMP, EMRATIO and EMSLOPE (default: fitted) |
 | `cones` | `both` (default), `approaching` or `receding`: only one cone in the model, for a wind whose other side is not seen (half the cells, no EMRATIO). With both cones, an empty one is found by EMRATIO |
-| `noisecorr`, `sigma` | the correlation and the value of the noise, as BAYESIAN3DFIT |
+| `noisecorr`, `sigma` | the correlation and the value of the noise, as 3DFIT with METHOD GLOBAL or BAYESIAN |
 | `datafrac` | a model error proportional to the data (default 0) |
 | `grow` | the region of the likelihood: the projected cones of the priors grown by `grow` beams (default 1) |
 | `prune` | values of the model below `prune` times the peak of their cell are left out of the likelihood (default 1e-3) |
 
-A fixed disk can be added with `DISKRINGS` (a rings file of 3DFIT or BAYESIAN3DFIT): its geometry and
+A fixed disk can be added with `DISKRINGS` (a rings file of 3DFIT): its geometry and
 kinematics are those of the file, and the densities of its rings are fitted with the emission of the wind.
 On a mock wind on top of a rotating disk, the fit with the disk found the true opening angle and the
 densities of the rings within 25%; without it, the cones widened to absorb the disk.
@@ -123,7 +133,7 @@ In the output folder, with the prefix of the cube:
   (`_0mom.fits`, ..., `_mod_0mom_wind.fits`, ...), as 3DFIT;
 - `pvs/`: position-velocity slices of the data, the model and the mask through the apex, across the axis of
   the cones (`_pv_a`, along `PA`) and along it (`_pv_b`, `PA` + 90), as 3DFIT;
-- `_<sampler>_windresults.npy`: the samples, their weights and the setup of the fit (after `optimize()`:
+- `_<sampler>_windresults.npy`: the samples, their weights and the setup of the fit (METHOD GLOBAL:
   `_optimize_windresults.npy`, with the best fit and the optimisation; `_wind_params.txt` then gives the best fit
   and the errors of the Laplace approximation);
 - `plotscripts/`: the plotting scripts (with `PLOTS` ≥ 0), run with `PLOTS` > 0. They produce

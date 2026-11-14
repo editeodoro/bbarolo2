@@ -5,6 +5,7 @@ bbarolo2, and report the output files that differ.
 
     python performance/compare_examples.py               # current code vs HEAD
     python performance/compare_examples.py 941b993 -j 8   # vs a commit, 8 runs at a time
+    python performance/compare_examples.py --examples old/examples --new-examples new/examples   # keywords changed
 
 The parameter files are those of <examples>/*.par and <examples>/test/*.par, where <examples> is
 ../examples (next to this repository) or --examples. They are run from the folder that contains
@@ -12,7 +13,9 @@ The parameter files are those of <examples>/*.par and <examples>/test/*.par, whe
 ignored: the noisy model (*mod_noise.fits, unseeded noise), the parameters of the run (*_params.par: date
 and folder) and the plot scripts (they contain the
 output folder). For FITS files the report gives the largest data difference and the header
-keywords that changed; for text files the number of lines that differ.
+keywords that changed; for text files the number of lines that differ. With --new-examples, the new code runs the
+parameter files of that folder instead (the same names, run from its parent folder), e.g. those of --examples
+translated to changed keywords, while the git revision runs those of --examples.
 """
 
 import os
@@ -79,6 +82,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("ref", nargs="?", default="HEAD", help="git revision to compare with (default HEAD)")
     ap.add_argument("--examples", default=os.path.join(os.path.dirname(REPO), "examples"))
+    ap.add_argument("--new-examples", default=None, help="the parameter files of the new code (the names of those of "
+                    "--examples; default: the same files), e.g. with changed keywords")
     ap.add_argument("--outdir", default=None, help="folder for the outputs (default: a temporary folder, deleted)")
     ap.add_argument("-j", "--jobs", type=int, default=4, help="runs at a time")
     ap.add_argument("-t", "--threads", type=int, default=4, help="THREADS of each run")
@@ -90,6 +95,10 @@ def main():
     if not pars:
         sys.exit(f"No parameter files in {examples}")
     cwd = os.path.dirname(examples)
+    newex = os.path.abspath(args.new_examples) if args.new_examples else examples
+    missing = [p for p in pars if not os.path.isfile(os.path.join(newex, os.path.relpath(p, examples)))]
+    if missing:
+        sys.exit(f"Not in {newex}: {', '.join(os.path.relpath(p, examples) for p in missing)}")
     outdir = args.outdir or tempfile.mkdtemp(prefix="bbcompare_")
     ref_code = os.path.join(outdir, "ref_code")
     subprocess.run(["git", "-C", REPO, "worktree", "add", "-q", "--detach", ref_code, args.ref], check=True)
@@ -97,10 +106,11 @@ def main():
         jobs = []
         for p in pars:
             name = os.path.relpath(p, examples).replace("/", "_")[:-4]
-            for tag, code in (("ref", ref_code), ("new", REPO)):
-                jobs.append((tag, name, code, p, os.path.join(outdir, tag, name) + "/"))
+            pn = os.path.join(newex, os.path.relpath(p, examples))
+            for tag, code, pf, wd in (("ref", ref_code, p, cwd), ("new", REPO, pn, os.path.dirname(newex))):
+                jobs.append((tag, name, code, pf, os.path.join(outdir, tag, name) + "/", wd))
         with ThreadPoolExecutor(args.jobs) as ex:
-            codes = list(ex.map(lambda j: run(j[2], j[3], j[4], cwd, args.threads), jobs))
+            codes = list(ex.map(lambda j: run(j[2], j[3], j[4], j[5], args.threads), jobs))
         failed = [f"{j[0]}:{j[1]}" for j, c in zip(jobs, codes) if c != 0]
         ndiff = 0
         for p in pars:

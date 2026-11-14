@@ -59,7 +59,7 @@ def fig_3dfit():
     save(res.plot_pv(), "3dfit_pv.png")
 
 
-# ---------------------------------------------------------------- models: BAYESIAN3DFIT, GALMOD, GalMod3D, GALWIND
+# ---------------------------------------------------------------- models: 3DFIT METHOD BAYESIAN, GALMOD, GalMod3D, GALWIND
 def _moment_panels(hdus, titles, cmaps, fname, figsize=None):
     """Moment maps (astropy HDUs, 2D) side by side, in pixels, each with its colour bar."""
     fig, axs = plt.subplots(1, len(hdus), figsize=figsize or (3.4 * len(hdus), 3.6))
@@ -136,8 +136,8 @@ def fig_bayesian3dfit():
                       inc=60, pa=123.7, z0=10, mask="SEARCH")
     f.priors["vrot"] = dict(name="uniform", loc=50, scale=200)      # km/s
     f.priors["vdisp"] = dict(name="uniform", loc=0, scale=30)       # km/s
-    f.run(freepar="VROT VDISP_SINGLE SIGMA", threads=4, method="dynesty",
-          sampler_kwargs=dict(nlive=100, seed=1), run_kwargs=dict(dlogz=1, print_progress=False))
+    f.sample(freepar="VROT VDISP_SINGLE SIGMA", threads=4, sampler="dynesty",
+             sampler_kwargs=dict(nlive=100, seed=1), run_kwargs=dict(dlogz=1, print_progress=False))
     f.print_stats()
     save(f.corner_plot(), "bayesian3dfit_corner.png")
 
@@ -684,8 +684,8 @@ def fig_bayesian():
     f.priors["inc"] = dict(name="uniform", loc=40, scale=25)        # degrees
     f.priors["phi"] = dict(name="uniform", loc=110, scale=30)       # degrees
     t0 = time.time()
-    f.run(freepar="VROT VDISP_SINGLE INC_SINGLE PA_SINGLE SIGMA RADMAX", threads=4, method="nautilusbb",
-          sampler_kwargs=dict(nlive=500, seed=1), run_kwargs=dict(dlogz=1, n_eff=3000))
+    f.sample(freepar="VROT VDISP_SINGLE INC_SINGLE PA_SINGLE SIGMA RADMAX", threads=4, sampler="nautilusbb",
+             sampler_kwargs=dict(nlive=500, seed=1), run_kwargs=dict(dlogz=1, n_eff=3000))
     print(f"    fit: {time.time() - t0:.0f} s")
     f.print_stats()
     if os.environ.get("BAYES_SAVE"):
@@ -706,7 +706,7 @@ def fig_bayesian():
     curves = np.array([s[[names.index(f"vrot{i + 1}") for i in range(len(R))]] for s in f.samples_equal])
     for c in curves[:: max(1, len(curves) // 150)]:
         ax.plot(R, c, color="C0", alpha=0.04, lw=1)
-    ax.errorbar(R, vr, [lo, hi], fmt="o", color="C0", capsize=3, label="BAYESIAN3DFIT: median, 68%")
+    ax.errorbar(R, vr, [lo, hi], fmt="o", color="C0", capsize=3, label="BAYESIAN: median, 68%")
     ax.plot(R + 6, fa.rings["vrot"], "s", color="C1", label=f"3DFIT, INC, PA free ({fa.rings['inc'][0]:.1f}$^\\circ$)")
     ax.plot(R - 6, fb.rings["vrot"], "^", color="C2", label=f"3DFIT, INC = {inc:.1f}$^\\circ$ (Bayesian)")
     if f.disk_edge is not None:

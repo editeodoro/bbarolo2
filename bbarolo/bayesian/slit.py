@@ -1,7 +1,7 @@
 """
-BayesianSlitFit (the task BAYESIANSLITFIT): fit the kinematics of a rotating disk to a long-slit spectrum (a 2D image,
+BayesianSlitFit (the task SLITFIT): fit the kinematics of a rotating disk to a long-slit spectrum (a 2D image,
 position along the slit x wavelength), by sampling the posterior with nested sampling (the nautilus included in
-BBarolo, NAUTILUSBB, the default; nautilus or dynesty) or by a minimisation of the same likelihood (SAMPLER OPTIMISE).
+BBarolo, NAUTILUSBB, the default; nautilus or dynesty) or by a minimisation of the same likelihood (METHOD GLOBAL).
 
 The model is a GALMOD disk (rings of VROT, VDISP, VRAD; INC and Z0 fixed) built on a thin 3D grid around the slit,
 with the spatial and spectral sampling of the slit, and seen through the slit: the seeing (BEAM, a circular Gaussian)
@@ -27,7 +27,7 @@ default is VROT VDISP VSYS XPOS. The geometry (INC, Z0, SLITANGLE, YPOS) is fixe
 The normalisation of the model (NORM):
   AZIM   (default) the densities of the rings are those whose model reproduces the flux of the lines along the slit
          (the data summed over the channels of the lines), a non-negative least-squares fit with a smoothness prior
-         (LIKEOPTS densprof_smooth), as BAYESIAN3DFIT deconvolves the total intensity map;
+         (LIKEOPTS densprof_smooth), as 3DFIT with METHOD GLOBAL or BAYESIAN deconvolves the total intensity map;
   LOCAL  the AZIM model times one amplitude per position of the slit (an asymmetric or clumpy disk), marginalised
          in the likelihood (a flat prior, non-negative);
   NONE   the densities of the rings (DENS, given or free).
@@ -35,7 +35,7 @@ The normalisation of the model (NORM):
 Options of the likelihood (LIKEOPTS): noisecorr ('measured', default: the correlation of the noise along the slit and
 along the spectra, measured; or a number of pixels per independent measurement, 1 for independent pixels),
 densprof_smooth (default 0.1), sigma (a fixed factor of the noise map, default 1), smooth (the smoothness priors of
-the parameters free in each ring, as BAYESIAN3DFIT: the bend allowed to each profile over one seeing FWHM, in the units
+the parameters free in each ring, as 3DFIT with METHOD GLOBAL or BAYESIAN: the bend allowed to each profile over one seeing FWHM, in the units
 of the parameter, DENS in dex: smooth=(vrot=5, vdisp=3) in LIKEOPTS, a dict in Python).
 """
 
@@ -47,9 +47,9 @@ import numpy as np
 from ..tasks import Task, build_param, _checked
 from ..bbutils import BBaroloError
 from .common import (vprint, banner, get_distribution, fast_ppf, show_bar, smoothness_penalty, smoothness_summary,
-                     smoothness_text, smoothness_result, SIGMA_QUANTILES)
+                     smoothness_text, smoothness_result, SIGMA_QUANTILES,
+                     fit_method, global_arguments, check_sampler, _resets)
 from .sampling import sample, sampler_options
-from .optimize import SAMPLER_NAMES, sampler_options as optimize_options
 
 SLIT_RING_PARS = ("vrot", "vdisp", "vrad", "dens")
 SLIT_SCALAR_PARS = ("vsys", "xpos")
@@ -68,7 +68,7 @@ SLIT_LIKE_OPTIONS = dict(noisecorr="measured", densprof_smooth=0.1, sigma=None, 
 
 
 def slit_like_option(name, value):
-    """An option of the likelihood of BAYESIANSLITFIT, checked: (name, value); None if name is not an option. Raises
+    """An option of the likelihood of SLITFIT, checked: (name, value); None if name is not an option. Raises
     ValueError for a wrong value (None gives the default)."""
     k = str(name).strip().lower()
     if k not in SLIT_LIKE_OPTIONS:
@@ -91,7 +91,7 @@ def slit_like_option(name, value):
         sm = bayes_like_option(k, value)[1]
         bad = [n for n in sm if n not in SLIT_RING_PARS]
         if bad:
-            raise ValueError(f"smooth: '{bad[0]}' is not a ring parameter of BAYESIANSLITFIT ("
+            raise ValueError(f"smooth: '{bad[0]}' is not a ring parameter of SLITFIT ("
                              + ", ".join(SLIT_RING_PARS) + ")")
         return k, sm
     try:
@@ -106,7 +106,7 @@ def slit_like_option(name, value):
 
 
 def slit_likeopts(opts):
-    """The options of the likelihood of BAYESIANSLITFIT from LIKEOPTS (as in a parameter file). Raises ValueError."""
+    """The options of the likelihood of SLITFIT from LIKEOPTS (as in a parameter file). Raises ValueError."""
     from ..params import bayes_options
     out = {}
     for k, v in bayes_options(opts, none=False).items():
@@ -118,13 +118,13 @@ def slit_likeopts(opts):
 
 
 def slit_freepar(free, funcs=SLIT_FUNC_PARS):
-    """The free parameters of BAYESIANSLITFIT from FREE: 'VROT VDISP_SINGLE VSYS XPOS' -> ['vrot', 'vdisp_single',
+    """The free parameters of SLITFIT from FREE: 'VROT VDISP_SINGLE VSYS XPOS' -> ['vrot', 'vdisp_single',
     'vsys', 'xpos'] (VSYS, XPOS: single values, also as VSYS_SINGLE, XPOS_SINGLE). Raises ValueError."""
     from ..params import bayes_freepar, bayes_name
     toks = str(free).replace(",", " ").split()
     for t in toks:
         if bayes_name(t, _SLIT_ALIASES).partition("_")[0] in _FIXED_GEOMETRY:
-            raise ValueError(f"{t}: the geometry (INC, PA, Z0, YPOS, SLITANGLE) is fixed in BAYESIANSLITFIT (a slit "
+            raise ValueError(f"{t}: the geometry (INC, PA, Z0, YPOS, SLITANGLE) is fixed in SLITFIT (a slit "
                              "does not constrain it)")
     out = []
     for n in bayes_freepar(free, funcs=funcs, ring_pars=SLIT_RING_PARS + SLIT_SCALAR_PARS,
@@ -132,14 +132,14 @@ def slit_freepar(free, funcs=SLIT_FUNC_PARS):
         base, _, suf = n.partition("_")
         if base in SLIT_SCALAR_PARS:
             if suf == "func":
-                raise ValueError(f"{base.upper()} is a single value in BAYESIANSLITFIT (no _FUNC)")
+                raise ValueError(f"{base.upper()} is a single value in SLITFIT (no _FUNC)")
             n = base
         out.append(n)
     return out
 
 
 def slit_priors(priors):
-    """The priors of BAYESIANSLITFIT from PRIORS (as BAYESIAN3DFIT, with its free parameters). Raises ValueError."""
+    """The priors of SLITFIT from PRIORS (as 3DFIT with METHOD GLOBAL or BAYESIAN, with its free parameters). Raises ValueError."""
     from ..params import bayes_priors
     return bayes_priors(priors, ring_pars=SLIT_RING_PARS + SLIT_SCALAR_PARS, other_pars=SLIT_OTHER_PARS,
                         func_pars=SLIT_FUNC_PARS, aliases=_SLIT_ALIASES)
@@ -167,7 +167,7 @@ def _ring_values(s):
     try:
         return float(ringTokens(s)[0])
     except (ValueError, IndexError):
-        raise BBaroloError(f"BAYESIANSLITFIT: cannot read the ring parameter {s!r}") from None
+        raise BBaroloError(f"SLITFIT: cannot read the ring parameter {s!r}") from None
 
 
 class BayesianSlitFit(Task):
@@ -189,11 +189,12 @@ class BayesianSlitFit(Task):
     optimize), optimum (the details of optimize), best (a dict: the rings, the model of the slit, the amplitudes).
     """
 
-    TASK = "BAYESIANSLITFIT"
+    TASK = "SLITFIT"
+    DEFAULT_METHOD = "GLOBAL"           # the METHOD of run() when it is not given (as the task SLITFIT)
     _KEYWORD_OPTIONS = ("FREE", "SAMPLER", "PRIORS", "SAMPLEROPTS", "RUNOPTS", "LIKEOPTS")
 
     def __init__(self, slit=None, **params):
-        self.taskname = "BAYESIANSLITFIT"
+        self.taskname = "SLITFIT"
         self.freepar_idx = {}
         self.freepar_names = []
         self.ndim = 0
@@ -242,7 +243,7 @@ class BayesianSlitFit(Task):
             if self.prior_distr is not None:
                 for k in given["PRIORS"]:
                     self.prior_distr.pop(k, None)
-        if params:
+        if _resets(params):
             self._reset()
         return self
 
@@ -256,15 +257,11 @@ class BayesianSlitFit(Task):
             if name == "PRIORS":
                 return slit_priors(s)
             if name == "SAMPLER":
-                m = s.strip().lower()
-                m = "optimise" if m == "optimize" else m
-                if m not in ("nautilusbb", "nautilus", "dynesty", "optimise"):
-                    raise ValueError(f"unknown sampler {s.strip()} (NAUTILUSBB, NAUTILUS, DYNESTY or OPTIMISE)")
-                return m
+                return check_sampler(s, "SLITFIT")
             from ..params import bayes_options
             return bayes_options(s)
         except ValueError as e:
-            raise ValueError(f"BAYESIANSLITFIT: {name}: {e}") from None
+            raise ValueError(f"SLITFIT: {name}: {str(e).replace('SLITFIT: ', '')}") from None
 
     def _run_defaults(self):
         from ..keywords import TASK_DEFAULTS
@@ -317,10 +314,10 @@ class BayesianSlitFit(Task):
         nl = max(len(rest), 1)
         relint = [x for x in (gf.RELINT or [])] if gf.RELINT and gf.RELINT[0] != -1 else [1.] * nl
         if len(relint) != nl:
-            raise BBaroloError(f"BAYESIANSLITFIT: RELINT must have one value per line ({nl})")
+            raise BBaroloError(f"SLITFIT: RELINT must have one value per line ({nl})")
         nch = par.specres if par.specres != -1 else par.linear
         if nch == -1:
-            raise BBaroloError("BAYESIANSLITFIT: give the instrumental resolution of the spectra, SPECRES (the "
+            raise BBaroloError("SLITFIT: give the instrumental resolution of the spectra, SPECRES (the "
                                "dispersion of the line spread function, in channels)")
         self._nch = float(nch)
         self._beam = float(par.beam[0])
@@ -362,7 +359,7 @@ class BayesianSlitFit(Task):
         inc = _ring_values(gf.INC)
         inc = float(np.median(inc)) if isinstance(inc, list) else float(inc)
         if not 0 < inc < 90:
-            raise BBaroloError(f"BAYESIANSLITFIT: INC must be between 0 and 90 degrees (not included), not {inc:g}")
+            raise BBaroloError(f"SLITFIT: INC must be between 0 and 90 degrees (not included), not {inc:g}")
         sini = math.sin(math.radians(inc))
         est = {}
         # the centre along the slit
@@ -463,7 +460,7 @@ class BayesianSlitFit(Task):
         try:
             yoff = 0. if yp in ("", "-1") else float(yp)
         except ValueError:
-            raise BBaroloError(f"BAYESIANSLITFIT: YPOS (the distance of the slit from the centre, arcsec) must be a "
+            raise BBaroloError(f"SLITFIT: YPOS (the distance of the slit from the centre, arcsec) must be a "
                                f"number, not {yp}") from None
         self.initial = dict(radii=radii, xpos=xpos, vsys=vsys, vrot=np.asarray(vrot, float) * np.ones(nr),
                             vdisp=np.asarray(vdisp, float) * np.ones(nr), inc=inc, slitangle=slitangle, yoffset=yoff,
@@ -532,11 +529,11 @@ class BayesianSlitFit(Task):
         for name in names:
             base, _, suffix = name.partition("_")
             if base == "dens" and norm != "NONE":
-                raise ValueError(f"BAYESIANSLITFIT: DENS is free only with NORM NONE (with NORM {norm} the densities "
+                raise ValueError(f"SLITFIT: DENS is free only with NORM NONE (with NORM {norm} the densities "
                                  "come from the data)")
             if suffix == "func":
                 if base not in self.funcs:
-                    raise ValueError(f"BAYESIANSLITFIT: no function of radius for {base.upper()} (see funcs)")
+                    raise ValueError(f"SLITFIT: no function of radius for {base.upper()} (see funcs)")
                 npar = self.funcs[base].__code__.co_argcount - 1
                 for i in range(npar):
                     key = f"{base}_p{i + 1}"
@@ -556,13 +553,13 @@ class BayesianSlitFit(Task):
         self.prior_distr = {} if self.prior_distr is None else self.prior_distr
         for key in self.freepar_idx:
             if key not in self.priors:
-                raise ValueError(f"BAYESIANSLITFIT: no prior for {key} (give it in PRIORS)")
+                raise ValueError(f"SLITFIT: no prior for {key} (give it in PRIORS)")
             d = self.priors[key]
             kw = {k: v for k, v in d.items() if k != "name"}
             try:
                 self.prior_distr[key] = get_distribution(d["name"], **kw)
             except Exception:
-                raise ValueError(f"BAYESIANSLITFIT: something is wrong in the prior of {key}: {d}")
+                raise ValueError(f"SLITFIT: something is wrong in the prior of {key}: {d}")
 
     def _prior_transform(self, u):
         """ The unit cube into the parameter space with the priors (their ppf, as common.fast_ppf computes it). """
@@ -681,7 +678,7 @@ class BayesianSlitFit(Task):
         A, Rc = self._profile_basis(rt)
         ok = self._prof_ok
         if ok.sum() < 2 * rt.nr:
-            raise BBaroloError("BAYESIANSLITFIT: too few positions with data to compute the density profile")
+            raise BBaroloError("SLITFIT: too few positions with data to compute the density profile")
         s = self._prof_rms[ok]
         dens = solve_profile(A[:, ok].T / s[:, None], self._prof[ok] / s, Rc,
                              self.like_kwargs.get("densprof_smooth") or 0.)
@@ -694,7 +691,7 @@ class BayesianSlitFit(Task):
         rd = self._update_rings(self._work, np.asarray(theta, float))
         for k in ("vdisp", "dens"):
             if np.any(np.asarray(rd.r[k]) < 0):
-                raise BBaroloError(f"BAYESIANSLITFIT: negative {k.upper()}")
+                raise BBaroloError(f"SLITFIT: negative {k.upper()}")
         rt = self._model.rings(rd)
         if self._norm() != "NONE":
             rt.dens = self._azim_density(rt)
@@ -779,26 +776,35 @@ class BayesianSlitFit(Task):
         return v if np.isfinite(v) else -np.inf
 
     # ------------------------------------------------------------------ fitting
-    def run(self, freepar=None, method=None, threads=None, *, like_kwargs: dict = {}, sampler_kwargs: dict = {},
+    def run(self, freepar=None, threads=None, *, like_kwargs: dict = {}, sampler_kwargs: dict = {},
             run_kwargs: dict = {}, verbose=True, dynamic=False, **params):
-        """Sample the posterior of the free parameters freepar (names as in FREE; default FREE, or VROT VDISP VSYS XPOS)
-        with method ('nautilusbb', default: the nautilus included in BBarolo, 'nautilus' or 'dynesty'; SAMPLER), in
-        threads processes (default THREADS, or 1), with the options of the likelihood like_kwargs (LIKEOPTS), of the
-        sampler (SAMPLEROPTS) and of its run (RUNOPTS).
-        Nothing is written (see write). method 'optimise' (or 'optimize'; SAMPLER OPTIMISE) runs optimize instead, with
-        sampler_kwargs its arguments (method, x0, posterior, errors, nstart, seed, step, nsamples) and run_kwargs the
-        options of its method. Returns self."""
+        """Fit with METHOD (a parameter, method=...; default GLOBAL, as the task SLITFIT): GLOBAL finds the maximum of the
+        likelihood (optimize(), with MINIMISER, the other arguments of optimize in SAMPLEROPTS and sampler_kwargs, the
+        options of the minimiser in RUNOPTS and run_kwargs), BAYESIAN samples the posterior (sample(), with SAMPLER).
+        params: any BBarolo parameter (e.g. method, sampler, minimiser). Nothing is written (see write). Returns
+        self."""
+        if params:
+            self.update(**params)
+        if fit_method(self, self.DEFAULT_METHOD) == "GLOBAL":
+            okw = global_arguments(self, self._run_defaults(), sampler_kwargs, run_kwargs, "SLITFIT")
+            return self.optimize(freepar, threads=threads, like_kwargs=like_kwargs, verbose=verbose, **okw)
+        return self.sample(freepar, threads=threads, like_kwargs=like_kwargs, sampler_kwargs=sampler_kwargs,
+                           run_kwargs=run_kwargs, verbose=verbose, dynamic=dynamic)
+
+    def sample(self, freepar=None, sampler=None, threads=None, *, like_kwargs: dict = {}, sampler_kwargs: dict = {},
+               run_kwargs: dict = {}, verbose=True, dynamic=False, **params):
+        """Sample the posterior of the free parameters freepar (names as in FREE; default FREE) with sampler
+        ('nautilusbb', default: the nautilus included in BBarolo, 'nautilus' or 'dynesty'; SAMPLER), in threads
+        processes (default THREADS, or 1), with the options of the likelihood like_kwargs (LIKEOPTS), of the sampler
+        (SAMPLEROPTS) and of its run (RUNOPTS) (METHOD BAYESIAN). Nothing is written (see write). Returns self."""
         if params:
             self.update(**params)
         dflt = self._run_defaults()
         freepar = self._fit_options(freepar, like_kwargs, dflt)
-        method = (method or dflt.get("SAMPLER") or "nautilusbb").lower()
+        method = check_sampler(sampler, "SLITFIT") if sampler is not None else dflt.get("SAMPLER", "nautilusbb")
         threads = self._threads(threads)
         skw = {**dflt.get("SAMPLEROPTS", {}), **dict(sampler_kwargs or {})}
         rkw = {**dflt.get("RUNOPTS", {}), **dict(run_kwargs or {})}
-        if method in SAMPLER_NAMES:
-            okw = optimize_options(skw, rkw, task="BAYESIANSLITFIT")
-            return self.optimize(freepar, threads=threads, like_kwargs=like_kwargs, verbose=verbose, **okw)
         dynamic = bool(skw.pop("dynamic", dynamic))
         if method == "dynesty" and "seed" in skw:
             seed = skw.pop("seed")
@@ -807,24 +813,24 @@ class BayesianSlitFit(Task):
         self._prepare_fit(freepar, verbose)
         self._method = method
         self.optimum = None
-        vprint(verbose, f" BAYESIANSLITFIT: sampling {self.ndim} parameters with {method} ({threads} processes)...")
+        vprint(verbose, f" SLITFIT: sampling {self.ndim} parameters with {method} ({threads} processes)...")
         samples, weights, dt = sample(self, {}, method, int(threads), dynamic, skw, rkw, verbose)
         self._set_sampling_stats(samples, weights)
         self.time = dt
         self._best_fit()
-        vprint(verbose, f" BAYESIANSLITFIT: done in {dt / 60.:.1f} minutes.")
+        vprint(verbose, f" SLITFIT: done in {dt / 60.:.1f} minutes.")
         vprint(verbose, banner())
         return self
 
-    def optimize(self, freepar=None, method="L-BFGS-B", threads=None, *, like_kwargs: dict = {}, x0=None,
+    def optimize(self, freepar=None, minimiser="L-BFGS-B", threads=None, *, like_kwargs: dict = {}, x0=None,
                  posterior=False, errors=True, nstart=1, seed=None, step=1e-3, options: dict = {}, nsamples=4000,
                  verbose=True, **params):
-        """Find the best fit by a classic minimisation of -log L, with the likelihood of run() (the same free
+        """Find the best fit by a classic minimisation of -log L (METHOD GLOBAL), with the likelihood of sample() (the same free
         parameters, options and priors), searched in the unit cube of the priors (see bbarolo.bayesian.optimize and
         Bayesian3DFIT.optimize: method, x0 None (the initial rings) or 'centre' or a vector, posterior, errors from the
         Laplace approximation, nstart, seed, step, options, nsamples). Nothing is written. Returns self."""
         from .optimize import optimize as _optimize, summary, method_name
-        method = method_name(method)
+        method = method_name(minimiser)
         if params:
             self.update(**params)
         dflt = self._run_defaults()
@@ -834,17 +840,17 @@ class BayesianSlitFit(Task):
         self.results = self.sampler = None
         if isinstance(x0, str):
             if x0.strip().lower() not in ("centre", "center"):
-                raise BBaroloError(f"BAYESIANSLITFIT: optimize: x0={x0!r} (None, 'centre' or a vector of the free "
+                raise BBaroloError(f"SLITFIT: optimize: x0={x0!r} (None, 'centre' or a vector of the free "
                                    "parameters)")
             theta0 = np.full(self.ndim, np.nan)
         else:
             theta0 = self._initial_theta() if x0 is None else np.asarray(x0, float)
-        vprint(verbose, f" BAYESIANSLITFIT: optimising {self.ndim} parameters with {method} ({threads} "
+        vprint(verbose, f" SLITFIT: optimising {self.ndim} parameters with {method} ({threads} "
                         f"process{'es' if threads > 1 else ''})...")
-        res = _optimize(self, {}, theta0, method=method, threads=int(threads), posterior=posterior, errors=errors,
+        res = _optimize(self, {}, theta0, minimiser=method, threads=int(threads), posterior=posterior, errors=errors,
                         nstart=nstart, seed=seed, step=step, options=options, nsamples=nsamples, verbose=verbose,
                         showbar=show_bar(self))
-        summary(res, verbose, taskname=" BAYESIANSLITFIT: ")
+        summary(res, verbose, taskname=" SLITFIT: ")
         self.optimum = res
         self._method = "optimize"
         self._set_sampling_stats(res.samples, np.ones(len(res.samples)))
@@ -857,13 +863,13 @@ class BayesianSlitFit(Task):
     def _fit_options(self, freepar, like_kwargs, dflt):
         freepar = freepar if freepar is not None else dflt.get("FREE")
         if not freepar:
-            raise ValueError("BAYESIANSLITFIT: no free parameters (give freepar or FREE)")
+            raise ValueError("SLITFIT: no free parameters (give freepar or FREE)")
         lk = dict(SLIT_LIKE_OPTIONS)
         lk.update(dflt.get("LIKEOPTS", {}))
         for k, v in dict(like_kwargs or {}).items():
             kv = slit_like_option(k, v)
             if kv is None:
-                raise ValueError(f"BAYESIANSLITFIT: unknown option of the likelihood '{k}' "
+                raise ValueError(f"SLITFIT: unknown option of the likelihood '{k}' "
                                  f"(options: {', '.join(SLIT_LIKE_OPTIONS)})")
             lk[kv[0]] = kv[1]
         self.like_kwargs = lk
@@ -875,14 +881,14 @@ class BayesianSlitFit(Task):
         return int(threads)
 
     def _prepare_fit(self, freepar, verbose):
-        vprint(verbose, banner("BAYESIANSLITFIT"))
+        vprint(verbose, banner("SLITFIT"))
         self._setup(freepar, verbose=verbose)
         if verbose:
             self.print_setup()
         theta0 = self._prior_transform(np.full(self.ndim, 0.5))
         l0 = self._log_like_func(theta0)
         if not np.isfinite(l0):
-            raise BBaroloError("BAYESIANSLITFIT: the likelihood at the centre of the priors is not finite (check the "
+            raise BBaroloError("SLITFIT: the likelihood at the centre of the priors is not finite (check the "
                                "initial rings and the priors)")
 
     def print_setup(self, stream=None):
@@ -1029,13 +1035,13 @@ class BayesianSlitFit(Task):
         import sys
         st = stream or sys.stdout
         if not self.modCalculated:
-            st.write(" BAYESIANSLITFIT: run() first.\n")
+            st.write(" SLITFIT: run() first.\n")
             return
         opt = self.optimum if self._method == "optimize" else None
         if opt is None:
-            st.write(f"\n BAYESIANSLITFIT posterior ({self._method}, NORM {self._norm()}):\n")
+            st.write(f"\n SLITFIT posterior ({self._method}, NORM {self._norm()}):\n")
         else:
-            st.write(f"\n BAYESIANSLITFIT {'maximum a posteriori' if opt.posterior else 'maximum likelihood'} "
+            st.write(f"\n SLITFIT {'maximum a posteriori' if opt.posterior else 'maximum likelihood'} "
                      f"({opt.method}, NORM {self._norm()}; errors: "
                      f"{'Laplace approximation' if opt.cov is not None else 'not computed'}):\n")
         for name, val, (lo, med, hi) in zip(self.freepar_names, self.params, self.quantiles):
@@ -1064,6 +1070,13 @@ class BayesianSlitFit(Task):
         if not self.modCalculated:
             raise RuntimeError("BayesianSlitFit: nothing to write, run() first.")
         return write_outputs(self, outfolder, plots, verbose)
+
+    def model_hdu(self):
+        """The best model of the slit as an HDU (that of <name>_slit_model.fits: the grid of the prepared data, NaN
+        outside the region of the fit). Needs run()."""
+        from .slit_outputs import model_array
+        prep = self.prep
+        return prep.slit.to_hdu(model_array(self), k0=prep.k0, extra={"BBTASK": "SLITFIT"})
 
     def plot_pv(self, **kwargs):
         """The data, the best model and the residuals of the slit (a matplotlib Figure; nothing is written)."""

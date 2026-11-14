@@ -27,7 +27,6 @@ BBVERSION = __version__
 
 TASKS_LIST = [
     ("3DFIT",         "Fit a 3D tilted-ring model to an emission-line datacube."),
-    ("BAYESIAN3DFIT", "Fit a 3D tilted-ring model by nested sampling of the posterior."),
     ("GALMOD",        "Make a 3D model observation datacube of an emission line."),
     ("SEARCH",        "Search for sources in a 3D datacube or in a 2D image."),
     ("2DFIT",         "Fit a 2D tilted-ring model to a velocity field."),
@@ -37,9 +36,10 @@ TASKS_LIST = [
     ("MAKEMASK",      "Define a mask for emission-line data."),
     ("SPACEPAR",      "Compute the full 2D space for any pair of 3DFIT parameters."),
     ("GALWIND",       "Make a 3D emission-line model of a bi-conical outflow."),
+    ("WINDFIT",       "Fit a bi-conical outflow to an emission-line datacube."),
     ("STATS",         "Simply calculate and print statistics for a cube."),
     ("CONTSUB",       "Subtract a polynomial continuum from a cube."),
-    ("BAYESIANSLITFIT", "Fit the kinematics of a long-slit spectrum by nested sampling of the posterior."),
+    ("SLITFIT",       "Fit the kinematics of a long-slit spectrum."),
     ("GLOBALPROFILE", "Extract a total spectral profile from a datacube."),
     ("TOTALMAP",      "Compute a total intensity map from a datacube."),
     ("VELOCITYMAP",   "Compute a velocity field from a datacube."),
@@ -191,9 +191,11 @@ class GalfitPar(GalmodPar):
     flagBADOUT: bool = False
     PLOTMASK: bool = False
     PLOTMINCON: float = -1.0
-    # BAYESIAN3DFIT (Bayesian3DFIT)
-    flagBAYESIAN: bool = False
+    # The fit tasks (3DFIT, WINDFIT, SLITFIT): METHOD ("": the default of the task, see keywords.DEFAULT_METHOD;
+    # checkPars sets the method of the run), and the options of METHOD GLOBAL and BAYESIAN
+    METHOD: str = ""
     SAMPLER: str = "NAUTILUSBB"
+    MINIMISER: str = "L-BFGS-B"
     PRIORS: str = ""
     SAMPLEROPTS: str = ""
     RUNOPTS: str = ""
@@ -203,7 +205,7 @@ class GalfitPar(GalmodPar):
 @dataclass
 class GalwindPar(GalmodPar):
     flagGALWIND: bool = False
-    flagBAYESIAN: bool = False          # (BAYESIANWIND)
+    flagWINDFIT: bool = False
     VWIND: str = "-1"
     VROT: str = "0"
     OPENANG: str = "-1"
@@ -316,7 +318,7 @@ class Param:
         self.window_type = "HANNING"
         self.window_size = 3.0
 
-        self.flagBayesSlit = False    # BAYESIANSLITFIT
+        self.flagSlitFit = False      # SLITFIT
         self.slitwidth = -1.0         # SLITWIDTH (arcsec)
         self.slitangle = "AUTO"       # SLITANGLE (degrees, or AUTO)
         self.waverange = []           # WAVERANGE
@@ -531,37 +533,12 @@ class Param:
                     out("The growth function is being turned off.")
                     se.flagGrowth = False
 
-        if gf.flagBAYESIAN:
-            if gf.flagGALFIT:
-                out("BAYESIAN3DFIT warning: 3DFIT and BAYESIAN3DFIT can not be run at the same time (they write "
-                    "the same outputs). Turning off 3DFIT.")
-                gf.flagGALFIT = False
-            if gm.flagGALMOD:
-                out("BAYESIAN3DFIT warning: GALMOD and BAYESIAN3DFIT can not be run at the same time. "
-                    "Turning off GALMOD.")
-                gm.flagGALMOD = False
-            gf.SAMPLER = gf.SAMPLER.strip().upper()
-            if gf.SAMPLER == "OPTIMIZE":
-                gf.SAMPLER = "OPTIMISE"
-            if gf.SAMPLER not in ("NAUTILUSBB", "NAUTILUS", "DYNESTY", "OPTIMISE"):
-                out(f"BAYESIAN3DFIT error: unknown SAMPLER {gf.SAMPLER} (NAUTILUSBB, NAUTILUS, DYNESTY or OPTIMISE).")
-                good = False
-            elif gf.SAMPLER == "OPTIMISE":
-                good = _check_optimise(gf, "BAYESIAN3DFIT", out) and good
-            elif pkg := _sampler_missing(gf.SAMPLER):
-                out(f"BAYESIAN3DFIT error: SAMPLER {gf.SAMPLER} needs the Python package {pkg} (pip install {pkg}).")
-                good = False
-            for key, check in (("FREE", bayes_freepar), ("PRIORS", bayes_priors), ("SAMPLEROPTS", bayes_options),
-                               ("RUNOPTS", bayes_options), ("LIKEOPTS", bayes_likeopts)):
-                if key == "FREE" and "FREE" not in getattr(self, "_given", {}):
-                    continue
-                try:
-                    check(getattr(gf, key))
-                except ValueError as e:
-                    out(f"BAYESIAN3DFIT error: {key}: {e}")
-                    good = False
+        good = self._check_method(out) and good
+        classic = gf.flagGALFIT and gf.METHOD == "CLASSIC"
+        if gf.flagGALFIT and not classic:             # 3DFIT with METHOD GLOBAL or BAYESIAN
+            good = self._check_likefit("3DFIT", bayes_freepar, bayes_priors, bayes_likeopts, out) and good
 
-        if gf.flagGALFIT or gf.flagBAYESIAN or self.flagSpace or gm.flagGALMOD:
+        if gf.flagGALFIT or self.flagSpace or gm.flagGALMOD:
             msg = " is not an optional parameter. Please specify it in the input file or set flagSearch=true"
             if gf.flagGALFIT and gm.flagGALMOD:
                 out("3DFIT warning: 3DFIT and GALMOD can not be run at the same time. Turning off GALMOD.")
@@ -583,7 +560,7 @@ class Param:
             # (AZIMUTHAL is AZIM: C++ accepted it here, then used LOCAL)
             gf.NORM = " ".join("AZIM" if n == "AZIMUTHAL" else n for n in gf.NORM.split())
 
-            if gf.flagGALFIT:
+            if classic:
                 if gf.FREE == "":
                     out("3DFIT error: FREE" + msg); good = False
                 elif free_problem(gf.FREE):
@@ -591,7 +568,7 @@ class Param:
                 if gf.MINVDISP >= gf.MAXVDISP:
                     out(f"3DFIT error: MINVDISP ({gf.MINVDISP:g}) must be smaller than MAXVDISP ({gf.MAXVDISP:g}).")
                     good = False
-            if (gf.flagGALFIT or self.flagSpace) and gf.STARTRAD < 0:
+            if (classic or self.flagSpace) and gf.STARTRAD < 0:
                 out(f"3DFIT error: STARTRAD ({gf.STARTRAD}) is the index of the first ring to fit: 0 or more.")
                 good = False
             if self.flagSpace:
@@ -608,7 +585,7 @@ class Param:
                 if abs(gf.WFUNC) > 2:
                     out("3DFIT warning: Not valid argument for WFUNC parameter. Assuming 1 (|cos(θ)| weighting function).")
                     gf.WFUNC = 1
-            if gf.flagGALFIT:
+            if classic:
                 # REGTYPE checking
                 polyn = gf.REGTYPE.split()
                 keep = []
@@ -653,7 +630,7 @@ class Param:
                 sys.stderr.write("3DFIT ERROR: ADRIFTPOL2 needs to be >0. Defaulting it to 3.\n")
                 gf.ADRIFTPOL2 = 3
 
-        if gf.flagGALFIT or gf.flagBAYESIAN or self.flagSpace or self.flagRing or self.flagEllProf:
+        if gf.flagGALFIT or self.flagSpace or self.flagRing or self.flagEllProf:
             # the long forms of SIDE, for all the tasks that use it (C++ never converted them)
             S = gf.SIDE
             if S in ("A", "APP", "APPR", "APPROACHING"): S = "A"
@@ -666,7 +643,7 @@ class Param:
                 S = "B"
             gf.SIDE = S
 
-        if gf.flagGALFIT or gf.flagBAYESIAN or self.flagSpace or gm.flagGALMOD or self.flagRing or self.flagEllProf:
+        if gf.flagGALFIT or self.flagSpace or gm.flagGALMOD or self.flagRing or self.flagEllProf:
             st = gm if gm.flagGALMOD else gf
             for key in _RING_KEYS:
                 attr = "PHI" if key == "PA" else key
@@ -688,45 +665,23 @@ class Param:
                 if getattr(gf, k) == "-1":
                     out(f"ELLPROF ERROR: {n}" + msg); good = False
 
-        if gw.flagBAYESIAN:
+        if gw.flagWINDFIT:
             from .bayesian.wind import wind_freepar, wind_priors, wind_likeopts
-            if gf.flagBAYESIAN:
-                out("BAYESIANWIND error: BAYESIAN3DFIT and BAYESIANWIND can not be run at the same time (they share "
-                    "FREE, PRIORS and the options of the sampler).")
-                good = False
-            gf.SAMPLER = gf.SAMPLER.strip().upper()
-            if gf.SAMPLER == "OPTIMIZE":
-                gf.SAMPLER = "OPTIMISE"
-            if gf.SAMPLER not in ("NAUTILUSBB", "NAUTILUS", "DYNESTY", "OPTIMISE"):
-                out(f"BAYESIANWIND error: unknown SAMPLER {gf.SAMPLER} (NAUTILUSBB, NAUTILUS, DYNESTY or OPTIMISE).")
-                good = False
-            elif gf.SAMPLER == "OPTIMISE":
-                good = _check_optimise(gf, "BAYESIANWIND", out) and good
-            elif pkg := _sampler_missing(gf.SAMPLER):
-                out(f"BAYESIANWIND error: SAMPLER {gf.SAMPLER} needs the Python package {pkg} (pip install {pkg}).")
-                good = False
             if "FREE" not in getattr(self, "_given", {}):
-                out("BAYESIANWIND error: FREE is not an optional parameter. Give the free parameters, e.g. "
-                    "FREE VWIND_SINGLE VDISP_SINGLE INC PA OPENANG (see bbarolo.help('BAYESIANWIND')).")
+                out("WINDFIT error: FREE is not an optional parameter. Give the free parameters, e.g. "
+                    "FREE VWIND_SINGLE VDISP_SINGLE INC PA OPENANG (see bbarolo.help('WINDFIT')).")
                 good = False
-            for key, check in (("FREE", wind_freepar), ("PRIORS", wind_priors), ("SAMPLEROPTS", bayes_options),
-                               ("RUNOPTS", bayes_options), ("LIKEOPTS", wind_likeopts)):
-                if key == "FREE" and "FREE" not in getattr(self, "_given", {}):
-                    continue
-                try:
-                    check(getattr(gf, key))
-                except ValueError as e:
-                    out(f"BAYESIANWIND error: {key}: {e}")
-                    good = False
+            good = self._check_likefit("WINDFIT", wind_freepar, wind_priors, wind_likeopts, out) and good
             msg = " is not an optional parameter. Please specify it in the input file (the initial wind)."
             for k in ("XPOS", "YPOS", "VSYS", "INC", "PHI", "OPENANG", "VWIND"):
                 if getattr(gw, k) == "-1":
-                    out(f"BAYESIANWIND ERROR: {k}" + msg); good = False
+                    out(f"WINDFIT ERROR: {k}" + msg); good = False
             if gw.CONELEN == -1:
-                out("BAYESIANWIND error: CONELEN" + msg); good = False
+                out("WINDFIT error: CONELEN" + msg); good = False
 
-        if self.flagBayesSlit:
+        if self.flagSlitFit:
             good = self._check_slitfit(out) and good
+        self._check_unused(out)
 
         if gw.flagGALWIND:
             msg = " is not an optional parameter. Please specify it in the input file."
@@ -761,7 +716,7 @@ class Param:
             out(f"REDUCE error: FACTOR (the pixels or channels averaged) must be at least 1, not {self.factor:g}.")
             good = False
 
-        if self.ma.maptype not in ("GAUSSIAN", "MOMENT"):     # (MAPS and the maps of 3DFIT, BAYESIAN3DFIT, GALMOD)
+        if self.ma.maptype not in ("GAUSSIAN", "MOMENT"):     # (MAPS and the maps of 3DFIT, WINDFIT, GALMOD)
             out("MAP warning: MAPTYPE is either MOMENT or GAUSSIAN. Reverting to MOMENT.")
             self.ma.maptype = "MOMENT"
 
@@ -807,82 +762,141 @@ class Param:
     # ------------------------------------------------------------------
     # Printing
     # ------------------------------------------------------------------
+    def _fit_tasks(self):
+        """The fit tasks of the run (3DFIT, also with AUTO; WINDFIT; SLITFIT)."""
+        return [t for t, f in (("3DFIT", self.gf.flagGALFIT or self.AUTO), ("WINDFIT", self.gw.flagWINDFIT),
+                               ("SLITFIT", self.flagSlitFit)) if f]
+
+    def _check_method(self, out):
+        """METHOD (in checkPars): one of CLASSIC (3DFIT only), GLOBAL or BAYESIAN; not given, the default of the
+        fit task of the run (keywords.DEFAULT_METHOD). Sets gf.METHOD to the method of the run. 3DFIT and WINDFIT
+        do not run together (they share FREE, METHOD and the options of the fits). Returns False on an error."""
+        gf = self.gf
+        good = True
+        fits = self._fit_tasks()
+        m = gf.METHOD.strip().upper()
+        if m not in ("", "CLASSIC", "GLOBAL", "BAYESIAN"):
+            out(f"{fits[0] if fits else 'METHOD'} error: unknown METHOD {gf.METHOD.strip()} (CLASSIC, GLOBAL or "
+                "BAYESIAN).")
+            good, m = False, ""
+        if "3DFIT" in fits and "WINDFIT" in fits:
+            out("WINDFIT error: 3DFIT and WINDFIT can not run at the same time (they share FREE, METHOD and the "
+                "options of the fit).")
+            good = False
+        if not m and fits:
+            m = _kw.DEFAULT_METHOD[fits[0]]
+        for t in fits:
+            if m not in _kw.METHODS[t]:
+                out(f"{t} error: METHOD {m} is not a method of {t} ({' or '.join(_kw.METHODS[t])}).")
+                good = False
+        gf.METHOD = m
+        return good
+
+    def _check_likefit(self, task, freepar, priors, likeopts, out):
+        """The checks of a fit with METHOD GLOBAL or BAYESIAN (in checkPars): the sampler (BAYESIAN), the
+        minimiser and its options (GLOBAL), and the free parameters (if given), the priors and the options, read
+        with freepar, priors and likeopts. Returns False if they are not acceptable."""
+        gf = self.gf
+        good = True
+        gf.SAMPLER = gf.SAMPLER.strip().upper()
+        if gf.METHOD == "BAYESIAN":
+            if gf.SAMPLER not in ("NAUTILUSBB", "NAUTILUS", "DYNESTY"):
+                out(f"{task} error: unknown SAMPLER {gf.SAMPLER} (NAUTILUSBB, NAUTILUS or DYNESTY).")
+                good = False
+            elif pkg := _sampler_missing(gf.SAMPLER):
+                out(f"{task} error: SAMPLER {gf.SAMPLER} needs the Python package {pkg} (pip install {pkg}).")
+                good = False
+        elif gf.METHOD == "GLOBAL":
+            good = _check_global(gf, task, out) and good
+        for key, check in (("FREE", freepar), ("PRIORS", priors), ("SAMPLEROPTS", bayes_options),
+                           ("RUNOPTS", bayes_options), ("LIKEOPTS", likeopts)):
+            if key == "FREE" and "FREE" not in getattr(self, "_given", {}):
+                continue
+            try:
+                check(getattr(gf, key))
+            except ValueError as e:
+                out(f"{task} error: {key}: {e}")
+                good = False
+        return good
+
+    def _check_unused(self, out):
+        """A warning for each keyword given that only a METHOD other than that of the run uses (e.g. PRIORS with
+        METHOD CLASSIC, DELTAINC with METHOD BAYESIAN), unless another task of the run uses it."""
+        fits = self._fit_tasks()
+        if not fits:
+            return
+        method = self.gf.METHOD
+        tasks = {k.name for k in _kw.TASK_FLAGS if k.value(self)} | set(fits)
+        for name in getattr(self, "_given", {}):
+            kw = _kw.lookup(name)
+            if kw is None or kw.flag or "ALL" in kw.tasks:
+                continue
+            if any(_kw.uses(kw, t, method if t in fits else None) for t in tasks):
+                continue
+            for t in fits:
+                ms = _kw.methods_for(kw, t)
+                if ms is not None and method not in ms:
+                    out(f"{t} warning: {kw.name} is not used by METHOD {method} (only by METHOD "
+                        f"{' or '.join(ms)}): it is ignored.")
+                    break
+
     def _check_slitfit(self, out):
-        """The checks of BAYESIANSLITFIT (in checkPars): it runs alone (its input is a long-slit spectrum, not a
+        """The checks of SLITFIT (in checkPars): it runs alone (its input is a long-slit spectrum, not a
         cube), with SLITWIDTH, BEAM and INC, and its options readable. Returns False if they are not."""
         from .bayesian.slit import slit_freepar, slit_priors, slit_likeopts
         gf, gm, gw, se = self.gf, self.gm, self.gw, self.se
         good = True
-        others = [n for n, f in (("3DFIT", gf.flagGALFIT), ("BAYESIAN3DFIT", gf.flagBAYESIAN),
+        others = [n for n, f in (("3DFIT", gf.flagGALFIT),
                                  ("GALMOD", gm.flagGALMOD), ("GALWIND", gw.flagGALWIND),
-                                 ("BAYESIANWIND", gw.flagBAYESIAN), ("SEARCH", se.flagSearch),
+                                 ("WINDFIT", gw.flagWINDFIT), ("SEARCH", se.flagSearch),
                                  ("SPACEPAR", self.flagSpace), ("2DFIT", self.flagRing), ("ELLPROF", self.flagEllProf),
                                  ("SMOOTH", self.flagSmooth), ("SMOOTHSPEC", self.flagSmoothSpectral),
                                  ("PVSLICE", self.flagPV), ("REND3D", self.flagRend3D),
                                  ("MAKEMASK", self.makeMask), ("STATS", self.flagStats), ("MAPS", self.getMaps()))
                   if f]
         if others:
-            out(f"BAYESIANSLITFIT error: {', '.join(others)} can not run with BAYESIANSLITFIT (its input is a long-slit "
+            out(f"SLITFIT error: {', '.join(others)} can not run with SLITFIT (its input is a long-slit "
                 "spectrum, a 2D image, not a datacube).")
             good = False
-        gf.SAMPLER = gf.SAMPLER.strip().upper()
-        if gf.SAMPLER == "OPTIMIZE":
-            gf.SAMPLER = "OPTIMISE"
-        if gf.SAMPLER not in ("NAUTILUSBB", "NAUTILUS", "DYNESTY", "OPTIMISE"):
-            out(f"BAYESIANSLITFIT error: unknown SAMPLER {gf.SAMPLER} (NAUTILUSBB, NAUTILUS, DYNESTY or OPTIMISE).")
-            good = False
-        elif gf.SAMPLER == "OPTIMISE":
-            good = _check_optimise(gf, "BAYESIANSLITFIT", out) and good
-        elif pkg := _sampler_missing(gf.SAMPLER):
-            out(f"BAYESIANSLITFIT error: SAMPLER {gf.SAMPLER} needs the Python package {pkg} (pip install {pkg}).")
-            good = False
-        for key, check in (("FREE", slit_freepar), ("PRIORS", slit_priors), ("SAMPLEROPTS", bayes_options),
-                           ("RUNOPTS", bayes_options), ("LIKEOPTS", slit_likeopts)):
-            if key == "FREE" and "FREE" not in getattr(self, "_given", {}):
-                continue
-            try:
-                check(getattr(gf, key))
-            except ValueError as e:
-                out(f"BAYESIANSLITFIT error: {key}: {e}")
-                good = False
+        good = self._check_likefit("SLITFIT", slit_freepar, slit_priors, slit_likeopts, out) and good
         msg = " is not an optional parameter. Please specify it in the input file."
         if not self.slitwidth > 0:
-            out("BAYESIANSLITFIT error: SLITWIDTH (the width of the slit, arcsec, > 0)" + msg)
+            out("SLITFIT error: SLITWIDTH (the width of the slit, arcsec, > 0)" + msg)
             good = False
         if self.beam is None:
-            out("BAYESIANSLITFIT error: BEAM (the seeing FWHM, arcsec)" + msg)
+            out("SLITFIT error: BEAM (the seeing FWHM, arcsec)" + msg)
             good = False
         elif abs(self.beam[0] - self.beam[1]) > 1e-6 * self.beam[0]:
-            out(f"BAYESIANSLITFIT error: BEAM must be circular (one value, the seeing FWHM), not {self.beam[0]:g} x "
+            out(f"SLITFIT error: BEAM must be circular (one value, the seeing FWHM), not {self.beam[0]:g} x "
                 f"{self.beam[1]:g} arcsec.")
             good = False
         if gf.INC == "-1":
-            out("BAYESIANSLITFIT error: INC" + msg)
+            out("SLITFIT error: INC" + msg)
             good = False
         sa = str(self.slitangle).strip().upper()
         if sa != "AUTO":
             try:
                 float(sa)
             except ValueError:
-                out(f"BAYESIANSLITFIT error: SLITANGLE must be AUTO or an angle in degrees, not {self.slitangle}.")
+                out(f"SLITFIT error: SLITANGLE must be AUTO or an angle in degrees, not {self.slitangle}.")
                 good = False
         for n in gf.NORM.split():
             if n not in ("NONE", "LOCAL", "AZIM", "AZIMUTHAL"):
-                out(f"BAYESIANSLITFIT error: unknown type of normalization NORM {n} (AZIM, LOCAL or NONE)")
+                out(f"SLITFIT error: unknown type of normalization NORM {n} (AZIM, LOCAL or NONE)")
                 good = False
         gf.NORM = " ".join("AZIM" if n == "AZIMUTHAL" else n for n in gf.NORM.split())
         if len(gf.NORM.split()) > 1:
-            out("BAYESIANSLITFIT error: NORM is one of AZIM, LOCAL or NONE.")
+            out("SLITFIT error: NORM is one of AZIM, LOCAL or NONE.")
             good = False
         for name, vec in (("WAVERANGE", self.waverange), ("MASKWAVE", self.maskwave)):
             if len(vec) % 2 or (name == "WAVERANGE" and len(vec) not in (0, 2)):
-                out(f"BAYESIANSLITFIT error: {name} needs " + ("two values (a range)." if name == "WAVERANGE" else
+                out(f"SLITFIT error: {name} needs " + ("two values (a range)." if name == "WAVERANGE" else
                                                                 "pairs of values (ranges)."))
                 good = False
         nl = len(gf.RESTWAVE) if gf.RESTWAVE and gf.RESTWAVE[0] != -1 else (
             len(gf.RESTFREQ) if gf.RESTFREQ and gf.RESTFREQ[0] != -1 else 0)
         if nl > 1 and gf.RELINT and gf.RELINT[0] != -1 and len(gf.RELINT) != nl:
-            out(f"BAYESIANSLITFIT error: RELINT must have one value per line ({nl}).")
+            out(f"SLITFIT error: RELINT must have one value per line ({nl}).")
             good = False
         for key in _RING_KEYS:
             attr = "PHI" if key == "PA" else key
@@ -924,7 +938,8 @@ class Param:
         import datetime
         given = {k: v for k, v in getattr(self, "_given", {}).items()
                  if k not in ("FITSFILE", "FITSLIST", "OUTFOLDER")}
-        uses = {t: {k.name for k in _kw.keywords_for(t)} for t in tasks}
+        meth = lambda t: (self.gf.METHOD or None) if t in _kw.FITS else None
+        uses = {t: {k.name for k in _kw.keywords_for(t, meth(t))} for t in tasks}
         names = set().union(*uses.values()) if uses else set()
         when = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         lines = [f"// BBarolo parameter file of a run of bbarolo {BBVERSION} ({when}, in {os.getcwd()}):",
@@ -949,10 +964,12 @@ class Param:
                 continue                         # (a default that depends on the task, e.g. VROT of GALWIND)
             v = kw.value(d)
             users = [t for t in tasks if kw.name in uses[t]]
-            tdef = {_kw._fmtval(_kw.TASK_DEFAULTS.get(t, {}).get(kw.name, v)) for t in users}
+            tdef = {_kw._fmtval(_kw.task_defaults(t, meth(t)).get(kw.name, v)) for t in users}
             if len(tdef) > 1:
-                continue                         # (e.g. GALMODTYPE: ANALYTIC for BAYESIAN3DFIT, MC for 3DFIT)
+                continue                         # (e.g. GALMODTYPE: ANALYTIC for 3DFIT GLOBAL, MC for GALMOD)
             s = tdef.pop() if tdef else _kw._fmtval(v)
+            if kw.name == "METHOD":
+                s = self.gf.METHOD or s          # (the method of the run, the default of its fit task)
             if s.strip() and s != '""':
                 lines.append(f"{kw.name:<{w}}{s}")
         return "\n".join(lines) + "\n"
@@ -1096,7 +1113,7 @@ def _numstr(v):
 
 
 # --------------------------------------------------------------------------
-# BAYESIAN3DFIT: free parameters, priors and options of the sampler (FREE, PRIORS,
+# 3DFIT with METHOD GLOBAL and BAYESIAN: free parameters, priors and options of the sampler (FREE, PRIORS,
 # SAMPLEROPTS and RUNOPTS, as written in parameter files)
 # --------------------------------------------------------------------------
 # ring parameters that can be fitted, the other free parameters, and the parameters with a
@@ -1118,7 +1135,7 @@ def bayes_name(name, aliases=None):
 
 
 def bayes_freepar(free, funcs=BAYES_FUNC_PARS, ring_pars=BAYES_RING_PARS, other_pars=BAYES_OTHER_PARS, aliases=None):
-    """The free parameters of BAYESIAN3DFIT from FREE (as in a parameter file), as a list for
+    """The free parameters of 3DFIT with METHOD GLOBAL or BAYESIAN from FREE (as in a parameter file), as a list for
     Bayesian3DFIT.run: 'VROT VDISP PA_SINGLE INC_SINGLE RADMAX' -> ['vrot', 'vdisp',
     'phi_single', 'inc_single', 'radmax']. A ring parameter (VROT, VDISP, DENS, Z0, INC, PA,
     XPOS, YPOS, VSYS, VRAD, VVERT, DVDZ, ZCYL) has one value per ring, NAME_SINGLE one value
@@ -1175,7 +1192,7 @@ def _number(v, where):
 
 def bayes_priors(priors, ring_pars=BAYES_RING_PARS, other_pars=BAYES_OTHER_PARS, func_pars=BAYES_FUNC_PARS,
                  aliases=None):
-    """The priors of BAYESIAN3DFIT from PRIORS (as in a parameter file), as entries of
+    """The priors of 3DFIT with METHOD GLOBAL or BAYESIAN from PRIORS (as in a parameter file), as entries of
     Bayesian3DFIT.priors:
 
         'VROT=(uniform,loc=0,scale=300) INC=(norm,60,5)'  ->
@@ -1252,7 +1269,7 @@ def bayes_priors(priors, ring_pars=BAYES_RING_PARS, other_pars=BAYES_OTHER_PARS,
     return out
 
 
-# The Python package of each sampler of BAYESIAN3DFIT and BAYESIANWIND: (module, name on PyPI); NAUTILUSBB is part
+# The Python package of each sampler of METHOD BAYESIAN: (module, name on PyPI); NAUTILUSBB is part
 # of BBarolo (bbarolo.bayesian.nautilus)
 SAMPLER_PACKAGES = {"NAUTILUS": ("nautilus", "nautilus-sampler"), "DYNESTY": ("dynesty", "dynesty")}
 
@@ -1267,24 +1284,30 @@ def _sampler_missing(sampler):
     return pkg[1] if spec is None or spec.origin is None else None
 
 
-def _check_optimise(gf, task, out):
-    """SAMPLER OPTIMISE: the options of SAMPLEROPTS (the arguments of the optimisation, see
-    bayesian.optimize.sampler_options). Prints the error and returns False if they are wrong."""
-    from .bayesian.optimize import sampler_options
+def _check_global(gf, task, out):
+    """METHOD GLOBAL: MINIMISER and the options of SAMPLEROPTS (the arguments of the minimisation, see
+    bayesian.optimize.global_options). Prints the error and returns False if they are wrong."""
+    from .bayesian.optimize import global_options, method_name
+    good = True
+    try:
+        method_name(gf.MINIMISER)
+    except ValueError as e:                    # (BBaroloError)
+        out(f"{task} error: MINIMISER: {str(e).replace('optimize: ', '')}")
+        good = False
     try:
         opts = bayes_options(gf.SAMPLEROPTS)
     except ValueError:
-        return True                            # (a wrong format: reported by the check of SAMPLEROPTS)
+        return good                            # (a wrong format: reported by the check of SAMPLEROPTS)
     try:
-        sampler_options(opts, task=task)
+        global_options(opts, task=task)
     except ValueError as e:                    # (BBaroloError)
         out(f"{task} error: {str(e).replace(task + ': ', '')}")
         return False
-    return True
+    return good
 
 
 def bayes_value_string(name, value):
-    """A Python value of FREE, PRIORS, SAMPLER, SAMPLEROPTS, RUNOPTS or LIKEOPTS (BAYESIAN3DFIT) as it is written in a
+    """A Python value of FREE, PRIORS, SAMPLER, SAMPLEROPTS, RUNOPTS or LIKEOPTS (METHOD GLOBAL, BAYESIAN) as it is written in a
     parameter file: FREE a list of names (['vrot', 'inc_single'] -> 'vrot inc_single'); PRIORS a dict as
     Bayesian3DFIT.priors, {name: {'name': distribution, argument: value}} or {name: (distribution, values by
     position)}; the options a dict {key: value} (a tuple: values separated by commas). A string is returned as it
@@ -1317,11 +1340,11 @@ def bayes_value_string(name, value):
             elif isinstance(d, (list, tuple)) and d and isinstance(d[0], str):
                 args = [d[0]] + [opt(v) for v in d[1:]]
             else:
-                raise TypeError(f"BAYESIAN3DFIT: PRIORS: {k}: give {{'name': distribution, ...}} or (distribution, "
+                raise TypeError(f"PRIORS: {k}: give {{'name': distribution, ...}} or (distribution, "
                                 f"values...), not {d!r}")
             items.append(f"{k}=({','.join(args)})")
         return " ".join(items)
-    raise TypeError(f"BAYESIAN3DFIT: {name}: expected a string as in a parameter file" + (
+    raise TypeError(f"{name}: expected a string as in a parameter file" + (
         ", or a list of names" if name == "FREE" else ", or a dict" if name != "SAMPLER" else "") + f", not {value!r}")
 
 
@@ -1481,7 +1504,7 @@ def bayes_like_option(name, value):
 
 
 def bayes_likeopts(opts):
-    """The options of the likelihood of BAYESIAN3DFIT from LIKEOPTS (as in a parameter file):
+    """The options of the likelihood of 3DFIT (METHOD GLOBAL, BAYESIAN) from LIKEOPTS (as in a parameter file):
     'likemask=none noisecorr=beam dilation=1.5,4' -> {'likemask': 'none', 'noisecorr': 'beam',
     'dilation': (1.5, 4)}; 'smooth=(vrot=5, vdisp=3)' -> {'smooth': {'vrot': 5.,
     'vdisp': 3.}}. The options are those of bayes_like_option. Raises ValueError."""
@@ -1511,6 +1534,22 @@ def recordParam(stream, name, desc, value):
     width = 60
     widthText = width - len(name)
     stream.write(f"{desc:.<{widthText}}{name}  =  {_fmt(value)}\n")
+
+
+def _likefit_rows(R, p, ml, wind=False):
+    """The rows of printParams of the options of METHOD GLOBAL and BAYESIAN: only those of the METHOD of p (both,
+    labelled by ml, for the defaults)."""
+    gf = p.gf
+    m = gf.METHOD
+    labelled = ml("   x") != "   x"
+    if labelled or m == "GLOBAL":
+        R("[MINIMISER]", ml("   Minimiser", "GLOBAL"), gf.MINIMISER)
+    if labelled or m == "BAYESIAN":
+        R("[SAMPLER]", ml("   Nested sampler", "BAYESIAN"), gf.SAMPLER)
+    R("[PRIORS]", ml("   Priors of the free parameters"), gf.PRIORS or "default")
+    R("[SAMPLEROPTS]", ml("   Options of the sampler or minimisation"), gf.SAMPLEROPTS or "default")
+    R("[RUNOPTS]", ml("   Options of the sampling or minimiser"), gf.RUNOPTS or "default")
+    R("[LIKEOPTS]", ml("   Options of the likelihood"), gf.LIKEOPTS or "default")
 
 
 def printParams(Str, p, defaults=False, whichtask="ALL"):
@@ -1544,7 +1583,7 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
     if isAll or p.flagStats or (defaults and whichtask == "STATS"):
         R("[STATS]", "Calculate and print statistics?", stringize(p.flagStats))
         R("[ITERNOISE]", "   Estimating noise with iterative algorithm?", stringize(se.iternoise))
-    if isAll or (p.contsub and not p.flagBayesSlit) or (defaults and whichtask == "CONTSUB"):
+    if isAll or (p.contsub and not p.flagSlitFit) or (defaults and whichtask == "CONTSUB"):
         R("[CONTSUB]", "Subtract continuum from datacube?", stringize(p.contsub))
         R("[EXCLWIND]", "   Channel window(s) to exclude for continuum fit", p.exclude_windows)
         R("[CONTORDER]", "   Order of polynomial for continuum fit", p.cont_order)
@@ -1601,13 +1640,20 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
         R("[REDUCE]", "   Averaging channels to reducing datacube?", p.reduce)
 
     isGalfit = isAll or gf.flagGALFIT or (defaults and whichtask == "3DFIT")
-    isBayes = isAll or gf.flagBAYESIAN or (defaults and whichtask == "BAYESIAN3DFIT")
+    # 3DFIT with METHOD CLASSIC, and with METHOD GLOBAL or BAYESIAN (both for the defaults and ALL: their rows
+    # then say which method uses them)
+    both = isAll or defaults
+    isClassic = isGalfit and (both or gf.METHOD in ("", "CLASSIC"))
+    isBayes = isGalfit and (both or gf.METHOD in ("GLOBAL", "BAYESIAN"))
+    mc = (lambda d: d.replace("   ", "   (CLASSIC) ", 1)) if both else (lambda d: d)
+    ml = (lambda d, m="GLOBAL, BAYESIAN": d.replace("   ", f"   ({m}) ", 1)) if both else (lambda d, m=None: d)
     isGalmod = isAll or gm.flagGALMOD or (defaults and whichtask == "GALMOD")
     isSpacepar = isAll or p.flagSpace or (defaults and whichtask == "SPACEPAR")
     if isGalfit or isBayes or isGalmod or isSpacepar:
         if isGalmod: R("[GALMOD]", "Writing a 3D model?", stringize(gm.flagGALMOD))
-        if isGalfit: R("[3DFIT]", "Fitting a 3D model to the datacube?", stringize(gf.flagGALFIT))
-        if isBayes: R("[BAYESIAN3DFIT]", "Fitting a 3D model by nested sampling?", stringize(gf.flagBAYESIAN))
+        if isGalfit:
+            R("[3DFIT]", "Fitting a 3D model to the datacube?", stringize(gf.flagGALFIT))
+            R("[METHOD]", "   Fitting method (CLASSIC, GLOBAL or BAYESIAN)", gf.METHOD or "CLASSIC")
         R("[REDSHIFT]", "   Redshift of the galaxy?", gf.REDSHIFT)
         if gf.RESTWAVE[0] != -1 or defaults: R("[RESTWAVE]", "   Transition wavelength at rest?", " ".join(f"{v:.5f}" for v in gf.RESTWAVE))
         if gf.RESTFREQ[0] != -1 or defaults: R("[RESTFREQ]", "   Transition frequency at rest?", " ".join(f"{v:.2f}" for v in gf.RESTFREQ))
@@ -1624,16 +1670,16 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
         R("[YPOS]", "   Y center of the galaxy (pixel)", gf.YPOS)
         R("[VSYS]", "   Systemic velocity of the galaxy (km/s)", gf.VSYS)
         R("[VROT]", "   Initial rotation velocity (km/s)", gf.VROT)
-        if isGalfit: R("[DELTAVROT]", "   Max rot. velocity variation from VROT (km/s)", gf.DELTAVROT)
+        if isClassic: R("[DELTAVROT]", mc("   Max rot. velocity variation from VROT (km/s)"), gf.DELTAVROT)
         R("[VRAD]", "   Initial radial velocity (km/s)", gf.VRAD)
         R("[VDISP]", "   Initial velocity dispersion (km/s)", gf.VDISP)
-        if isGalfit:
-            R("[MINVDISP]", "   Minimum acceptable velocity dispersion (km/s)", gf.MINVDISP)
-            R("[MAXVDISP]", "   Maximum acceptable velocity dispersion (km/s)", gf.MAXVDISP)
+        if isClassic:
+            R("[MINVDISP]", mc("   Minimum acceptable velocity dispersion (km/s)"), gf.MINVDISP)
+            R("[MAXVDISP]", mc("   Maximum acceptable velocity dispersion (km/s)"), gf.MAXVDISP)
         R("[INC]", "   Initial inclination (degrees)", gf.INC)
-        if isGalfit: R("[DELTAINC]", "   Max inclination variation from INC (degrees)", gf.DELTAINC)
+        if isClassic: R("[DELTAINC]", mc("   Max inclination variation from INC (degrees)"), gf.DELTAINC)
         R("[PA]", "   Initial position angle (degrees)", gf.PHI)
-        if isGalfit: R("[DELTAPA]", "   Max position angle variation from PA (degrees)", gf.DELTAPHI)
+        if isClassic: R("[DELTAPA]", mc("   Max position angle variation from PA (degrees)"), gf.DELTAPHI)
         R("[Z0]", "   Scale height of the disk (arcsec)", gf.Z0)
         R("[DENS]", "   Gas column density (atoms/cm2)", gf.DENS)
         if isGalmod:
@@ -1641,48 +1687,48 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
             R("[VVERT]", "   Vertical velocity (km/s)", gm.VVERT)
             R("[DVDZ]", "   Vertical gradient of rotation velocity (km/s/arcs)", gm.DVDZ)
             R("[ZCYL]", "   Height where the gradient begins (arcs)", gm.ZCYL)
-        if isGalfit or isBayes:
-            free = gf.FREE if (isGalfit or "FREE" in getattr(p, "_given", {})) else _kw.BAYES_DEFAULT_FREE
-            R("[FREE]", "   Parameters to be minimized", free)
+        if isClassic:
+            R("[FREE]", mc("   Parameters to be minimized"), gf.FREE)
+        if isBayes:
+            free = gf.FREE if (not defaults and "FREE" in getattr(p, "_given", {})) else _kw.BAYES_DEFAULT_FREE
+            R("[FREE]", ml("   Parameters to be fitted"), free)
         R("[MASK]", "   Type of mask", p.MaskType)
-        if isGalfit or isGalmod or isSpacepar: R("[NORM]", "   Type of normalization", gf.NORM)
+        if isClassic or isGalmod or isSpacepar: R("[NORM]", "   Type of normalization", gf.NORM)
         if isGalfit: R("[SIDE]", "   Side of the galaxy to be used", gf.SIDE)
         typ = {1: "gaussian", 2: "sech2", 3: "exponential", 4: "Lorentzian", 5: "box"}.get(gf.LTYPE, "")
         R("[LTYPE]", "   Layer type along z direction", typ)
         gmt = p.galmodtype
-        if (defaults and whichtask == "BAYESIAN3DFIT") or \
-                (not defaults and gf.flagBAYESIAN and "GALMODTYPE" not in getattr(p, "_given", {})):
-            gmt = "ANALYTIC"                    # the default of BAYESIAN3DFIT (keywords.TASK_DEFAULTS)
+        if not defaults and isBayes and not isClassic and "GALMODTYPE" not in getattr(p, "_given", {}):
+            gmt = "ANALYTIC"                    # the default of METHOD GLOBAL and BAYESIAN (keywords.TASK_DEFAULTS)
         R("[GALMODTYPE]", "   Type of model (MC or ANALYTIC)", gmt)
+        if defaults and isBayes:
+            R("[GALMODTYPE]", ml("   Type of model (MC or ANALYTIC)"), "ANALYTIC")
         R("[RINGMODE]", "   Ring convention (CENTRED, NODES, SHIFTED)", p.ringmode)
         R("[EMPTY]", "   Whether to leave empty inner part", stringize(gf.EMPTY))
-        if isGalfit:
+        if isClassic:
             typ = {1: "chi-squared", 2: "|m-o|", 3: "|m-o|/|m+o|", 4: "(m-o)^2"}.get(gf.FTYPE, "")
             R("[FTYPE]", "   Residuals to minimize", typ)
             typ = {0: "uniform", 1: "|cos(θ)|", 2: "cos(θ)^2", -1: "|sin(θ)|", -2: "sin(θ)^2"}.get(gf.WFUNC, "")
             R("[WFUNC]", "   Weighting function", typ)
             R("[BWEIGHT]", "   Weight for blank pixels", gf.BWEIGHT)
-            R("[TOL]", "   Minimization tolerance", gf.TOL)
-            R("[TWOSTAGE]", "   Two stages minimization?", stringize(gf.TWOSTAGE))
-            if gf.TWOSTAGE or defaults: R("[REGTYPE]", "     Degree of polynomial fitting angles?", gf.REGTYPE)
-            R("[FLAGERRORS]", "   Estimating errors?", stringize(gf.flagERRORS))
-            R("[ADRIFT]", "   Computing asymmetric drift correction?", stringize(gf.flagADRIFT))
+            R("[TOL]", mc("   Minimization tolerance"), gf.TOL)
+            R("[TWOSTAGE]", mc("   Two stages minimization?"), stringize(gf.TWOSTAGE))
+            if gf.TWOSTAGE or defaults: R("[REGTYPE]", mc("     Degree of polynomial fitting angles?"), gf.REGTYPE)
+            R("[FLAGERRORS]", mc("   Estimating errors?"), stringize(gf.flagERRORS))
+            R("[ADRIFT]", mc("   Computing asymmetric drift correction?"), stringize(gf.flagADRIFT))
             if gf.flagADRIFT or defaults:
-                R("[ADRIFTPOL1]", "     Polynomial for VDISP2 regularisation?", gf.ADRIFTPOL1)
-                R("[ADRIFTPOL2]", "     Polynomial for SIGMA regularisation?", gf.ADRIFTPOL2)
-            R("[REVERSE]", "   Using reverse-cumulative fitting?", gf.REVERSE)
-            R("[NORMALCUBE]", "   Normalizing cube to help convergence?", stringize(gf.NORMALCUBE))
-            R("[BADOUT]", "   Write unconverged rings in output (with flag)?", stringize(gf.flagBADOUT))
+                R("[ADRIFTPOL1]", mc("     Polynomial for VDISP2 regularisation?"), gf.ADRIFTPOL1)
+                R("[ADRIFTPOL2]", mc("     Polynomial for SIGMA regularisation?"), gf.ADRIFTPOL2)
+            R("[REVERSE]", mc("   Using reverse-cumulative fitting?"), gf.REVERSE)
+            R("[NORMALCUBE]", mc("   Normalizing cube to help convergence?"), stringize(gf.NORMALCUBE))
+            R("[BADOUT]", mc("   Write unconverged rings in output (with flag)?"), stringize(gf.flagBADOUT))
+        if isGalfit:
             R("[VELDEF]", "   Definition for velocity conversion?", ma.veldef)
             R("[PLOTMASK]", "   Overlaying mask to output plots?", stringize(gf.PLOTMASK))
             R("[PLOTMINCON]", "   Minimum flux contour for output plots", gf.PLOTMINCON)
         if isBayes:
-            R("[SAMPLER]", "   Sampler (or OPTIMISE)", gf.SAMPLER)
-            R("[PRIORS]", "   Priors of the free parameters", gf.PRIORS or "default")
-            R("[SAMPLEROPTS]", "   Options of the sampler", gf.SAMPLEROPTS or "default")
-            R("[RUNOPTS]", "   Options of the sampling", gf.RUNOPTS or "default")
-            R("[LIKEOPTS]", "   Options of the likelihood", gf.LIKEOPTS or "default")
-        if isGalfit or isGalmod or isSpacepar: R("[NOISERMS]", "   RMS noise to add to the model", gf.NOISERMS)
+            _likefit_rows(R, p, ml)
+        if isClassic or isGalmod or isSpacepar: R("[NOISERMS]", "   RMS noise to add to the model", gf.NOISERMS)
         if isSpacepar:
             R("[SPACEPAR]", "Full parameter space for a pair of parameters", stringize(p.flagSpace))
             R("[P1]", "   First parameter to explore", p.P1)
@@ -1731,11 +1777,33 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
         R("[WFUNC]", "   Weighting function", typ)
         R("[FREEANGLE]", "   Angle around the minor axis left out (deg)", gf.FREEANGLE)
 
-    if isAll or p.flagBayesSlit or (defaults and whichtask == "BAYESIANSLITFIT"):
-        sd = _kw.TASK_DEFAULTS["BAYESIANSLITFIT"]
+    if isAll or gw.flagWINDFIT or (defaults and whichtask == "WINDFIT"):
+        R("[WINDFIT]", "Fitting a bi-conical wind to the datacube?", stringize(gw.flagWINDFIT))
+        R("[METHOD]", "   Fitting method (GLOBAL or BAYESIAN)", gf.METHOD or "GLOBAL")
+        R("[XPOS]", "   X center of the galaxy (pixel)", gw.XPOS)
+        R("[YPOS]", "   Y center of the galaxy (pixel)", gw.YPOS)
+        R("[VSYS]", "   Systemic velocity of the galaxy (km/s)", gw.VSYS)
+        R("[INC]", "   Inclination of the wind axis (degrees)", gw.INC)
+        R("[PA]", "   Position angle of the wind axis (degrees)", gw.PHI)
+        R("[OPENANG]", "   Wind opening angle (degrees)", gw.OPENANG)
+        R("[OPENIN]", "   Wind inner opening angle (degrees)", gw.OPENIN)
+        R("[CONELEN]", "   Length of each cone of the wind (arcsec)", gw.CONELEN)
+        R("[VWIND]", "   Radial velocity of the wind (km/s)", gw.VWIND)
+        R("[VROT]", "   Azimuthal velocity of the wind (km/s)", gw.VROT)
+        R("[VDISP]", "   Velocity dispersion (km/s)", gw.VDISP)
+        R("[NLAYERS]", "   Number of shells in each cone", gw.NLAYERS)
+        R("[DISKRINGS]", "   Rings file of a fixed disk", gw.DISKRINGS or "none")
+        R("[FREE]", "   Parameters to be fitted", gf.FREE if "FREE" in getattr(p, "_given", {}) and not defaults
+          else "required")
+        _likefit_rows(R, p, (lambda d, m="GLOBAL, BAYESIAN": d.replace("   ", f"   ({m}) ", 1)) if defaults
+                      else (lambda d, m=None: d), wind=True)
+
+    if isAll or p.flagSlitFit or (defaults and whichtask == "SLITFIT"):
+        sd = _kw.TASK_DEFAULTS["SLITFIT"]
         given = getattr(p, "_given", {})
         vec = lambda v, none: " ".join(f"{x:g}" for x in v) if v else none
-        R("[BAYESIANSLITFIT]", "Fitting a long-slit spectrum?", stringize(p.flagBayesSlit))
+        R("[SLITFIT]", "Fitting a long-slit spectrum?", stringize(p.flagSlitFit))
+        R("[METHOD]", "   Fitting method (GLOBAL or BAYESIAN)", gf.METHOD or "GLOBAL")
         R("[SLITWIDTH]", "   Width of the slit (arcsec)", p.slitwidth)
         R("[SLITANGLE]", "   Slit to receding major axis (deg, or AUTO)", p.slitangle)
         R("[REDSHIFT]", "   Redshift of the galaxy?", gf.REDSHIFT)
@@ -1771,11 +1839,8 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
         R("[RINGMODE]", "   Ring convention (CENTRED, NODES, SHIFTED)", p.ringmode)
         R("[FREE]", "   Parameters to be fitted", gf.FREE if "FREE" in given and not defaults else sd["FREE"])
         R("[NORM]", "   Type of normalization", gf.NORM if "NORM" in given and not defaults else sd["NORM"])
-        R("[SAMPLER]", "   Sampler (or OPTIMISE)", gf.SAMPLER)
-        R("[PRIORS]", "   Priors of the free parameters", gf.PRIORS or "default")
-        R("[SAMPLEROPTS]", "   Options of the sampler", gf.SAMPLEROPTS or "default")
-        R("[RUNOPTS]", "   Options of the sampling", gf.RUNOPTS or "default")
-        R("[LIKEOPTS]", "   Options of the likelihood", gf.LIKEOPTS or "default")
+        _likefit_rows(R, p, (lambda d, m="GLOBAL, BAYESIAN": d.replace("   ", f"   ({m}) ", 1)) if defaults
+                      else (lambda d, m=None: d), wind=True)
 
     if isAll or p.flagEllProf or (defaults and whichtask == "ELLPROF"):
         R("[ELLPROF]", "Deriving radial intensity profile?", stringize(p.flagEllProf))

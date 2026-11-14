@@ -1,5 +1,5 @@
 """
-The outputs of BAYESIANSLITFIT (BayesianSlitFit.write), in the output folder, named after the OBJECT of the slit:
+The outputs of SLITFIT (BayesianSlitFit.write), in the output folder, named after the OBJECT of the slit:
 
   <prefix>_slitfit_rings.txt          the rings of the best fit with the 1-sigma errors of the free parameters
   <prefix>_slit_data.fits             the spectral window of the fit (continuum and residual sky subtracted)
@@ -201,10 +201,8 @@ def write_outputs(f, outfolder=None, plots=None, verbose=True):
             allow_pickle=True)
     files.append(fn)
     if plots >= 0:
-        p0, p1 = f.region
-        model = np.full(prep.data.shape, np.nan)
-        model[:, p0:p1] = f.best["model"]
-        extra = {"BBTASK": "BAYESIANSLITFIT"}
+        model = model_array(f)
+        extra = {"BBTASK": "SLITFIT"}
         for suffix, arr in (("data", prep.data), ("model", model), ("resid", prep.data - model),
                             ("noise", prep.noise * f.best["scale"])):
             fn = pre + f"_slit_{suffix}.fits"
@@ -217,8 +215,16 @@ def write_outputs(f, outfolder=None, plots=None, verbose=True):
     if plots > 0:
         files += _write_plots(f, of)
     if verbose:
-        print(f" BAYESIANSLITFIT: {len(files)} files written in {of}")
+        print(f" SLITFIT: {len(files)} files written in {of}")
     return files
+
+
+def model_array(f):
+    """The best model of the slit f on the grid of its prepared data (NaN outside the region of the fit)."""
+    p0, p1 = f.region
+    model = np.full(f.prep.data.shape, np.nan)
+    model[:, p0:p1] = f.best["model"]
+    return model
 
 
 def _write_plots(f, of):
@@ -239,8 +245,8 @@ def _write_plots(f, of):
         plt.close(fig)
         files.append(pre + "_slitfit_parameters.pdf")
     except Exception as e:                                  # (the plots must not lose the other outputs)
-        print(f" BAYESIANSLITFIT WARNING: the plots failed: {e}")
-    if np.all(np.ptp(np.asarray(f.samples_equal), axis=0) > 0):   # (no errors, SAMPLER OPTIMISE errors=false: none)
+        print(f" SLITFIT WARNING: the plots failed: {e}")
+    if np.all(np.ptp(np.asarray(f.samples_equal), axis=0) > 0):   # (no errors, METHOD GLOBAL, errors=false: none)
         try:
             import corner                                       # noqa: F401
             fig = f.corner_plot()

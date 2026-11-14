@@ -129,7 +129,7 @@ def run_scan(args):
         kw = dict(nradii=n, radsep=w, xpos=xc, ypos=xc, vsys=0., z0=rs.Z0, ltype=1, mask=rs.MASK, inc=g["inc"],
                   pa=g["pa"], vrot=list(t["vrot"]), vdisp=g["sigma"], free="VSYS", twostage=False,
                   galmodtype="ANALYTIC")
-        gf = FitMod3D(fn, threads=1, verbose=False, plots=-1, outfolder=os.path.join(wd, "out"), **kw).run()["galfit"]
+        gf = FitMod3D(fn, threads=1, verbose=False, plots=-1, outfolder=os.path.join(wd, "out"), **kw).run()["fitter"]
 
         def disk(r0, r1, blo, bhi):            # model of the disk between r0 and r1 (true values)
             dr = max(rs.RMAX / 30., cg["pix"])

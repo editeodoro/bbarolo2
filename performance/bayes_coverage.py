@@ -205,9 +205,9 @@ def fit(job):
                 def prof(rings, td=td):
                     rings.modify_parameter("dens", td, makeobj=True)
                 f._set_density = prof
-            f.run(freepar=free, method='nautilus', threads=1, verbose=False, like_kwargs=like,
-                  sampler_kwargs=dict(n_live=job["nlive"], seed=job["seed"] % 2 ** 31),
-                  run_kwargs=dict(n_eff=job["neff"]))
+            f.sample(freepar=free, sampler='nautilus', threads=1, verbose=False, like_kwargs=like,
+                     sampler_kwargs=dict(n_live=job["nlive"], seed=job["seed"] % 2 ** 31),
+                     run_kwargs=dict(n_eff=job["neff"]))
             q = np.asarray(f.quantiles)
             truth = {}
             for i, name in enumerate(f.freepar_names):

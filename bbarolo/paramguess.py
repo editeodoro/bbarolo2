@@ -364,7 +364,7 @@ class ParamGuess:
 
     def findRings(self, halve=True):
         """The rings out to Rmax, one beam (radsep) wide; halve: half a beam wide when there are fewer
-        than 20 (as C++; BAYESIAN3DFIT keeps one beam)."""
+        than 20 (as C++; METHOD GLOBAL and BAYESIAN keep one beam)."""
         self.nrings = _lround(self.Rmax / self.radsep)
         if halve and self.nrings < 20:
             self.radsep /= 2.
@@ -657,7 +657,7 @@ def funcIncfromMap(mypar, c, radsep, Rmax, pa, xcen, ycen, vsys, Imap, totflux):
 
 def EstimateInitial(c, p, beamrings=False):
     """Estimate the initial parameters not given in the GALFIT_PAR structure p. beamrings: rings one beam
-    wide when RADSEP is not given (BAYESIAN3DFIT), otherwise half a beam wide for fewer than 20 rings."""
+    wide when RADSEP is not given (3DFIT, METHOD GLOBAL or BAYESIAN), otherwise half a beam wide for fewer than 20 rings."""
     from .search import Detection
     largest = None
     if c.MaskAll() and "FILE(" in c.pars().MaskType:

@@ -65,7 +65,7 @@ radius of each ring, and the fit gives one value of each parameter per ring.
 
 A model needs a value of every parameter at every radius, and the way the radii are turned into a disk is the
 ring convention {ref}`RINGMODE <par-galmod-ringmode>`. It applies to the final models of 3DFIT, to GALMOD
-and to BAYESIAN3DFIT, not to the fits themselves (the ring tables of 3DFIT do not depend on it):
+and to 3DFIT with METHOD GLOBAL or BAYESIAN, not to the fits themselves (the ring tables of 3DFIT do not depend on it):
 
 | `RINGMODE` | The disk of the model | Where |
 |------------|-----------------------|-------|

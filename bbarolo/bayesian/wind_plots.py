@@ -1,5 +1,5 @@
 """
-The plotting scripts of BAYESIANWIND, in the style of those of 3DFIT (bbarolo/plotscripts.py) and with their helpers
+The plotting scripts of WINDFIT, in the style of those of 3DFIT (bbarolo/plotscripts.py) and with their helpers
 (plot_utils.py): written in <outfolder>/plotscripts/ by BayesianWind.write and run with PLOTS.
 
   plot_chanmaps_wind.py  channel maps of the data with the contours of the model -> <prefix>_chanmaps_wind.pdf
@@ -319,7 +319,7 @@ def write_scripts(f, outfolder, prefix, cubefile, cubehdu=0):
                              ("plot_pvs_wind.py", _PVS, "position-velocity slices of data and model")):
         path = folder + name
         with open(path, "w") as fh:
-            fh.write(f"#### BAYESIANWIND: {what} (BBarolo; edit and run from this folder) ####\n")
+            fh.write(f"#### WINDFIT: {what} (BBarolo; edit and run from this folder) ####\n")
             fh.write(_IMPORTS + "\n" + header + body)
         paths.append(path)
     return paths

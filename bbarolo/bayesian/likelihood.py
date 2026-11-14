@@ -579,7 +579,7 @@ class LikelihoodMixin(object):
         b = self._beam_fwhm()
         if not b > 0:
             from ..bbutils import BBaroloError
-            raise BBaroloError("BAYESIAN3DFIT: LIKEOPTS smooth needs the beam of the cube (BEAM, or BMAJ in the "
+            raise BBaroloError("3DFIT: LIKEOPTS smooth needs the beam of the cube (BEAM, or BMAJ in the "
                                "header): the bends are measured over one beam.")
         return b
 

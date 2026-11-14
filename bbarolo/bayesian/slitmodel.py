@@ -1,5 +1,5 @@
 """
-The model of BAYESIANSLITFIT: a GALMOD disk on a thin 3D grid around the slit, seen through the slit.
+The model of SLITFIT: a GALMOD disk on a thin 3D grid around the slit, seen through the slit.
 
 The grid (the template) has the slit along its x axis: x covers the positions of the slit (pixels of the data, or
 an integer fraction of them if they are larger than half the seeing FWHM), y a strip across the slit, wide enough
@@ -64,7 +64,7 @@ class SlitModel:
         self.pix = slit.pix                              # arcsec per position of the slit
         self.p0, self.p1 = int(region[0]), int(region[1])
         if not 0 <= self.p0 < self.p1 <= slit.npos:
-            raise BBaroloError(f"BAYESIANSLITFIT: bad region of the slit {region}")
+            raise BBaroloError(f"SLITFIT: bad region of the slit {region}")
         self.width = float(slitwidth)
         self.fwhm = float(beam_fwhm)
         self.sigma = self.fwhm / (2. * math.sqrt(2. * math.log(2.)))

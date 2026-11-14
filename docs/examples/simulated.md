@@ -129,7 +129,7 @@ The repository has a systematic version of this test, in `performance/`: `run_su
 with GALMOD (ANALYTIC models on an empty cube, noise smoothed to the beam as above) and fits them with
 `FitMod3D`, varying the resolution (beams across the disk, channel width), the signal-to-noise ratio, the
 inclination and position angle, and warps; `analyse.py` makes the figures and tables of the report in
-`performance/report/`, and `bayes_coverage.py` tests the errors of BAYESIAN3DFIT. The main findings, from 3304
+`performance/report/`, and `bayes_coverage.py` tests the errors of 3DFIT with METHOD BAYESIAN. The main findings, from 3304
 fits, are in {doc}`../tasks/3dfit/algorithm` (section *Accuracy and known biases*): VROT is robust (median error between −2% and 0% at five beams or more across the disk
 and a peak S/N of 10 or more), VDISP is hard (20–40% scatter, and a bias that follows the S/N), and the
 inclination stays close to its starting value.

@@ -47,11 +47,12 @@ pip install git+https://github.com/editeodoro/bbarolo2       # then: BBarolo -p 
 beam and the spectral resolution in the model.
 :::
 
-:::{grid-item-card} Bayesian fits
-:link: tasks/bayesian3dfit/index
+:::{grid-item-card} Global and Bayesian fits
+:link: tasks/3dfit/index
 :link-type: doc
-**BAYESIAN3DFIT** samples the posterior of all the parameters at once with nested sampling:
-errors, correlations, priors, the outer edge of the disk.
+**3DFIT** with `METHOD GLOBAL` or `BAYESIAN` fits all the parameters at once: the maximum of the likelihood, or the
+posterior by nested sampling, with errors, correlations, priors and the outer edge of the disk. **WINDFIT** and
+**SLITFIT** fit winds and long-slit spectra the same way.
 :::
 
 :::{grid-item-card} Models of datacubes
@@ -85,8 +86,8 @@ with the results as astropy objects.
 
 ## News
 
-- **BBarolo 2.0** (in development): the pure-Python BBarolo, with the Bayesian fit
-  (BAYESIAN3DFIT), models from 3D fields (GalMod3D), new initial estimates and many fixes. See
+- **BBarolo 2.0** (in development): the pure-Python BBarolo, with the global and Global and Bayesian fits
+  (3DFIT METHOD GLOBAL and BAYESIAN, WINDFIT, SLITFIT), models from 3D fields (GalMod3D), new initial estimates and many fixes. See
   {doc}`reference/changes`.
 - **BBarolo 1.8** (June 2026): the last version of the C++ code. Its documentation is
   {doc}`archived <reference/legacy>`.

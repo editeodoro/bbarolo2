@@ -1,5 +1,5 @@
 """
-The plots of 3DFIT and BAYESIAN3DFIT (port of Galfit::writeScripts_Python of galfit_out.cpp). Each plot is a
+The plots of 3DFIT (port of Galfit::writeScripts_Python of galfit_out.cpp). Each plot is a
 function that draws it from arrays and returns a matplotlib Figure, writing nothing:
 
   plot_parameters   the parameters of the rings against radius           <prefix>_parameters.pdf
@@ -108,7 +108,7 @@ def plot_parameters(rings, rings2=None, sdens=None, sdens_obs=None, sdens_label=
     values, errors: one array or [lower, upper], positive); sdens_obs: the profile of the data (radii, values;
     empty circles) or None; sdens_label: the label of sdens in the legend (no legend if None); faceon: whether the
     profiles are face-on (per arcsec^2); bunit: the units of the maps. radmax: the outer edge of the disk (arcsec,
-    BAYESIAN3DFIT), beyond which the plot is shaded, or None. Returns the Figure."""
+    METHOD GLOBAL and BAYESIAN), beyond which the plot is shaded, or None. Returns the Figure."""
     style = {"xtick.direction": "in", "xtick.top": True, "ytick.direction": "in", "ytick.right": True,
              "contour.negative_linestyle": "solid", "font.family": "sans-serif", "font.serif": "Helvetica",
              "font.size": 10, "text.usetex": False, "mathtext.fontset": "cm", "mathtext.default": "regular",

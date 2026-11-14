@@ -1,5 +1,5 @@
 """
-BAYESIANWIND on a mock wind with a clumpy emission.
+WINDFIT (METHOD BAYESIAN) on a mock wind with a clumpy emission.
 
 The mock (performance/wind_mocks.py) is made with GalMod3D: 100 Gaussian clumps at random positions in two cones
 (60 degrees of full opening angle, 200 arcsec long, inclined by 60 degrees, PA 30), a radial wind of 200 km/s with a
@@ -27,7 +27,7 @@ threads = int(sys.argv[2]) if len(sys.argv) > 2 else 8
 hdu, truth = mock_wind(kind="clumps", seed=1, snr=10)
 f = BayesianWind(hdu, xpos=23.5, ypos=23.5, vsys=0, inc=55, pa=30, openang=55, conelen=200, vwind=180, vdisp=20,
                  outfolder=out)
-f.run(freepar=["vwind_single", "inc", "openang"], threads=threads)
+f.sample(freepar=["vwind_single", "inc", "openang"], threads=threads)      # run() now minimises (METHOD GLOBAL)
 f.print_stats()
 print(f" truth: VWIND {truth['vwind'][0]:g} km/s, INC {truth['inc']:g} deg, OPENANG {truth['openang']:g} deg")
 f.write(plots=1)

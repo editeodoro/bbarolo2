@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Example: Bayesian 3D fit of NGC 2403 with the pure-Python Bayesian3DFIT.
+Example: Bayesian 3D fit of NGC 2403 with the pure-Python Bayesian3DFIT (the engine of 3DFIT with METHOD BAYESIAN).
 
 Run from the BBarolo folder (the one containing examples/ngc2403.fits):
 
@@ -55,8 +55,8 @@ f.priors['vdisp'] = dict(name='uniform', loc=0, scale=40)         # 0-40 km/s
 # mock cubes, VDISP and INC are then unbiased (see the README).
 freepar = ['vrot', 'vdisp_single', 'inc_single', 'sigma']
 
-f.run(freepar=freepar, threads=args.threads, method='nautilusbb',
-      sampler_kwargs=dict(n_live=500), run_kwargs=dict(f_live=0.01))
+f.sample(freepar=freepar, threads=args.threads, sampler='nautilusbb',
+         sampler_kwargs=dict(n_live=500), run_kwargs=dict(f_live=0.01))
 
 f.print_stats()
 f.save_results(os.path.join(args.outfolder, "bayes_results.npy"))

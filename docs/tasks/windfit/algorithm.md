@@ -1,4 +1,4 @@
-# BAYESIANWIND: how it works
+# WINDFIT: how it works
 
 ## The problem: where along the line of sight
 
@@ -19,12 +19,12 @@ sight, but only once the geometry and the kinematics are known, and those are wh
   1st or 99th percentile velocity more than 5% away from the observed one, and it fixes the position angle and the
   opening angle from the data. The current code (github.com/cosimomarconcini/moka_3d) fits only the 1st and 99th
   percentile velocities of the unweighted model in shells on the sky (or a CRPS of 19 percentiles), and weights
-  the clouds by the observed flux only after the fit. BAYESIANWIND's `emission=voxel` keeps the weighting with a
+  the clouds by the observed flux only after the fit. WINDFIT's `emission=voxel` keeps the weighting with a
   likelihood of the detections instead (see below).
 
 ## The emission as linear amplitudes
 
-BAYESIANWIND keeps the idea that the data, not a law, set the emission, within a forward model:
+WINDFIT keeps the idea that the data, not a law, set the emission, within a forward model:
 
 1. The emission is a set of emissivities on cells of the cones: radial bins, polar bins from the axis to the
    largest opening angle of the priors, and azimuthal sectors, each cone its own. The cells are a fixed grid
@@ -106,13 +106,13 @@ the widest priors (the corners of the box of the priors of the centre, INC, PA, 
 channels. There is no mask, because the empty voxels are what tell a cone that is too large, but the blanks
 (NaN in the file) are not data and are left out: blank what is not the wind (other lines, other sources) to keep
 it out of the fit. The noise rms is measured outside the mask of the emission (`MASK`) and the blanks, and the
-log-likelihood is divided by the correlation volume of the noise, as in {doc}`BAYESIAN3DFIT <../bayesian3dfit/algorithm>`. Values of the columns below `prune`
+log-likelihood is divided by the correlation volume of the noise, as in {doc}`3DFIT with METHOD GLOBAL or BAYESIAN <../3dfit/likelihood>`. Values of the columns below `prune`
 times the peak of their cell (the faint wings, where the tails of the line and of the beam multiply, about
 0.3% of the flux) are left out of the normal equations, which makes the likelihood about ten times faster.
 
 The quadrature points of each cell are one dispersion of the beam apart (at most 2 million points in all; beyond,
 the spacing grows, with a warning above twice the dispersion), so the bases with one cell per cone or per shell
-are as smooth as the cells. The sampling runs on `THREADS` processes, as BAYESIAN3DFIT. A likelihood evaluation of a wind 8 beams long in a
+are as smooth as the cells. The sampling and the minimisation run on `THREADS` processes, as for 3DFIT. A likelihood evaluation of a wind 8 beams long in a
 48×48×40 cube takes 15–60 ms with about 500 cells.
 
 ## Validation

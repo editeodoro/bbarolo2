@@ -317,18 +317,18 @@ def default_z0(h):
     return float(h.PixScale() * arcsconv(h.Cunit(0)))
 
 
-def initial_rings(c, par, galmod=False, write=True, buildmask=False, task="3DFIT"):
-    """The initial rings of 3DFIT and BAYESIAN3DFIT, or the rings of GALMOD (galmod=True), from the
+def initial_rings(c, par, galmod=False, write=True, buildmask=False, task="3DFIT", beamrings=False):
+    """The initial rings of 3DFIT (all its METHODs), or the rings of GALMOD (galmod=True), from the
     parameters par (a GalfitPar; changed in place: the values that are not given are set).
 
     Values not given are read from RINGFILE, estimated from the data (centre, systemic and
     rotation velocity, inclination, position angle, number and width of the rings), or set
     to the defaults (VDISP=8, or its estimate with GUESSTYPE FIT; Z0=one pixel, VRAD=0, DENS=1,
     VVERT=0, DVDZ=0, ZCYL=0). The estimates use the mask of the cube: 3DFIT builds it before;
-    buildmask=True builds it here (MASK; BAYESIAN3DFIT, only when something is estimated), otherwise
+    buildmask=True builds it here (MASK; METHOD GLOBAL and BAYESIAN, only when something is estimated), otherwise
     only a mask from a file is built (GALMOD). With write=True the rings are kept in the cube for
     rings_model.txt (GALMOD) or rings_initial.txt (3DFIT), see Cube.add_output. task: the name in
-    the error messages; with BAYESIAN3DFIT, the estimated rings are one beam wide (EstimateInitial
+    the error messages; beamrings (METHOD GLOBAL and BAYESIAN): the estimated rings are one beam wide (EstimateInitial
     beamrings), not half a beam for fewer than 20 rings.
 
     Returns a namespace with: rings (a Rings object), fromfile (the rings were read from a
@@ -348,7 +348,7 @@ def initial_rings(c, par, galmod=False, write=True, buildmask=False, task="3DFIT
                 c.BlankMask()
         elif "FILE(" in p.MaskType and not c.MaskAll():    # the estimates use a mask from a file
             c.BlankMask()
-        ip = EstimateInitial(c, par, beamrings=task == "BAYESIAN3DFIT")
+        ip = EstimateInitial(c, par, beamrings=beamrings)
         if par.RADII == "-1":
             if par.NRADII == -1: par.NRADII = ip.nrings
             if par.RADSEP == -1: par.RADSEP = ip.radsep
@@ -386,7 +386,7 @@ def estimatedParameters(par):
 
 
 def initialParametersText(inr, est):
-    """The table of the initial parameters of the rings inr shown by 3DFIT and BAYESIAN3DFIT: each value marked
+    """The table of the initial parameters of the rings inr shown by 3DFIT: each value marked
     (i) given, (e) estimated or (d) default, as in est (see estimatedParameters)."""
     def tag(k, d="(e)"): return d if est.get(k, False) else "(i)"
     def tagd(k): return "(d)" if est.get(k, False) else "(i)"

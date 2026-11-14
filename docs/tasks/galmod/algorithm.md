@@ -7,7 +7,7 @@ from which the algorithm comes. The input is the cube (only its header is needed
 are used to normalise it) and the ring parameters; the output is the model cube, normalised to the data
 or not, with its moment maps and position-velocity slices. The same engine makes every disk model of
 BBarolo: the models of {doc}`3DFIT <../3dfit/algorithm>`, {doc}`SPACEPAR <../spacepar/algorithm>`
-and {doc}`BAYESIAN3DFIT <../bayesian3dfit/algorithm>` are the ones described here.
+and {doc}`3DFIT with METHOD GLOBAL or BAYESIAN <../3dfit/likelihood>` are the ones described here.
 
 A model is built in five steps: the rings become a disk with a ring convention; the disk is cut into
 thin sub-rings; the sub-rings are filled with emission, by random clouds (`MC`) or on a regular grid
@@ -48,7 +48,7 @@ the ring convention, {ref}`RINGMODE <par-galmod-ringmode>`:
   1.x. The disk covers the area of `CENTRED`, but the values in the first and last ring are interpolated
   between the shifted radii.
 
-The convention applies to the final models (GALMOD, the final models of 3DFIT, BAYESIAN3DFIT). In the
+The convention applies to the final models (GALMOD, the final models of 3DFIT with every METHOD). In the
 fits of 3DFIT and SPACEPAR each ring is modelled alone, as two nodes at its edges with the values of the
 ring, so the ring tables do not depend on RINGMODE.
 
@@ -82,8 +82,8 @@ $$
 This holds for all the values, the geometry included: a warp in $i$ or $\phi$ is linear between the
 nodes. The face-on area of a sub-ring is $A_j = 2\pi r_j \delta$ (arcsec²).
 
-**Outer edge.** BAYESIAN3DFIT can fit the outer edge $E$ of the disk (RADMAX, see
-{ref}`LIKEOPTS <par-bayesian3dfit-likeopts>`), with the rings fixed. The density of each sub-ring is
+**Outer edge.** 3DFIT with METHOD GLOBAL or BAYESIAN can fit the outer edge $E$ of the disk (RADMAX, see
+{ref}`LIKEOPTS <par-3dfit-likeopts>`), with the rings fixed. The density of each sub-ring is
 then multiplied by the fraction of the sub-ring inside the edge, or by a Gaussian taper of width $w_E$
 (`radmax=taper`):
 
@@ -457,7 +457,7 @@ described on this page: see {doc}`../galmod3d/index`.
 - **Several lines** were shifted from the first by fixed velocity offsets, exact only for a cloud at velocity
   0: each line now has its own reference frequency, so the lines of a cloud share its Doppler factor.
 - **MC models in a box**: clouds outside the box drew no velocity deviates, so the model of a box (the
-  single rings of 3DFIT and of BAYESIAN3DFIT) was not a crop of the model of the whole cube. Models of disks
+  single rings of 3DFIT CLASSIC and the models of METHOD GLOBAL and BAYESIAN) was not a crop of the model of the whole cube. Models of disks
   inside the field with LTYPE 1–3 do not change.
 - **NORM AZIMUTHAL** was taken as `LOCAL`; it is `AZIM`.
 - **SPECRES** is new; LINEAR still sets the instrumental broadening when SPECRES is not given.

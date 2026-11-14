@@ -59,10 +59,10 @@ def make():
     return f
 
 
-def sample(f, **kw):
+def sample(f, sampler="nautilus", **kw):
     if cfg["label"] == "C++":
-        return f.compute(threads=cfg["threads"], **kw)
-    return f.run(threads=cfg["threads"], **kw)
+        return f.compute(threads=cfg["threads"], method=sampler, **kw)      # pyBBarolo: method is the sampler
+    return f.sample(threads=cfg["threads"], sampler=sampler, **kw)          # bbarolo: sampler='nautilus'
 
 
 # likelihood scan through the vrot of the second ring
@@ -82,7 +82,7 @@ for i in range(10): f._log_likelihood(th, **LK)
 tcall = (time.time() - t0) / 10
 f2 = make()
 t0 = time.time()
-sample(f2, freepar=cfg["freepar"], method="nautilus", like_kwargs=PY,
+sample(f2, freepar=cfg["freepar"], sampler="nautilus", like_kwargs=PY,
        sampler_kwargs=dict(n_live=cfg["nlive"], seed=cfg["seed"]), run_kwargs=dict(f_live=cfg["flive"]))
 dt = time.time() - t0
 q = np.quantile(f2.samples_equal, [0.16, 0.5, 0.84], axis=0)

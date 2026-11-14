@@ -263,7 +263,7 @@ def main(argv=None):
 
 
 def _main(argv=None):
-    # plots are written to files only (e.g. the corner plot of BAYESIAN3DFIT): no GUI backend
+    # plots are written to files only (e.g. the corner plot of 3DFIT with METHOD BAYESIAN): no GUI backend
     os.environ.setdefault("MPLBACKEND", "Agg")
     argv = sys.argv[1:] if argv is None else list(argv)
     par = getopts(argv)

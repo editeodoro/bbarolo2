@@ -20,7 +20,7 @@ class DensityMixin(object):
         (<prefix>_densprof.txt, see _observed_profile). """
         dens = self._deconvolved_profile(rings)
         if dens is None:
-            raise ValueError("BAYESIAN3DFIT ERROR: too few pixels with data in the likelihood region to compute "
+            raise ValueError("3DFIT ERROR: too few pixels with data in the likelihood region to compute "
                              "the density profile.\n  Check the mask and the rings, or fit DENS.")
         rings.modify_parameter("dens", dens, makeobj=True)
 

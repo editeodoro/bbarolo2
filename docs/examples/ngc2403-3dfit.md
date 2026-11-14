@@ -246,7 +246,7 @@ The errors of VROT are 1.7 to 5.0 km/s (lower) and 1.9 to 4.3 km/s (upper), and 
 and 1.0 to 2.8 km/s. They are not statistical confidence
 intervals: they measure how fast the residual grows when one parameter moves, with the others fixed. They
 do not include the uncertainty of the inclination, which is the largest here (section 3). For the posterior
-distributions, see {doc}`BAYESIAN3DFIT <../tasks/bayesian3dfit/index>`.
+distributions, see {doc}`3DFIT with METHOD BAYESIAN <../tasks/3dfit/index>`.
 
 **Asymmetric drift.** Gas with a velocity dispersion is held up partly by its pressure, so its rotation velocity
 is lower than the circular velocity of the potential. With {ref}`ADRIFT <par-3dfit-adrift>`, BBarolo computes

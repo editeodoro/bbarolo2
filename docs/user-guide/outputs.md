@@ -25,7 +25,7 @@ The folder can hold `BBlog_0.txt`, the messages of a run with {ref}`LOGFILE <par
 
 ### Ring tables (`.txt`)
 
-The rings of 3DFIT, GALMOD and BAYESIAN3DFIT (`_rings_initial.txt`, `_rings_final1.txt`, `_rings_final2.txt`,
+The rings of 3DFIT (every METHOD) and GALMOD (`_rings_initial.txt`, `_rings_final1.txt`, `_rings_final2.txt`,
 `_rings_model.txt`) are text files with a header line and one row per ring. The columns, in this order:
 
 | Column | Content | Unit |
@@ -37,7 +37,7 @@ The rings of 3DFIT, GALMOD and BAYESIAN3DFIT (`_rings_initial.txt`, `_rings_fina
 | `DENS` | gas density (`SIG(E20)` in the initial rings) | the units of the model, see {doc}`../tasks/galmod/index` |
 | `XPOS`, `YPOS` | centre | pixels |
 | `VSYS`, `VRAD` | systemic and radial velocity | km/s |
-| `E_VROT1`, `E_VROT2`, `E_DISP1`, ... | with {ref}`FLAGERRORS <par-3dfit-flagerrors>` or BAYESIAN3DFIT: the lower (negative) and upper errors of each free parameter | as the parameter |
+| `E_VROT1`, `E_VROT2`, `E_DISP1`, ... | with {ref}`FLAGERRORS <par-3dfit-flagerrors>` or METHOD GLOBAL or BAYESIAN of 3DFIT: the lower (negative) and upper errors of each free parameter | as the parameter |
 
 `_rings_initial.txt` and `_rings_model.txt` have no `VRAD` column. The values have three decimals. The rows of the rings
 whose fit failed are left out (unless {ref}`BADOUT <par-3dfit-badout>`). The other text tables
@@ -92,7 +92,7 @@ python3 output/ngc2403/plotscripts/plot_all.py
 |---|---|
 | `1`, `true` (default) | the plots and their scripts |
 | `0`, `false` | no plots and no scripts: the other files are written as usual |
-| `-1` | no plots, and 3DFIT and BAYESIAN3DFIT write no model, maps, slices or mask: only the ring tables |
+| `-1` | no plots, and 3DFIT (every METHOD) writes no model, maps, slices or mask: only the ring tables |
 | `2`, `3` | also the plots of the initial estimates of the geometry, when BBarolo makes them (`_initialguesses.pdf`) |
 
 In Python, `res.write(plots=False)` writes without plots. A text that is not a number or `true` (`PLOTS no`) is
@@ -107,8 +107,10 @@ defaults. It runs the same tasks again with `BBarolo -p`. See {doc}`parameter-fi
 
 | Task | Files | Described in |
 |---|---|---|
-| 3DFIT | rings (initial, final), `_densprof.txt`, `_densprof_deconvolved.txt`, `_mod_<norm>.fits`, mask, `maps/`, `pvs/`, plots, `_asymdrift.txt` | {doc}`../tasks/3dfit/index` |
-| BAYESIAN3DFIT | `_rings_final1.txt` with errors, best model, `maps/`, `pvs/`, samples (`_nautilus_results.npy` or `_dynesty_results.npy`), plots (`_parameters.pdf`, ...), `_corner.pdf` | {doc}`../tasks/bayesian3dfit/index` |
+| 3DFIT, METHOD CLASSIC | rings (initial, final), `_densprof.txt`, `_densprof_deconvolved.txt`, `_mod_<norm>.fits`, mask, `maps/`, `pvs/`, plots, `_asymdrift.txt` | {doc}`../tasks/3dfit/index` |
+| 3DFIT, METHOD GLOBAL or BAYESIAN | `_rings_final1.txt` with errors, best model, `maps/`, `pvs/`, samples (`_nautilus_results.npy`, `_dynesty_results.npy`, or `_optimize_results.npy` for GLOBAL), plots (`_parameters.pdf`, ...), `_corner.pdf` | {doc}`../tasks/3dfit/index` |
+| WINDFIT | `_wind_params.txt`, `_wind_shells.txt`, `_wind_cells.txt`, `_mod_wind.fits`, `maps/`, `pvs/`, samples (`_<sampler>_windresults.npy`, or `_optimize_windresults.npy`), plots | {doc}`../tasks/windfit/index` |
+| SLITFIT | `_slitfit_rings.txt`, `_slit_data.fits`, `_slit_model.fits`, `_slit_resid.fits`, samples (`_slitfit_<method>_results.npy`), plots | {doc}`../tasks/slitfit/index` |
 | GALMOD | `_rings_model.txt`, `_mod_<norm>.fits`, mask, `_densprof.txt`, `maps/`, `pvs/` | {doc}`../tasks/galmod/index` |
 | GalMod3D | no files: `model()` returns an HDU | {doc}`../tasks/galmod3d/index` |
 | GALWIND | `_wind.fits`, `_wind_<n>mom.fits`, `_wind_pv.fits`, plots | {doc}`../tasks/galwind/index` |

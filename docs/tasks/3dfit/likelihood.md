@@ -1,19 +1,22 @@
-# BAYESIAN3DFIT: how it works
+# METHOD GLOBAL and BAYESIAN: how they work
 
-BAYESIAN3DFIT fits a 3D tilted-ring model to a datacube, as {doc}`3DFIT <../3dfit/algorithm>` does, but
-instead of minimising the residuals it samples the posterior probability distribution of the free
-parameters with nested sampling. The inputs are the cube, its mask, the rings (given or estimated as in
-3DFIT), the free parameters ({ref}`FREE <par-bayesian3dfit-free>`) and their priors
-({ref}`PRIORS <par-bayesian3dfit-priors>`). The outputs are the posterior samples, the median and the 68%
-credible interval of each free parameter, the best-fit rings with these errors, the best model with its
-maps and position–velocity slices, and the plots. In Python the same fit is
-{class}`bbarolo.Bayesian3DFIT` (method `run`), which also offers a fit of the geometry on the total
-intensity map (`run_geometry`).
+3DFIT with METHOD GLOBAL or BAYESIAN fits a 3D tilted-ring model to a datacube, as
+{doc}`METHOD CLASSIC <algorithm>` does, but all the free parameters of all the rings are fitted together with
+one likelihood. METHOD GLOBAL finds the maximum of the likelihood with a minimiser, and gives the errors of the
+Laplace approximation; METHOD BAYESIAN samples the posterior probability distribution of the free parameters with
+nested sampling. The two share the model, the likelihood, the priors and the outputs: only the last step of the
+fit differs, and they differ from CLASSIC in the rest. The inputs are the cube, its mask, the rings (given or
+estimated as in CLASSIC), the free parameters ({ref}`FREE <par-3dfit-free>`) and their priors
+({ref}`PRIORS <par-3dfit-priors>`). The outputs are the best-fit rings with their errors (the median and the 68%
+credible interval of each free parameter for BAYESIAN), the samples, the best model with its maps and
+position–velocity slices, and the plots. In Python the fit is {class}`bbarolo.FitMod3D` with `method="global"` or
+`"bayesian"`; the engine behind it, {class}`bbarolo.Bayesian3DFIT` (methods `sample`, `optimize` and `run`, which
+follows METHOD), also offers a fit of the geometry on the total intensity map (`run_geometry`).
 
 ## The idea
 
-3DFIT fits the rings one at a time, each against the data of its own annulus, with a downhill simplex.
-BAYESIAN3DFIT builds one model of the whole disk from all the rings and treats all the free parameters
+CLASSIC fits the rings one at a time, each against the data of its own annulus, with a downhill simplex.
+GLOBAL and BAYESIAN build one model of the whole disk from all the rings and treats all the free parameters
 together, as one vector $\boldsymbol\theta$ of dimension $n$. By Bayes' theorem
 
 $$
@@ -28,7 +31,8 @@ Nested sampling (Skilling 2006) follows a set of live points drawn from the prio
 lowest likelihood with a new point of higher likelihood at each step, so that it moves through shells of
 decreasing prior volume. It returns weighted samples of the posterior and an estimate of $\ln Z$. The
 credible intervals include the correlations between parameters (e.g. INC and VROT), and a parameter shared
-by all the rings is constrained by the whole disk.
+by all the rings is constrained by the whole disk. METHOD GLOBAL does not follow the posterior: it looks for the
+maximum of $\mathcal L$ (or of the posterior, see *Fit by minimisation* below).
 
 The fit runs in four steps:
 
@@ -36,7 +40,7 @@ The fit runs in four steps:
    of 3DFIT) and the priors;
 2. the setup of the likelihood: the noise of the cube and its correlation, the voxels and the region of
    the likelihood;
-3. the sampling: for each $\boldsymbol\theta$ proposed by the sampler, the rings are updated, the density
+3. the sampling (BAYESIAN) or the minimisation (GLOBAL): for each $\boldsymbol\theta$ proposed by the sampler, the rings are updated, the density
    profile is recomputed if needed, the model cube is built and $\ln\mathcal L$ is evaluated;
 4. the posterior statistics, the best-fit rings and the outputs.
 
@@ -65,16 +69,16 @@ V_\mathrm{disp}(R) = p_1 + p_2 R,
 \Sigma(R) = p_1\,e^{-R/p_2},
 $$
 
-with $p_1$ in km/s for VROT and VDISP and in the units of {ref}`DENS <par-bayesian3dfit-dens>` for DENS,
+with $p_1$ in km/s for VROT and VDISP and in the units of {ref}`DENS <par-3dfit-dens>` for DENS,
 $p_2$ in arcsec for VROT and DENS and in km/s/arcsec for VDISP. In Python, `f.funcs[name]` can be any
 function $g(R, p_1, \dots, p_k)$ of any ring parameter; $k$ is read from its signature.
 
 The ring parameters that are not free keep their initial values. The initial rings are built by the code of
 3DFIT, and are those of 3DFIT for the same parameters: the values given (or read from RINGFILE), the
-estimates of {ref}`GUESSTYPE <par-bayesian3dfit-guesstype>` (the rings, the centre, VSYS, VROT, INC and PA,
+estimates of {ref}`GUESSTYPE <par-3dfit-guesstype>` (the rings, the centre, VSYS, VROT, INC and PA,
 and VDISP from the second moment with GUESSTYPE FIT), and otherwise VDISP 8 km/s, Z0 one pixel, DENS 1 and
 VRAD, VVERT, DVDZ, ZCYL 0. (3DFIT then changes its rings for REVERSE and, with PA free, refines PA and VROT
-with a 2D fit of the velocity field: these are steps of its fit, which BAYESIAN3DFIT does not take.) A point
+with a 2D fit of the velocity field: these are steps of its fit, which GLOBAL and BAYESIAN do not take.) A point
 $\boldsymbol\theta$ for which a free VROT, VDISP, INC, XPOS, YPOS, Z0 or DENS is negative in some ring, or
 RADMAX is negative, has $\mathcal L = 0$. The parameters of a function of radius may be negative (e.g. the
 slope of VDISP).
@@ -85,7 +89,7 @@ The priors are independent, $\pi(\boldsymbol\theta) = \prod_k \pi_k(\theta_k)$. 
 $u_k$ in the unit hypercube and map them to the parameters with the prior transform
 $\theta_k = F_k^{-1}(u_k)$, where $F_k$ is the cumulative distribution of $\pi_k$. A parameter with one
 value per ring has the same prior in every ring. Any continuous distribution of `scipy.stats` can be set
-with {ref}`PRIORS <par-bayesian3dfit-priors>` (in Python, `f.priors[name]`, or a frozen distribution in
+with {ref}`PRIORS <par-3dfit-priors>` (in Python, `f.priors[name]`, or a frozen distribution in
 `f.prior_distr`).
 
 The default priors are uniform, and those of the ring parameters follow the initial rings (given or
@@ -119,7 +123,7 @@ Three priors are part of the algorithm:
   FWHM, where
   the estimated outer radius is the last radius of the initial rings (given or estimated). It is kept within
   the rings: with `radmax` `edge` or `taper` (below), the edge of the disk, it stops at the outer edge of the
-  last ring (the last radius with {ref}`RINGMODE <par-bayesian3dfit-ringmode>` NODES), beyond which the edge
+  last ring (the last radius with {ref}`RINGMODE <par-3dfit-ringmode>` NODES), beyond which the edge
   has no effect; with `radmax=ring`, the last ring itself, it stays beyond the middle of the last two radii.
   When RADMAX is free as the edge of the disk (`radmax=edge` or `taper`, the default being `edge`) and the
   number of rings is estimated (RADII and NRADII not given), the rings are extended, with the same separation
@@ -137,7 +141,7 @@ ring values are interpolated linearly between the radii, with the ring conventio
 each sub-ring is projected and given its line profile, and the cube is convolved with the beam. Compared
 with 3DFIT:
 
-- the models are ANALYTIC by default ({ref}`GALMODTYPE <par-bayesian3dfit-galmodtype>`): the expectation of
+- the models are ANALYTIC by default ({ref}`GALMODTYPE <par-3dfit-galmodtype>`): the expectation of
   the Monte-Carlo model, without its noise. The likelihood is then smooth in $\boldsymbol\theta$, which the
   sampler needs when $\sigma$ is the noise of the data, and a call is faster: on NGC 2403 (16″ pixels), 1.8
   times with a thin disk (Z0 = 0), 1.4 times with Z0 = 10″, whose layer is sampled every 0.75 pixels in
@@ -197,7 +201,7 @@ $$
   \qquad i = 2, \dots, N_\mathrm r .
   $$
 
-- $\alpha$ is `densprof_smooth` of {ref}`LIKEOPTS <par-bayesian3dfit-likeopts>` (default 0.1; 0: no
+- $\alpha$ is `densprof_smooth` of {ref}`LIKEOPTS <par-3dfit-likeopts>` (default 0.1; 0: no
   smoothness term). The factor $\lVert A\rVert^2/\lVert L\rVert^2$ makes the weight $\alpha$ times the mean
   data weight of a ring, independent of the units and of the signal-to-noise ratio. Rings narrower than the
   beam are nearly degenerate once convolved, and without this term noise and non-axisymmetric structure make
@@ -231,7 +235,7 @@ The errors of the profile combine two terms in quadrature, separately for the lo
 ### Noise of the cube
 
 The noise per voxel is measured as the scaled median absolute deviation of the data $d$ outside the mask
-({ref}`MASK <par-bayesian3dfit-mask>`) and the blanks:
+({ref}`MASK <par-3dfit-mask>`) and the blanks:
 
 $$
 \sigma_\mathrm n = 1.4826\;\mathrm{median}\,\bigl|\,d - \mathrm{median}(d)\,\bigr| ,
@@ -283,7 +287,7 @@ $\delta_\mathrm c$ the largest shift of the centre allowed by the priors of XPOS
 pixel size. The model is zero outside its own box, where the squared data still count. The likelihood thus
 does not depend on the box of the model, and the data beyond the outermost ring are not part of the fit.
 
-With {ref}`SIDE <par-bayesian3dfit-side>` A or R, the region holds only the pixels of the approaching or of
+With {ref}`SIDE <par-3dfit-side>` A or R, the region holds only the pixels of the approaching or of
 the receding half of the galaxy: those on that side of the minor axis of the initial rings, through their
 median centre at their median position angle (the pixels on the axis belong to both halves). The half is
 fixed during the sampling, also when the centre or PA are free, so that the likelihood always compares the
@@ -468,9 +472,9 @@ the profiles inside the edge (the ring only sets their slope inside it). Such ri
 is shaded in the plots of the parameters, `print_stats` names them, and in Python `f.in_disk` and
 `f.disk_edge` give them.
 
-## Sampling
+## Sampling (METHOD BAYESIAN)
 
-{ref}`SAMPLER <par-bayesian3dfit-sampler>` chooses the sampler:
+{ref}`SAMPLER <par-3dfit-sampler>` chooses the sampler:
 
 - `NAUTILUSBB` (the default) and `NAUTILUS` (Lange 2023): importance nested sampling with boundaries learnt by
   neural networks. `NAUTILUSBB` is the copy of nautilus 1.0.6 included in BBarolo (`bbarolo.bayesian.nautilus`,
@@ -482,7 +486,7 @@ is shaded in the plots of the parameters, `print_stats` names them, and in Pytho
 - `DYNESTY` (Speagle 2020): the static nested sampler, with multi-ellipsoid bounds (`bound=multi`, Feroz et
   al. 2009) and the other defaults of dynesty; `SAMPLEROPTS dynamic=true` selects the dynamic sampler.
 
-{ref}`SAMPLEROPTS <par-bayesian3dfit-sampleropts>` and {ref}`RUNOPTS <par-bayesian3dfit-runopts>` pass
+{ref}`SAMPLEROPTS <par-3dfit-sampleropts>` and {ref}`RUNOPTS <par-3dfit-runopts>` pass
 options to the sampler and to its run; they are checked against the arguments of the sampler before the
 setup. `nlive` (`n_live` of nautilus), `dlogz` (`dlogz_init` of the dynamic sampler of dynesty,
 $f_\mathrm{live} = 1 - e^{-\mathrm{dlogz}}$ for nautilus) and `seed` (a reproducible sampling) are accepted
@@ -521,9 +525,9 @@ the pixels and is recommended for real galaxies, whose maps have structure that 
 convergence in 20 minutes without it). FRACERR does not suit the map: it weights the faint outer disk. The
 map does not change for PA → PA + 180°, so the prior of PA should cover half a circle.
 
-## Fit by minimisation
+## Fit by minimisation (METHOD GLOBAL)
 
-`SAMPLER OPTIMISE` (or `OPTIMIZE`), in Python `optimize(freepar, method, ...)`, minimises $-\ln\mathcal L$, or with `posterior=True` $-\ln\mathcal L - \ln\pi$
+`METHOD GLOBAL`, in Python `optimize(freepar, minimiser, ...)`, minimises $-\ln\mathcal L$, or with `posterior=True` $-\ln\mathcal L - \ln\pi$
 (the maximum of the posterior), with the log-likelihood, the setup and the priors of `run` (and of
 `run_geometry` with `log_like=f._log_likelihood_geometry`). The search runs in the unit cube of the priors, the
 space of the samplers ($\theta_k = F_k^{-1}(u_k)$, with $F_k$ the cumulative distribution of the prior $k$):
@@ -531,7 +535,7 @@ every parameter has a range of one, the bounds are those of the priors, and log-
 FRACERR) are searched in their logarithm. The search starts from the initial rings (`x0=None`, with SIGMA the
 noise and the centre of the prior for FRACERR and the parameters of the functions of radius), from the centres
 of the priors (`x0="centre"`) or from a vector; `nstart` adds starts drawn from the priors (`seed`) and keeps
-the best. The methods:
+the best. The minimisers:
 
 - `L-BFGS-B` (the default), `TNC`, `SLSQP`, `trust-constr`: quasi-Newton methods, with the gradient by central
   differences of step `step` (default $10^{-3}$ of the range of each prior: the likelihood is rough at much
@@ -546,9 +550,10 @@ the best. The methods:
 whose length is not known in advance, prints the likelihoods computed and the best log-likelihood after 10 seconds
 and then at intervals of a tenth of the time elapsed; the Hessian shows the progress bar (`SHOWBAR`). In parameter
 files,
-`SAMPLEROPTS` gives the arguments of `optimize` (`method`, `x0`, `nstart`, `seed`, `posterior`, `errors`,
-`nsamples`, `step`) and `RUNOPTS` the options of the method; in Python, `run(method="optimise")` (or
-`SAMPLER` given to the object) does the same with `sampler_kwargs` and `run_kwargs`.
+{ref}`MINIMISER <par-3dfit-minimiser>` (alias MINIMIZER) chooses the method, `SAMPLEROPTS` gives the other
+arguments of `optimize` (`x0`, `nstart`, `seed`, `posterior`, `errors`, `nsamples`, `step`) and `RUNOPTS` the options
+of the method; in Python, `run(method="global", minimiser="powell")` (or `METHOD` given to the object) does the same
+with `sampleropts` and `runopts`.
 
 The errors are those of the Laplace approximation: the covariance is the inverse of the Hessian $\mathrm H$ of
 the objective at the best fit, computed by finite differences in the parameters ($n^2+n+1$ likelihoods, and a
@@ -620,8 +625,9 @@ The task writes in {ref}`OUTFOLDER <par-all-outfolder>`, with the prefix
   posteriors, with the 15.87th, 50th and 84.13th percentiles).
 
 With `PLOTS -1` only the rings and the samples are written, no model. With
-{ref}`VERBOSE <par-all-verbose>` the statistics of the posterior are printed. In Python, `run()` writes
-nothing, and `write(outfolder=None, plots=None)` writes these files as the task does. `write_bestmodel`
+{ref}`VERBOSE <par-all-verbose>` the statistics of the posterior are printed. In Python, the task `FitMod3D.run()` writes
+nothing (`Result.write()` writes the files), as does the engine's `run()`, `sample()` and `optimize()`, whose
+`write(outfolder=None, plots=None)` writes these files as the task does. `write_bestmodel`
 writes only the best model with its outputs and the rings; `corner_plot` and `plot_profiles` (VROT, VDISP,
 DENS, INC, PA, Z0, XPOS, YPOS and VSYS against radius, with their errors; not written by `write`) return the
 figures; `print_stats`,
@@ -678,11 +684,11 @@ that changes from sample to sample.
 
 ## Differences from BBarolo 1.8
 
-The C++ BBarolo 1.8 has no BAYESIAN3DFIT task: the Bayesian fit was the module `bayesian.py` of pyBBarolo,
+The C++ BBarolo 1.8 has no METHOD GLOBAL or BAYESIAN: the Bayesian fit was the module `bayesian.py` of pyBBarolo,
 on top of the C++ library. With respect to it:
 
-- the fit runs from parameter files (BAYESIAN3DFIT, FREE, PRIORS, SAMPLER, SAMPLEROPTS, RUNOPTS, LIKEOPTS);
-  in Python, `run` and `run_geometry` replace `compute` and `compute_geometry`;
+- the fit runs from parameter files (3DFIT with METHOD, FREE, PRIORS, SAMPLER, MINIMISER, SAMPLEROPTS, RUNOPTS, LIKEOPTS);
+  in Python, `run` (or `sample`) and `run_geometry` replace `compute` and `compute_geometry`;
 - the models are ANALYTIC by default (they were MC);
 - $\sigma$ is the measured noise when SIGMA is not free (it was 1 in the units of the data), the
   normalisation term counts all the voxels (it was $\tfrac12\ln 2\pi\sigma^2$ once, so a free $\sigma$ had
@@ -727,7 +733,7 @@ on top of the C++ library. With respect to it:
 
 ## In the code
 
-- `bbarolo/bayesian/fitter.py`: `Bayesian3DFIT` (`run`, `optimize`, `run_geometry`, the setup `_setup`, the initial
+- `bbarolo/bayesian/fitter.py`: `Bayesian3DFIT` (`run`, `sample`, `optimize`, `run_geometry`, the setup `_setup`, the initial
   rings and default priors `_init_rings`, `_set_default_priors`, the free parameters `_parse_freepar`,
   `_prior_transform`, `_update_rings`, `_setup_radmax`).
 - `bbarolo/bayesian/likelihood.py`: `_log_likelihood`, `_log_likelihood_geometry`, `_calculate_residuals`,

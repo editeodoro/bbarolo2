@@ -237,14 +237,14 @@ def sampler_options(method, dynamic, sampler_kwargs, run_kwargs):
         bad = sorted(set(opts) - ok)
         if bad:
             kind = (" (dynamic sampler)" if dynamic else " (static sampler)") if method == 'dynesty' else ""
-            raise BBaroloError(f"BAYESIAN3DFIT: {what}: unknown option(s) {', '.join(bad)} of {method}{kind}. "
+            raise BBaroloError(f"3DFIT: {what}: unknown option(s) {', '.join(bad)} of {method}{kind}. "
                                f"Options: {', '.join(sorted(ok))}.")
     if method == 'nautilusbb':          # (its networks take the options of scikit-learn's that apply to them)
         from .nautilus.mlp import MLPRegressor
         ok = set(inspect.signature(MLPRegressor).parameters) - {'random_state'}
         bad = sorted(set(sampler_kwargs.get('neural_network_kwargs') or {}) - ok)
         if bad:
-            raise BBaroloError(f"BAYESIAN3DFIT: SAMPLEROPTS: unknown option(s) {', '.join(bad)} of the networks of "
+            raise BBaroloError(f"3DFIT: SAMPLEROPTS: unknown option(s) {', '.join(bad)} of the networks of "
                                f"nautilusbb (neural_network_kwargs). Options: {', '.join(sorted(ok))}.")
     return sampler_kwargs, run_kwargs
 

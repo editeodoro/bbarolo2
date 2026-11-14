@@ -1,10 +1,10 @@
 """
-Mock datacubes of bi-conical winds with a patchy emission, for the tests of BAYESIANWIND (performance/
+Mock datacubes of bi-conical winds with a patchy emission, for the tests of WINDFIT (performance/
 wind_recovery.py, tests/test_wind.py).
 
 The mocks are built with GalMod3D (bbarolo.galmod3d: a Cartesian grid in the frame of the wind, the fields
 interpolated, the points deposited with their lines), not with the engine of the fit (bbarolo.windmodel), so that
-the fits are not tested on their own model. The geometry is that of GALWIND and BAYESIANWIND: the cones along the
+the fits are not tested on their own model. The geometry is that of GALWIND and WINDFIT: the cones along the
 rotation axis z of a disk of inclination INC and position angle PA (GalMod3D with the same INC and PA), a radial
 velocity v(r), a rotation around the axis and a dispersion.
 

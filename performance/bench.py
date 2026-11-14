@@ -76,8 +76,8 @@ def sampling_case(cube, threads, nlive, max_calls, blas_limit=True, seed=1):
     fitter.sample = timed
     try:
         with contextlib.redirect_stdout(io.StringIO()):
-            f.run(freepar=CASES["ANALYTIC, + inc + pa"][1], threads=threads, method='nautilus', verbose=False,
-                  sampler_kwargs=dict(n_live=nlive, seed=seed), run_kwargs=dict(n_like_max=max_calls))
+            f.sample(freepar=CASES["ANALYTIC, + inc + pa"][1], threads=threads, sampler='nautilus', verbose=False,
+                     sampler_kwargs=dict(n_live=nlive, seed=seed), run_kwargs=dict(n_like_max=max_calls))
     finally:
         fitter.sample = sample
     ncall = int(f.sampler.n_like)

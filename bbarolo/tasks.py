@@ -223,7 +223,14 @@ def _rotation_curve(t):
     return rc
 
 
+def _likefit(c):
+    """3DFIT with METHOD GLOBAL or BAYESIAN (the likelihood; Bayesian3DFIT), not CLASSIC (Galfit)."""
+    return c.pars().gf.METHOD in ("GLOBAL", "BAYESIAN")
+
+
 def _compute_3dfit(c, par):
+    if _likefit(c):
+        return _compute_bayesian(c, par)
     from .galfit import Galfit, ring_table
     fit = Galfit(c)
     fit.galfit()
@@ -242,12 +249,14 @@ def _compute_3dfit(c, par):
     out["rotation_curve"] = _rotation_curve(out["rings"])
     if par.plots >= 0:                           # (PLOTS=-1: no final model)
         _model_results(out, fit.model_outputs("BOTH" if par.debug else fit.Norms(2)), fit.Norms(2).lower())
-    out["galfit"] = fit
+    out["fitter"] = fit
     return out
 
 
 def _write_3dfit(c, par, out):
-    _write_model_outputs(c, par, out, out["galfit"])
+    if _likefit(c):
+        return _write_bayesian(c, par, out)
+    _write_model_outputs(c, par, out, out["fitter"])
 
 
 def _compute_bayesian(c, par):
@@ -256,31 +265,59 @@ def _compute_bayesian(c, par):
     f = run_task(c, par)
     mpar, errors = f._posterior_errors()
     extra = None if f.disk_edge is None else {"indisk": np.asarray(f.in_disk, bool)}
-    out = Outputs(rings=ring_table(f.outri.object, mpar, errors, extra=extra), bayes=f, galfit=f._galfit)
+    out = Outputs(rings=ring_table(f.outri.object, mpar, errors, extra=extra))
+    out["rotation_curve"] = _rotation_curve(out["rings"])
+    out["rings_initial"] = ring_table(f._inri.object)
     # The best model and its outputs, computed when used (by the plots, e.g.); write() computes them again
     out["model"] = Lazy(lambda: list(out["_model_outputs"].model_hdus().values())[0], "HDU")
     out["densprof"] = Lazy(lambda: out["_model_outputs"].densprof(), "Table")
+    if f.useNorm and not f.useBBres:
+        out["densprof_deconvolved"] = Lazy(f.deconvolved_profile_table, "Table")
     out["maps"] = Lazy(lambda: out["_model_outputs"].maps(), "dict of HDUs")
     out["pvs"] = Lazy(lambda: out["_model_outputs"].pvs(), "dict of HDUs")
+    out["samples"] = samples_table(f)
+    cf = f._cube_obj                             # (the mask of the fit: that of the cube of the engine)
+    if cf is not None and cf.mask is not None and cf.mask_header is not None:
+        out["mask"] = cf.mask_hdu()
+    out["fitter"] = f
     out["_model_outputs"] = Lazy(f.model_outputs)
     out["_model_norm"] = Lazy(lambda: list(out["_model_outputs"].models)[0])
     return out
 
 
+def samples_table(f):
+    """The samples of the posterior of a fit with METHOD GLOBAL or BAYESIAN (f: its engine) as a Table, with equal
+    weights: one column per free parameter (names of freepar_names), one row per sample (BAYESIAN: resampled from
+    the weighted samples; GLOBAL: the draws of the Laplace approximation)."""
+    from astropy.table import Table
+    s = getattr(f, "samples_equal", None)
+    if s is None:
+        return None
+    s = np.atleast_2d(np.asarray(s, float))
+    names = [str(n) for n in f.freepar_names]
+    return Table(rows=s, names=names) if len(names) == s.shape[1] else Table(s)
+
+
 def _write_bayesian(c, par, out):
     from .bayesian.task import write_task
-    write_task(out["bayes"], c)
+    write_task(out["fitter"], c)
 
 
 def _compute_bayeswind(c, par):
     from .bayesian.windtask import run_task
     f = run_task(c, par)
-    return Outputs(bayeswind=f, model=f.model)
+    from astropy.table import Table
+    out = Outputs(model=f.model_hdu())
+    out["parameters"] = f.parameters_table()
+    out["shells"] = Table(f.shells_table())
+    out["samples"] = samples_table(f)
+    out["fitter"] = f
+    return out
 
 
 def _write_bayeswind(c, par, out):
     from .bayesian.windtask import write_task
-    write_task(out["bayeswind"], c)
+    write_task(out["fitter"], c)
 
 
 def _compute_galmod(c, par, seed=None):
@@ -442,12 +479,16 @@ def _write_reduce(c, par, out):
 def _compute_bayesslit(c, par):
     from .bayesian.slittask import run_task
     f = run_task(c, par)
-    return Outputs(bayesslit=f, rings=f.ring_table())
+    out = Outputs(rings=f.ring_table())
+    out["model"] = f.model_hdu()
+    out["samples"] = samples_table(f)
+    out["fitter"] = f
+    return out
 
 
 def _write_bayesslit(c, par, out):
     from .bayesian.slittask import write_task
-    write_task(out["bayesslit"], c)
+    write_task(out["fitter"], c)
 
 
 def _compute_ellprof(c, par):
@@ -501,7 +542,7 @@ def _write_rend3d(c, par, out):
 # (name, is it requested?, compute, write), in the order in which BBarolo runs them.
 # p is the Param of the cube (a copy of par, with the output folder and prefix).
 STEPS = [
-    ("CONTSUB", lambda par, p: par.contsub and not par.flagBayesSlit, _compute_contsub, _write_contsub),
+    ("CONTSUB", lambda par, p: par.contsub and not par.flagSlitFit, _compute_contsub, _write_contsub),
     ("CHECKCUBE", lambda par, p: par.checkCube, _compute_checkcube, _write_checkcube),
     ("STATS", lambda par, p: par.flagStats, _compute_stats, _write_stats),
     ("MAKEMASK", lambda par, p: par.makeMask, _compute_makemask, _nothing),
@@ -509,17 +550,16 @@ STEPS = [
     ("SMOOTHSPEC", lambda par, p: par.flagSmoothSpectral, _compute_smoothspec, _write_smoothspec),
     ("SEARCH", lambda par, p: p.se.flagSearch, _compute_search, _write_search),
     ("3DFIT", lambda par, p: p.gf.flagGALFIT, _compute_3dfit, _write_3dfit),
-    ("BAYESIAN3DFIT", lambda par, p: p.gf.flagBAYESIAN, _compute_bayesian, _write_bayesian),
     ("GALMOD", lambda par, p: p.gm.flagGALMOD, _compute_galmod, _write_galmod),
     ("SPACEPAR", lambda par, p: par.flagSpace, _compute_spacepar, _write_spacepar),
     ("GALWIND", lambda par, p: p.gw.flagGALWIND, _compute_galwind, _write_galwind),
-    ("BAYESIANWIND", lambda par, p: p.gw.flagBAYESIAN, _compute_bayeswind, _write_bayeswind),
+    ("WINDFIT", lambda par, p: p.gw.flagWINDFIT, _compute_bayeswind, _write_bayeswind),
     ("2DFIT", lambda par, p: par.flagRing, _compute_2dfit, _write_2dfit),
     ("MAPS", lambda par, p: p.getMaps(), _compute_maps, _write_maps),
     ("PVSLICE", lambda par, p: par.flagPV, _compute_pvslice, _write_pvslice),
     ("REDUCE", lambda par, p: par.getflagReduce() and not (par.flagSmooth or par.flagSmoothSpectral),
      _compute_reduce, _write_reduce),
-    ("BAYESIANSLITFIT", lambda par, p: par.flagBayesSlit, _compute_bayesslit, _write_bayesslit),
+    ("SLITFIT", lambda par, p: par.flagSlitFit, _compute_bayesslit, _write_bayesslit),
     ("ELLPROF", lambda par, p: par.flagEllProf, _compute_ellprof, _write_ellprof),
     ("REND3D", lambda par, p: par.flagRend3D, _compute_rend3d, _write_rend3d),
 ]
@@ -534,7 +574,7 @@ def _run_tasks(par, p):
 def _with_mask_tasks(tasks, p):
     """The tasks, with SEARCH and MAKEMASK when the mask of one of them needs them (their parameters are used)."""
     tasks = list(tasks)
-    if any(t in tasks for t in ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "MAPS", "ELLPROF")):
+    if any(t in tasks for t in ("3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "MAPS", "ELLPROF")):
         mask = str(p.MaskType).upper()
         tasks += [t for t, k in (("SEARCH", "SEARCH"), ("MAKEMASK", "SMOOTH")) if k in mask and t not in tasks]
     return tasks
@@ -563,7 +603,7 @@ def run_steps(c, par, collect=False, write=True):
     """Run all the requested tasks on the cube c (port of the task part of BBcore): each task computes its
     outputs, then (write=True) writes them. With collect=True, return {step name: (Outputs, files written)}."""
     p = c.pars()
-    if par.AUTO and not p.gf.flagBAYESIAN:          # (BBarolo -f cube.fits BAYESIAN3DFIT=true: no 3DFIT)
+    if par.AUTO:                                    # (BBarolo -f cube.fits: 3DFIT, with its METHOD)
         p.gf.flagGALFIT = True
     # all the parameters of the run, in a parameter file in the output folder
     if write and p.outFolder:
@@ -624,7 +664,7 @@ def BBcore(par, collect=False):
     with _logfile(par, outfolder):
         if par.logFile:
             p.showbar = False
-        if par.flagBayesSlit:                    # (a long-slit spectrum, read by the task: not a cube)
+        if par.flagSlitFit:                      # (a long-slit spectrum, read by the task: not a cube)
             out = run_steps(_slit_cube(c, p), par, collect)
             return (out, c) if collect else True
         try:
@@ -641,11 +681,12 @@ def BBcore(par, collect=False):
     return (out, c) if collect else True
 
 
-def _slit_cube(c, p):
-    """The Cube of a BAYESIANSLITFIT run (BBcore): no data, the prefix of the outputs the OBJECT of the slit."""
+def _slit_cube(c, p, hdu=None):
+    """The Cube of a SLITFIT run (BBcore, SlitFit): no data, the prefix of the outputs the OBJECT of the slit (of the
+    file, or of hdu, a slit in memory)."""
     from .header import read_fits_image, object_name
     if p.outPrefix == "":
-        hdr, _ = read_fits_image(p.imageFile, data=False)
+        hdr = hdu.header if hdu is not None else read_fits_image(p.imageFile, data=False)[0]
         p.outPrefix = object_name(hdr.get("OBJECT", "NONE")) or "NONE"
     return c
 
@@ -829,6 +870,8 @@ class Result:
 
     def __init__(self, task, cube=None, par=None, source=None):
         self.task = task
+        # the METHOD of a fit (3DFIT, WINDFIT, SLITFIT: CLASSIC, GLOBAL or BAYESIAN), None for the other tasks
+        self.method = (par.gf.METHOD or None) if (par is not None and task in _kw.FITS) else None
         self.outfolder = None
         self.files = []
         self._cube = cube                 # (the Cube analysed, for write)
@@ -936,7 +979,7 @@ class Result:
 
     def __repr__(self):
         where = f"{len(self.files)} files in {self.outfolder}" if self.outfolder else "in memory, not written"
-        lines = [f"<Result of {self.task}: {where}"]
+        lines = [f"<Result of {self.task}" + (f" (METHOD {self.method})" if self.method else "") + f": {where}"]
         w = max([14] + [len(k) for k in self._keys])
         for k in self._keys:
             d = self._lazy[k][1] + " (computed when used)" if k in self._lazy else self._describe(getattr(self, k))
@@ -1040,7 +1083,7 @@ class Result:
         fig.tight_layout()
         return fig
 
-    # ------------------------------------------------------------------ the plots of 3DFIT and BAYESIAN3DFIT
+    # ------------------------------------------------------------------ the plots of 3DFIT
     def _output(self, key):
         """An output of the tasks run that is not an attribute (a key starting with '_', e.g. _model_outputs)."""
         for _, out in reversed(self._steps):
@@ -1053,8 +1096,7 @@ class Result:
         return from_result(self)
 
     def plot_parameters(self):
-        """The parameters of the rings against radius, with their errors, and the surface density profile (3DFIT,
-        BAYESIAN3DFIT): the plot <prefix>_parameters.pdf of the command line, from the outputs in memory.
+        """The parameters of the rings against radius, with their errors, and the surface density profile (3DFIT): the plot <prefix>_parameters.pdf of the command line, from the outputs in memory.
         Returns a matplotlib Figure (see bbarolo.plots.plot_parameters)."""
         return self._fit3d_plots().parameters()
 
@@ -1064,31 +1106,30 @@ class Result:
         return self._fit3d_plots().asymdrift()
 
     def plot_chanmaps(self, model=None):
-        """Channel maps of the data and of the model (3DFIT, BAYESIAN3DFIT): the plot <prefix>_chanmaps_<norm>.pdf.
+        """Channel maps of the data and of the model (3DFIT): the plot <prefix>_chanmaps_<norm>.pdf.
         model: the name of the model, a key of models ('azim', 'local', 'noise'), or None for model. Returns a
         matplotlib Figure (see bbarolo.plots.plot_chanmaps)."""
         return self._fit3d_plots().chanmaps(model)
 
     def plot_pvs(self, model=None):
         """Position-velocity slices of the data and of the model along the major and minor axes, following the
-        rings (3DFIT, BAYESIAN3DFIT): the plot <prefix>_pv_<norm>.pdf. model: as for plot_chanmaps. Returns a
+        rings (3DFIT): the plot <prefix>_pv_<norm>.pdf. model: as for plot_chanmaps. Returns a
         matplotlib Figure (see bbarolo.plots.plot_pvs)."""
         return self._fit3d_plots().pvs(model)
 
     def plot_pvslices(self, model=None):
-        """Position-velocity slices of the data and of the model at several angles and offsets (3DFIT,
-        BAYESIAN3DFIT): the plot <prefix>_pvslices_<norm>.pdf. model: as for plot_chanmaps. Returns a matplotlib
+        """Position-velocity slices of the data and of the model at several angles and offsets (3DFIT): the plot <prefix>_pvslices_<norm>.pdf. model: as for plot_chanmaps. Returns a matplotlib
         Figure (see bbarolo.plots.plot_pvslices)."""
         return self._fit3d_plots().pvslices(model)
 
     def plot_kinmaps(self, model=None):
-        """The moment maps of the data, of the model and of the residuals (3DFIT, BAYESIAN3DFIT): the plot
+        """The moment maps of the data, of the model and of the residuals (3DFIT): the plot
         <prefix>_maps_<norm>.pdf. model: as for plot_chanmaps (not 'noise'). Returns a matplotlib Figure (see
         bbarolo.plots.plot_kinmaps)."""
         return self._fit3d_plots().kinmaps(model)
 
     def write_allplots(self, outfolder=None):
-        """Write all the plots of 3DFIT or BAYESIAN3DFIT as PDF files in outfolder, drawn from the outputs in memory,
+        """Write all the plots of 3DFIT as PDF files in outfolder, drawn from the outputs in memory,
         with the names of the command line: <prefix>_parameters.pdf, <prefix>_asymmetricdrift.pdf (ADRIFT), and for
         each model <prefix>_chanmaps_<norm>.pdf, _pv_<norm>.pdf, _pvslices_<norm>.pdf and _maps_<norm>.pdf. Nothing
         else is written (write() writes all the outputs, with the plotting scripts). outfolder: by default the
@@ -1130,12 +1171,12 @@ def _result(task, steps, c, par, source=None):
     if "mask" not in res and c.mask is not None and c.mask_header is not None and \
             any(n in steps for n in _MASKED):
         res._set("mask", c.mask_hdu())
-    if any(n in steps for n in ("3DFIT", "GALMOD", "BAYESIAN3DFIT")):
+    if any(n in steps for n in ("3DFIT", "GALMOD")):
         _add_data(res, c)
     return res
 
 
-_MASKED = ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "MAPS", "ELLPROF", "REND3D")
+_MASKED = ("3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "MAPS", "ELLPROF", "REND3D")
 
 
 def _input_copy(task, c, outfolder):
@@ -1304,12 +1345,34 @@ class Task:
                 from .params import ring_value_problem, _RING_KEYS, free_problem
                 if isinstance(v, str) and not isinstance(v, _FromFile):
                     prob = ring_value_problem(k, v) if k in _RING_KEYS else (
-                        free_problem(v, self.TASK) if k == "FREE" and self.TASK in ("3DFIT", "2DFIT") else None)
+                        self._free_problem(v, new) if k == "FREE" else None)
                     if prob:
                         raise BBaroloError(f"{type(self).__name__}: {prob}")
                 self._params[k] = v
         self._check_rings()
         return self
+
+    def _free_problem(self, free, new):
+        """The problem of the value of FREE, checked when it is set for 2DFIT and 3DFIT: for 3DFIT that of METHOD
+        CLASSIC if METHOD is CLASSIC, either syntax if METHOD is not given (run(method=...) may change it), none for
+        GLOBAL and BAYESIAN (checked when the fit starts, with their free parameters). None if acceptable."""
+        from .params import free_problem, bayes_freepar
+        if self.TASK == "2DFIT":
+            return free_problem(free, "2DFIT")
+        if self.TASK != "3DFIT":
+            return None
+        meth = new.get("METHOD", self._params.get("METHOD"))
+        meth = str(meth).strip().upper() if meth not in (None, "") else None
+        if meth in ("GLOBAL", "BAYESIAN"):
+            return None
+        prob = free_problem(free, "3DFIT")
+        if prob and meth is None:
+            try:
+                bayes_freepar(free)
+                return None
+            except ValueError:
+                pass
+        return prob
 
     def _check_rings(self):
         """Ring parameters given as lists must have the same number of values (= NRADII)."""
@@ -1457,7 +1520,13 @@ class Task:
         prm = self._all_params(outfolder=os.path.abspath(of) + "/",
                                fitsfile=self._cube if hdu is None else "in-memory cube")
         par = _checked(build_param(prm))
-        c = self._read_cube(par)
+        if self.TASK == "SLITFIT":                   # (a long-slit spectrum, read by the task: not a cube)
+            from .cube import Cube
+            c = Cube(par=par)
+            _slit_cube(c, c.pars(), hdu)
+        else:
+            c = self._read_cube(par)
+        c._source_hdu = hdu                          # (the cube in memory, for the engines of the fits)
         c.noise_seed = seed
         outs = run_steps(c, par, collect=True, write=False)
         self.result = _result(self.TASK or "MAPS", {n: o for n, (o, _) in outs.items()}, c, par, source=self)
@@ -1514,6 +1583,14 @@ class GalWind(Task):
     TASK = "GALWIND"
 
 
+class WindFit(Task):
+    TASK = "WINDFIT"
+
+
+class SlitFit(Task):
+    TASK = "SLITFIT"
+
+
 class Search(Task):
     TASK = "SEARCH"
 
@@ -1564,9 +1641,17 @@ class MakeMask(Task):
     TASK = "MAKEMASK"
 
 
-_doc(FitMod3D, """Fit a 3D tilted-ring model to a datacube (3DFIT).
+_doc(FitMod3D, """Fit a 3D tilted-ring model to a datacube (3DFIT), with method (the parameter METHOD):
 
-    Result (of run(), in memory):
+      'classic'   (the default) ring by ring, minimising the residuals between model and data (BBarolo's 3DFIT)
+      'global'    all the rings together: the maximum of the likelihood, with the errors of its curvature (the
+                  minimiser: minimiser=, MINIMISER)
+      'bayesian'  the posterior of the parameters, by nested sampling (the sampler: sampler=, SAMPLER)
+
+    'global' and 'bayesian' take the same parameters (FREE, PRIORS, LIKEOPTS, SAMPLEROPTS, RUNOPTS: see
+    bbarolo.help('3DFIT')); their engine is Bayesian3DFIT (res.fitter), for custom likelihoods and more.
+
+    Result (of run(), in memory; method: res.method):
       rings          Table of the final rings at full precision, all of them: radii (arcsec),
                      vrot, vdisp, vrad, vsys (km/s), inc, pa (deg), z0 (arcsec), dens, xpos, ypos
                      (pixels), fitok (False: the fit of the ring failed); with FLAGERRORS, the
@@ -1580,7 +1665,10 @@ _doc(FitMod3D, """Fit a 3D tilted-ring model to a datacube (3DFIT).
       densprof       the observed radial profile (Table, <prefix>_densprof.txt)
       densprof_deconvolved  the profile deconvolved from the beam at the final geometry (Table: sdens_fo
                      with errors, sdens_fo_obs, dens), whose densities build the final model
-      asymdrift (ADRIFT), mask, galfit (the fitting engine)
+      asymdrift (ADRIFT), mask, fitter (the fitting engine: Galfit, or Bayesian3DFIT for 'global' and
+                     'bayesian')
+      'classic' only: rings_stage1, models, asymdrift; 'global' and 'bayesian': samples (Table of the samples of the
+                     posterior, or of the Laplace approximation for 'global'), no rings_stage1
     Methods: plot_rings(), plot_maps(), plot_pv() (matplotlib Figures); write(outfolder) writes the
     files and the PDF plots of the command line. Geometric parameters that are not given are
     estimated, as in BBarolo.
@@ -1589,7 +1677,22 @@ _doc(FitMod3D, """Fit a 3D tilted-ring model to a datacube (3DFIT).
     ...              vsys=132.8, vrot=120, vdisp=8, z0=10, inc=60, pa=123.7,
     ...              free="VROT VDISP", mask="SEARCH")
     >>> res = f.run(threads=4)          # nothing written
-    >>> res.write("out/")               # the files of BBarolo -p""")
+    >>> res.write("out/")               # the files of BBarolo -p
+    >>> res = f.run(method="global", free="VROT VDISP INC_SINGLE PA_SINGLE")""")
+_doc(WindFit, """Fit a bi-conical outflow to a datacube (WINDFIT), with method (the parameter METHOD): 'global' (the
+    default: the maximum of the likelihood, with the errors of its curvature; MINIMISER) or 'bayesian' (the
+    posterior, by nested sampling; SAMPLER). The initial wind as for GALWIND (XPOS, YPOS, VSYS, INC, PA, OPENANG,
+    CONELEN, VWIND), and FREE (required), PRIORS, LIKEOPTS, SAMPLEROPTS, RUNOPTS: see bbarolo.help('WINDFIT').
+
+    Result: model (HDU of the best model), parameters (Table of the free parameters with their errors), shells
+    (Table: VWIND, VDISP, VROT of the shells with errors), samples (Table), fitter (the engine, BayesianWind).""")
+_doc(SlitFit, """Fit the kinematics of a disk to a long-slit spectrum (SLITFIT), with method (the parameter METHOD):
+    'global' (the default: the maximum of the likelihood, with the errors of its curvature; MINIMISER) or
+    'bayesian' (the posterior, by nested sampling; SAMPLER). The first argument is the slit (position x
+    wavelength). SLITWIDTH, BEAM (the seeing), INC and SPECRES are required: see bbarolo.help('SLITFIT').
+
+    Result: rings (Table of the rings with their errors), model (HDU of the best model of the slit), samples
+    (Table), fitter (the engine, BayesianSlitFit).""")
 _doc(GalMod, """Make a 3D model of a disk galaxy on the grid of a datacube (GALMOD).
 
     The rings (single values or one value per ring): RADII (or NRADII and RADSEP), XPOS,
@@ -1698,11 +1801,6 @@ def run(parfile=None, exe=None, stdout=None, **params):
         for name, (mem, files) in out.items():
             d[name] = _result(name, {name: mem}, c, par)
             d[name].files, d[name].outfolder = list(files), p.outFolder
-            if name == "BAYESIAN3DFIT":          # (the files of the samples and of the deconvolved profile)
-                d[name]._set("samples", next((f for f in files if f.endswith("_results.npy")), None))
-                dp = [f for f in files if f.endswith("_densprof_deconvolved.txt")]
-                if dp:
-                    d[name]._set("densprof_deconvolved", read_table(dp[0]))
         results.append(d)
     if all(r is None for r in results):
         raise BBaroloError("BBarolo could not run (see the messages above).")

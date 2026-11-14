@@ -11,9 +11,8 @@ the files of the command line (see {doc}`../user-guide/python`).
 .. currentmodule:: bbarolo
 
 .. autoclass:: FitMod3D
-.. autoclass:: Bayesian3DFIT
-.. autoclass:: BayesianWind
-.. autoclass:: BayesianSlitFit
+.. autoclass:: WindFit
+.. autoclass:: SlitFit
 .. autoclass:: GalMod
 .. autoclass:: GalMod3D
 .. autoclass:: GalWind
@@ -31,6 +30,20 @@ the files of the command line (see {doc}`../user-guide/python`).
 .. autoclass:: Rend3D
 ```
 
+## Engines of the fits
+
+The classes behind the methods GLOBAL and BAYESIAN of the fits, for custom likelihoods and interactive work: `run()`
+follows METHOD, `sample()` samples the posterior and `optimize()` finds the maximum of the likelihood
+(see {doc}`../user-guide/python`).
+
+```{eval-rst}
+.. currentmodule:: bbarolo
+
+.. autoclass:: Bayesian3DFIT
+.. autoclass:: BayesianWind
+.. autoclass:: BayesianSlitFit
+```
+
 ## Results and other tools
 
 ```{eval-rst}
@@ -45,7 +58,7 @@ the files of the command line (see {doc}`../user-guide/python`).
 
 ## Plots
 
-The plots of 3DFIT and BAYESIAN3DFIT: each function draws one from arrays and returns a matplotlib Figure.
+The plots of 3DFIT (every method): each function draws one from arrays and returns a matplotlib Figure.
 `Result.plot_parameters()`, `plot_chanmaps()`, ... (and the same methods of `Bayesian3DFIT`) call them with
 the outputs in memory; the plotting scripts written with the PDF files contain a copy of them.
 

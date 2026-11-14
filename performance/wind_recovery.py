@@ -1,5 +1,5 @@
 """
-Recovery of the parameters of patchy mock winds by BAYESIANWIND: bias, pulls and coverage of the 68% intervals.
+Recovery of the parameters of patchy mock winds by WINDFIT (METHOD BAYESIAN): bias, pulls and coverage of the 68% intervals.
 
 Each fit is a mock of wind_mocks.py (GalMod3D: clumps or a log-normal field in the cones, smoothed noise) fitted with
 BayesianWind (nautilus), with one emission basis of the likelihood (option emission, and marginal or profile). The
@@ -81,9 +81,9 @@ def one_fit(config, seed, basis, threads, nlive, out, neff=2000):
                      **{k: v for k, v in ini.items() if k != "vwind"}, verbose=False,
                      outfolder=os.path.join(HERE, "results", "wind_tmp") + "/")
     t0 = time.time()
-    f.run(freepar=cfg["free"], threads=threads, like_kwargs={**BASES[basis], **cfg.get("like", {})},
-          sampler_kwargs=dict(n_live=nlive, seed=seed),
-          run_kwargs=dict(verbose=False, n_eff=neff), verbose=False)
+    f.sample(freepar=cfg["free"], threads=threads, like_kwargs={**BASES[basis], **cfg.get("like", {})},
+             sampler_kwargs=dict(n_live=nlive, seed=seed),
+             run_kwargs=dict(verbose=False, n_eff=neff), verbose=False)
     res = dict(config=config, seed=seed, basis=basis, time=time.time() - t0, ess=f.ess, ndim=f.ndim,
                names=f.freepar_names, quantiles=f.quantiles.tolist(), snr=tr["snr"], kind=tr["kind"],
                truth={k: (np.asarray(v).tolist() if np.ndim(v) else v) for k, v in tr.items()
@@ -152,7 +152,7 @@ def report(path=RESULTS, out=REPORT):
     groups = {}
     for r in rows:
         groups.setdefault((r["config"], r["basis"]), []).append(r)
-    L = ["# BAYESIANWIND: recovery of patchy mock winds", "",
+    L = ["# WINDFIT: recovery of patchy mock winds", "",
          "Mocks: performance/wind_mocks.py (GalMod3D, an engine independent of the fit; clumps or a log-normal field "
          "in the cones; noise smoothed by the beam, peak S/N 10 unless noted). Fits: BayesianWind with nautilus "
          "(300 live points, 2000 effective samples), the initial wind offset from the truth (INC -5, PA +5, OPENANG "

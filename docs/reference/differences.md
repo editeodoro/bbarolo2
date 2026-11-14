@@ -22,8 +22,8 @@ the links are in [the last section](#differences-by-task).
 
 ## What gives the same results
 
-Every task of 1.8 is available; SLITFIT, which did not work, is replaced by the new task
-{doc}`BAYESIANSLITFIT <../tasks/bayesianslitfit/index>`. The table compares the
+Every task of 1.8 is available; SLITFIT, which did not work, is replaced by the new fit
+{doc}`SLITFIT <../tasks/slitfit/index>`, and 3DFIT has the new methods GLOBAL and BAYESIAN beside the CLASSIC of 1.8. The table compares the
 outputs of the Python code with those of the C++ code on the example cubes of BBarolo (numbers from
 `README_cowork.md` of the repository, measured when the port was made).
 
@@ -50,7 +50,7 @@ the other 3DFIT examples the differences are those between two runs of the C++ c
 
 On simulated galaxies (3304 fits, `performance/` in the repository), ring by ring the two codes differ by
 2% in VROT, 14% in VDISP and 0.9° in INC, the level of the Monte Carlo noise of the models, and their
-statistics are the same. The same fit of NGC 2403 with BAYESIAN3DFIT (3 rings, 4 free parameters, dynesty
+statistics are the same. The same fit of NGC 2403 with METHOD BAYESIAN of 3DFIT (3 rings, 4 free parameters, dynesty
 with 100 live points) gave VROT 103.8 ± 9.7 and 128.8 ± 9.2 km/s in the last two rings with the C++-based
 pyBBarolo, and 103.4 ± 9.5 and 128.3 ± 9.0 km/s with the Python code of that time. A 3DFIT of NGC 2403 took 66.8 s in C++ and 22.3 s in Python, on
 two cores (README_cowork.md; the models and the convolutions of the fit are the part that is faster).
@@ -73,18 +73,18 @@ see the value and the description of a parameter.
 | What | BBarolo 1.8 | BBarolo 2 |
 |---|---|---|
 | Ring convention of the models ({ref}`RINGMODE <par-3dfit-ringmode>`) | the first and last radius are moved by RADSEP/2 | `CENTRED`: each ring is an annulus centred on its radius, with the value of the ring. `RINGMODE SHIFTED` gives the models of 1.8, `NODES` those of GIPSY's GALMOD |
-| Z0 when not given ({ref}`Z0 <par-3dfit-z0>`) | 0, a disk with no thickness | one pixel, a thin disk (3DFIT, BAYESIAN3DFIT, SPACEPAR and the estimates of GUESSTYPE FIT; GALMOD needs Z0) |
+| Z0 when not given ({ref}`Z0 <par-3dfit-z0>`) | 0, a disk with no thickness | one pixel, a thin disk (3DFIT, SPACEPAR and the estimates of GUESSTYPE FIT; GALMOD needs Z0) |
 | Initial estimates ({ref}`GUESSTYPE <par-3dfit-guesstype>`) | one algorithm | `LEGACY` (the default) is that algorithm; `ELLIPSE` corrects it and `FIT` is new |
 | DISTANCE | converts the outputs to kpc | removed (see below) |
 | THREADS | all the cores | the number of cores, at most 16 |
 | VERBOSE | `true` or `false` | also 2; the default (1) prints about 140 lines for the NGC 2403 3DFIT instead of about 400 |
 | Names of the output files | some without the prefix, some with it but with no underscore | every file is `<prefix>_<what>` |
 | A misspelt keyword | ignored | an error if it is very close to a real one (VDSIP), otherwise a warning that proposes the closest keywords |
-| BAYESIAN3DFIT and the Python class `Bayesian3DFIT`: GALMODTYPE | (pyBBarolo) MC models | `ANALYTIC`; the other tasks keep `MC` |
-| BAYESIAN3DFIT: SAMPLER | (pyBBarolo) dynesty | nautilus (`SAMPLER DYNESTY` or `run(method='dynesty')` selects dynesty) |
-| BAYESIAN3DFIT: dynesty | (pyBBarolo) dynamic sampler | static sampler (`SAMPLEROPTS dynamic=true` selects the dynamic one) |
-| BAYESIAN3DFIT: RADMAX | (pyBBarolo) the radius of the last ring | the outer edge of the disk (`LIKEOPTS radmax=edge`; `ring` is the old meaning) |
-| BAYESIAN3DFIT: priors | (pyBBarolo) fixed wide ranges | follow the initial rings (given or estimated) |
+| 3DFIT with METHOD GLOBAL or BAYESIAN, and the Python class `Bayesian3DFIT`: GALMODTYPE | (pyBBarolo) MC models | `ANALYTIC`; the other tasks keep `MC` |
+| METHOD BAYESIAN: SAMPLER | (pyBBarolo) dynesty | nautilus (`SAMPLER DYNESTY` or `sample(sampler='dynesty')` selects dynesty) |
+| METHOD BAYESIAN: dynesty | (pyBBarolo) dynamic sampler | static sampler (`SAMPLEROPTS dynamic=true` selects the dynamic one) |
+| METHOD GLOBAL and BAYESIAN: RADMAX | (pyBBarolo) the radius of the last ring | the outer edge of the disk (`LIKEOPTS radmax=edge`; `ring` is the old meaning) |
+| METHOD GLOBAL and BAYESIAN: priors | (pyBBarolo) fixed wide ranges | follow the initial rings (given or estimated) |
 
 ### RINGMODE
 
@@ -147,7 +147,7 @@ The complete list, with the numbers measured for each change, is in {doc}`change
 
 All the keywords of the C++ parameter table are known to BBarolo 2 except DISTANCE (checked by comparing
 the keywords read by `Arrays/param.cpp` with `bbarolo/keywords.py`). The keywords that are new in BBarolo 2
-are BAYESIAN3DFIT, PRIORS, SAMPLER, SAMPLEROPTS, RUNOPTS and LIKEOPTS (see the Bayesian task), GALMODTYPE,
+are METHOD, MINIMISER, WINDFIT, SLITFIT, PRIORS, SAMPLER, SAMPLEROPTS, RUNOPTS and LIKEOPTS (see 3DFIT with METHOD GLOBAL or BAYESIAN), GALMODTYPE,
 RINGMODE, GUESSTYPE, FREEANGLE and SPECRES.
 
 | Keyword | What happened |
@@ -156,7 +156,7 @@ RINGMODE, GUESSTYPE, FREEANGLE and SPECRES.
 | LINEAR of SMOOTH | removed (above); LINEAR of the models stays |
 | BMAJ, BMIN, BPA, BEAMFWHM, OBMAJ, OBMIN, OBPA | replaced by {ref}`BEAM <par-all-beam>` (the beam of the data, which replaces that of the header) and {ref}`NEWBEAM <par-smooth-newbeam>` (the new beam of SMOOTH and of the SMOOTH masks); the old keywords are errors that name BEAM. In Python, `beam=` is the keyword BEAM, and `Smooth(cube, newbeam=150)` replaces `bmaj=150, bmin=150, bpa=0` |
 | DVDZ of 2DFIT | no longer read; use FREEANGLE |
-| SLITFIT | an error that names BAYESIANSLITFIT, the new task of the fit of long-slit spectra (SLITWIDTH is one of its keywords) |
+| SLITFIT | the new fit of long-slit spectra (METHOD GLOBAL or BAYESIAN; SLITWIDTH is one of its keywords) |
 | NORM `AZIMUTHAL` | accepted before, but used as LOCAL; it is AZIM now |
 | the long forms of SIDE (`APPROACHING`, `RECEDING`, `BOTH`, `APP`, ...) | work in 3DFIT, 2DFIT, SPACEPAR and ELLPROF (1.8 ignored them) |
 | `POLYN` | still accepted, as an alias of REGTYPE (as in C++) |
@@ -172,10 +172,11 @@ smooth`: the bend allowed over a beam, in the units of the parameter); `outfolde
 
 ## New tasks and features
 
-- **BAYESIAN3DFIT** is a task of the parameter files (`BBarolo -p file.par`), with the keywords above. In
-  1.8 the Bayesian fit was the Python module `pyBBarolo.bayesian`, built on the C++ library. See
-  {doc}`../tasks/bayesian3dfit/index`. The likelihood, the priors, the sampler defaults and RADMAX differ
-  from that module: the list is in {doc}`../tasks/bayesian3dfit/algorithm`. Its default sampler,
+- **3DFIT with METHOD GLOBAL or BAYESIAN** is a task of the parameter files (`BBarolo -p file.par`), with the
+  keywords above (METHOD CLASSIC, the default, is the 3DFIT of 1.8: the parameter files of the C++ code run
+  unchanged). In 1.8 the Bayesian fit was the Python module `pyBBarolo.bayesian`, built on the C++ library. See
+  {doc}`../tasks/3dfit/index`. The likelihood, the priors, the sampler defaults and RADMAX differ
+  from that module: the list is in {doc}`../tasks/3dfit/likelihood`. Its default sampler,
   nautilus, is included (`SAMPLER NAUTILUSBB`); the packages dynesty and nautilus-sampler are optional
   (`pip install "bbarolo[bayesian]"`).
 - **GalMod3D** (Python only): model cubes from 3D fields of the density and velocity of the gas, e.g.
@@ -184,7 +185,11 @@ smooth`: the bend allowed over a beam, in the units of the parameter); `outfolde
   (also for GALWIND models, GalMod3D and the fits). See {doc}`../tasks/galmod/algorithm`.
 - **RINGMODE**, **GUESSTYPE**, **SPECRES**, **FREEANGLE**: above.
 - **Deconvolved density profile** in ELLPROF (`<prefix>_ellprof_deconvolved.txt`).
-- **SIDE in BAYESIAN3DFIT**, and `INDISK` in the ring files of BAYESIAN3DFIT.
+- **SIDE with METHOD GLOBAL and BAYESIAN**, and `INDISK` in their ring files.
+- **WINDFIT** (a bi-conical wind) and **SLITFIT** (a long-slit spectrum), new fits with METHOD GLOBAL and BAYESIAN,
+  and the Python classes `WindFit` and `SlitFit`. The names BAYESIAN3DFIT, BAYESIANWIND and BAYESIANSLITFIT of
+  earlier development versions are errors that name the new form (`3DFIT` with `METHOD GLOBAL` or `BAYESIAN`,
+  WINDFIT, SLITFIT).
 - **Errors**: problems in the input raise `bbarolo.BBaroloError` (a `ValueError`) with a message that names
   the parameter; the library never exits the Python session, and the command line exits with code 1.
   Parameters are checked before the run, e.g. unknown names in FREE and a VSYS outside the velocity range
@@ -283,7 +288,7 @@ summary: {doc}`changes` has the details and the size of each change.
 | 3DFIT | A fixed VROT was replaced by that of the 2D fit when PA was free |
 | 3DFIT | RADSEP without NRADII: the extent of the rings scaled with RADSEP |
 | 3DFIT, GALMOD, SPACEPAR | `NORM AZIMUTHAL` was used as LOCAL; a NORM with two values made GALMOD write no model |
-| 3DFIT, BAYESIAN3DFIT | MC models in a box were not crops of the model of the whole cube (the residuals jumped by the Monte Carlo noise) |
+| 3DFIT (every METHOD) | MC models in a box were not crops of the model of the whole cube (the residuals jumped by the Monte Carlo noise) |
 | 3DFIT | `writeModel` switched FLUXCONVERT off and never restored it |
 | GALMOD | `DENSFLUX false` was ignored (the task went through the 3DFIT class, which sets it) |
 | SPACEPAR | The PA and VROT of the given rings were replaced by those of a 2D fit; the models were always normalised LOCAL; FTYPE and WFUNC out of range gave zero residuals |
@@ -307,13 +312,13 @@ summary: {doc}`changes` has the details and the size of each change.
 | ADRIFT | ADRIFTPOL1 < 0 left the dispersion profile uninitialised |
 | Initial estimates | The simplex of the inclination estimate did not keep the folded point (INC above 90°), so the estimate could end at 80° |
 | pyBBarolo | Default `redshift=-1` gave $1/(1+z) = \infty$; `write_bestmodel` called a missing function; `useBBres=True` returned an undefined variable; `verbose=` raised a TypeError; `plot_profiles` failed unless all nine parameters were free; parallel sampling failed with the `spawn` start method of macOS; the wrapper did not skip comment lines of parameter files |
-| BAYESIAN3DFIT | The `lambdas` penalties used the wrong separations; `update()` discarded the priors given as distributions; a negative parameter of a function of radius had zero likelihood; `RUNOPTS dlogz` failed with dynesty's dynamic sampler, and with nautilus gave `f_live = dlogz`; a failed or interrupted sampling left the worker processes running; the initial rings changed during a run |
+| 3DFIT with METHOD GLOBAL or BAYESIAN | The `lambdas` penalties used the wrong separations; `update()` discarded the priors given as distributions; a negative parameter of a function of radius had zero likelihood; `RUNOPTS dlogz` failed with dynesty's dynamic sampler, and with nautilus gave `f_live = dlogz`; a failed or interrupted sampling left the worker processes running; the initial rings changed during a run |
 
 ## Differences by task
 
 The section *Differences from BBarolo 1.8* of the page *how it works* of each task:
-[3DFIT](../tasks/3dfit/algorithm.md#differences-from-bbarolo-18),
-[BAYESIAN3DFIT](../tasks/bayesian3dfit/algorithm.md#differences-from-bbarolo-18),
+[3DFIT, METHOD CLASSIC](../tasks/3dfit/algorithm.md#differences-from-bbarolo-18),
+[3DFIT, METHOD GLOBAL and BAYESIAN](../tasks/3dfit/likelihood.md#differences-from-bbarolo-18),
 [GALMOD](../tasks/galmod/algorithm.md#differences-from-bbarolo-18),
 [GalMod3D](../tasks/galmod3d/algorithm.md#differences-from-bbarolo-18),
 [GALWIND](../tasks/galwind/algorithm.md#differences-from-bbarolo-18),
@@ -333,8 +338,8 @@ The section *Differences from BBarolo 1.8* of the page *how it works* of each ta
 
 ## Not ported
 
-- **SLITFIT**: the task did not work in the C++ code. It is replaced by the new
-  {doc}`BAYESIANSLITFIT <../tasks/bayesianslitfit/index>`.
+- **SLITFIT of 1.8**: the task did not work in the C++ code. It is replaced by the new
+  {doc}`SLITFIT <../tasks/slitfit/index>`, a different fit.
 - **gnuplot output**: removed. All plots are made with matplotlib.
 - **The MPI executable `BBarolo_MPI`**: see above.
 - **The unfinished `BBauto` routine** of the C++ code.

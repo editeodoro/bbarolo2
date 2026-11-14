@@ -93,6 +93,70 @@ def show_bar(fitter):
     return bool(build_param({"SHOWBAR": s}).showbar)
 
 
+def _resets(params):
+    """ Whether changing params resets a fit engine (its rings, model engine, ...): not when they are only the method
+    and the algorithm and its options (METHOD, SAMPLER, MINIMISER, SAMPLEROPTS, RUNOPTS), which do not change the
+    model. """
+    from ..keywords import lookup
+    for k in params:
+        kw = lookup(k)
+        if kw is None or kw.name not in ("METHOD", "SAMPLER", "MINIMISER", "SAMPLEROPTS", "RUNOPTS"):
+            return True
+    return False
+
+
+def fit_method(engine, default):
+    """ The METHOD of a fit engine (Bayesian3DFIT, BayesianWind, BayesianSlitFit): its parameter METHOD, or default;
+    GLOBAL or BAYESIAN (BBaroloError for any other). """
+    from ..bbutils import BBaroloError
+    m = str(engine._params.get("METHOD") or "").strip().upper() or default
+    if m not in ("GLOBAL", "BAYESIAN"):
+        raise BBaroloError(f"{type(engine).__name__}: METHOD {m}: the methods of the engine are GLOBAL and BAYESIAN "
+                           "(METHOD CLASSIC is the 3DFIT of FitMod3D).")
+    return m
+
+
+def global_arguments(engine, defaults, sampler_kwargs, run_kwargs, task):
+    """ The arguments of optimize() for METHOD GLOBAL (run()): minimiser MINIMISER (default L-BFGS-B), the options of
+    SAMPLEROPTS with sampler_kwargs, and those of RUNOPTS with run_kwargs as the options of the minimiser (defaults:
+    the options of the parameters, see _run_defaults; see optimize.global_options). """
+    from .optimize import global_options
+    kw = global_options({**defaults.get("SAMPLEROPTS", {}), **dict(sampler_kwargs or {})},
+                        {**defaults.get("RUNOPTS", {}), **dict(run_kwargs or {})}, task=task)
+    kw["minimiser"] = str(engine._params.get("MINIMISER") or "L-BFGS-B").strip()
+    return kw
+
+
+def task_fit(f, p, task, freepar=None):
+    """ The fit of a task of parameter files (run_task of task.py, windtask.py, slittask.py) with the engine f and the
+    METHOD of p (a checked Param, METHOD set by checkPars): GLOBAL, optimize() with MINIMISER, SAMPLEROPTS and RUNOPTS;
+    BAYESIAN, sample() with SAMPLER (dynesty without its progress line when the progress bars are off, e.g. LOGFILE);
+    in THREADS processes. freepar: the free parameters (None: those of the parameter FREE of f, or the default). """
+    from ..params import bayes_options
+    gf = p.gf
+    verbose = bool(p.verbose)
+    f._task_showbar = p.showbar                   # (off with LOGFILE: the progress bars of METHOD GLOBAL)
+    if gf.METHOD == "GLOBAL":
+        f.optimize(freepar, threads=p.threads, verbose=verbose,
+                   **global_arguments(f, f._run_defaults(), {}, {}, task))
+        return f
+    sampler = gf.SAMPLER.strip().lower()
+    run_kwargs = {}
+    if sampler == "dynesty" and not p.showbar and "print_progress" not in bayes_options(gf.RUNOPTS):
+        run_kwargs["print_progress"] = False
+    f.sample(freepar, sampler=sampler, threads=p.threads, verbose=verbose, run_kwargs=run_kwargs)
+    return f
+
+
+def check_sampler(name, task):
+    """ The name of a sampler of METHOD BAYESIAN ('nautilusbb', 'nautilus' or 'dynesty'; case-insensitive). Raises
+    ValueError for any other. """
+    m = str(name).strip().lower()
+    if m not in ("nautilusbb", "nautilus", "dynesty"):
+        raise ValueError(f"{task}: unknown SAMPLER {str(name).strip()} (NAUTILUSBB, NAUTILUS or DYNESTY)")
+    return m
+
+
 # A function to print only if verbose is True
 vprint = lambda verbose, *args, **kwargs: print(*args, **kwargs) if verbose else None
 

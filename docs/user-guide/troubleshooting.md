@@ -135,7 +135,7 @@ ones load them from the cache. See {doc}`parallel`.
 ### The fit is slow
 
 Set {ref}`THREADS <par-all-threads>`; with the default (all the cores, at most 16) a shared machine may be busy.
-The fits take seconds to a minute, BAYESIAN3DFIT minutes to hours. Plots take a few seconds; `PLOTS false` skips them.
+The fits take seconds to a minute, METHOD BAYESIAN of 3DFIT minutes to hours. Plots take a few seconds; `PLOTS false` skips them.
 
 (ts-numba-cache)=
 ### Strange errors after an update, or after moving the package

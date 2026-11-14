@@ -578,7 +578,7 @@ def test_bayesian_quick(tmp_path):
     f._setup(['vrot', 'vdisp_single'])
     scan = [f._log_likelihood(np.array([80., v, 120., 13.]), sigma=1.) for v in (90., 110., 130.)]
     assert scan[1] > scan[0] and scan[1] > scan[2]
-    f.run(method='dynesty', freepar=['vrot_single', 'vdisp_single'], threads=1, dynamic=False, verbose=False,
+    f.sample(sampler='dynesty', freepar=['vrot_single', 'vdisp_single'], threads=1, dynamic=False, verbose=False,
               sampler_kwargs=dict(nlive=30, rstate=np.random.default_rng(1)), run_kwargs=dict(maxiter=150))
     assert f.params.shape == (2,) and np.all(np.isfinite(f.params))
     assert not f._galfit.par.TWOSTAGE                   # the plots then read rings_final1.txt
@@ -790,13 +790,13 @@ def test_bayesian_noisecorr_and_fracerr(tmp_path):
             g._set_likefactor()
     # the options of the likelihood are in like_kwargs (checked)
     with pytest.raises(TypeError, match="like_kwargs"):
-        f.run(method='dynesty', freepar=['vrot_single'], noisecorr='beam')
+        f.sample(sampler='dynesty', freepar=['vrot_single'], noisecorr='beam')
     for bad in (dict(factor=1.), dict(likemask='mask'), dict(noisecorr=-1), dict(dilation=1)):
         with pytest.raises(ValueError):
-            f.run(method='dynesty', freepar=['vrot_single'], like_kwargs=bad)
+            f.sample(sampler='dynesty', freepar=['vrot_single'], like_kwargs=bad)
     # a short run with both
     pytest.importorskip("dynesty")
-    f.run(method='dynesty', freepar=['vrot_single', 'fracerr'], like_kwargs=dict(noisecorr='measured'), threads=1, dynamic=False,
+    f.sample(sampler='dynesty', freepar=['vrot_single', 'fracerr'], like_kwargs=dict(noisecorr='measured'), threads=1, dynamic=False,
           verbose=False, sampler_kwargs=dict(nlive=30, rstate=np.random.default_rng(1)), run_kwargs=dict(maxiter=150))
     assert f.freepar_names == ['vrot', 'fracerr'] and np.all(np.isfinite(f.params))
     nc = f.noise_correlation
@@ -975,11 +975,11 @@ def test_optimize_gaussian(monkeypatch, capsys):
     assert np.allclose(res.cov, C, rtol=0.01, atol=1e-3 * sd.min() ** 2) and not res.regularised
     assert np.allclose(res.samples.std(axis=0), sd, rtol=0.05) and abs(res.logl) < 1e-4
     for m in ("Powell", "Nelder-Mead", "TNC", "SLSQP", "differential_evolution"):
-        r = optimize(f, {}, th0, method=m, errors=False, seed=1, verbose=False)
+        r = optimize(f, {}, th0, minimiser=m, errors=False, seed=1, verbose=False)
         assert np.all(np.abs(r.x - mu) < 0.1 * sd), m
         assert r.cov is None and r.samples.shape == (1, 3)
     assert method_name("nelder-mead") == "Nelder-Mead" and method_name("lbfgsb") == "L-BFGS-B"
-    with pytest.raises(BBaroloError, match="unknown method"):
+    with pytest.raises(BBaroloError, match="unknown minimiser"):
         method_name("simulated-annealing")
     # the mean beyond the prior: the bound, flagged
     g = _GaussFitter([3., -1., 1200.], C, pri)
@@ -1050,7 +1050,7 @@ def test_bayesian_optimize(tmp_path, capsys):
     assert r._method == "optimize" and np.allclose(r.params, opt.x) and r.optimum.method == "L-BFGS-B"
     assert np.allclose(r.ring_errors('vrot')[0], g.ring_errors('vrot')[0])
     # from the centre of the priors, two starts, without errors (zero), Powell
-    g.optimize(freepar=['vrot', 'vdisp_single'], x0="centre", nstart=2, seed=1, errors=False, method="powell",
+    g.optimize(freepar=['vrot', 'vdisp_single'], x0="centre", nstart=2, seed=1, errors=False, minimiser="powell",
                verbose=False)
     assert len(g.optimum.starts) == 2 and g.optimum.cov is None
     assert np.all(np.abs(g.params - opt.x) < 0.5 * opt.errors)
@@ -1066,7 +1066,7 @@ def test_bayesian_optimize(tmp_path, capsys):
 
 
 def test_bayesian_keywords(capsys):
-    """BAYESIAN3DFIT in parameter files: FREE, PRIORS, SAMPLER, SAMPLEROPTS and RUNOPTS."""
+    """3DFIT with METHOD GLOBAL or BAYESIAN in parameter files: FREE, PRIORS, SAMPLER, SAMPLEROPTS and RUNOPTS."""
     import io
     from bbarolo.params import bayes_freepar, bayes_priors, bayes_options, bayes_name, TASKS_LIST
     from bbarolo import help
@@ -1111,15 +1111,16 @@ def test_bayesian_keywords(capsys):
     assert bayes_likeopts(bayes_value_string("LIKEOPTS", lk)) == lk
     # Param: the values as given, the checks, the printing, the task list and the help
     p = Param()
-    p.readParamString("FITSFILE m.fits\nBAYESIAN3DFIT true\n3DFIT true\nFREE VROT INC_SINGLE\n"
+    p.readParamString("FITSFILE m.fits\n3DFIT true\nMETHOD bayesian\nFREE VROT INC_SINGLE\n"
                       "PRIORS inc=(uniform,40,40)\nSAMPLER nautilus\n")
-    assert p._given["FREE"] == "VROT INC_SINGLE" and p.gf.flagBAYESIAN and p.gf.SAMPLER == "NAUTILUS"
-    assert p.checkPars() and not p.gf.flagGALFIT                # 3DFIT turned off
-    assert "Turning off 3DFIT" in capsys.readouterr().out
+    assert p._given["FREE"] == "VROT INC_SINGLE" and p.gf.flagGALFIT and p.gf.SAMPLER == "NAUTILUS"
+    assert p.checkPars() and p.gf.METHOD == "BAYESIAN"
+    capsys.readouterr()
     s = str(p)
-    assert "[BAYESIAN3DFIT]  =  true" in s and "inc=(uniform,40,40)" in s and "[3DFIT]" not in s
-    assert "[NORM]" not in s and "[NOISERMS]" not in s and "VROT INC_SINGLE" in s
-    # FREE is optional: the default of BAYESIAN3DFIT (not that of 3DFIT)
+    assert "[METHOD]  =  BAYESIAN" in s and "inc=(uniform,40,40)" in s and "[3DFIT]  =  true" in s
+    assert "[NORM]" not in s and "[NOISERMS]" not in s and "VROT INC_SINGLE" in s and "[DELTAINC]" not in s
+    assert "[SAMPLER]" in s and "[MINIMISER]" not in s
+    # FREE is optional: the default of METHOD BAYESIAN (not that of CLASSIC)
     p.set("free", None)
     assert "FREE" not in p._given and p.gf.FREE == "VROT VDISP INC PA"
     assert p.checkPars() and "FREE" not in capsys.readouterr().out
@@ -1127,21 +1128,23 @@ def test_bayesian_keywords(capsys):
     assert p.checkPars()
     capsys.readouterr()
     st = io.StringIO()
-    Param().printDefaults(st, "BAYESIAN3DFIT")
-    assert ("[FREE]  =  VROT VDISP XPOS_SINGLE YPOS_SINGLE VSYS_SINGLE INC_SINGLE PA_SINGLE Z0_SINGLE RADMAX "
-            "FRACERR" in st.getvalue() and "[NORM]" not in st.getvalue())
+    Param().printDefaults(st, "3DFIT")
+    assert ("(GLOBAL, BAYESIAN) Parameters to be fitted" in st.getvalue() and "[FREE]  =  VROT VDISP XPOS_SINGLE "
+            "YPOS_SINGLE VSYS_SINGLE INC_SINGLE PA_SINGLE Z0_SINGLE RADMAX FRACERR" in st.getvalue())
     p = Param()
-    p.readParamString("FITSFILE m.fits\nBAYESIAN3DFIT true\nSAMPLER emcee\nFREE VROT INC_FUNC\n"
+    p.readParamString("FITSFILE m.fits\n3DFIT true\nMETHOD BAYESIAN\nSAMPLER emcee\nFREE VROT INC_FUNC\n"
                       "PRIORS vrot=(xx,1)\nSAMPLEROPTS nlive\nLIKEOPTS factor=1\n")
     assert not p.checkPars()
     out = capsys.readouterr().out
     assert all(k in out for k in ("SAMPLER EMCEE", "FREE: INC_FUNC", "PRIORS: vrot", "SAMPLEROPTS: cannot",
                                   "LIKEOPTS: unknown option 'factor'"))
-    assert "BAYESIAN3DFIT" in [t[0] for t in TASKS_LIST]
-    help("BAYESIAN3DFIT")
+    names = [t[0] for t in TASKS_LIST]
+    assert "WINDFIT" in names and "SLITFIT" in names and not any(n.startswith("BAYESIAN") for n in names)
+    help("3DFIT")
     out = capsys.readouterr().out
     assert "SAMPLER" in out and "PRIORS" in out and "RUNOPTS" in out and "VVERT" in out
-    assert "\n  NORM " not in out and "\n  NOISERMS " not in out
+    assert "With METHOD CLASSIC only:" in out and "With METHOD BAYESIAN only:" in out
+    assert out.index("NORM ") > out.index("With METHOD CLASSIC only:")
 
 
 def _mock_cube(tmp_path, name="mock"):
@@ -1163,27 +1166,33 @@ def _mock_cube(tmp_path, name="mock"):
 
 
 def test_bayesian_optimise_task(tmp_path, capsys):
-    """SAMPLER OPTIMISE (or OPTIMIZE) in parameter files: the checks of SAMPLEROPTS (the arguments of optimize) before
-    the run, BBarolo -p (the optimisation with the method of SAMPLEROPTS and the options of RUNOPTS, the statistics, the
-    outputs with <prefix>_optimize_results.npy), and the same as the default of Bayesian3DFIT.run() in Python; an
-    option that the method does not know is an error."""
+    """METHOD GLOBAL in parameter files: the checks of MINIMISER and of SAMPLEROPTS (the arguments of optimize) before
+    the run, BBarolo -p (the optimisation with MINIMISER and the options of RUNOPTS, the statistics, the
+    outputs with <prefix>_optimize_results.npy), and the same with METHOD GLOBAL in Bayesian3DFIT.run() in Python; an
+    option that the minimiser does not know is an error."""
     from bbarolo import Bayesian3DFIT
     from bbarolo.cli import main
     from bbarolo.bbutils import BBaroloError
     p = Param()
-    p.readParamString("FITSFILE m.fits\nBAYESIAN3DFIT true\nSAMPLER optimize\nSAMPLEROPTS method=nelder-mead nstart=2\n")
-    assert p.checkPars(quiet=True) and p.gf.SAMPLER == "OPTIMISE"
-    for opts, msg in (("nlive=20", "unknown option(s) nlive of SAMPLER OPTIMISE"), ("method=annealing",
-                                                                                     "unknown method 'annealing'")):
+    p.readParamString("FITSFILE m.fits\n3DFIT true\nMETHOD global\nMINIMIZER nelder-mead\nSAMPLEROPTS nstart=2\n")
+    assert p.checkPars(quiet=True) and p.gf.METHOD == "GLOBAL" and p.gf.MINIMISER == "nelder-mead"
+    for opts, msg in (("SAMPLEROPTS nlive=20", "SAMPLEROPTS: unknown option(s) nlive of METHOD GLOBAL"),
+                      ("SAMPLEROPTS method=powell", "SAMPLEROPTS: unknown option(s) method of METHOD GLOBAL (the "
+                                                     "minimiser is MINIMISER)"),
+                      ("MINIMISER annealing", "MINIMISER: unknown minimiser 'annealing'")):
         p = Param()
-        p.readParamString(f"FITSFILE m.fits\nBAYESIAN3DFIT true\nSAMPLER OPTIMISE\nSAMPLEROPTS {opts}\n")
+        p.readParamString(f"FITSFILE m.fits\n3DFIT true\nMETHOD GLOBAL\n{opts}\n")
         assert not p.checkPars()
-        assert f"BAYESIAN3DFIT error: SAMPLEROPTS: {msg}" in capsys.readouterr().out
+        assert f"3DFIT error: {msg}" in capsys.readouterr().out
+    # SAMPLER OPTIMISE is gone (an unknown sampler with METHOD BAYESIAN)
+    p = Param()
+    p.readParamString("FITSFILE m.fits\n3DFIT true\nMETHOD BAYESIAN\nSAMPLER OPTIMISE\n")
+    assert not p.checkPars() and "unknown SAMPLER OPTIMISE (NAUTILUSBB, NAUTILUS or DYNESTY)" in capsys.readouterr().out
     fn = _mock_cube(tmp_path)
     par = tmp_path / "opt.par"
-    par.write_text(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/cli\nBAYESIAN3DFIT true\nNRADII 4\nRADSEP 40\nXPOS 31.5\n"
-                   "YPOS 31.5\nVSYS 0\nVROT 120\nVDISP 15\nZ0 0\nINC 60\nPA 45\nMASK SEARCH\nGALMODTYPE ANALYTIC\n"
-                   "LINEAR 0\nFREE VROT_SINGLE VDISP_SINGLE INC_SINGLE\nSAMPLER OPTIMISE\nSAMPLEROPTS method=Powell\n"
+    par.write_text(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/cli\n3DFIT true\nMETHOD GLOBAL\nNRADII 4\nRADSEP 40\n"
+                   "XPOS 31.5\nYPOS 31.5\nVSYS 0\nVROT 120\nVDISP 15\nZ0 0\nINC 60\nPA 45\nMASK SEARCH\n"
+                   "GALMODTYPE ANALYTIC\nLINEAR 0\nFREE VROT_SINGLE VDISP_SINGLE INC_SINGLE\nMINIMISER Powell\n"
                    "RUNOPTS maxiter=50\nTHREADS 2\nPLOTS false\n")
     assert main(["-p", str(par)]) == 0
     out = capsys.readouterr().out
@@ -1195,18 +1204,106 @@ def test_bayesian_optimise_task(tmp_path, capsys):
     g.load_results(str(cli / "MOCK_optimize_results.npy"))
     assert g._method == "optimize" and g.optimum.method == "Powell" and 140 < g.params[0] < 160
     assert abs(g.params[2] - 60.) < 2.
-    # Python: SAMPLER as the default of run(), SAMPLEROPTS its arguments
-    h = Bayesian3DFIT.from_parfile(str(par), sampler="optimise", sampleropts="method=tnc errors=false",
+    # Python: METHOD GLOBAL in run() (the engine and FitMod3D), MINIMISER, SAMPLEROPTS its arguments
+    h = Bayesian3DFIT.from_parfile(str(par), minimiser="tnc", sampleropts="errors=false",
                                    runopts="maxfun=40", outfolder=str(tmp_path / "py"))
     h.run(verbose=False)
     assert h._method == "optimize" and h.optimum.method == "TNC" and h.optimum.cov is None
     assert np.all(np.abs(h.params - g.params) < 1.)
     with pytest.raises(BBaroloError, match="Unknown solver options: maxfunn"):
         h.run(run_kwargs=dict(maxfunn=40), verbose=False)
+    from bbarolo import FitMod3D
+    r = FitMod3D.from_parfile(str(par), minimiser="tnc", sampleropts="errors=false", runopts="maxfun=40",
+                              verbose=False).run()
+    assert r.method == "GLOBAL" and isinstance(r.fitter, Bayesian3DFIT) and r.fitter.optimum.method == "TNC"
+    assert np.allclose(r.fitter.params, h.params)
+    assert "(METHOD GLOBAL)" in repr(r) and len(r.samples) == 1 and r.samples.colnames == r.fitter.freepar_names
+
+
+def test_fit_method(tmp_path, capsys):
+    """METHOD of the fits: CLASSIC (3DFIT), GLOBAL (WINDFIT, SLITFIT) by default, checked, one per run; the old tasks
+    BAYESIAN3DFIT, BAYESIANWIND and BAYESIANSLITFIT are errors that name the new form; a keyword of another method
+    gives a warning; the engines follow METHOD; FitMod3D(method=...) fits a cube in memory with the likelihood."""
+    from bbarolo import FitMod3D, Bayesian3DFIT, BBaroloError
+    wind = "XPOS 1\nYPOS 1\nVSYS 0\nINC 60\nPA 30\nOPENANG 60\nVWIND 200\nCONELEN 100\nFREE VWIND_SINGLE\n"
+    slit = "INC 60\nSLITWIDTH 1\nBEAM 1.5\n"
+    for task, more, method in (("3DFIT", "", "CLASSIC"), ("WINDFIT", wind, "GLOBAL"), ("SLITFIT", slit, "GLOBAL")):
+        p = Param()
+        p.readParamString(f"FITSFILE m.fits\n{task} true\n{more}")
+        assert p.checkPars(quiet=True) and p.gf.METHOD == method, task
+    p = Param()
+    p.readParamString("FITSFILE m.fits\nAUTO true\nMETHOD Bayesian\n")
+    assert p.checkPars(quiet=True) and p.gf.METHOD == "BAYESIAN"
+    p = Param()
+    p.readParamString("FITSFILE m.fits\n3DFIT true\nMETHOD sampling\n")
+    assert not p.checkPars() and "3DFIT error: unknown METHOD SAMPLING (CLASSIC, GLOBAL or BAYESIAN)" in \
+        capsys.readouterr().out
+    # the old tasks: errors that name the new form, in parameter files and in Python
+    for old, new in (("BAYESIAN3DFIT", "3DFIT with METHOD GLOBAL or BAYESIAN"), ("BAYESIANWIND", "WINDFIT"),
+                     ("BAYESIANSLITFIT", "SLITFIT")):
+        with pytest.raises(BBaroloError, match=f"{old} is no longer a parameter: {new}"):
+            Param().readParamString(f"FITSFILE m.fits\n{old} true\n")
+    with pytest.raises(BBaroloError, match="BAYESIAN3DFIT is no longer a parameter"):
+        FitMod3D(N2403, bayesian3dfit=True)
+    # a keyword of another method: a warning (not when another task of the run uses it)
+    for text, warn in (("METHOD CLASSIC\nPRIORS inc=(norm,60,5)\n",
+                        "PRIORS is not used by METHOD CLASSIC (only by METHOD GLOBAL or BAYESIAN)"),
+                       ("METHOD GLOBAL\nDELTAINC 10\nTWOSTAGE false\n", "DELTAINC is not used by METHOD GLOBAL"),
+                       ("METHOD GLOBAL\nSAMPLER dynesty\n", "SAMPLER is not used by METHOD GLOBAL"),
+                       ("METHOD BAYESIAN\nMINIMISER powell\n", "MINIMISER is not used by METHOD BAYESIAN"),
+                       ("METHOD BAYESIAN\nFTYPE 1\nWFUNC 0\nSAMPLER dynesty\nPRIORS inc=(norm,60,5)\n", None),
+                       ("METHOD GLOBAL\nSPACEPAR true\nSTARTRAD 1\n", None)):
+        p = Param()
+        p.readParamString("FITSFILE m.fits\n3DFIT true\n" + text)
+        assert p.checkPars()
+        out = capsys.readouterr().out
+        assert (warn in out) if warn else ("is not used by METHOD" not in out), text
+    # the parameter file of a run records METHOD, and the defaults of its method
+    p = Param()
+    p.readParamString("FITSFILE m.fits\n3DFIT true\nMETHOD GLOBAL\n")
+    assert p.checkPars(quiet=True)
+    lines = {ln.split()[0]: ln.split()[1:] for ln in p.to_parfile(["3DFIT"]).splitlines() if ln and ln[0] != "/"}
+    assert lines["METHOD"] == ["GLOBAL"] and lines["GALMODTYPE"] == ["ANALYTIC"] and lines["MINIMISER"] == ["L-BFGS-B"]
+    assert "DELTAINC" not in lines and "SAMPLER" not in lines
+    p = Param()
+    p.readParamString("FITSFILE m.fits\nSEARCH true\n3DFIT true\n")
+    assert p.checkPars(quiet=True)
+    lines = {ln.split()[0]: ln.split()[1:] for ln in p.to_parfile(["3DFIT"]).splitlines() if ln and ln[0] != "/"}
+    assert lines["METHOD"] == ["CLASSIC"] and lines["GALMODTYPE"] == ["MC"] and "PRIORS" not in lines
+    # the engine: run() follows METHOD (BAYESIAN by default), CLASSIC is not one of its methods
+    f = Bayesian3DFIT(_mock_cube(tmp_path), nradii=4, radsep=40, xpos=31.5, ypos=31.5, vsys=0, vrot=120, vdisp=15,
+                      z0=0, inc=60, pa=45, mask="SEARCH", linear=0, outfolder=str(tmp_path / "eng") + "/")
+    inri = f._inri
+    with pytest.raises(BBaroloError, match="METHOD CLASSIC"):
+        f.run(method="classic", freepar=["vrot_single"], verbose=False)
+    f.run(method="global", freepar=["vrot_single"], sampleropts="errors=false", verbose=False)
+    assert f._method == "optimize" and f.optimum.method == "L-BFGS-B" and f._inri is inri   # (rings not reset)
+    # FitMod3D with the likelihood, on a cube in memory (an HDU)
+    from astropy.io import fits
+    hdu = fits.open(str(tmp_path / "mock.fits"))[0]
+    r = FitMod3D(hdu, nradii=4, radsep=40, xpos=31.5, ypos=31.5, vsys=0, vrot=120, vdisp=15, z0=0, inc=60, pa=45,
+                 mask="SEARCH", linear=0, free="VROT_SINGLE", sampleropts="errors=false", verbose=False,
+                 threads=1).run(method="global")
+    assert r.method == "GLOBAL" and isinstance(r.fitter, Bayesian3DFIT) and len(r.rings) == 4
+    assert np.allclose(r.rings["vrot"], f.outri.r["vrot"])
+    assert {"rings", "rotation_curve", "rings_initial", "model", "densprof", "densprof_deconvolved", "maps", "pvs",
+            "samples", "fitter", "data", "residual", "mask"} <= set(r.keys())
+    assert r.residual.data.shape == hdu.data.shape and "rings_stage1" not in r
+    # FREE with the names of GLOBAL and BAYESIAN (SIGMA, NAME_SINGLE) is accepted with those methods only
+    # (also without METHOD, which run() may give; with METHOD CLASSIC, an error when it is set)
+    FitMod3D(hdu, method="bayesian", free="VROT VDISP_SINGLE SIGMA")
+    FitMod3D(hdu, free="VROT VDISP_SINGLE SIGMA")
+    with pytest.raises(BBaroloError, match="SIGMA"):
+        FitMod3D(hdu, method="classic", free="VROT VDISP_SINGLE SIGMA")
+    with pytest.raises(BBaroloError, match="FOO"):
+        FitMod3D(hdu, free="VROT FOO")
+    r2 = FitMod3D(hdu, nradii=4, radsep=40, xpos=31.5, ypos=31.5, vsys=0, vrot=120, vdisp=15, z0=0, inc=60, pa=45,
+                  mask="SEARCH", linear=0, free="VROT", twostage=False, verbose=False, threads=1).run()
+    assert r2.method == "CLASSIC" and r2.fitter.__class__.__name__ == "Galfit" and "samples" not in r2
 
 
 def test_bayesian_task(tmp_path, capsys):
-    """The BAYESIAN3DFIT task of parameter files: BBarolo -p (the samples, the outputs, the
+    """3DFIT with METHOD BAYESIAN in parameter files: BBarolo -p (the samples, the outputs, the
     statistics and the plots), bbarolo.run and Bayesian3DFIT.from_parfile."""
     pytest.importorskip("dynesty")
     from bbarolo import Bayesian3DFIT
@@ -1215,8 +1312,9 @@ def test_bayesian_task(tmp_path, capsys):
     import bbarolo
     fn = _mock_cube(tmp_path)
     par = tmp_path / "bbb.par"
-    par.write_text(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/cli\nBAYESIAN3DFIT true\nNRADII 4\nRADSEP 40\nXPOS 31.5\n"
-                   "YPOS 31.5\nVSYS 0\nVROT 120\nVDISP 15\nZ0 0\nINC 60\nPA 45\nMASK SEARCH\nGALMODTYPE ANALYTIC\n"
+    par.write_text(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/cli\n3DFIT true\nMETHOD BAYESIAN\nNRADII 4\nRADSEP 40\n"
+                   "XPOS 31.5\nYPOS 31.5\nVSYS 0\nVROT 120\nVDISP 15\nZ0 0\nINC 60\nPA 45\nMASK SEARCH\n"
+                   "GALMODTYPE ANALYTIC\n"
                    "LINEAR 0\nFREE VROT_SINGLE VDISP_SINGLE\nPRIORS vrot=(uniform,100,100) vdisp=(uniform,1,30)\n"
                    "SAMPLER DYNESTY\nSAMPLEROPTS nlive=20 dynamic=false seed=2\nRUNOPTS dlogz=1\nTHREADS 1\nPLOTS true\n"
                    "LIKEOPTS likemask=dilated dilation=1,3 noisecorr=measured smooth=(vrot=5, vdisp=3)\n")
@@ -1228,8 +1326,8 @@ def test_bayesian_task(tmp_path, capsys):
     f = _task_fitter(c, p)
     assert np.array_equal(f._cube_obj.array, c.array) and np.allclose(f._inri.r['radii'], [20, 60, 100, 140])
     assert f.priors['vrot'] == dict(name='uniform', loc=100., scale=100.)
-    assert not any(k in f._params for k in ("FITSFILE", "BAYESIAN3DFIT", "3DFIT"))
-    assert f._par.gf.flagGALFIT and not f._par.gf.flagBAYESIAN and f._par.gf.FREE == "VROT VDISP INC PA"
+    assert not any(k in f._params for k in ("FITSFILE", "3DFIT")) and f._params["METHOD"] == "BAYESIAN"
+    assert f._par.gf.flagGALFIT and f._par.gf.METHOD == "CLASSIC" and f._par.gf.FREE == "VROT VDISP INC PA"
     assert f._run_defaults()['FREE'] == ['vrot_single', 'vdisp_single']
     assert f._run_defaults()['LIKEOPTS']['smooth'] == dict(vrot=5., vdisp=3.)
     # the command line
@@ -1256,19 +1354,22 @@ def test_bayesian_task(tmp_path, capsys):
     capsys.readouterr()
     # bbarolo.run (the same parameters, quiet, no plots): a Result with the fitter
     res = bbarolo.run(str(par), outfolder=str(tmp_path / "run"), verbose=False, plots=False,
-                      runopts="maxiter=40", free="vrot_single Disp_Single")["BAYESIAN3DFIT"]
-    assert isinstance(res.bayes, Bayesian3DFIT) and len(res.rings) == 4 and "e_vrot1" in res.rings.colnames
-    assert res.bayes.freepar_names == ['vrot', 'vdisp']
-    assert res.samples.endswith("MOCK_dynesty_results.npy") and len(res.densprof_deconvolved) == 4
+                      runopts="maxiter=40", free="vrot_single Disp_Single")["3DFIT"]
+    assert isinstance(res.fitter, Bayesian3DFIT) and len(res.rings) == 4 and "e_vrot1" in res.rings.colnames
+    assert res.fitter.freepar_names == ['vrot', 'vdisp'] and res.method == "BAYESIAN"
+    assert res.samples.colnames == ['vrot', 'vdisp'] and len(res.densprof_deconvolved) == 4
+    assert np.allclose(res.densprof_deconvolved["dens_model"], res.rings["dens"])
+    assert any(x.endswith("MOCK_dynesty_results.npy") for x in res.files)
+    assert len(res.rotation_curve) == 4 and len(res.rings_initial) == 4
     assert not any(x.endswith(".pdf") for x in res.files) and capsys.readouterr().out.strip() == ""
     # from_parfile: the rings of the file; FREE, SAMPLER, SAMPLEROPTS, RUNOPTS: the defaults of run()
     h = Bayesian3DFIT.from_parfile(str(par), sampler="nautilus")
     assert np.allclose(h._inri.r['vrot'], 120) and h._run_defaults()['SAMPLER'] == 'nautilus'
     assert h.get("priors").startswith("vrot=(uniform") and h.priors['vdisp']['scale'] == 30.
-    with pytest.raises(ValueError, match="BAYESIAN3DFIT: FREE"):
+    with pytest.raises(ValueError, match="3DFIT: FREE"):
         h.update(free="VROT_P1")
     with pytest.raises(ValueError, match="another task"):
-        h.update(**{"3dfit": True})
+        h.update(windfit=True)
     h.update(priors="inc=(norm,60,5)")
     assert h.priors['inc'] == dict(name='norm', loc=60., scale=5.) and h.priors['vrot']['loc'] == 100.
     # a prior changed after a run is used by the next run; a distribution given in prior_distr is kept
@@ -1756,8 +1857,8 @@ def test_fft_kernel_cache_is_bounded():
 
 @needs_data
 def test_bayesian_default_analytic(tmp_path):
-    """Bayesian3DFIT and BAYESIAN3DFIT use ANALYTIC models by default; a GALMODTYPE that is given is
-    kept. 3DFIT keeps MC."""
+    """Bayesian3DFIT and 3DFIT with METHOD GLOBAL or BAYESIAN use ANALYTIC models by default; a GALMODTYPE that is
+    given is kept. METHOD CLASSIC keeps MC."""
     from bbarolo import FitMod3D
     from bbarolo.bayesian import Bayesian3DFIT
     kw = dict(radii=[100, 200], xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10, inc=60, pa=123.7, z0=10,
@@ -1766,8 +1867,8 @@ def test_bayesian_default_analytic(tmp_path):
     assert Bayesian3DFIT(N2403, galmodtype="MC", **kw)._make_par().galmodtype == "MC"
     assert FitMod3D(N2403, **kw).par.galmodtype == "MC"
     par = tmp_path / "b.par"
-    par.write_text(f"FITSFILE {N2403}\nBAYESIAN3DFIT true\nFREE VROT\nRADII 100 200\nXPOS 77\nYPOS 77\nVSYS 132.8\n"
-                   "VROT 100\nVDISP 10\nINC 60\nPA 123.7\nZ0 10\n")
+    par.write_text(f"FITSFILE {N2403}\n3DFIT true\nMETHOD BAYESIAN\nFREE VROT\nRADII 100 200\nXPOS 77\nYPOS 77\n"
+                   "VSYS 132.8\nVROT 100\nVDISP 10\nINC 60\nPA 123.7\nZ0 10\n")
     assert Bayesian3DFIT.from_parfile(str(par))._make_par().galmodtype == "ANALYTIC"
     par.write_text(par.read_text() + "GALMODTYPE MC\n")
     assert Bayesian3DFIT.from_parfile(str(par))._make_par().galmodtype == "MC"
@@ -2110,13 +2211,13 @@ def test_bayesian_nautilusbb(tmp_path, capsys, monkeypatch):
     from bbarolo.bayesian import sampling
     from bbarolo.bayesian import nautilus as nautilusbb
     assert Param().gf.SAMPLER == "NAUTILUSBB"
-    for s in ("nautilusbb", "NAUTILUS", "dynesty", "optimise"):
+    for s in ("nautilusbb", "NAUTILUS", "dynesty"):
         p = Param()
-        p.readParamString(f"FITSFILE m.fits\nBAYESIAN3DFIT true\nSAMPLER {s}\n")
+        p.readParamString(f"FITSFILE m.fits\n3DFIT true\nMETHOD BAYESIAN\nSAMPLER {s}\n")
         assert p.checkPars(quiet=True)
     p = Param()
-    p.readParamString("FITSFILE m.fits\nBAYESIAN3DFIT true\nSAMPLER emcee\n")
-    assert not p.checkPars() and "(NAUTILUSBB, NAUTILUS, DYNESTY or OPTIMISE)" in capsys.readouterr().out
+    p.readParamString("FITSFILE m.fits\n3DFIT true\nMETHOD BAYESIAN\nSAMPLER emcee\n")
+    assert not p.checkPars() and "(NAUTILUSBB, NAUTILUS or DYNESTY)" in capsys.readouterr().out
     # without the packages of the samplers (and with folders of their names, as tests/nautilusbb here): NAUTILUSBB
     # needs none, NAUTILUS needs nautilus-sampler
     import importlib.util
@@ -2126,12 +2227,12 @@ def test_bayesian_nautilusbb(tmp_path, capsys, monkeypatch):
                         else find_spec(name, *a))
     wind = ("FREE VWIND_SINGLE\nXPOS 1\nYPOS 1\nVSYS 0\nINC 60\nPHI 0\nOPENANG 30\nVWIND 100\n"
             "CONELEN 10\n")
-    for task, more in (("BAYESIAN3DFIT", ""), ("BAYESIANWIND", wind)):
+    for task, more in (("3DFIT", ""), ("WINDFIT", wind)):
         p = Param()
-        p.readParamString(f"FITSFILE m.fits\n{task} true\n{more}")
+        p.readParamString(f"FITSFILE m.fits\n{task} true\nMETHOD BAYESIAN\n{more}")
         assert p.gf.SAMPLER == "NAUTILUSBB" and p.checkPars(quiet=True)
         p = Param()
-        p.readParamString(f"FITSFILE m.fits\n{task} true\n{more}SAMPLER NAUTILUS\n")
+        p.readParamString(f"FITSFILE m.fits\n{task} true\nMETHOD BAYESIAN\n{more}SAMPLER NAUTILUS\n")
         assert not p.checkPars()
         assert (f"{task} error: SAMPLER NAUTILUS needs the Python package nautilus-sampler "
                 "(pip install nautilus-sampler)") in capsys.readouterr().out
@@ -2387,7 +2488,7 @@ def test_bayesian_flux_beyond_rings(tmp_path, capsys):
     g = _bayes_mock(tmp_path, radii=[20., 60.], outfolder=str(tmp_path / "g"))
     g._setup(['vrot_single'])
     assert g._flux_beyond_rings() > 0.05
-    g.run(method='dynesty', freepar=['vrot_single'], threads=1, dynamic=False, sampler_kwargs=dict(nlive=15, seed=1),
+    g.sample(sampler='dynesty', freepar=['vrot_single'], threads=1, dynamic=False, sampler_kwargs=dict(nlive=15, seed=1),
           run_kwargs=dict(maxiter=20, print_progress=False))
     assert "lies beyond the outermost ring" in capsys.readouterr().out
 
@@ -2686,7 +2787,7 @@ def test_bayesian_rings_beyond_radmax(tmp_path, capsys):
     from bbarolo.tasks import read_table
     f = _bayes_mock(tmp_path)
     f.priors['radmax'] = dict(name='uniform', loc=80., scale=50.)
-    f.run(method='dynesty', freepar=['vrot_single', 'radmax'], threads=1, verbose=False, dynamic=False,
+    f.sample(sampler='dynesty', freepar=['vrot_single', 'radmax'], threads=1, verbose=False, dynamic=False,
           sampler_kwargs=dict(nlive=15, seed=1), run_kwargs=dict(maxiter=60))
     assert 80 <= f.disk_edge <= 130 and list(f.in_disk) == [True, True, True, False]
     f.write_bestmodel(plots=False, verbose=False)
@@ -2706,7 +2807,7 @@ def test_bayesian_rings_beyond_radmax(tmp_path, capsys):
     assert g._outfolder() == str(tmp_path / "other") + "/" and list(g.in_disk) == [True, True, True, False]
     h = _bayes_mock(tmp_path, outfolder=str(tmp_path / "ring"))
     h.priors['radmax'] = dict(name='uniform', loc=120., scale=40.)
-    h.run(method='dynesty', freepar=['vrot_single', 'radmax'], like_kwargs=dict(radmax='ring'), threads=1, verbose=False,
+    h.sample(sampler='dynesty', freepar=['vrot_single', 'radmax'], like_kwargs=dict(radmax='ring'), threads=1, verbose=False,
           dynamic=False, sampler_kwargs=dict(nlive=15, seed=1), run_kwargs=dict(maxiter=40))
     assert h.disk_edge is None and h.in_disk.all()
 
@@ -2722,9 +2823,10 @@ def test_keyword_docs():
         assert k.doc and len(k.doc.split()) >= 8, k.name
         assert all(len(ln) <= 110 for ln in k.doc.splitlines()), k.name
         assert k.default_text is None or k.default_text.strip(), k.name
+        tasks = {K.split_tag(t)[0] for t in k.tasks}
         if isinstance(k.group, dict):
-            assert "*" in k.group and set(k.group) - {"*"} <= set(k.tasks), k.name
-        for t in k.tasks:
+            assert "*" in k.group and set(k.group) - {"*"} <= tasks, k.name
+        for t in tasks:
             assert k.group_for(t) in GROUPS, (k.name, t)
     s = io.StringIO()
     K.help("free", stream=s)
@@ -3800,7 +3902,7 @@ def test_bayesian_side(tmp_path, capsys):
     assert 0.4 < a.sum() / b.sum() < 0.6 and (a & r).sum() < 0.05 * b.sum()
     assert vmean["R"] > 20 and vmean["A"] < -20 and abs(vmean["B"]) < 10
     f = _bayes_mock(tmp_path, side="R")
-    f.run(method='dynesty', freepar=['vrot_single'], threads=1, verbose=True, dynamic=False, sampler_kwargs=dict(nlive=15, seed=1),
+    f.sample(sampler='dynesty', freepar=['vrot_single'], threads=1, verbose=True, dynamic=False, sampler_kwargs=dict(nlive=15, seed=1),
           run_kwargs=dict(maxiter=40, print_progress=False))
     assert "the receding half of the galaxy only (SIDE)" in capsys.readouterr().out
 
@@ -3942,7 +4044,7 @@ def test_3dfit_twostage_geometry_only_and_negative_dens(tmp_path):
     r = bbarolo.FitMod3D(fn, free="INC PA", twostage=True, **kw).run()
     inc, pa = np.asarray(r.rings["inc"]), np.asarray(r.rings["pa"])
     assert len(inc) == 4 and np.ptp(inc) < 1e-6 and abs(inc[0] - 60) < 5 and abs(pa[0] - 45) < 5
-    g = r.galfit
+    g = r.fitter
     g.mpar, g.nfree = [False] * MAXPAR, 1
     g.mpar[DENS] = True
     d = g._make_dring(1)
@@ -4318,8 +4420,8 @@ def test_small_fixes_of_the_review(tmp_path):
     r = bbarolo.FitMod3D(fn, radii=[40, 80], xpos=31.5, ypos=31.5, vsys=0., vrot=150., vdisp=10., z0=0., inc=60.,
                          pa=45., free="VROT", mask="SEARCH", galmodtype="ANALYTIC", twostage=False, verbose=0,
                          threads=1, outfolder=str(tmp_path / "o")).run()
-    g2 = pickle.loads(pickle.dumps(r.galfit))
-    assert np.allclose(g2.outr.vrot, r.galfit.outr.vrot)
+    g2 = pickle.loads(pickle.dumps(r.fitter))
+    assert np.allclose(g2.outr.vrot, r.fitter.outr.vrot)
     (tmp_path / "p.par").write_text(f"FITSFILE {fn}\nTOTALMAP true\nMASK NONE\nOUTFOLDER {tmp_path}/m\n")
     assert getopts([f"--paramfile={tmp_path / 'p.par'}"]).imageFile == fn
     c = Cube(fn, par=Param())

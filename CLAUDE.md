@@ -19,11 +19,15 @@ likelihood. Read the relevant section of it before changing behaviour.
   write while computing: files made during a computation go to `Cube.add_output` (written by the task).
 - `bbarolo/keywords.py`: the parameter table. Every keyword is defined once in `KEYWORDS`
   (reader, `Param` attributes, tasks, help, aliases). New keywords go there.
-  `bbarolo/params.py`: `Param`, `checkPars()` (port of `Param::checkPars`), BAYESIAN3DFIT parsers.
+  `bbarolo/params.py`: `Param`, `checkPars()` (port of `Param::checkPars`; also METHOD), the parsers of FREE,
+  PRIORS, LIKEOPTS of METHOD GLOBAL and BAYESIAN.
 - `bbarolo/galmod.py`: `DiskModel`, the only model engine (GALMOD, 3DFIT, SPACEPAR, Bayesian,
   `SimulatedGalaxyCube`), with `GALMODTYPE` MC/ANALYTIC and `RINGMODE` CENTRED/NODES/SHIFTED.
-- `bbarolo/galfit.py` + `galfit_out.py`: 3DFIT. `bbarolo/bayesian/`: `Bayesian3DFIT`
-  (BAYESIAN3DFIT): `fitter.py` (the class: parameters, rings, priors, `_setup` steps, `run`) with the
+- The fits 3DFIT, WINDFIT, SLITFIT have `METHOD` CLASSIC (3DFIT only), GLOBAL (`optimize`: maximum likelihood) or
+  BAYESIAN (`sample`: nested sampling); the task classes are `FitMod3D`, `WindFit`, `SlitFit`, and the STEPS of
+  3DFIT dispatch on METHOD. A keyword's `tasks` may name a method (`3DFIT/CLASSIC`, see `keywords.split_tag`).
+- `bbarolo/galfit.py` + `galfit_out.py`: 3DFIT CLASSIC. `bbarolo/bayesian/`: the engines of GLOBAL and BAYESIAN,
+  `Bayesian3DFIT` (3DFIT): `fitter.py` (the class: parameters, rings, priors, `_setup` steps, `run`) with the
   mixins `likelihood.py`, `density.py` (deconvolved profile) and `outputs.py`; `sampling.py`
   (nautilusbb, nautilus, dynesty, process pool), `noise.py`, `rings.py`, `task.py`. The other modules map
   one-to-one to C++ sources: see the section "Map of the C++ sources" of `README_cowork.md`.

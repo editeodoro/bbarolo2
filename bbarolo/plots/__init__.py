@@ -4,7 +4,7 @@ nothing. The plotting scripts written in <outfolder>/plotscripts/ contain a copy
 plots can be edited and made again without bbarolo. Result.plot_parameters(), plot_chanmaps() etc. draw them from
 the outputs of a task in memory.
 
-3DFIT and BAYESIAN3DFIT (fit3d.py): plot_parameters, plot_asymdrift, plot_chanmaps, plot_pvs, plot_pvslices,
+3DFIT (fit3d.py): plot_parameters, plot_asymdrift, plot_chanmaps, plot_pvs, plot_pvslices,
 plot_kinmaps; read_rings, read_cube, read_map and read_columns read the output files for them.
 """
 

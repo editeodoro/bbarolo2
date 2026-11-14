@@ -21,6 +21,12 @@ The parameters of 3DFIT: the keywords of the parameter files (case-insensitive; 
 :group: Free parameters and fit
 ```
 
+## Bayesian sampling
+
+```{bbparams} 3DFIT
+:group: Bayesian sampling
+```
+
 ## Model
 
 ```{bbparams} 3DFIT

@@ -29,7 +29,7 @@ class OutputsMixin(object):
 
     def write(self, outfolder=None, plots=None, verbose=True):
         """ Write the outputs of the fit in outfolder (default: OUTFOLDER, or ./output/<OBJECT>/), as the
-        BAYESIAN3DFIT task does: with plots >= 0 (default PLOTS) the best model and its outputs
+        3DFIT task does (METHOD GLOBAL, BAYESIAN): with plots >= 0 (default PLOTS) the best model and its outputs
         (write_bestmodel: model, maps, PV diagrams, <prefix>_rings_final1.txt with the errors,
         <prefix>_densprof.txt, ...; plots > 0: the plots of 3DFIT, with the radial profiles and their errors
         in <prefix>_parameters.pdf), otherwise only the rings; the samples (<prefix>_<sampler>_results.npy, see
@@ -92,7 +92,7 @@ class OutputsMixin(object):
             vprint(verbose, f"Plot written in {shortpath(out)}")
         except Exception as e:
             plt.close('all')
-            print(f"BAYESIAN3DFIT WARNING: no corner plot ({e})")
+            print(f"3DFIT WARNING: no corner plot ({e})")
         finally:
             root.setLevel(level)
 
@@ -150,7 +150,7 @@ class OutputsMixin(object):
         (densprof()), the moment maps (maps()) and the PV slices (pvs()) of the data and of the model. norm: as for
         write_bestmodel. Needs run() or load_results(). """
         if not self.modCalculated:
-            raise ValueError("BAYESIAN3DFIT: no best model yet: run() (or load_results()) first.")
+            raise ValueError("3DFIT: no best model yet: run() (or load_results()) first.")
         if self.useBBres:
             return self._galfit.model_outputs("AZIM")
         from ..galfit_out import ModelOutputs
@@ -159,6 +159,31 @@ class OutputsMixin(object):
         mod.Head().setName(self._cube_obj.pars().outPrefix + "mod")
         gf = self._galfit
         return ModelOutputs(self._cube_obj, gf.outr, gf.mask, ell, {"none": mod}, fluxconv=True)
+
+    def deconvolved_profile_table(self):
+        """ The density profile of the model deconvolved from the beam (DENS not fitted), as
+        <prefix>_densprof_deconvolved.txt lists it, in a Table: radii (arcsec), dens_model with its 1-sigma errors e_lo,
+        e_hi, dens_obs (the observed profile) and the errors from the geometry and from the noise (e_geom_lo, e_geom_hi,
+        e_noise_lo, e_noise_hi), in the units of DENS. None if DENS is fitted. Needs run(). """
+        from astropy.table import Table
+        if not self.useNorm or self.useBBres:
+            return None
+        self._set_density(self.outri)                     # (as write_bestmodel: the deconvolved densities...)
+        ell = self._observed_profile(self.outri)          # (...and the observed profile along the best rings)
+        r = self.outri.r
+        nr = self.outri.nr
+        dp = getattr(self, 'dens_profile', None)
+        z = np.zeros(nr)
+        e = {k: (np.asarray(dp[k], float) if dp is not None else z) for k in (
+            'err_lo', 'err_hi', 'err_geom_lo', 'err_geom_hi', 'err_noise_lo', 'err_noise_hi')}
+        t = Table()
+        t['radii'] = np.asarray(r['radii'], float)
+        t['dens_model'] = np.asarray(r['dens'], float)
+        t['e_lo'], t['e_hi'] = e['err_lo'], e['err_hi']
+        t['dens_obs'] = [abs(ell.getSurfDensFaceOn(i)) for i in range(nr)]
+        t['e_geom_lo'], t['e_geom_hi'] = e['err_geom_lo'], e['err_geom_hi']
+        t['e_noise_lo'], t['e_noise_hi'] = e['err_noise_lo'], e['err_noise_hi']
+        return t
 
     def _write_deconvolved_profile(self):
         """ <prefix>_densprof_deconvolved.txt in the output folder: radius, the density profile of the

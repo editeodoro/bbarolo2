@@ -1,5 +1,5 @@
 """
-The plotting scripts of 3DFIT and BAYESIAN3DFIT (port of Galfit::writeScripts_Python of galfit_out.cpp), written in
+The plotting scripts of 3DFIT (port of Galfit::writeScripts_Python of galfit_out.cpp), written in
 <outfolder>/plotscripts/ and run by plotscripts.plotAll_Python.
 
 Each script is made of: the imports; a copy of the source of its plotting function and of the readers of fit3d.py
@@ -68,7 +68,7 @@ def script(title, funcs, settings, body):
 
 
 def plot_utils_text():
-    """The source of plot_utils.py, the helpers of the plotting scripts (3DFIT, BAYESIAN3DFIT, BAYESIANWIND)."""
+    """The source of plot_utils.py, the helpers of the plotting scripts (3DFIT, WINDFIT)."""
     from .. import pvslice
     from . import utils
     return ("###############################################################\n"
@@ -86,15 +86,15 @@ def _lround(x):
 
 
 def plot_settings(gf):
-    """The settings of the plots of the fit gf (a Galfit after the fit, also that of BAYESIAN3DFIT), as a dict:
+    """The settings of the plots of the fit gf (a Galfit after the fit, also that of METHOD GLOBAL or BAYESIAN), as a dict:
     gname, outfolder, outprefix, twostage, plotmask; box: (xmin, xmax, ymin, ymax, zmin, zmax) the region of the
     cube shown (pixels and channels, inclusive: around the largest source of the SEARCH mask, the mask of
     SMOOTH&SEARCH, or the rings and their velocities); cont: the lowest contour; pixscale (arcsec), cdelt3,
     crval3 (km/s, channel width and velocity of channel 0), beam (pixels, pixels, degrees), vrange (km/s, the
     velocities of the outer edges of the channels of the box); bunit (of the maps) and head_bunit (of the cube),
     mapnames; errcols1, errcols2: the columns of the errors in the ring files of the two stages; dens: the
-    density panel ('plain', 'deconvolved' (3DFIT) or 'model' (BAYESIAN3DFIT)) and model_dens (the profile of the
-    model, BAYESIAN3DFIT); radmax: the edge of the disk (BAYESIAN3DFIT) or None; cubefile, cubehdu: the cube read
+    density panel ('plain', 'deconvolved' (3DFIT) or 'model' (3DFIT, METHOD GLOBAL or BAYESIAN)) and model_dens (the profile of the
+    model, METHOD GLOBAL and BAYESIAN); radmax: the edge of the disk (3DFIT, METHOD GLOBAL or BAYESIAN) or None; cubefile, cubehdu: the cube read
     by the scripts; and disp, pa_av, pa_min, reverse, arcconv (for plot_pvs_old.py)."""
     c = gf.cin
     h = c.Head()

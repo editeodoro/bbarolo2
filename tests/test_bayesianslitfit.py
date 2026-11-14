@@ -1,4 +1,4 @@
-"""Tests of BAYESIANSLITFIT (bbarolo.bayesian.slit): the reader of long-slit spectra, the preparation of the data, the
+"""Tests of SLITFIT (bbarolo.bayesian.slit): the reader of long-slit spectra, the preparation of the data, the
 model seen through the slit, the likelihood, the fit and the task."""
 
 import math
@@ -201,11 +201,12 @@ def test_slit_prepare_and_noise(mock_slit):
 
 
 def test_slit_fit_optimise(mock_slit):
-    """SAMPLER OPTIMISE on the mock recovers the rotation curve, the dispersion, VSYS and XPOS within the errors of the
+    """METHOD GLOBAL (the default) on the mock recovers the rotation curve, the dispersion, VSYS and XPOS within the errors of the
     Laplace approximation (and the noise map: reduced chi-square close to 1)."""
     fname, R = mock_slit
     f = _fit(fname, radii=list(R))
-    f.run(method="optimise", threads=4, verbose=False)
+    f.run(threads=4, verbose=False)
+    assert f._method == "optimize"
     t = f.ring_table()
     pull = (np.asarray(t["VROT"]) - _vrot(R)) / (0.5 * (t["E_VROT_LO"] + t["E_VROT_HI"]))
     assert np.sqrt(np.mean(np.asarray(pull[1:]) ** 2)) < 2.5
@@ -236,9 +237,9 @@ def test_slit_task_parfile(mock_slit, tmp_path):
     import bbarolo
     fname, R = mock_slit
     par = tmp_path / "slit.par"
-    par.write_text(f"FITSFILE {fname}\nBAYESIANSLITFIT true\nSLITWIDTH 1\nBEAM 1.2\nSPECRES 1.2\nINC 60\n"
+    par.write_text(f"FITSFILE {fname}\nSLITFIT true\nSLITWIDTH 1\nBEAM 1.2\nSPECRES 1.2\nINC 60\n"
                    f"REDSHIFT {Z}\nRESTWAVE {' '.join(map(str, REST))}\nRELINT {' '.join(map(str, RELINT))}\n"
-                   f"CONTSUB true\nNORM LOCAL\nFREE VROT VDISP_SINGLE VSYS XPOS\nSAMPLER OPTIMISE\n"
+                   f"CONTSUB true\nNORM LOCAL\nFREE VROT VDISP_SINGLE VSYS XPOS\nMETHOD GLOBAL\n"
                    f"SAMPLEROPTS errors=false\nTHREADS 4\nPLOTS 1\nVERBOSE 0\nOUTFOLDER {tmp_path}/out\n")
     res = bbarolo.run(str(par))
     out = tmp_path / "out"
@@ -246,9 +247,22 @@ def test_slit_task_parfile(mock_slit, tmp_path):
                    "_slit_noise.fits", "_slit_cont.fits", "_slitfit_pv.pdf", "_slitfit_parameters.pdf"):
         assert (out / ("MOCKSLIT" + suffix)).is_file(), suffix
     assert (out / "plotscripts" / "plot_slitfit_pv.py").is_file()
-    assert len(res["BAYESIANSLITFIT"].rings) == len(R)
+    assert len(res["SLITFIT"].rings) == len(R) and res["SLITFIT"].method == "GLOBAL"
     rings = np.loadtxt(out / "MOCKSLIT_slitfit_rings.txt")
     assert rings.shape[0] == len(R) and np.all(np.abs(rings[:, 2] - rings[0, 2]) < 1e-6)   # (VDISP_SINGLE)
+    from astropy.io import fits
+    assert fits.getheader(out / "MOCKSLIT_slit_model.fits")["BBTASK"] == "SLITFIT"
+    # SlitFit: the same fit in memory, also of a slit in memory (an HDU)
+    from bbarolo import SlitFit, BayesianSlitFit
+    hdu = fits.open(fname)[0]
+    kw = dict(slitwidth=1, beam=1.2, specres=1.2, inc=60, redshift=Z, restwave=list(REST), relint=list(RELINT),
+              contsub=True, norm="LOCAL", free="VROT VDISP_SINGLE VSYS XPOS", sampleropts="errors=false", threads=4,
+              verbose=False)
+    for slit in (fname, hdu):
+        r = SlitFit(slit, **kw).run()
+        assert r.method == "GLOBAL" and isinstance(r.fitter, BayesianSlitFit) and len(r.rings) == len(R)
+        assert np.allclose(r.rings["VROT"], res["SLITFIT"].rings["VROT"])
+        assert r.model.data.shape == fits.getdata(out / "MOCKSLIT_slit_model.fits").shape
 
 
 def test_slit_contsub(tmp_path):
@@ -272,8 +286,8 @@ def test_slit_contsub(tmp_path):
 
 
 def test_slit_smooth(mock_slit):
-    """LIKEOPTS smooth (as BAYESIAN3DFIT): the smoothness prior of the parameters free in each ring, over one seeing
-    FWHM, is subtracted from log L; the keys are the ring parameters of the slit."""
+    """LIKEOPTS smooth (as 3DFIT with METHOD GLOBAL or BAYESIAN): the smoothness prior of the parameters free in each
+    ring, over one seeing FWHM, is subtracted from log L; the keys are the ring parameters of the slit."""
     from bbarolo.bayesian.slit import slit_likeopts
     from bbarolo.bayesian.common import smoothness_penalty
     assert slit_likeopts("smooth=(vrot=5, disp=3) noisecorr=1") == \
@@ -332,19 +346,19 @@ def test_slit_xpos_smooth(mock_slit):
 
 
 def test_slit_parameter_listing():
-    """The parameters of BAYESIANSLITFIT in the lists of BBarolo -d BAYESIANSLITFIT (the defaults of the task: FREE,
+    """The parameters of SLITFIT in the lists of BBarolo -d SLITFIT (the defaults of the task: FREE,
     NORM AZIM) and of a parameter file (VERBOSE 2: the values given; CONTSUB is that of the slit, not of a cube)."""
     import io
     from bbarolo.params import Param
     s = io.StringIO()
-    Param().printDefaults(s, "BAYESIANSLITFIT")
+    Param().printDefaults(s, "SLITFIT")
     txt = s.getvalue()
     for k in ("[SLITWIDTH]", "[SLITANGLE]", "[CONTSUB]", "[CONTORDER]", "[EXCLWIND]", "[SKYRESID]", "[MASKWAVE]",
-              "[WAVERANGE]", "[SPECRES]", "[LIKEOPTS]"):
+              "[WAVERANGE]", "[SPECRES]", "[LIKEOPTS]", "[METHOD]", "[MINIMISER]", "[SAMPLER]"):
         assert k in txt, k
     assert "VROT VDISP VSYS XPOS" in txt and "[NORM]  =  AZIM" in txt.replace(".", "")
     p = Param()
-    p.readParamString("FITSFILE a.fits\nBAYESIANSLITFIT true\nINC 60\nSLITWIDTH 1.5\nBEAM 1.5\nCONTSUB true\n"
+    p.readParamString("FITSFILE a.fits\nSLITFIT true\nINC 60\nSLITWIDTH 1.5\nBEAM 1.5\nCONTSUB true\n"
                       "CONTORDER 2\nNORM LOCAL\nMASKWAVE 7150 7152\n")
     txt = str(p)
     assert "Width of the slit (arcsec)" in txt and "1.5" in txt and "7150 7152" in txt
@@ -352,23 +366,24 @@ def test_slit_parameter_listing():
 
 
 def test_slit_keywords():
-    """The checks of the task: SLITFIT is gone (an error naming BAYESIANSLITFIT), and BAYESIANSLITFIT needs SLITWIDTH, a
-    circular BEAM and INC, and runs alone; the geometry cannot be free."""
+    """The checks of the task: SLITFIT is gone (an error naming SLITFIT), and SLITFIT needs SLITWIDTH, a
+    circular BEAM and INC, and runs alone, with METHOD GLOBAL or BAYESIAN; the geometry cannot be free."""
     from bbarolo.keywords import check_removed
     from bbarolo.params import Param
     from bbarolo.bayesian.slit import slit_freepar
-    with pytest.raises(BBaroloError, match="BAYESIANSLITFIT"):
-        check_removed("SLITFIT")
+    with pytest.raises(BBaroloError, match="BAYESIANSLITFIT is no longer a parameter: SLITFIT"):
+        check_removed("BAYESIANSLITFIT")
     p = Param()
-    p.readParamString("FITSFILE a.fits\nBAYESIANSLITFIT true\nINC 60\nSLITWIDTH 1\nBEAM 1.5\n")
-    assert p.checkPars(quiet=True)
+    p.readParamString("FITSFILE a.fits\nSLITFIT true\nINC 60\nSLITWIDTH 1\nBEAM 1.5\n")
+    assert p.checkPars(quiet=True) and p.gf.METHOD == "GLOBAL"
     for extra, ok in (("BEAM 1.5 1.0 0\n", False), ("SLITWIDTH 0\n", False), ("3DFIT true\n", False),
                       ("SLITANGLE abc\n", False), ("NORM LOCAL\n", True), ("MASKWAVE 1 2 3\n", False),
                       ("CONTSUB true\nCONTORDER 2\nEXCLWIND 10:20\n", True),
                       ("LIKEOPTS smooth=(vrot=5)\n", True), ("LIKEOPTS smooth=(xpos=1)\n", False),
-                      ("LIKEOPTS lambdas=(vrot=100)\n", False)):
+                      ("LIKEOPTS lambdas=(vrot=100)\n", False), ("METHOD CLASSIC\n", False),
+                      ("METHOD bayesian\n", True), ("MINIMISER simplex\n", True), ("MINIMISER foo\n", False)):
         p = Param()
-        p.readParamString("FITSFILE a.fits\nBAYESIANSLITFIT true\nINC 60\nSLITWIDTH 1\nBEAM 1.5\n" + extra)
+        p.readParamString("FITSFILE a.fits\nSLITFIT true\nINC 60\nSLITWIDTH 1\nBEAM 1.5\n" + extra)
         assert p.checkPars(quiet=True) == ok, extra
     assert slit_freepar("VROT VDISP_SINGLE VSYS_SINGLE XPOS") == ["vrot", "vdisp_single", "vsys", "xpos"]
     with pytest.raises(ValueError, match="fixed"):

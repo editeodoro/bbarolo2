@@ -28,7 +28,7 @@ BBarolo 2 needs these packages, which are installed with it and have their own l
 
 The optional extra `bayesian` adds [dynesty](https://dynesty.readthedocs.io) and
 [nautilus-sampler](https://nautilus-sampler.readthedocs.io) (the nested samplers DYNESTY and NAUTILUS of
-BAYESIAN3DFIT), corner and threadpoolctl; the extra `mpi` adds mpi4py and schwimmbad.
+METHOD BAYESIAN of 3DFIT), corner and threadpoolctl; the extra `mpi` adds mpi4py and schwimmbad.
 
 ## nautilus
 

@@ -14,7 +14,7 @@ scipy, astropy, numba and matplotlib. Optional extras:
 
 | Extra | Adds | For |
 |---|---|---|
-| `bayesian` | dynesty, nautilus-sampler, corner, threadpoolctl | the samplers DYNESTY and NAUTILUS of BAYESIAN3DFIT, its corner plot |
+| `bayesian` | dynesty, nautilus-sampler, corner, threadpoolctl | the samplers DYNESTY and NAUTILUS of METHOD BAYESIAN, its corner plot |
 | `mpi` | mpi4py, schwimmbad | Bayesian samplings on several nodes with MPI |
 | `test` | pytest | the tests |
 
@@ -22,7 +22,7 @@ scipy, astropy, numba and matplotlib. Optional extras:
 pip install "bbarolo[bayesian] @ git+https://github.com/editeodoro/bbarolo2"
 ```
 
-BAYESIAN3DFIT and BAYESIANWIND run without the extras: their default sampler (`SAMPLER NAUTILUSBB`) is part
+3DFIT with METHOD BAYESIAN, and WINDFIT and SLITFIT, run without the extras: their default sampler (`SAMPLER NAUTILUSBB`) is part
 of BBarolo.
 
 ## From a copy of the repository

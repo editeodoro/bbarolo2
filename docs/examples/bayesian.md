@@ -1,6 +1,6 @@
 # A Bayesian fit of NGC 2403
 
-The page of the task, {doc}`BAYESIAN3DFIT <../tasks/bayesian3dfit/index>`, fits only the rotation velocity
+The page of the task, {doc}`3DFIT <../tasks/3dfit/index>` with `METHOD BAYESIAN`, fits only the rotation velocity
 and the velocity dispersion. Here the geometry is free too: the inclination and the position angle are
 shared by all the rings and are sampled with the other parameters, together with the edge of the disk and
 the noise. The fit gives the rotation curve with its credible intervals, which we compare with the
@@ -19,7 +19,7 @@ cannot reproduce it. We use three rings of 300 arcsec, at 300, 600 and 900 arcse
 beam is 59 arcsec) but keeps the fit short: the time grows with the number of rings and of free parameters,
 and with the number of voxels in the region of the likelihood, which grows with the radius of the last ring.
 
-The free parameters ({ref}`FREE <par-bayesian3dfit-free>`) are 8:
+The free parameters ({ref}`FREE <par-3dfit-free>`) are 8:
 
 | Name | Number | Meaning |
 |---|---|---|
@@ -36,7 +36,7 @@ then include the misfit of the model. `FRACERR` (a fractional error of the model
 
 ### Priors
 
-The default priors follow the initial values (see {ref}`PRIORS <par-bayesian3dfit-priors>`); here we set the
+The default priors follow the initial values (see {ref}`PRIORS <par-3dfit-priors>`); here we set the
 ones that matter by hand, as uniform distributions of `scipy.stats` (`loc` is the lower limit, `scale` the
 width): VROT between 50 and 250 km/s, VDISP between 0 and 30 km/s, INC between 40° and 65°, PA between 110°
 and 140°. The priors of SIGMA and RADMAX are the default ones: SIGMA is log-uniform between 0.5 and 1000
@@ -60,7 +60,8 @@ would take a long time here). The dynesty alternative is discussed at the end of
 
 ```text
 FITSFILE        ngc2403.fits
-BAYESIAN3DFIT   true
+3DFIT           true
+METHOD          BAYESIAN
 RADII           300 600 900
 XPOS            77
 YPOS            77
@@ -96,14 +97,15 @@ f.priors["vrot"] = dict(name="uniform", loc=50, scale=200)      # km/s
 f.priors["vdisp"] = dict(name="uniform", loc=0, scale=30)       # km/s
 f.priors["inc"] = dict(name="uniform", loc=40, scale=25)        # degrees
 f.priors["phi"] = dict(name="uniform", loc=110, scale=30)       # degrees (phi is PA)
-f.run(freepar="VROT VDISP_SINGLE INC_SINGLE PA_SINGLE SIGMA RADMAX", threads=4, method="nautilusbb",
-      sampler_kwargs=dict(nlive=500, seed=1), run_kwargs=dict(n_eff=3000))
+f.sample(freepar="VROT VDISP_SINGLE INC_SINGLE PA_SINGLE SIGMA RADMAX", threads=4, sampler="nautilusbb",
+         sampler_kwargs=dict(nlive=500, seed=1), run_kwargs=dict(n_eff=3000))
 f.print_stats()
 ```
 :::
 ::::
 
-The fit took 9 minutes (563 seconds). In Python the parameter PA is called `phi` in `priors` and in the printed
+The fit took 9 minutes (563 seconds). In Python the engine {class}`~bbarolo.Bayesian3DFIT` is used here, for its
+priors and its samples (`FitMod3D(..., method="bayesian")` runs the same fit and returns a Result). In Python the parameter PA is called `phi` in `priors` and in the printed
 statistics.
 
 ### Result
@@ -128,7 +130,7 @@ as the accuracy of the inclination of NGC 2403: it is the precision of this mode
 particular the warp of the outer disk and the structure of the gas are not in the model.
 
 VDISP is biased low in the tests on simulated disks (by 0.4 to 1.6 km/s at signal-to-noise ratios of 20 to
-40; see {doc}`../tasks/bayesian3dfit/algorithm`): the interval above is smaller than that bias. The same is
+40; see {doc}`../tasks/3dfit/likelihood`): the interval above is smaller than that bias. The same is
 true of the other intervals: they do not contain the systematic errors.
 
 ## The posterior of the geometry
@@ -160,7 +162,7 @@ is at least 959 arcsec. To measure it, put rings beyond it.
 
 The free parameter RADMAX is the radius at which the gas of the model ends. Without it, the model has gas
 out to the last ring and nothing beyond, whatever the data. The behaviour is chosen by the option `radmax`
-of {ref}`LIKEOPTS <par-bayesian3dfit-likeopts>`:
+of {ref}`LIKEOPTS <par-3dfit-likeopts>`:
 
 - `edge` (the default): the rings stay where they are and the density of the model is multiplied by a
   weight that goes from 1 to 0 across less than one pixel at the edge, so the likelihood is continuous in RADMAX;
@@ -170,7 +172,7 @@ of {ref}`LIKEOPTS <par-bayesian3dfit-likeopts>`:
 With `edge`, a ring beyond the edge has no gas in the model: its values are extrapolations, not measurements.
 `f.in_disk` says which rings are inside the edge and `f.disk_edge` gives it (here all three are inside, and
 the edge is 959 arcsec). Rings beyond it have INDISK = 0 in the rings file. See
-{doc}`../tasks/bayesian3dfit/algorithm` for the formulas.
+{doc}`../tasks/3dfit/likelihood` for the formulas.
 
 ## The rotation curve and 3DFIT
 
@@ -192,16 +194,16 @@ lo, hi = f.ring_errors("vrot")
 
 ```{figure} /figures/bayesian_vrot.png
 :width: 70%
-:alt: Rotation curve of NGC 2403 from BAYESIAN3DFIT with credible intervals, and from 3DFIT
+:alt: Rotation curve of NGC 2403 from METHOD BAYESIAN with credible intervals, and from 3DFIT
 
-Rotation velocity of the three rings: median and 68% interval of BAYESIAN3DFIT (circles), and 3DFIT with its
+Rotation velocity of the three rings: median and 68% interval of METHOD BAYESIAN (circles), and METHOD CLASSIC with its
 own inclination and position angle (squares) and with those of the posterior medians (triangles). The
 thin lines are 150 curves drawn from the posterior. The dotted line is the edge of the disk (RADMAX).
 ```
 
 The numbers, in km/s:
 
-| Ring (arcsec) | BAYESIAN3DFIT | 3DFIT, INC and PA free | 3DFIT at the posterior INC, PA |
+| Ring (arcsec) | BAYESIAN | CLASSIC, INC and PA free | CLASSIC at the posterior INC, PA |
 |---|---|---|---|
 | 300 | 118.2 ± 0.4 | 122.5 | 121.0 |
 | 600 | 130.1 ± 0.4 | 130.4 | 128.2 |
@@ -211,7 +213,7 @@ The numbers, in km/s:
 rotation curve rises more steeply in the outer rings. Fixing 3DFIT at the posterior geometry brings its
 rotation curve closer, as expected, because the rotation velocity scales as 1/sin INC, but the two codes
 still differ by 2 to 3 km/s, several times the intervals of the posterior. The two methods fit the data in
-different ways (3DFIT fits each ring separately, BAYESIAN3DFIT the whole disk with one likelihood), and the
+different ways (CLASSIC fits each ring separately, BAYESIAN the whole disk with one likelihood), and the
 intervals of the posterior do not include that difference. The scatter between the two methods is the
 better measure of the systematic uncertainty of the curve: about 3 km/s, 2% of VROT.
 
@@ -233,14 +235,14 @@ g.write()                                                     # the files of the
 ```
 
 A saved result can be plotted again, or written out, on another day or machine. `write()` writes the files of
-BAYESIAN3DFIT in the output folder (`output/ngc2403/` by default): the best-fit rings with the errors
+3DFIT with METHOD BAYESIAN in the output folder (`output/ngc2403/` by default): the best-fit rings with the errors
 (`ngc2403_rings_final1.txt`), the best model cube and its maps and position–velocity slices, the deconvolved
 density profile, the samples, and, with `plots=1`, the corner plot and the profiles. The page of the
-{doc}`task <../tasks/bayesian3dfit/index>` lists the files.
+{doc}`task <../tasks/3dfit/index>` lists the files.
 
 ## dynesty or nautilus
 
-The sampler is chosen by `method` (`SAMPLER` in a parameter file). Both are nested samplers. nautilus comes in
+The sampler is chosen by `sampler` (`SAMPLER` in a parameter file). Both are nested samplers. nautilus comes in
 two versions with the same algorithm and options: `nautilusbb` (`NAUTILUSBB`, the default), included in
 BBarolo, and `nautilus` (`NAUTILUS`), the package nautilus-sampler.
 
@@ -260,7 +262,7 @@ free SIGMA and RADMAX only when you need them.
 
 ## More
 
-- {doc}`../tasks/bayesian3dfit/index` and {doc}`../tasks/bayesian3dfit/parameters`: the task and all its parameters.
-- {doc}`../tasks/bayesian3dfit/algorithm`: the likelihood, the priors, RADMAX, the samplers, and the tests on
+- {doc}`../tasks/3dfit/index` and {doc}`../tasks/3dfit/parameters`: the task, its methods and all its parameters.
+- {doc}`../tasks/3dfit/likelihood`: the likelihood, the priors, RADMAX, the samplers, and the tests on
   simulated disks, with their known biases.
-- {doc}`../tasks/3dfit/index`: the same model, fitted ring by ring.
+- {doc}`../tasks/3dfit/algorithm`: METHOD CLASSIC, the same model fitted ring by ring.

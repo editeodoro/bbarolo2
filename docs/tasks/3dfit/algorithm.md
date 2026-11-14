@@ -1,6 +1,7 @@
 # 3DFIT: how it works
 
-3DFIT fits a tilted-ring model of a rotating disk directly to an emission-line datacube (Di Teodoro &
+3DFIT with METHOD CLASSIC (the default; see {doc}`index` for GLOBAL and BAYESIAN, and {doc}`likelihood` for their
+algorithm) fits a tilted-ring model of a rotating disk directly to an emission-line datacube (Di Teodoro &
 Fraternali 2015). The disk is a set of concentric rings. For each ring, the GALMOD engine builds a model
 cube of that ring alone, convolves it with the beam and compares it, voxel by voxel, with the data in
 the mask. The free parameters of the ring (by default the rotation velocity, the velocity dispersion, the
@@ -96,7 +97,7 @@ parameters, the fixed value for the others. The values come, in order of precede
 An estimated value is the same in all the rings. The initial rings are written in
 `<prefix>_rings_initial.txt`, before the beam-wide rings of REVERSE and the refinement of $\phi$ (below); the
 screen summary marks each value as given (i), default (d) or estimated (e); NRADII and RADSEP are given
-when RADII gives the rings. BAYESIAN3DFIT builds its initial rings with the same code, and prints the same
+when RADII gives the rings. METHOD GLOBAL and BAYESIAN build the initial rings with the same code, and prints the same
 summary. Then, with $\phi$ free, a 2D fit
 may refine $\phi$ and $V_\mathrm{rot}$ ring by ring (see below).
 
@@ -474,7 +475,7 @@ after its fit (in both stages), one parameter $p$ at a time, with the others at 
 
 The lower (negative) and upper errors are written in the columns `E_VROT1`, `E_VROT2`, ... of the ring files.
 These intervals are not statistical confidence intervals: they measure how fast the residual grows when
-one parameter moves. BAYESIAN3DFIT gives posterior distributions instead.
+one parameter moves. METHOD BAYESIAN gives posterior distributions instead (and GLOBAL the errors of the Laplace approximation).
 
 ## The final model and the outputs
 
@@ -496,7 +497,7 @@ with the ring convention RINGMODE, convolved with the beam and normalised with t
 
 **The deconvolved profile.** At the end of the run, 3DFIT computes the density profile deconvolved from the
 beam at the geometry of the final rings, by the same method as the deconvolved profile of
-{doc}`ELLPROF <../ellprof/algorithm>` and of {doc}`BAYESIAN3DFIT <../bayesian3dfit/algorithm>`: the densities
+{doc}`ELLPROF <../ellprof/algorithm>` and of {doc}`METHOD GLOBAL and BAYESIAN <likelihood>`: the densities
 whose beam-convolved model reproduces the total intensity map of the data in the mask dilated by one beam,
 with a smoothness prior on the profile. The errors come from 200 noise realisations. With SIDE `A` or `R`
 only one half of the galaxy is used. It is written to `<prefix>_densprof_deconvolved.txt`, in the format of

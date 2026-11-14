@@ -4,7 +4,7 @@ GALWIND task: 3D models of bi-conical outflows (port of Tasks/galwind.cpp).
 The cone is built either as a stack of ``NLAYERS`` cylinders (``WTYPE=0``, Lelli's
 approach, each cylinder being a GALMOD disk with vertical/radial velocities), as
 a set of spherical shells (``WTYPE=1``, Galmod_wind) or, in bbarolo2 only, with the
-noise-free cones of bbarolo.windmodel (``WTYPE=2``, the engine of BAYESIANWIND: inner
+noise-free cones of bbarolo.windmodel (``WTYPE=2``, the engine of WINDFIT: inner
 opening angle OPENIN, emissivity DENS per shell).
 
 Differences with the C++ code (all bugs in the original):
@@ -123,7 +123,7 @@ class GalWind:
         return ok
 
     def _analytic(self):
-        """WTYPE 2: the cones of bbarolo.windmodel (the engine of BAYESIANWIND), noise-free: filled from the apex to
+        """WTYPE 2: the cones of bbarolo.windmodel (the engine of WINDFIT), noise-free: filled from the apex to
         CONELEN between the half opening angles OPENIN/2 and OPENANG/2, with VWIND, VDISP, VROT and DENS given per shell
         (RADII, or NLAYERS shells CONELEN/NLAYERS apart; linear between the shells, constant beyond them). DENS is an
         emissivity: a flux per arcsec^3 in the units of the cube times km/s (the analogue of DENS of GALMOD, a flux per

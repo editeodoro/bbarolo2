@@ -19,7 +19,7 @@ a few cases, the environment variables below.
 | GALWIND | the cylinders or the shells |
 | REND3D, maps (moments) | the angles, the pixels (numba threads, see below) |
 | SMOOTH, convolution of the models | the FFT of the convolution (`scipy.fft` workers) |
-| BAYESIAN3DFIT | the sampler: `THREADS` processes (see below) |
+| 3DFIT with METHOD GLOBAL or BAYESIAN, WINDFIT, SLITFIT | the sampler and the minimiser: `THREADS` processes (see below) |
 | SEARCH, MAKEMASK, ELLPROF, PVSLICE, STATS | nothing: one thread |
 
 The rings of 3DFIT are fitted in Python threads, which work in parallel because the numba kernels release the
@@ -74,7 +74,7 @@ Python threads.
 
 The linear algebra of numpy and scipy (BLAS, LAPACK) can start its own threads, set by `OMP_NUM_THREADS`,
 `OPENBLAS_NUM_THREADS` or `MKL_NUM_THREADS`. BBarolo's kernels do not use it much, but the likelihood of
-BAYESIAN3DFIT does, on small matrices, for which many threads are slower: with MKL on 224 cores it was
+METHOD GLOBAL and BAYESIAN of 3DFIT do, on small matrices, for which many threads are slower: with MKL on 224 cores it was
 1.6 to 2.2 times slower, and the processes of the sampler competed for the cores. During the sampling and the
 deconvolution of the density profile BBarolo therefore limits BLAS and OpenMP to **one thread**, with the
 package [threadpoolctl](https://github.com/joblib/threadpoolctl) (installed with the `bayesian` extra; without it
@@ -87,10 +87,11 @@ export OMP_NUM_THREADS=1        # or OPENBLAS_NUM_THREADS / MKL_NUM_THREADS
 
 before starting BBarolo, and use `THREADS` to choose the parallelism.
 
-## BAYESIAN3DFIT: processes
+## METHOD GLOBAL and BAYESIAN: processes
 
-{doc}`BAYESIAN3DFIT <../tasks/bayesian3dfit/index>` samples the posterior with `THREADS` **processes**, not
-threads: the model engine of one likelihood runs on one thread. The pool is started with the `fork` method, so
+{doc}`3DFIT with METHOD BAYESIAN <../tasks/3dfit/index>` samples the posterior with `THREADS` **processes**, not
+threads: the model engine of one likelihood runs on one thread. METHOD GLOBAL, WINDFIT and SLITFIT use the same pool,
+for the gradient of the minimiser and for the samplers. The pool is started with the `fork` method, so
 the workers inherit the fitter without copying it, and the sampler (dynesty or nautilus) sends them only the
 parameter vectors. dynesty evaluates four proposals per process at a time, nautilus at least four points per
 process in each step (`n_batch`, at least 100 points). Two consequences:
@@ -101,11 +102,11 @@ process in each step (`n_batch`, at least 100 points). Two consequences:
 - do not edit the package while a long run is going, since a new worker imports the modules from disk.
 
 The default of `THREADS` in the task is the number of cores (at most 16). The Python class
-{class}`bbarolo.Bayesian3DFIT` has `threads=1` by default: give `run(threads=n)`. When the script is
+The Python classes {class}`bbarolo.FitMod3D` and the engines ({class}`bbarolo.Bayesian3DFIT`, ...) have `threads=1` by default: give `run(threads=n)`. When the script is
 launched with `mpirun` or `mpiexec`, the sampler uses an MPI pool (needs `mpi4py` and `schwimmbad`) instead
 of the process pool, so a fit can use several nodes.
 
-The example of the {doc}`BAYESIAN3DFIT page <../tasks/bayesian3dfit/index>` takes between 2.5 and 3 minutes on
+The BAYESIAN example of the {doc}`3DFIT page <../tasks/3dfit/index>` takes between 2.5 and 3 minutes on
 four processes, about 8 minutes of CPU time: the sampling scales almost linearly with the processes, but
 the time grows quickly with the number of free parameters.
 

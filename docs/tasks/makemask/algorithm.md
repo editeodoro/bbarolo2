@@ -2,7 +2,7 @@
 
 A mask selects the voxels of a cube that contain genuine emission. MAKEMASK builds the mask set by
 {ref}`MASK <par-makemask-mask>` and writes it in `<prefix>_mask.fits`. The same masks are built by every
-task that needs one: 3DFIT, BAYESIAN3DFIT, GALMOD and SPACEPAR compare model and data within the mask;
+task that needs one: 3DFIT (every METHOD), GALMOD and SPACEPAR compare model and data within the mask;
 2DFIT, ELLPROF, REND3D and the maps use the data within it. This page describes all the types of mask.
 The input is the cube; the output is a cube of 1 (in the mask) and 0 (outside), with the parameters of
 the mask in the HISTORY cards of its header.
@@ -45,7 +45,7 @@ one, the detection with most voxels:
 
 - MAKEMASK, the maps (`TOTALMAP`, `VELOCITYMAP`, `DISPERSIONMAP`, `MASSDENSMAP`, `RMSMAP`), 2DFIT and
   ELLPROF use all the detections;
-- 3DFIT, BAYESIAN3DFIT, GALMOD, SPACEPAR and REND3D use the largest.
+- 3DFIT (every METHOD), GALMOD, SPACEPAR and REND3D use the largest.
 
 The types ending in `LARGEST` (`SEARCHLARGEST`, `SMOOTH&SEARCHLARGEST`, `SMOOTHSPEC&SEARCHLARGEST`) keep
 only the largest detection in every case. If nothing is detected, BBarolo stops with an error.

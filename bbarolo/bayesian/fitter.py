@@ -11,13 +11,13 @@ from scipy import stats
 
 from ..tasks import FitMod3D, build_param, _checked
 from ..bbutils import BBaroloError
-from .common import vprint, banner, get_distribution, fast_ppf, resample_equal, show_bar, SIGMA_QUANTILES
+from .common import (vprint, banner, get_distribution, fast_ppf, resample_equal, show_bar, SIGMA_QUANTILES, fit_method,
+                     global_arguments, check_sampler, _resets)
 from .rings import _RingDict
 from .likelihood import LikelihoodMixin
 from .density import DensityMixin
 from .outputs import OutputsMixin
 from .sampling import sample, sampler_options
-from .optimize import SAMPLER_NAMES, sampler_options as optimize_options
 
 # the default functions of radius of VROT_FUNC, VDISP_FUNC and DENS_FUNC (Bayesian3DFIT.funcs)
 DEFAULT_FUNCS = dict(vrot=lambda R, p1, p2: 2. / np.pi * p1 * np.arctan(R / p2),     # arctan curve
@@ -38,7 +38,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
     the initial values (e.g. INC +- 10 deg, PA +- 15 deg, VROT 0 to twice the largest initial
     VROT: see _set_default_priors and the keyword PRIORS).
 
-    The parameters of the BAYESIAN3DFIT task of parameter files are accepted too: FREE (the
+    The parameters of 3DFIT with METHOD GLOBAL or BAYESIAN in parameter files are accepted too: FREE (the
     free parameters, e.g. 'VROT VDISP_SINGLE INC_SINGLE'; default
     keywords.BAYES_DEFAULT_FREE, used when neither FREE nor freepar is given), SAMPLER, SAMPLEROPTS and RUNOPTS are the defaults of run(); PRIORS sets entries
     of priors (e.g. 'VROT=(uniform,loc=0,scale=300)'). Bayesian3DFIT.from_parfile(file)
@@ -50,7 +50,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
     run(freepar, method, threads, log_like, like_kwargs, sampler_kwargs, run_kwargs, verbose,
         dynamic, **params):  sample the posterior ('nautilusbb', 'nautilus' or 'dynesty'); nothing is written.
     run_geometry(freepar, **kwargs): fit only the geometry on the total intensity map.
-    write(outfolder, plots): write all the outputs, as the BAYESIAN3DFIT task.
+    write(outfolder, plots): write all the outputs, as 3DFIT with METHOD GLOBAL or BAYESIAN.
     write_bestmodel(plots, norm, **kwargs): write the best model, maps, PVs and plots.
     corner_plot(...), plot_profiles(...), print_stats(...), print_priors(), chi2_reduced()
     plot_parameters(), plot_chanmaps(), plot_pvs(), plot_pvslices(), plot_kinmaps(): the plots of the
@@ -66,12 +66,13 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
     parameters), samples, samples_equal, quantiles, outri (best-fit rings).
     """
 
-    TASK = "BAYESIAN3DFIT"              # its task flag in parameter files (the model engine is that of 3DFIT)
+    TASK = "3DFIT"                      # its task flag in parameter files (METHOD GLOBAL or BAYESIAN)
+    DEFAULT_METHOD = "BAYESIAN"         # the METHOD of run() when it is not given
 
     _KEYWORD_OPTIONS = ("FREE", "SAMPLER", "PRIORS", "SAMPLEROPTS", "RUNOPTS", "LIKEOPTS")
 
     def __init__(self, cube=None, **params):
-        self.taskname = "BAYESIAN3DFIT"
+        self.taskname = "3DFIT"
         self._method = None
         self.freepar_idx = None
         self.ndim = 0
@@ -124,7 +125,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             if self.prior_distr is not None:
                 for k in given["PRIORS"]:
                     self.prior_distr[k] = None       # frozen again by the next run
-        if params:
+        if _resets(params):
             self._galfit = self._ellprof = None
             self._cube_obj = None
             if self._inri is not None:
@@ -132,7 +133,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         return self
 
     def _keyword_option(self, name, value):
-        """ The value of FREE (list of free parameters), SAMPLER ('nautilusbb', 'nautilus', 'dynesty' or 'optimise'),
+        """ The value of FREE (list of free parameters), SAMPLER ('nautilusbb', 'nautilus' or 'dynesty'),
         PRIORS (dict of priors), SAMPLEROPTS, RUNOPTS or LIKEOPTS (dict of options), from a
         string as in a parameter file. Raises ValueError. """
         from ..params import bayes_freepar, bayes_priors, bayes_options, bayes_likeopts, BAYES_FUNC_PARS
@@ -145,14 +146,10 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             if name == "PRIORS":
                 return bayes_priors(s)
             if name == "SAMPLER":
-                m = s.strip().lower()
-                m = "optimise" if m == "optimize" else m
-                if m not in ("nautilusbb", "nautilus", "dynesty", "optimise"):
-                    raise ValueError(f"unknown sampler {s.strip()} (NAUTILUSBB, NAUTILUS, DYNESTY or OPTIMISE)")
-                return m
+                return check_sampler(s, "3DFIT").strip()
             return bayes_options(s)
         except ValueError as e:
-            raise ValueError(f"BAYESIAN3DFIT: {name}: {e}") from None
+            raise ValueError(f"3DFIT: {name}: {str(e).replace('3DFIT: ', '')}") from None
 
     def _run_defaults(self):
         """ The defaults of run() given as parameters: FREE, SAMPLER, SAMPLEROPTS, RUNOPTS, LIKEOPTS. """
@@ -188,13 +185,13 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         return out
 
     def _all_params(self, outfolder=None, fitsfile=None):
-        # The defaults of the Bayesian fit that differ from 3DFIT (keywords.TASK_DEFAULTS): ANALYTIC
+        # The defaults of METHOD GLOBAL and BAYESIAN that differ from CLASSIC (keywords.task_defaults): ANALYTIC
         # models, whose likelihood has no Monte-Carlo noise (with sigma = the noise, the noise of MC
         # models makes it rough and the sampling slow) and which are about twice faster. A GALMODTYPE
         # that is given (MC) is kept.
-        from ..keywords import TASK_DEFAULTS
+        from ..keywords import task_defaults
         prm = super(Bayesian3DFIT, self)._all_params(outfolder=outfolder, fitsfile=fitsfile)
-        for k, v in TASK_DEFAULTS[self.TASK].items():
+        for k, v in task_defaults(self.TASK, "BAYESIAN").items():
             prm.setdefault(k, v)
         return prm
 
@@ -209,9 +206,16 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         of = self._outfolder()
         hdu = self._input_hdu()
         prm = self._all_params(outfolder=of, fitsfile=self._cube if hdu is None else "in-memory cube")
-        prm.pop(self.TASK, None)                 # the engine is that of 3DFIT...
-        prm.pop("FREE", None)                    # ...whose FREE is not that of BAYESIAN3DFIT
+        # the engine is that of 3DFIT CLASSIC: without FREE (not that of METHOD GLOBAL and BAYESIAN) and the options
+        # of those methods (e.g. PRIORS, SAMPLER)
+        from ..keywords import lookup, methods_for
+        for k in list(prm):
+            kw = lookup(k)
+            ms = methods_for(kw, "3DFIT") if kw is not None else None
+            if k == "FREE" or (ms is not None and "CLASSIC" not in ms):
+                prm.pop(k)
         prm["3DFIT"] = True
+        prm["METHOD"] = "CLASSIC"
         prm["VERBOSE"] = False
         prm["THREADS"] = 1
         prm["TWOSTAGE"] = False                  # one set of rings (<prefix>_rings_final1.txt), also for the plots
@@ -243,7 +247,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         from ..galfit import initial_rings, initialParametersText
         c = self._cube_obj if self._cube_obj is not None else self._load_cube()
         c.checkBeam()                            # (as 3DFIT; the default priors use the beam)
-        ini = initial_rings(c, copy.deepcopy(c.pars().gf), write=False, buildmask=True, task=self.TASK)
+        ini = initial_rings(c, copy.deepcopy(c.pars().gf), write=False, buildmask=True, beamrings=True)
         inR, toEstimate = ini.rings, ini.toEstimate
         if show_initial:
             print(initialParametersText(inR, ini.estimated), end="")
@@ -557,9 +561,28 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             p[self.freepar_idx[key]] = fast_ppf(self.prior_distr[key])(u[self.freepar_idx[key]])
         return p
 
-    def run(self, freepar=None, method=None, threads=None, *, log_like=None, like_kwargs: dict = {},
-            sampler_kwargs: dict = {}, run_kwargs: dict = {}, **kwargs):
-        """ Sample the posterior.
+    def run(self, freepar=None, threads=None, *, log_like=None, like_kwargs: dict = {}, sampler_kwargs: dict = {},
+            run_kwargs: dict = {}, **kwargs):
+        """ Fit with METHOD (a parameter, method=...; default BAYESIAN): BAYESIAN samples the posterior (sample(), with
+        SAMPLER), GLOBAL finds the maximum of the likelihood (optimize(), with MINIMISER, the other arguments of
+        optimize in SAMPLEROPTS and sampler_kwargs, the options of the minimiser in RUNOPTS and run_kwargs). The other
+        arguments are those of sample(); kwargs: verbose and any BBarolo parameter (e.g. method, sampler, minimiser).
+        Nothing is written (see write). Returns self. """
+        params = {k: v for k, v in kwargs.items() if k not in ('verbose', 'dynamic')}
+        self._check_moved(kwargs, 'run')
+        if params:
+            self.update(**params)
+        kwargs = {k: v for k, v in kwargs.items() if k in ('verbose', 'dynamic')}
+        if fit_method(self, self.DEFAULT_METHOD) == "GLOBAL":
+            okw = global_arguments(self, self._run_defaults(), sampler_kwargs, run_kwargs, "3DFIT")
+            return self.optimize(freepar, threads=threads, log_like=log_like, like_kwargs=like_kwargs,
+                                 verbose=kwargs.get('verbose', True), **okw)
+        return self.sample(freepar, threads=threads, log_like=log_like, like_kwargs=like_kwargs,
+                           sampler_kwargs=sampler_kwargs, run_kwargs=run_kwargs, **kwargs)
+
+    def sample(self, freepar=None, sampler=None, threads=None, *, log_like=None, like_kwargs: dict = {},
+               sampler_kwargs: dict = {}, run_kwargs: dict = {}, **kwargs):
+        """ Sample the posterior (METHOD BAYESIAN). Nothing is written (see write). Returns self.
 
         Args:
           threads (int):        number of processes for the sampler (default: THREADS if it was
@@ -570,11 +593,8 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                                 ['vrot','vdisp_single','inc_single','sigma'], or a string as FREE in
                                 a parameter file ('VROT VDISP_SINGLE INC_SINGLE SIGMA'). Names are
                                 case-insensitive (PA is phi, DISP is vdisp)
-          method (str):         'nautilusbb' (the copy of nautilus in BBarolo), 'nautilus' (the package
-                                nautilus-sampler) or 'dynesty' (default: SAMPLER if given, otherwise 'nautilusbb');
-                                'optimise' (or 'optimize'): optimize(), with sampler_kwargs its arguments
-                                (method, x0, posterior, errors, nstart, seed, step, nsamples) and run_kwargs
-                                the options of its method (SAMPLER OPTIMISE in parameter files)
+          sampler (str):        'nautilusbb' (the copy of nautilus in BBarolo), 'nautilus' (the package
+                                nautilus-sampler) or 'dynesty' (default: SAMPLER if given, otherwise 'nautilusbb')
           log_like (callable):  a custom log-likelihood f(theta, **like_kwargs) (default _log_likelihood)
           like_kwargs (dict):   the options of the likelihood, added to LIKEOPTS if given (they are
                                 kept in self.like_kwargs, with the defaults; see
@@ -602,17 +622,13 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                                 default False, the static one), and any BBarolo parameter
         """
         params = {k: v for k, v in kwargs.items() if k not in ('verbose', 'dynamic')}
-        self._check_moved(kwargs, 'run')
+        self._check_moved(kwargs, 'sample')
         if params:
             self.update(**params)
         kwargs = {k: v for k, v in kwargs.items() if k in ('verbose', 'dynamic')}
         dflt = self._run_defaults()
-        method = str(dflt.get('SAMPLER', 'nautilusbb') if method is None else method).lower()
+        method = dflt.get('SAMPLER', 'nautilusbb') if sampler is None else check_sampler(sampler, "3DFIT")
         sampler_kwargs = {**dflt.get('SAMPLEROPTS', {}), **sampler_kwargs}
-        if method in SAMPLER_NAMES:                  # (SAMPLER OPTIMISE: the optimisation)
-            okw = optimize_options(sampler_kwargs, {**dflt.get('RUNOPTS', {}), **run_kwargs})
-            return self.optimize(freepar, threads=threads, log_like=log_like, like_kwargs=like_kwargs,
-                                 verbose=kwargs.get('verbose', True), **okw)
         if 'dynamic' in sampler_kwargs:              # dynesty: static (default) or dynamic sampler
             kwargs.setdefault('dynamic', bool(sampler_kwargs.pop('dynamic')))
         if method == 'dynesty' and 'seed' in sampler_kwargs:     # (nautilus(bb): its own option seed)
@@ -621,7 +637,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         run_kwargs = {**dflt.get('RUNOPTS', {}), **run_kwargs}
         sampler_kwargs, run_kwargs = sampler_options(method, kwargs.get('dynamic', False), sampler_kwargs,
                                                       run_kwargs)
-        like_kwargs, threads, custom = self._start_fit(freepar, threads, log_like, like_kwargs, kwargs, 'run')
+        like_kwargs, threads, custom = self._start_fit(freepar, threads, log_like, like_kwargs, kwargs, 'sample')
         verbose = kwargs.get('verbose', True)
         self._method = method
         self.optimum = None
@@ -637,11 +653,11 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                   "sigma is right, or make it\n         a free parameter).")
         return self._finish_fit(like_kwargs, custom, verbose)
 
-    def optimize(self, freepar=None, method='L-BFGS-B', threads=None, *, log_like=None, like_kwargs: dict = {},
+    def optimize(self, freepar=None, minimiser='L-BFGS-B', threads=None, *, log_like=None, like_kwargs: dict = {},
                  x0=None, posterior=False, errors=True, nstart=1, seed=None, step=1e-3, options: dict = {},
                  nsamples=4000, **kwargs):
-        """ Find the best fit by a classic minimisation of -log L, with the likelihood of run() (the same free
-        parameters, options and priors: see run), e.g. to test the sampling. Nothing is written (see write).
+        """ Find the best fit by a classic minimisation of -log L (METHOD GLOBAL), with the likelihood of sample() (the
+        same free parameters, options and priors: see sample). Nothing is written (see write). Returns self.
 
         The result is the maximum likelihood within the bounds of the priors (posterior=True: the maximum of the
         posterior, likelihood x prior), searched in the unit cube of the priors (see bbarolo.bayesian.optimize).
@@ -652,9 +668,9 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         bbarolo.bayesian.optimize.optimize).
 
         Args:
-          freepar, threads, log_like, like_kwargs: as in run (threads: the processes of the likelihoods of a
+          freepar, threads, log_like, like_kwargs: as in sample (threads: the processes of the likelihoods of a
                                 gradient, of the Hessian and of a population)
-          method (str):         'L-BFGS-B' (default: quasi-Newton, the gradient by central differences),
+          minimiser (str):      'L-BFGS-B' (default: quasi-Newton, the gradient by central differences),
                                 'TNC', 'SLSQP', 'trust-constr', 'Powell', 'Nelder-Mead', 'COBYLA', 'COBYQA'
                                 (scipy.optimize.minimize, with the bounds of the priors) or
                                 'differential_evolution' (global, then polished with L-BFGS-B)
@@ -668,11 +684,11 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                                 keep the best (default 1)
           step (float):         the step of the gradient, in units of the range of each prior (default 1e-3: the
                                 likelihood of the discretised models is rough at much smaller steps)
-          options (dict):       options of the method (scipy's, e.g. maxiter)
+          options (dict):       options of the minimiser (scipy's, e.g. maxiter)
           kwargs:               verbose (bool) and any BBarolo parameter
         """
         from .optimize import optimize as _optimize, summary, method_name
-        method = method_name(method)
+        method = method_name(minimiser)
         params = {k: v for k, v in kwargs.items() if k not in ('verbose',)}
         self._check_moved(kwargs, 'optimize')
         if params:
@@ -689,7 +705,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         else:
             theta0 = self._initial_theta() if x0 is None else np.asarray(x0, float)
         vprint(verbose, f"\nOptimising with {method} ({threads} process{'es' if threads > 1 else ''})...")
-        res = _optimize(self, like_kwargs, theta0, method=method, threads=threads, posterior=posterior,
+        res = _optimize(self, like_kwargs, theta0, minimiser=method, threads=threads, posterior=posterior,
                         errors=errors, nstart=nstart, seed=seed, step=step, options=options, nsamples=nsamples,
                         verbose=verbose, showbar=show_bar(self))
         summary(res, verbose)
@@ -754,7 +770,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         self._set_like_options({**dflt.get('LIKEOPTS', {}), **like_kwargs}, custom=custom or own)
         like_kwargs = self._like_kwargs                      # (those of each call of the log-likelihood)
         useBBres = self.like_kwargs['bbres']
-        vprint(kwargs.get('verbose', True), banner("BAYESIAN3DFIT"))
+        vprint(kwargs.get('verbose', True), banner("3DFIT " + ("GLOBAL" if caller == "optimize" else "BAYESIAN")))
         self._setup(freepar, **kwargs)
         self._log_like_func = log_like if log_like is not None else self._log_likelihood
         verbose = kwargs.get('verbose', True)

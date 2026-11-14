@@ -16,17 +16,21 @@ computes in memory and writes nothing; write() writes the files of the command l
     >>> res.rings, res.model
     >>> res.write("output/")                      # or f.write()
 
-Tasks: FitMod3D (3DFIT), GalMod (GALMOD), GalWind (GALWIND), Search (SEARCH),
-FitMod2D (2DFIT), Ellprof (ELLPROF), Smooth (SMOOTH), SmoothSpec (SMOOTHSPEC),
+Tasks: FitMod3D (3DFIT), WindFit (WINDFIT), SlitFit (SLITFIT), GalMod (GALMOD), GalWind (GALWIND),
+Search (SEARCH), FitMod2D (2DFIT), Ellprof (ELLPROF), Smooth (SMOOTH), SmoothSpec (SMOOTHSPEC),
 Maps (TOTALMAP, VELOCITYMAP, ...), PVSlice (PVSLICE), SpacePar (SPACEPAR),
-Rend3D (REND3D), ContSub (CONTSUB), Stats (STATS), MakeMask (MAKEMASK),
-Bayesian3DFIT (BAYESIAN3DFIT: 3D fit with nested sampling).
+Rend3D (REND3D), ContSub (CONTSUB), Stats (STATS), MakeMask (MAKEMASK). The fits (FitMod3D, WindFit,
+SlitFit) take method= (METHOD): 'classic' (3DFIT only, its default), 'global' (the maximum of the likelihood,
+the default of WindFit and SlitFit) or 'bayesian' (nested sampling).
 
     >>> bbarolo.run("ngc2403.par", threads=8)     # a parameter file, as the command line (writes)
     >>> bbarolo.help("free")                      # one parameter; help("3DFIT"): a task
 
 Command line: ``BBarolo -p param.par`` (after pip install), ``python -m bbarolo -p
 param.par``, or the launchers run_bbarolo.py and bin/BBarolo (no install needed).
+
+Engines of the fits with METHOD GLOBAL and BAYESIAN, for custom likelihoods and more: Bayesian3DFIT,
+BayesianWind, BayesianSlitFit (run() follows METHOD; sample() and optimize()).
 
 Other tools: GalMod3D (model cubes from 3D fields of the density and velocity of the gas, as
 functions of (R, z), (R, phi, z) or (x, y, z); Python only), DiskModel (the model engine of
@@ -37,8 +41,8 @@ search, ...) can also be used directly.
 """
 
 from ._version import __version__, __BBBversion__, __cpp_reference__
-from .tasks import (FitMod3D, GalMod, GalWind, Search, FitMod2D, Ellprof, Smooth, SmoothSpec, Maps,
-                    PVSlice, SpacePar, Rend3D, ContSub, Stats, MakeMask, run, Result, read_parfile)
+from .tasks import (FitMod3D, WindFit, SlitFit, GalMod, GalWind, Search, FitMod2D, Ellprof, Smooth, SmoothSpec,
+                    Maps, PVSlice, SpacePar, Rend3D, ContSub, Stats, MakeMask, run, Result, read_parfile)
 from .keywords import help
 from .params import Param
 from .cube import Cube
@@ -49,7 +53,8 @@ from .pvslice import pv_path, pv_sample, pv_extract
 from .utils import SimulatedGalaxyCube, emptyfits
 from .bbutils import BBaroloError
 
-__all__ = ['FitMod3D', 'GalMod', 'GalWind', 'Search', 'FitMod2D', 'Ellprof', 'Smooth', 'SmoothSpec', 'Maps',
+__all__ = ['FitMod3D', 'WindFit', 'SlitFit', 'GalMod', 'GalWind', 'Search', 'FitMod2D', 'Ellprof', 'Smooth',
+           'SmoothSpec', 'Maps',
            'PVSlice', 'SpacePar', 'Rend3D', 'ContSub', 'Stats', 'MakeMask', 'Bayesian3DFIT', 'BayesianWind',
            'BayesianSlitFit', 'run',
            'Result', 'read_parfile', 'Param', 'Cube', 'Rings', 'DiskModel', 'GalMod3D', 'pv_path', 'pv_sample',
@@ -63,7 +68,8 @@ BBBversion = __BBBversion__
 
 
 def __getattr__(name):
-    # Bayesian3DFIT, BayesianWind and BayesianSlitFit are imported on demand (its samplers are optional dependencies)
+    # the engines Bayesian3DFIT, BayesianWind and BayesianSlitFit are imported on demand (their samplers are optional
+    # dependencies)
     if name == "Bayesian3DFIT":
         from .bayesian import Bayesian3DFIT
         return Bayesian3DFIT

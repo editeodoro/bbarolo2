@@ -1,5 +1,5 @@
 """
-The outputs of BayesianWind (BAYESIANWIND), written by BayesianWind.write in the output folder, with the prefix of
+The outputs of BayesianWind (WINDFIT), written by BayesianWind.write in the output folder, with the prefix of
 the cube (<prefix>):
 
   <prefix>_wind_params.txt       the free parameters: median and 1-sigma interval of the posterior (optimize: the best
@@ -52,12 +52,12 @@ def write_outputs(f, outfolder=None, plots=None, verbose=True):
     with open(fn, "w") as out:
         opt = f.optimum if f._method == "optimize" else None
         if opt is None:
-            out.write(f"# BAYESIANWIND: emission {f.like_kwargs['emission']}, "
+            out.write(f"# WINDFIT: emission {f.like_kwargs['emission']}, "
                       f"{f._likelihood_name()} likelihood, sampler "
                       f"{f._method}, effective sample size {f.ess:.0f}, log-likelihood at the medians "
                       f"{f.best_logl:.6g}\n")
         else:
-            out.write(f"# BAYESIANWIND: emission {f.like_kwargs['emission']}, {f._likelihood_name()} likelihood, "
+            out.write(f"# WINDFIT: emission {f.like_kwargs['emission']}, {f._likelihood_name()} likelihood, "
                       f"{'maximum a posteriori' if opt.posterior else 'maximum likelihood'} by {opt.method} "
                       f"(errors: {'Laplace approximation' if opt.cov is not None else 'not computed'}), "
                       f"log-likelihood at the best fit {f.best_logl:.6g}\n")
@@ -141,7 +141,7 @@ def write_outputs(f, outfolder=None, plots=None, verbose=True):
     files.append(fn)
     if plots is not None and plots >= 0:
         files += _plots(f, of, prefix, run=plots > 0, verbose=verbose)
-    vprint(verbose, f" BAYESIANWIND: written {len(files)} files with the prefix {pre}")
+    vprint(verbose, f" WINDFIT: written {len(files)} files with the prefix {pre}")
     return files
 
 
@@ -178,7 +178,7 @@ def _plots(f, of, prefix, run=True, verbose=True):
         return out
     ret = run_scripts(paths)
     if ret != 0:
-        vprint(verbose, " BAYESIANWIND: something went wrong with the plots: check the scripts in " + of + "plotscripts/")
+        vprint(verbose, " WINDFIT: something went wrong with the plots: check the scripts in " + of + "plotscripts/")
     out += [pre + s for s in ("_chanmaps_wind.pdf", "_maps_wind.pdf", "_pv_wind.pdf") if os.path.isfile(pre + s)]
     import matplotlib
     matplotlib.use("Agg", force=False)
@@ -192,9 +192,9 @@ def _plots(f, of, prefix, run=True, verbose=True):
         plt.close(fig)
         out.append(fn)
     except ImportError:
-        vprint(verbose, " BAYESIANWIND: no corner plot (it needs the package corner)")
+        vprint(verbose, " WINDFIT: no corner plot (it needs the package corner)")
     except ValueError as e:                   # (e.g. a parameter without dynamic range in the samples)
-        vprint(verbose, f" BAYESIANWIND: no corner plot ({e})")
+        vprint(verbose, f" WINDFIT: no corner plot ({e})")
     # the shells
     tab = f.shells_table()
     em = f.emission_errors()

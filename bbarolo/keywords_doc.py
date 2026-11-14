@@ -83,9 +83,9 @@ bars are turned off. With `VERBOSE`, the log starts with the list of the paramet
         group='Messages and computation',
         default='the number of cores, at most 16',
         doc="""\
-The number of threads for the parallel parts of the tasks: e.g. 3DFIT fits the rings in parallel,
-and the models, the convolutions, SPACEPAR, 2DFIT and the RMS map use several threads. For
-BAYESIAN3DFIT it is the number of processes of the sampler. Values below 1 are set to 1.
+The number of threads for the parallel parts of the tasks: e.g. 3DFIT fits the rings in parallel, and the
+models, the convolutions, SPACEPAR, 2DFIT and the RMS map use several threads. For the METHOD GLOBAL and
+BAYESIAN of the fits it is the number of processes of the likelihoods. Values below 1 are set to 1.
 
 The ring tables of 3DFIT do not depend on THREADS; the Monte Carlo noise of the final MC models does
 (one random seed per chunk). In BBarolo 1.8 the default was all the cores.
@@ -108,7 +108,7 @@ Whether to show progress bars. They are drawn only on a terminal, and never with
         doc="""\
 Whether plots are made (with matplotlib), and how many:
 
-- `-1`: no plots; 3DFIT and BAYESIAN3DFIT write no final model (only the ring tables), and no task
+- `-1`: no plots; 3DFIT writes no final model (only the ring tables), and no task
   writes the mask;
 - `0` (or `false`): no plots;
 - `1` (or `true`, the default): the plots of the tasks, e.g. the channel maps, position-velocity
@@ -165,9 +165,8 @@ parameters that are not given (the rings, centre, `VSYS`, `INC`, `PA`, `VROT`, .
 the data, with the mask set by `MASK` (by default the detections of the source finder). The
 estimates can be poor for data of low resolution or low S/N: check the results.
 
-With `BAYESIAN3DFIT true`, AUTO does not turn on 3DFIT. The Python task classes do not accept it
-(use `FitMod3D`, or `bbarolo.run(auto=True)`).
-"""),
+AUTO runs 3DFIT with the `METHOD` given (e.g. `BBarolo -f cube.fits METHOD=global`). The Python task classes
+do not accept it (use `FitMod3D`, or `bbarolo.run(auto=True)`)."""),
     'FLUXCONVERT': dict(
         group='Options',
         doc="""\
@@ -190,7 +189,7 @@ They are used for the noise of the cube (the thresholds of SEARCH, STATS, `SNMAP
 3DFIT), the `SMOOTH` and `NEGATIVE` masks and the RMS map. Blank voxels (0 or NaN) are excluded.
 """),
     'CONTSUB': dict(
-        group={'BAYESIANSLITFIT': 'Input', '*': 'Task'},
+        group={'SLITFIT': 'Input', '*': 'Task'},
         doc="""\
 Subtracts the continuum: a polynomial of degree `CONTORDER` is fitted to each spectrum, excluding the
 channels of `EXCLWIND`, and subtracted from it. `true` runs it.
@@ -198,13 +197,13 @@ channels of `EXCLWIND`, and subtracted from it. `true` runs it.
 It runs before all the other tasks, which then analyse the subtracted cube. The cube is written in
 `<prefix>_contsub.fits`. In Python: the `ContSub` class, or `contsub=True` given to any other task.
 
-BAYESIANSLITFIT: the continuum of each position of the slit (e.g. stellar light), a polynomial of degree
+SLITFIT: the continuum of each position of the slit (e.g. stellar light), a polynomial of degree
 `CONTORDER` fitted with a 3σ clipping in the spectral window of the fit away from the lines (found
 automatically) and from the channels of `EXCLWIND` and `MASKWAVE`, and subtracted. It is written in
 `<prefix>_slit_cont.fits`.
 """),
     'EXCLWIND': dict(
-        group={'BAYESIANSLITFIT': 'Input', '*': 'Options'},
+        group={'SLITFIT': 'Input', '*': 'Options'},
         default='none (all the channels are used)',
         doc="""\
 The channels excluded from the continuum fit of `CONTSUB`, i.e. those with line emission: single
@@ -214,13 +213,13 @@ error, as is a window that excludes all the channels.
 
 If not given, the continuum is fitted to all the channels, including those of the line.
 
-BAYESIANSLITFIT: channels of the slit (counted from 0 along its spectral axis) that are not continuum, in
+SLITFIT: channels of the slit (counted from 0 along its spectral axis) that are not continuum, in
 addition to the channels of the lines, which are found automatically: they are left out of the fit of the
 continuum (`CONTSUB`) and of the measure of the noise of each position (e.g. other emission or absorption
 lines in the window).
 """),
     'CONTORDER': dict(
-        group={'BAYESIANSLITFIT': 'Input', '*': 'Options'},
+        group={'SLITFIT': 'Input', '*': 'Options'},
         doc="""\
 The degree of the polynomial fitted to each spectrum by `CONTSUB`: `0` a constant, `1` a straight
 line (the default), `2` a parabola, ... Negative values are set to 1.
@@ -240,7 +239,7 @@ the fits and the maps, which then use this mask.
         group='Mask',
         doc="""\
 The mask of the emission, i.e. the voxels with genuine emission. The fits and models (3DFIT,
-BAYESIAN3DFIT, GALMOD, SPACEPAR) compare model and data within it; the maps (not `GLOBALPROFILE`),
+GALMOD, SPACEPAR) compare model and data within it; the maps (not `GLOBALPROFILE`),
 2DFIT and ELLPROF use the data within it. It is written in `<prefix>_mask.fits`. Values
 (case-insensitive):
 
@@ -287,21 +286,21 @@ printed (with `VERBOSE`) and written in `<prefix>_stats.txt`. `true` runs it.
 """),
     'GALMODTYPE': dict(
         group='Model',
-        default='MC (ANALYTIC for BAYESIAN3DFIT)',
+        default='MC (ANALYTIC for 3DFIT with METHOD GLOBAL or BAYESIAN)',
         doc="""\
 The kind of disk models. `MC`: the Monte Carlo models of GIPSY's GALMOD and BBarolo 1.8, made of random
 clouds (see `CDENS`, `NV`, `ISEED`). `ANALYTIC`: models without Monte Carlo noise, whose clouds lie on a
 regular grid in radius, azimuth and height, with line profiles integrated over the channels; they are
 usually faster, and their residuals change smoothly with the parameters.
 
-The default is `MC`, except for BAYESIAN3DFIT, whose sampling needs a likelihood without noise
+The default is `MC`, except for 3DFIT with `METHOD` GLOBAL or BAYESIAN, whose likelihood must be without noise
 (`ANALYTIC`). In GALWIND only the cylinders can be ANALYTIC. ANALYTIC is new in BBarolo 2.
 """),
     'RINGMODE': dict(
         group='Model',
         doc="""\
-How a set of rings becomes a model, in the final models of 3DFIT and the models of GALMOD and
-BAYESIAN3DFIT; the values are interpolated linearly between the radii.
+How a set of rings becomes a model, in the final models of 3DFIT (all its METHODs) and the
+models of GALMOD; the values are interpolated linearly between the radii.
 
 - `CENTRED` (the default): each ring is an annulus centred on its radius, reaching halfway to the
   neighbouring rings, as the rings fitted by 3DFIT; the disk extends half a ring beyond the first and
@@ -572,7 +571,7 @@ fewer than 5 channels, the noise of all of them). The noise is the MADFM/0.6745 
 standard deviation (`FLAGROBUSTSTATS`). `true` runs it.
 """),
     'MAPTYPE': dict(
-        group={'3DFIT': 'Outputs', 'BAYESIAN3DFIT': 'Outputs', 'BAYESIANWIND': 'Outputs', 'GALMOD': 'Outputs',
+        group={'3DFIT': 'Outputs', 'WINDFIT': 'Outputs', 'GALMOD': 'Outputs',
                '*': 'Maps'},
         doc="""\
 How the maps are derived: `MOMENT` (default), the moments of the spectra, or `GAUSSIAN`, a Gaussian
@@ -585,7 +584,7 @@ its channels, `GAUSSIAN` fits all the lines with one velocity and one dispersion
 Case-insensitive; another value is replaced by `MOMENT`, with a warning.
 
 For `TOTALMAP`, `VELOCITYMAP` and `DISPERSIONMAP`, and for the maps of the data and of the models
-written by 3DFIT, BAYESIAN3DFIT, BAYESIANWIND and GALMOD (`maps/`, and the maps page of the plots).
+written by 3DFIT, WINDFIT and GALMOD (`maps/`, and the maps page of the plots).
 """),
     'SNMAP': dict(
         group={'SEARCH': 'Outputs', '*': 'Maps'},
@@ -672,69 +671,67 @@ of single pixels and its face-on value
 Jy, also the face-on HI column density (1E20 atoms/cm2) and mass surface density (Msun/pc2). In
 BBarolo 1.8 the files were `<prefix>_densprof.txt` and `<prefix>_densmap.fits`.
 
-With a beam in the header, `<prefix>_ellprof_deconvolved.txt` also gives the profile corrected for the
-beam, as BAYESIAN3DFIT computes it: the face-on surface densities of the rings whose beam-convolved
-model reproduces the total intensity map (the data in the mask dilated by one beam and ±3 channels, not
-clipped), with a weak smoothness prior and an annulus beyond the last ring that takes the emission
-outside the rings; `Z0` is the thickness of the model (thin if not given). The table has the radius, the
-deconvolved face-on surface density with its 1-sigma errors from the noise (the rings are fixed), the
-observed one (`SDENS_FO` above, which the beam smooths), the densities of the model (as `DENS` of
-GALMOD) and, for maps in Jy, the HI mass surface densities. With `SIDE` `A` or `R` it uses that half
+With a beam in the header, `<prefix>_ellprof_deconvolved.txt` also gives the profile corrected for the beam,
+as 3DFIT with METHOD GLOBAL or BAYESIAN computes it: the face-on surface densities of the rings whose
+beam-convolved model reproduces the total intensity map (the data in the mask dilated by one beam and ±3
+channels, not clipped), with a weak smoothness prior and an annulus beyond the last ring that takes the
+emission outside the rings; `Z0` is the thickness of the model (thin if not given). The table has the
+radius, the deconvolved face-on surface density with its 1-sigma errors from the noise (the rings are
+fixed), the observed one (`SDENS_FO` above, which the beam smooths), the densities of the model (as `DENS`
+of GALMOD) and, for maps in Jy, the HI mass surface densities. With `SIDE` `A` or `R` it uses that half
 only. For a 2D map the data are the map itself, the model of each ring is the ring projected on the sky
 (with the vertical profile `LTYPE` of thickness `Z0`) and convolved with the beam, the errors come from the
 scatter of the residuals of the fit (which includes the structure that the rings do not describe; for a
-clipped map, of its pixels with data), and `DENS` is the face-on surface density in the units of the map
-per pixel. The deconvolution works at any inclination, up to edge-on, where the observed profile is
-meaningless (it inverts the projection along the line of sight together with the beam): on simulated
-disks it recovers the profile within 5-10% from 60 to 90 degrees. Edge-on, `Z0` must be close to the true
-thickness: a thickness three times the one given made the whole profile 20% low.
-"""),
+clipped map, of its pixels with data), and `DENS` is the face-on surface density in the units of the map per
+pixel. The deconvolution works at any inclination, up to edge-on, where the observed profile is meaningless
+(it inverts the projection along the line of sight together with the beam): on simulated disks it recovers
+the profile within 5-10% from 60 to 90 degrees. Edge-on, `Z0` must be close to the true thickness: a
+thickness three times the one given made the whole profile 20% low."""),
     '3DFIT': dict(
         group='Task',
         doc="""\
-Fits a 3D tilted-ring model to the datacube of `FITSFILE`: the rings are fitted one at a time, in
-parallel threads, by comparing the data in the mask (`MASK`) with models of the ring convolved with the
-beam (Di Teodoro & Fraternali 2015). `true` runs the task.
+Fits a 3D tilted-ring model to the datacube of `FITSFILE`. `true` runs the task, with one of three
+methods (`METHOD`):
 
-The ring parameters that are not given are estimated from the data (`GUESSTYPE`) or take their
-defaults, and `FREE` lists those that are fitted. With `TWOSTAGE`, the geometry is regularised and the
-rings are fitted again. The outputs are the ring tables `<prefix>_rings_initial.txt` (the values given
-or estimated, before the 2D refinement of PA and VROT, in `<prefix>_2drings.txt`, and before the
-beam-wide rings of `REVERSE`), `<prefix>_rings_final1.txt` and `<prefix>_rings_final2.txt`, the model
-`<prefix>_mod_<norm>.fits` with its moment maps and position-velocity slices, the radial profile
-`<prefix>_densprof.txt` and the plots.
+- `CLASSIC` (the default): the fit of BBarolo (Di Teodoro & Fraternali 2015). The rings are fitted one
+  at a time, in parallel threads, by minimising the residuals between the data in the mask (`MASK`) and
+  models of the ring convolved with the beam. With `TWOSTAGE`, the geometry is regularised and the rings
+  are fitted again.
+- `GLOBAL`: all the rings and parameters together, at the maximum of a Gaussian likelihood (within the
+  bounds of the priors), with the errors of its curvature (the Laplace approximation): seconds or
+  minutes. The minimiser is `MINIMISER`.
+- `BAYESIAN`: the same likelihood, the posterior distribution of the free parameters sampled with nested
+  sampling (`SAMPLER`): errors that do not assume a Gaussian posterior, at the cost of a longer run.
 
-3DFIT does not run with `BAYESIAN3DFIT`, which turns it off; when both 3DFIT and `GALMOD` are set,
-GALMOD is turned off.
-"""),
-    'BAYESIAN3DFIT': dict(
-        group='Task',
-        doc="""\
-Fits a 3D tilted-ring model to the datacube by sampling the posterior distribution of the free
-parameters with nested sampling (see `SAMPLER`), instead of minimising the residuals as `3DFIT` does.
-`true` runs the task. It needs the free parameters in `FREE` (e.g. `FREE VROT VDISP_SINGLE INC_SINGLE`)
-The default sampler (`SAMPLER NAUTILUSBB`) is part of BBarolo; `SAMPLER NAUTILUS` and `DYNESTY` need
-their packages (`pip install "bbarolo[bayesian]"` installs both).
+The ring parameters that are not given are estimated from the data (`GUESSTYPE`) or take their defaults,
+and `FREE` lists those that are fitted (with `GLOBAL` and `BAYESIAN`, also `NAME_SINGLE`, one value for
+all the rings, and `NAME_FUNC`, a function of radius; the default is `VROT VDISP XPOS_SINGLE YPOS_SINGLE
+VSYS_SINGLE INC_SINGLE PA_SINGLE Z0_SINGLE RADMAX FRACERR`). Some parameters belong to one method:
+`DELTAINC`, `TWOSTAGE`, `FLAGERRORS`, `NORM` and the other options of the minimisation ring by ring to
+`CLASSIC`; `PRIORS`, `LIKEOPTS`, `SAMPLEROPTS` and `RUNOPTS` to `GLOBAL` and `BAYESIAN` (a warning says when
+one is given for another method).
 
-The rings are given as in `3DFIT`. The parameters that are not free stay fixed, and the geometry that
-is not given (rings, `XPOS`, `YPOS`, `VSYS`, `VROT`, `INC`, `PA`) is estimated as in `3DFIT`
-(`GUESSTYPE`); `VDISP` is 8 km/s (with `GUESSTYPE` `FIT`, estimated from the second moment as in `3DFIT`),
-`Z0` one pixel, `VRAD` 0 and `DENS` 1 when not given. The models are
-ANALYTIC by default (`GALMODTYPE`), with one set of rings (no second stage), and `NORM` is not used:
-unless `DENS` is free, the density profile is deconvolved from the total intensity map.
+With `GLOBAL` and `BAYESIAN` the models are ANALYTIC by default (`GALMODTYPE`), with one set of rings (no
+second stage), and `NORM` is not used: unless `DENS` is free, the density profile is deconvolved from the
+total intensity map. The likelihood is Gaussian, with the noise rms measured outside the mask, on the data
+in the mask (`MASK`) dilated by one beam and 3 channels, and the log-likelihood is divided by the
+correlation volume of the noise; `LIKEOPTS` changes these choices, `PRIORS` the priors. The fit runs on
+`THREADS` processes.
 
-The likelihood is Gaussian, with the noise rms measured outside the mask, on the data in the mask
-(`MASK`) dilated by one beam and 3 channels, and the log-likelihood is divided by the correlation
-volume of the noise; `LIKEOPTS` changes these choices, `PRIORS` the priors, `SAMPLEROPTS` and
-`RUNOPTS` the sampler. The sampling runs on `THREADS` processes.
+The outputs are the ring tables `<prefix>_rings_initial.txt` (the values given or estimated; with
+`CLASSIC`, before the 2D refinement of PA and VROT, in `<prefix>_2drings.txt`, and before the beam-wide
+rings of `REVERSE`), `<prefix>_rings_final1.txt` (and `<prefix>_rings_final2.txt` with `TWOSTAGE`), the
+model `<prefix>_mod_<norm>.fits` with its moment maps and position-velocity slices, the radial profile
+`<prefix>_densprof.txt` and the plots. With `GLOBAL` and `BAYESIAN` the errors of the rings are those of
+the posterior (the 16th and 84th percentiles; `GLOBAL`: of the Laplace approximation), the best fit is the
+median of the posterior (`GLOBAL`: the maximum of the likelihood), and BBarolo also writes, when `DENS` is
+not free, `<prefix>_densprof_deconvolved.txt`, the samples in `<prefix>_<sampler>_results.npy`
+(`_optimize_results.npy` for `GLOBAL`), the corner plot `<prefix>_corner.pdf` and, with `VERBOSE`, the
+statistics of the posterior.
 
-The best fit is the median of the posterior. BBarolo writes the outputs of `3DFIT` for it (model,
-maps, PV diagrams, `<prefix>_rings_final1.txt` with the errors from the 16th and 84th percentiles,
-`<prefix>_densprof.txt` and, when `DENS` is not free, `<prefix>_densprof_deconvolved.txt`), the samples
-in `<prefix>_<sampler>_results.npy`, with `PLOTS` the plots of `3DFIT` (the radial profiles with their errors
-in `<prefix>_parameters.pdf`) and the corner plot `<prefix>_corner.pdf`, and with `VERBOSE` the statistics of
-the posterior. `3DFIT` and
-`GALMOD` cannot run with it and are turned off. In Python the same fit is `bbarolo.Bayesian3DFIT`.
+When both 3DFIT and `GALMOD` are set, GALMOD is turned off; 3DFIT and `WINDFIT` do not run together. In
+Python: `bbarolo.FitMod3D(cube, method=...)`, whose engine for `GLOBAL` and `BAYESIAN` is
+`bbarolo.Bayesian3DFIT`.
 """),
     'GALMOD': dict(
         group='Task',
@@ -749,7 +746,7 @@ written to `<prefix>_mod_<norm>.fits`, with the rings (`<prefix>_rings_model.txt
 position-velocity slices of the model and of the data, and `<prefix>_densprof.txt`. A `VSYS` outside the
 velocity range of the cube gives a warning.
 
-GALMOD is turned off when `3DFIT` or `BAYESIAN3DFIT` run.
+GALMOD is turned off when `3DFIT` runs.
 """),
     'GALWIND': dict(
         group='Task',
@@ -760,23 +757,23 @@ apex at (`XPOS`, `YPOS`), along the rotation axis of a disk with inclination `IN
 rotates around the axis at `VROT` and has velocity dispersion `VDISP`. `true` runs the task.
 
 The cones are made of cylinders (`WTYPE` 0), of spherical shells (`WTYPE` 1) or are the noise-free cones
-of `BAYESIANWIND` (`WTYPE` 2, with the inner opening angle `OPENIN`). The model is convolved with the
+of `WINDFIT` (`WTYPE` 2, with the inner opening angle `OPENIN`). The model is convolved with the
 beam if `SM` is true and written to `<prefix>_wind.fits`, with its moment maps
 (`<prefix>_wind_0mom.fits`, ...), a position-velocity slice along the axis (`<prefix>_wind_pv.fits`) and
 plots. `XPOS`, `YPOS`, `VSYS`, `VDISP`, `INC`, `PA`, `DENS`, `OPENANG`, `VWIND` and `CONELEN` are required.
 """),
-    'BAYESIANWIND': dict(
+    'WINDFIT': dict(
         group='Task',
         doc="""\
-Fits a bi-conical wind to the datacube by sampling the posterior distribution of its geometry and
-kinematics with nested sampling (see `SAMPLER`). `true` runs the task. The wind is that of GALWIND: two
-cones with their apex at (`XPOS`, `YPOS`), along the rotation axis of a disk with inclination `INC` (0
-to 90: the cone along +z recedes, `PA` sets its side) and position angle `PA`, between the opening
+Fits a bi-conical wind to the datacube: its geometry and kinematics at the maximum of the likelihood, with
+the errors of its curvature (`METHOD GLOBAL`, the default; `MINIMISER`), or their posterior distribution
+sampled with nested sampling (`METHOD BAYESIAN`; `SAMPLER`). `true` runs the task. The wind is that of
+GALWIND: two cones with their apex at (`XPOS`, `YPOS`), along the rotation axis of a disk with inclination
+`INC` (0 to 90: the cone along +z recedes, `PA` sets its side) and position angle `PA`, between the opening
 angles `OPENIN` and `OPENANG`, out to `CONELEN`, with the radial velocity `VWIND`, the dispersion `VDISP`
 and the rotation `VROT` per shell (`RADII`, or `NLAYERS` shells; by default one per beam). The initial wind
-is given as for GALWIND (`XPOS`, `YPOS`, `VSYS`, `INC`, `PA`, `OPENANG`, `CONELEN` and `VWIND` are
-required) and the free parameters in `FREE` (e.g. `FREE VWIND_SINGLE VDISP_SINGLE INC PA OPENANG
-EMSCALE`).
+is given as for GALWIND (`XPOS`, `YPOS`, `VSYS`, `INC`, `PA`, `OPENANG`, `CONELEN` and `VWIND` are required)
+and the free parameters in `FREE` (e.g. `FREE VWIND_SINGLE VDISP_SINGLE INC PA OPENANG EMSCALE`).
 
 The emission of the wind is not assumed: it is a set of non-negative emissivities on cells of the cones
 (shells x polar bins x azimuthal sectors, about one beam across, each cone its own), solved at every
@@ -784,18 +781,17 @@ evaluation of the likelihood and marginalised, so that a patchy wind does not bi
 cones or velocities larger than the data need are penalised by the marginalisation (see `LIKEOPTS`:
 other bases of the emission, the profile likelihood). `DISKRINGS` adds a fixed disk. The likelihood is
 Gaussian, on all the voxels of the projected cones of the priors grown by one beam, with the noise rms
-measured outside the mask (`MASK`) and divided by the correlation volume of the noise, as
-`BAYESIAN3DFIT`. The sampling runs on `THREADS` processes.
+measured outside the mask (`MASK`) and divided by the correlation volume of the noise, as 3DFIT with
+`METHOD GLOBAL` or `BAYESIAN`. The fit runs on `THREADS` processes.
 
-The best fit is the median of the posterior. BBarolo writes the free parameters
-(`<prefix>_wind_params.txt`), the shells with their errors and the flux of each cone
+The best fit is the median of the posterior (`GLOBAL`: the maximum of the likelihood). BBarolo writes the
+free parameters (`<prefix>_wind_params.txt`), the shells with their errors and the flux of each cone
 (`<prefix>_wind_shells.txt`), the emissivities of the cells (`<prefix>_wind_cells.txt`), the model
 (`<prefix>_mod_wind.fits`), the moment maps and position-velocity slices of the data and of the model in the
 layout of 3DFIT (`maps/`, `pvs/`: across and along the axis of the cones), the samples
-(`<prefix>_<sampler>_windresults.npy`) and the plotting scripts, run with `PLOTS`: channel maps, moment maps
-and PV slices of data and model in the style of 3DFIT, a corner plot and the shells. In Python:
-`bbarolo.BayesianWind`.
-"""),
+(`<prefix>_<sampler>_windresults.npy`, `_optimize_windresults.npy` for `GLOBAL`) and the plotting scripts,
+run with `PLOTS`: channel maps, moment maps and PV slices of data and model in the style of 3DFIT, a corner
+plot and the shells. In Python: `bbarolo.WindFit(cube, method=...)`, whose engine is `bbarolo.BayesianWind`."""),
     'SPACEPAR': dict(
         group='Task',
         doc="""\
@@ -818,7 +814,7 @@ The number of rings. Without `RADII`, the rings are `RADSEP` arcsec apart, at th
 values, a smaller NRADII keeps only the first NRADII rings (in Python, it must equal the number of
 values).
 
-When neither NRADII nor `RADII` is given, 3DFIT, BAYESIAN3DFIT, SPACEPAR and 2DFIT estimate the number
+When neither NRADII nor `RADII` is given, 3DFIT, SPACEPAR and 2DFIT estimate the number
 of rings from the extent of the emission (see `GUESSTYPE`). GALMOD and ELLPROF need `NRADII` and
 `RADSEP`, or `RADII`.
 """),
@@ -837,19 +833,17 @@ each ring is an annulus reaching halfway to the neighbouring radii (see also `RI
 """),
     'RADSEP': dict(
         group='Rings',
-        default='estimated from the beam (BAYESIAN3DFIT: the beam FWHM)',
+        default='estimated from the beam (3DFIT GLOBAL and BAYESIAN: the beam FWHM)',
         doc="""\
 The separation between consecutive rings (arcsec), which is also the width of each ring, used with
 `NRADII` when `RADII` is not given (with `RADII` it is ignored, except for a single radius).
 
-If it is not given, BAYESIAN3DFIT uses the FWHM of the major axis of the beam, whatever the number of
-rings; 3DFIT, SPACEPAR and 2DFIT use the FWHM, or half of it when that gives fewer than 20 rings across
-the emission. Given without `NRADII`, the
-number of rings is estimated so that rings of RADSEP cover the emission. GALMOD and ELLPROF need it
-(or `RADII`).
-"""),
+If it is not given, 3DFIT with `METHOD` GLOBAL or BAYESIAN uses the FWHM of the major axis of the beam,
+whatever the number of rings; 3DFIT (CLASSIC), SPACEPAR and 2DFIT use the FWHM, or half of it when that
+gives fewer than 20 rings across the emission. Given without `NRADII`, the number of rings is estimated so
+that rings of RADSEP cover the emission. GALMOD and ELLPROF need it (or `RADII`)."""),
     'VROT': dict(
-        group={'GALWIND': 'Wind', 'BAYESIANWIND': 'Wind', '*': 'Rings'},
+        group={'GALWIND': 'Wind', 'WINDFIT': 'Wind', '*': 'Rings'},
         default='estimated from the data (GALMOD: required; GALWIND: 0)',
         doc="""\
 The rotation velocity of the rings (km/s): the initial value of the fits, or the value of the model
@@ -862,8 +856,8 @@ without a number in that column are skipped. A column of a BBarolo ring file (e.
 values must have the same length (in a parameter file the shortest one sets the number of rings).
 
 The models interpolate the ring values linearly in radius. When VROT is not given, 3DFIT,
-BAYESIAN3DFIT, SPACEPAR and 2DFIT estimate it from the width of the global profile, deprojected with the
-inclination (see `GUESSTYPE`); GALMOD needs it. In 3DFIT the fitted VROT of each ring stays within
+SPACEPAR and 2DFIT estimate it from the width of the global profile, deprojected with the
+inclination (see `GUESSTYPE`); GALMOD needs it. In 3DFIT CLASSIC the fitted VROT of each ring stays within
 `DELTAVROT` of its initial value.
 
 In GALWIND, VROT is the rotation of the outflowing gas around the axis of the cones (default 0): one
@@ -889,7 +883,7 @@ The scale height of the gas layer (arcsec), i.e. the thickness of the disk perpe
 its meaning depends on `LTYPE` (e.g. the dispersion of a Gaussian layer, the half-thickness of a box).
 One value, one value per ring or `file(name,column)` (see `VROT`).
 
-When it is not given, 3DFIT, BAYESIAN3DFIT, SPACEPAR and the estimates of `GUESSTYPE` `FIT` use one
+When it is not given, 3DFIT, SPACEPAR and the estimates of `GUESSTYPE` `FIT` use one
 pixel, a thin disk; GALMOD needs it. When `FREE` includes Z0, 3DFIT fits it between 0 and 1000 arcsec.
 BBarolo 1.8 used 0 (a disk with no thickness) when Z0 was not given.
 """),
@@ -901,9 +895,8 @@ A velocity perpendicular to the plane of the disk (km/s), the same above and bel
 VVERT·cos(`INC`) to the line-of-sight velocity of all the gas (positive values: away from the observer).
 One value, one value per ring or `file(name,column)` (see `VROT`); 0 if not given.
 
-BAYESIAN3DFIT fits it when `FREE` includes it. The models of 3DFIT and SPACEPAR also use the value
-given, fixed.
-"""),
+3DFIT with `METHOD` GLOBAL or BAYESIAN fits it when `FREE` includes it. The models of 3DFIT and SPACEPAR
+also use the value given, fixed."""),
     'DVDZ': dict(
         group='Rings',
         default='0',
@@ -913,10 +906,9 @@ rotates at `VROT` − DVDZ·(|z| − `ZCYL`), so a positive value gives a thick 
 plane (it needs `Z0` > 0). One value, one value per ring or `file(name,column)` (see `VROT`); 0 if not
 given.
 
-BAYESIAN3DFIT fits it when `FREE` includes it; the models of 3DFIT and SPACEPAR use the value given,
-fixed. (2DFIT of BBarolo 1.8 read DVDZ as the angle around the minor axis left out of the fit, now
-`FREEANGLE`.)
-"""),
+3DFIT with `METHOD` GLOBAL or BAYESIAN fits it when `FREE` includes it; the models of 3DFIT and SPACEPAR use
+the value given, fixed. (2DFIT of BBarolo 1.8 read DVDZ as the angle around the minor axis left out of the
+fit, now `FREEANGLE`.)"""),
     'ZCYL': dict(
         group='Rings',
         default='0',
@@ -925,25 +917,24 @@ The height above the plane of the disk (arcsec) where the vertical gradient of r
 closer to the plane the gas rotates at `VROT`. One value, one value per ring or `file(name,column)` (see
 `VROT`); 0 if not given.
 
-BAYESIAN3DFIT fits it when `FREE` includes it; the models of 3DFIT and SPACEPAR use the value given,
-fixed.
-"""),
+3DFIT with `METHOD` GLOBAL or BAYESIAN fits it when `FREE` includes it; the models of 3DFIT and SPACEPAR use
+the value given, fixed."""),
     'VDISP': dict(
-        group={'GALWIND': 'Wind', 'BAYESIANWIND': 'Wind', '*': 'Rings'},
+        group={'GALWIND': 'Wind', 'WINDFIT': 'Wind', '*': 'Rings'},
         default='8 km/s, or estimated with GUESSTYPE FIT (GALMOD, GALWIND: required)',
         doc="""\
 The velocity dispersion of the gas (km/s), the intrinsic width (σ) of the line: the models add in
 quadrature the instrumental broadening `SPECRES` (or `LINEAR`). One value, one value per ring or
 `file(name,column)` (see `VROT`).
 
-When it is not given, 3DFIT, SPACEPAR and BAYESIAN3DFIT start from 8 km/s; with `GUESSTYPE` `FIT`,
+When it is not given, 3DFIT and SPACEPAR start from 8 km/s; with `GUESSTYPE` `FIT`,
 they use instead an estimate from the second moment of the emission (in the outer half of
 the disk, corrected for the channel width). GALMOD and GALWIND need it (in GALWIND: one value, or one
 value per cylinder or shell, as a list or a file column). When `FREE` includes VDISP, 3DFIT fits it between
 `MINVDISP` and `MAXVDISP`.
 """),
     'XPOS': dict(
-        group={'GALWIND': 'Wind', 'BAYESIANWIND': 'Wind', '*': 'Rings'},
+        group={'GALWIND': 'Wind', 'WINDFIT': 'Wind', '*': 'Rings'},
         default='estimated from the data (GALMOD, ELLPROF, GALWIND: required)',
         doc="""\
 The x coordinate of the centre of the rings: a pixel, counted from 0 (unlike GIPSY), or a world
@@ -953,15 +944,15 @@ a right ascension axis, degrees otherwise). A pixel can also be one value per ri
 takes one value. Give `XPOS` and `YPOS` in the same form, both pixels or both world coordinates; when
 one is a list or a file column, the other can be a single value in pixels, used for all the rings.
 
-When it is not given, 3DFIT, BAYESIAN3DFIT, SPACEPAR and 2DFIT estimate it from the largest source in
+When it is not given, 3DFIT, SPACEPAR and 2DFIT estimate it from the largest source in
 the cube (see `GUESSTYPE`); GALMOD, ELLPROF and GALWIND need it. When `FREE` includes XPOS, 3DFIT fits
 it within 10 pixels of the initial values.
 
-BAYESIANSLITFIT: the centre of the galaxy along the slit, a position of the slit in pixels (from 0); by
+SLITFIT: the centre of the galaxy along the slit, a position of the slit in pixels (from 0); by
 default the peak of the continuum (`CONTSUB`) or the kinematic centre.
 """),
     'YPOS': dict(
-        group={'GALWIND': 'Wind', 'BAYESIANWIND': 'Wind', '*': 'Rings'},
+        group={'GALWIND': 'Wind', 'WINDFIT': 'Wind', '*': 'Rings'},
         default='estimated from the data (GALMOD, ELLPROF, GALWIND: required)',
         doc="""\
 The y coordinate of the centre of the rings: a pixel, counted from 0, or a world coordinate, in degrees
@@ -969,16 +960,16 @@ with a `d` (`65.6025d`) or sexagesimal (`+65:36:09` or `+65d36m09s`). The same f
 given in the same form as `XPOS`: one value, one value per ring or `file(name,column)` for pixels, one
 position for all the rings for world coordinates.
 
-When it is not given, 3DFIT, BAYESIAN3DFIT, SPACEPAR and 2DFIT estimate it from the largest source in
+When it is not given, 3DFIT, SPACEPAR and 2DFIT estimate it from the largest source in
 the cube (see `GUESSTYPE`); GALMOD, ELLPROF and GALWIND need it. When `FREE` includes YPOS, 3DFIT fits
 it within 10 pixels of the initial values.
 
-BAYESIANSLITFIT: the distance of the slit from the centre of the galaxy, across the slit, in arcsec
+SLITFIT: the distance of the slit from the centre of the galaxy, across the slit, in arcsec
 (default 0: the slit passes through the centre), positive on the side 90 degrees counterclockwise from the
 direction of increasing position. It is not fitted.
 """),
     'VSYS': dict(
-        group={'GALWIND': 'Wind', 'BAYESIANWIND': 'Wind', '*': 'Rings'},
+        group={'GALWIND': 'Wind', 'WINDFIT': 'Wind', '*': 'Rings'},
         default='estimated from the data (GALMOD, GALWIND: required)',
         doc="""\
 The systemic velocity (km/s), in the velocity frame of the cube: on frequency and wavelength axes it is
@@ -986,20 +977,20 @@ relative to the rest frequency or wavelength of the line redshifted by `REDSHIFT
 `RESTWAVE`), with the velocity definition `VELDEF`. One value, one value per ring or
 `file(name,column)` (see `VROT`).
 
-When it is not given, 3DFIT, BAYESIAN3DFIT, SPACEPAR and 2DFIT estimate it from the global profile of
+When it is not given, 3DFIT, SPACEPAR and 2DFIT estimate it from the global profile of
 the largest source in the cube, the midpoint of its widths at 20% and 50% of the peak (see
 `GUESSTYPE`); GALMOD and GALWIND need it. A VSYS outside the velocity range of the cube (often a value
-in m/s instead of km/s) is an error for the fits (3DFIT, BAYESIAN3DFIT, SPACEPAR) and a warning for
+in m/s instead of km/s) is an error for the fits (3DFIT, SPACEPAR) and a warning for
 GALMOD.
 """),
     'INC': dict(
-        group={'GALWIND': 'Wind', 'BAYESIANWIND': 'Wind', '*': 'Rings'},
+        group={'GALWIND': 'Wind', 'WINDFIT': 'Wind', '*': 'Rings'},
         default='estimated from the data (GALMOD, ELLPROF, GALWIND: required)',
         doc="""\
 The inclination of the disk (degrees): 0 face-on, 90 edge-on. One value, one value per ring or
 `file(name,column)` (see `VROT`).
 
-When it is not given, 3DFIT, BAYESIAN3DFIT, SPACEPAR and 2DFIT estimate it from the shape of the
+When it is not given, 3DFIT, SPACEPAR and 2DFIT estimate it from the shape of the
 emission (see `GUESSTYPE`); GALMOD, ELLPROF and GALWIND need it. The fit of 3DFIT is sensitive to the
 initial inclination: when `FREE` includes INC, the value of each ring stays within `DELTAINC` of its
 initial value, and between 0 and 90.
@@ -1008,13 +999,13 @@ In GALWIND, INC is the inclination of the plane perpendicular to the axis of the
 along the line of sight).
 """),
     'PA': dict(
-        group={'GALWIND': 'Wind', 'BAYESIANWIND': 'Wind', '*': 'Rings'},
+        group={'GALWIND': 'Wind', 'WINDFIT': 'Wind', '*': 'Rings'},
         default='estimated from the data (GALMOD, ELLPROF, GALWIND: required)',
         doc="""\
 The position angle of the receding half of the major axis (degrees), measured anticlockwise from North,
 i.e. towards East. One value, one value per ring or `file(name,column)` (see `VROT`).
 
-When it is not given, 3DFIT, BAYESIAN3DFIT, SPACEPAR and 2DFIT estimate it from the velocity field
+When it is not given, 3DFIT, SPACEPAR and 2DFIT estimate it from the velocity field
 (see `GUESSTYPE`); GALMOD, ELLPROF and GALWIND need it. When `FREE` includes PA, 3DFIT keeps the value of
 each ring within `DELTAPA` of its initial value.
 
@@ -1032,11 +1023,11 @@ arcsec². With `DENSFLUX` false (GALMOD with `NORM` `NONE` only) it is a column 
 atoms/cm², converted to flux as in GIPSY's GALMOD. One value, one value per ring or `file(name,column)`
 (see `VROT`); 1 if not given.
 
-DENS sets the flux of the models only with `NORM` `NONE`. With `AZIM`, the final models of 3DFIT and
-GALMOD take the densities from the radial profile of the data (the rings with DENS = 0 stay empty); with
-`LOCAL`, each spectrum of the model is scaled to the data. 3DFIT fits DENS only with `FREE` `ALL`.
-BAYESIAN3DFIT fits it when `FREE` includes it, otherwise it uses a density profile deconvolved from the
-total intensity map of the data.
+DENS sets the flux of the models only with `NORM` `NONE`. With `AZIM`, the final models of 3DFIT and GALMOD
+take the densities from the radial profile of the data (the rings with DENS = 0 stay empty); with `LOCAL`,
+each spectrum of the model is scaled to the data. 3DFIT fits DENS only with `FREE` `ALL`. 3DFIT with
+`METHOD` GLOBAL or BAYESIAN fits it when `FREE` includes it, otherwise it uses a density profile deconvolved
+from the total intensity map of the data.
 
 In GALWIND, DENS is the density of the cylinders (`WTYPE` 0, as in GALMOD) or of the spherical shells
 (`WTYPE` 1, a column density in 1E20 atoms/cm²): one value, or one value per cylinder or shell (a list
@@ -1124,7 +1115,7 @@ the relative intensities `RELINT`: the velocities refer to the first line, and e
 its own rest wavelength times the same Doppler factor. On a velocity axis only one line is modelled,
 with a warning.
 
-BAYESIANSLITFIT reads a wavelength axis in metres in Angstrom: RESTWAVE is then in Angstrom. With a
+SLITFIT reads a wavelength axis in metres in Angstrom: RESTWAVE is then in Angstrom. With a
 vacuum wavelength axis (CTYPE `WAVE`) give vacuum rest wavelengths, with an air axis (`AWAV`) air ones:
 the difference (about 1.8 Angstrom at Halpha) would otherwise shift `VSYS` by about 80 km/s.
 """),
@@ -1241,7 +1232,7 @@ voxels, where m is the model and o the data (the noise rms where the data are no
 
 Each term is weighted by `WFUNC`; the sum is divided by the number of voxels and multiplied by the
 penalty for blanks (`BWEIGHT`). 3DFIT and SPACEPAR replace other values with 2, with a warning.
-BAYESIAN3DFIT uses it only with `LIKEOPTS` `bbres=true`.
+3DFIT with `METHOD` GLOBAL or BAYESIAN uses it only with `LIKEOPTS` `bbres=true`.
 """),
     'WFUNC': dict(
         group='Free parameters and fit',
@@ -1251,7 +1242,7 @@ disk (0 on the receding major axis): 0 uniform; 1 |cos θ|; 2 cos²θ (the defau
 −2 sin²θ. The cosine weights favour the pixels near the major axis, which carry most of the information
 on the rotation. Used by 3DFIT, SPACEPAR and 2DFIT (on the velocity field); 3DFIT and SPACEPAR replace
 values beyond ±2 with 1, with a warning.
-BAYESIAN3DFIT uses it only with `LIKEOPTS` `bbres=true`.
+3DFIT with `METHOD` GLOBAL or BAYESIAN uses it only with `LIKEOPTS` `bbres=true`.
 """),
     'TOL': dict(
         group='Free parameters and fit',
@@ -1263,19 +1254,20 @@ converged (see `BADOUT`).
 """),
     'FREE': dict(
         group='Free parameters and fit',
-        default='VROT VDISP INC PA (BAYESIAN3DFIT: required)',
+        default='VROT VDISP INC PA (3DFIT GLOBAL and BAYESIAN: see below; WINDFIT: required)',
         doc="""\
 The parameters that are fitted, case-insensitive, separated by spaces or commas; the other ring
 parameters stay at their initial values.
 
-3DFIT: any of `VROT`, `VDISP` (or `DISP`), `INC`, `PA` (or `PHI`), `Z0`, `XPOS`, `YPOS`, `VSYS` and
-`VRAD`, or `ALL`, which also frees `DENS` (`DENS` alone is not fitted). When `PA` is free and there are at
-least 5 rings, the initial PA (and VROT, if free) of the rings are first refined by a 2D fit of the
-velocity field.
+3DFIT with `METHOD CLASSIC`: any of `VROT`, `VDISP` (or `DISP`), `INC`, `PA` (or `PHI`), `Z0`, `XPOS`,
+`YPOS`, `VSYS` and `VRAD`, or `ALL`, which also frees `DENS` (`DENS` alone is not fitted). When `PA` is free
+and there are at least 5 rings, the initial PA (and VROT, if free) of the rings are first refined by a 2D
+fit of the velocity field.
+
 2DFIT: `VROT`, `INC`, `PA`, `XPOS`, `YPOS`, `VSYS`, `VRAD` (or `VEXP`) or `ALL`, the others are ignored;
 with `SIDE` `A` or `R` the centre and VSYS stay fixed.
 
-BAYESIAN3DFIT: a ring parameter (`VROT`, `VDISP`, `DENS`, `Z0`, `INC`, `PA`, `XPOS`,
+3DFIT with `METHOD` GLOBAL or BAYESIAN: a ring parameter (`VROT`, `VDISP`, `DENS`, `Z0`, `INC`, `PA`, `XPOS`,
 `YPOS`, `VSYS`, `VRAD`, `VVERT`, `DVDZ`, `ZCYL`) has one value per ring; `NAME_SINGLE` has one value
 for all the rings; `NAME_FUNC` is a function of radius with two parameters: `VROT_FUNC` an arctangent,
 2/π·p1·arctan(R/p2), `VDISP_FUNC` a line, p1 + p2·R, `DENS_FUNC` an exponential, p1·exp(−R/p2).
@@ -1286,21 +1278,21 @@ velocity and the dispersion of each ring, one centre, systemic velocity, inclina
 scale height for all the rings, the outer edge of the disk and the fractional model error:
 `VROT VDISP XPOS_SINGLE YPOS_SINGLE VSYS_SINGLE INC_SINGLE PA_SINGLE Z0_SINGLE RADMAX FRACERR`.
 
-BAYESIANWIND (required): `VWIND`, `VDISP` and `VROT` have one value per shell, NAME_SINGLE one for all
+WINDFIT (required): `VWIND`, `VDISP` and `VROT` have one value per shell, NAME_SINGLE one for all
 the shells, NAME_FUNC a function of radius (VWIND an arctangent rising to the terminal velocity p1);
 `XPOS`, `YPOS`, `VSYS`, `INC`, `PA`, `OPENANG`, `OPENIN`, `CONELEN`, `SIGMA` and the parameters of the prior
 of the emission `EMSCALE`, `EMCLUMP`, `EMRATIO` and `EMSLOPE` are single values; e.g. `FREE VWIND_SINGLE
 VDISP_SINGLE INC PA OPENANG` (EMSCALE, EMCLUMP, EMRATIO and EMSLOPE are added unless `LIKEOPTS` fixes them).
 
-BAYESIANSLITFIT: `VROT`, `VDISP`, `VRAD` (and `DENS` with `NORM NONE`) have one value per ring, NAME_SINGLE
-one for all the rings, NAME_FUNC a function of radius (as BAYESIAN3DFIT; VRAD a line); `VSYS`, `XPOS` and
+SLITFIT: `VROT`, `VDISP`, `VRAD` (and `DENS` with `NORM NONE`) have one value per ring, NAME_SINGLE
+one for all the rings, NAME_FUNC a function of radius (as 3DFIT; VRAD a line); `VSYS`, `XPOS` and
 `SIGMA` (a factor of the noise map) are single values. The geometry is fixed. Default: `VROT VDISP VSYS
 XPOS`.
 """),
     'GUESSTYPE': dict(
         group='Rings',
         doc="""\
-How the ring parameters that are not given are estimated by 3DFIT, BAYESIAN3DFIT, SPACEPAR and 2DFIT:
+How the ring parameters that are not given are estimated by 3DFIT, SPACEPAR and 2DFIT:
 the centre (`XPOS`, `YPOS`), `VSYS`, `VROT`, `INC`, `PA` and the rings (`NRADII`, `RADSEP`). The
 estimates use the largest source found by the source finder (with the parameters of SEARCH), or the
 mask of `MASK` `file(...)`. The values given are used as they are. Other values of GUESSTYPE are an
@@ -1322,16 +1314,14 @@ moment (3DFIT and SPACEPAR). On simulated disks its initial INC is biased by at 
     'SIDE': dict(
         group={'ELLPROF': 'Options', '*': 'Free parameters and fit'},
         doc="""\
-The half of the galaxy that is used, divided by the minor axis: `A` the approaching side, `R` the
-receding side, `B` both (the default). 3DFIT and SPACEPAR use only the pixels of that side in the
-residuals, 2DFIT in the fit of the velocity field (with one side it keeps the centre and `VSYS` fixed),
-ELLPROF in the radial profile. All these tasks also accept `APPROACHING`, `RECEDING`, `BOTH` and their
-abbreviations (`APP`, `REC`, ...); other values are taken as `B`, with a warning. BAYESIAN3DFIT uses
-only the pixels of that side in the likelihood: the half of the galaxy on that side of the minor axis of
-the initial rings (their median centre and position angle), fixed during the sampling so that the
-likelihood always uses the same voxels (with `LIKEOPTS` `bbres=true`, the residuals of 3DFIT, ring by
-ring).
-"""),
+The half of the galaxy that is used, divided by the minor axis: `A` the approaching side, `R` the receding
+side, `B` both (the default). 3DFIT and SPACEPAR use only the pixels of that side in the residuals, 2DFIT in
+the fit of the velocity field (with one side it keeps the centre and `VSYS` fixed), ELLPROF in the radial
+profile. All these tasks also accept `APPROACHING`, `RECEDING`, `BOTH` and their abbreviations (`APP`,
+`REC`, ...); other values are taken as `B`, with a warning. 3DFIT with `METHOD` GLOBAL or BAYESIAN uses only
+the pixels of that side in the likelihood: the half of the galaxy on that side of the minor axis of the
+initial rings (their median centre and position angle), fixed during the sampling so that the likelihood
+always uses the same voxels (with `LIKEOPTS` `bbres=true`, the residuals of 3DFIT, ring by ring)."""),
     'FREEANGLE': dict(
         group='Free parameters and fit',
         doc="""\
@@ -1347,7 +1337,7 @@ The weight of the blank voxels in the residuals of 3DFIT and SPACEPAR: the voxel
 emission and the mask (`MASK`) has none. The residual of a ring is multiplied by
 (1 + N_blank/N)^BWEIGHT, where N is the number of voxels compared (section 2.4 of Di Teodoro &
 Fraternali 2015). Larger values penalise more the models that extend beyond the observed emission; 0
-ignores the blanks. BAYESIAN3DFIT uses it only with `LIKEOPTS` `bbres=true`.
+ignores the blanks. 3DFIT with `METHOD` GLOBAL or BAYESIAN uses it only with `LIKEOPTS` `bbres=true`.
 """),
     'TWOSTAGE': dict(
         group='Free parameters and fit',
@@ -1393,9 +1383,9 @@ final model.
 GALMOD takes one value (the second, if more are given): `AZIM`, `LOCAL`, `NONE` or `BOTH`. `AZIMUTHAL`
 is the same as `AZIM`. Values not recognised become `LOCAL`, with a warning. SPACEPAR uses the first
 value, the normalisation of the first stage of 3DFIT (BBarolo 1.8 always used `LOCAL`).
-BAYESIAN3DFIT uses it only with `LIKEOPTS` `bbres=true`.
+3DFIT with `METHOD` GLOBAL or BAYESIAN uses it only with `LIKEOPTS` `bbres=true`.
 
-BAYESIANSLITFIT takes one value (default `AZIM`): `AZIM`, the densities of the rings whose model reproduces
+SLITFIT takes one value (default `AZIM`): `AZIM`, the densities of the rings whose model reproduces
 the flux of the lines along the slit; `LOCAL`, that model times one amplitude per position of the slit,
 marginalised in the likelihood; `NONE`, the densities `DENS` (which can then be free).
 """),
@@ -1480,21 +1470,50 @@ case.
         group='Outputs',
         doc="""\
 Whether the contour of the mask is drawn on the channel maps and on the position-velocity plots of 3DFIT
-and BAYESIAN3DFIT.
+(all its METHODs).
 """),
     'PLOTMINCON': dict(
         group='Outputs',
         default='from the noise or the thresholds of the mask',
         doc="""\
 The lowest contour (flux units of the cube) of the channel maps and position-velocity plots of 3DFIT
-and BAYESIAN3DFIT: the contours are at 1, 2, 4, ..., 64 times this value, plus one negative contour at
+(all its METHODs): the contours are at 1, 2, 4, ..., 64 times this value, plus one negative contour at
 −PLOTMINCON. If it is not given (or not positive), it is the growth threshold of the source finder with
 `MASK` `SEARCH` (its primary threshold without growth), otherwise 2.5 times the noise rms of the cube.
+"""),
+    'METHOD': dict(
+        group='Task',
+        default='CLASSIC for 3DFIT, GLOBAL for WINDFIT and SLITFIT',
+        doc="""\
+The method of the fits `3DFIT`, `WINDFIT` and `SLITFIT` (case-insensitive):
+
+- `CLASSIC` (3DFIT only, its default): the rings fitted one at a time by minimising the residuals between
+  model and data, as in BBarolo 1.
+- `GLOBAL` (the default of WINDFIT and SLITFIT): all the parameters together, at the maximum of the
+  likelihood within the bounds of the priors (`MINIMISER`), with the errors of the Laplace approximation
+  (the inverse Hessian at the best fit), whose draws stand in for the samples of the posterior in the
+  outputs: seconds or minutes, to fit or to test a setup before a sampling.
+- `BAYESIAN`: the posterior distribution of the free parameters, sampled with nested sampling (`SAMPLER`).
+
+`GLOBAL` and `BAYESIAN` use the same likelihood, free parameters (`FREE`), priors (`PRIORS`) and options
+(`LIKEOPTS`), so that one can go from one to the other by changing METHOD alone. One METHOD applies to the
+fits of a run (3DFIT and WINDFIT do not run together, SLITFIT runs alone). In Python, the argument
+`method` of the classes of the fits, e.g. `FitMod3D(cube, method="global")`.
+"""),
+    'MINIMISER': dict(
+        group='Bayesian sampling',
+        doc="""\
+The minimiser of `METHOD GLOBAL` (case-insensitive; also MINIMIZER): `L-BFGS-B` (the default:
+quasi-Newton, the gradient by central differences computed on the `THREADS` processes), `Powell`,
+`Nelder-Mead`, `TNC`, `SLSQP`, `trust-constr`, `COBYLA`, `COBYQA` (`scipy.optimize.minimize`, with the
+bounds of the priors) or `differential_evolution` (a global search, then L-BFGS-B). The search runs in the
+unit cube of the priors. Its other arguments are given with `SAMPLEROPTS` and the options of the scipy
+minimiser with `RUNOPTS`. An unknown minimiser is an error before the run.
 """),
     'SAMPLER': dict(
         group='Bayesian sampling',
         doc="""\
-The nested sampler of `BAYESIAN3DFIT` and `BAYESIANWIND` (case-insensitive):
+The nested sampler of `METHOD BAYESIAN` (case-insensitive):
 
 - `NAUTILUSBB` (the default): nautilus (Lange 2023) as included in BBarolo, in `bbarolo.bayesian.nautilus`:
   version 1.0.6 of the package, changed to need no other package (its neural networks and the splitting of
@@ -1504,27 +1523,21 @@ The nested sampler of `BAYESIAN3DFIT` and `BAYESIANWIND` (case-insensitive):
 - `NAUTILUS`: the nautilus package (`nautilus-sampler` on PyPI).
 - `DYNESTY`: the dynesty package, with its static sampler and multi-ellipsoid bounds (`bound=multi`);
   `SAMPLEROPTS dynamic=true` selects its dynamic sampler.
-- `OPTIMISE` (or `OPTIMIZE`): no sampling, but the best fit by a classic minimisation of the same
-  likelihood (the maximum likelihood within the bounds of the priors), with the errors of the Laplace
-  approximation (the inverse Hessian at the best fit): seconds instead of minutes, to test a setup or a
-  sampling. L-BFGS-B by default; `SAMPLEROPTS` gives its arguments (e.g. `method=powell`) and `RUNOPTS`
-  the options of the method. The outputs are those of a sampling, with the best fit and its errors, and
-  the draws of the Laplace approximation in `<prefix>_optimize_results.npy` (`_optimize_windresults.npy`
-  for `BAYESIANWIND`). In Python, `Bayesian3DFIT.optimize()` and `BayesianWind.optimize()`.
 
 The package of a sampler must be installed: an unknown sampler, or one that is not installed, is an
-error before the run. The options of the sampler are given with `SAMPLEROPTS` and `RUNOPTS`.
+error before the run. The options of the sampler are given with `SAMPLEROPTS` and `RUNOPTS`. The best fit
+without a sampling is `METHOD GLOBAL`.
 """),
     'PRIORS': dict(
         group='Bayesian sampling',
         default='uniform, listed below',
         doc="""\
-The priors of the free parameters of `BAYESIAN3DFIT`, as `NAME=(distribution,arguments)` (or
-`NAME=distribution(arguments)`) separated by spaces, e.g. `PRIORS VROT=(uniform,loc=0,scale=300)
-INC=(norm,60,5)`. The distribution is a continuous distribution of `scipy.stats` (`uniform`, `norm`,
-`loguniform`, `truncnorm`, `halfcauchy`, ...), with its arguments as `key=value` or by position (the
-shape parameters, then `loc` and `scale`, as in `scipy.stats`): `uniform` is uniform between `loc` and
-`loc`+`scale`. A wrong entry is an error before the run.
+The priors of the free parameters of the fits with `METHOD` GLOBAL or BAYESIAN (3DFIT, WINDFIT, SLITFIT), as
+`NAME=(distribution,arguments)` (or `NAME=distribution(arguments)`) separated by spaces, e.g. `PRIORS
+VROT=(uniform,loc=0,scale=300) INC=(norm,60,5)`. The distribution is a continuous distribution of
+`scipy.stats` (`uniform`, `norm`, `loguniform`, `truncnorm`, `halfcauchy`, ...), with its arguments as
+`key=value` or by position (the shape parameters, then `loc` and `scale`, as in `scipy.stats`): `uniform` is
+uniform between `loc` and `loc`+`scale`. A wrong entry is an error before the run.
 
 NAME is a free parameter as in `FREE` (case-insensitive; `NAME_SINGLE` is the same as NAME, and the
 prior of a parameter with one value per ring applies to each ring), or `VROT_P1`, `VROT_P2`,
@@ -1557,19 +1570,19 @@ The priors follow the rings when they change (in Python, `update`), but those gi
 estimated INC can be wrong by 10° or more below 45° (see `GUESSTYPE`): for a galaxy seen nearly face-on,
 give `INC` or a wider prior.
 
-BAYESIANWIND: the names of its free parameters (e.g. `OPENANG=(uniform,20,100) VWIND_P1=(uniform,0,800)`);
-the defaults follow the initial wind (see the BAYESIANWIND page).
+WINDFIT: the names of its free parameters (e.g. `OPENANG=(uniform,20,100) VWIND_P1=(uniform,0,800)`);
+the defaults follow the initial wind (see the WINDFIT page).
 """),
     'SAMPLEROPTS': dict(
         group='Bayesian sampling',
         default='the defaults of the sampler',
         doc="""\
-Options of the sampler of `BAYESIAN3DFIT`, as `key=value` separated by spaces, e.g.
-`SAMPLEROPTS nlive=200 seed=1`: the arguments of `dynesty.NestedSampler` (or
+Options of the sampler of `METHOD BAYESIAN` (3DFIT, WINDFIT, SLITFIT), as `key=value` separated by spaces,
+e.g. `SAMPLEROPTS nlive=200 seed=1`: the arguments of `dynesty.NestedSampler` (or
 `dynesty.DynamicNestedSampler`) or of `nautilus.Sampler` (also for `NAUTILUSBB`, whose networks take the
-options of scikit-learn's `MLPRegressor` that apply to them in `neural_network_kwargs`). The values are
-read as integers, numbers, `true`/`false`, `none` or strings; values separated by commas form a tuple. An
-option that the sampler does not accept is an error before the setup, with the list of the accepted ones.
+options of scikit-learn's `MLPRegressor` that apply to them in `neural_network_kwargs`). The values are read
+as integers, numbers, `true`/`false`, `none` or strings; values separated by commas form a tuple. An option
+that the sampler does not accept is an error before the setup, with the list of the accepted ones.
 
 Some options are handled by BBarolo:
 
@@ -1583,12 +1596,8 @@ nautilus, a training of at most 20 epochs for the networks of its bounds (`neura
 `max_iter=20`, much faster with a small change of the efficiency) and at least 4 points per process in
 each step (`n_batch`). With several processes (`THREADS`) BBarolo gives the sampler its pool of processes.
 
-With `SAMPLER OPTIMISE`, the options are those of the minimisation:
+With `METHOD GLOBAL`, the options are those of the minimisation (the minimiser is `MINIMISER`):
 
-- `method`: `L-BFGS-B` (the default: quasi-Newton, the gradient by central differences computed on the
-  `THREADS` processes), `Powell`, `Nelder-Mead`, `TNC`, `SLSQP`, `trust-constr`, `COBYLA`, `COBYQA`
-  (`scipy.optimize.minimize`, with the bounds of the priors) or `differential_evolution` (a global
-  search, then L-BFGS-B), case-insensitive;
 - `x0`: the starting point, the initial values (the default) or `centre` (the centres of the priors), or
   one value per free parameter separated by commas;
 - `nstart=N`: also N − 1 starts drawn from the priors, keeping the best (with `seed=N`, reproducible);
@@ -1601,7 +1610,7 @@ With `SAMPLER OPTIMISE`, the options are those of the minimisation:
         group='Bayesian sampling',
         default='the defaults of the sampler',
         doc="""\
-Options of the sampling run of `BAYESIAN3DFIT`, as `key=value` separated by spaces: the arguments of
+Options of the sampling run of `METHOD BAYESIAN`, as `key=value` separated by spaces: the arguments of
 `run_nested` of dynesty (of the static or dynamic sampler, see `SAMPLEROPTS`) or of `Sampler.run` of
 nautilus, e.g. `RUNOPTS dlogz=0.5 maxiter=20000` (dynesty) or `RUNOPTS f_live=0.01` (nautilus). The
 values are read as in `SAMPLEROPTS`, and an option that the sampler does not accept is an error before
@@ -1616,14 +1625,14 @@ the run on the fits tested), on one line updated in place on a terminal with `SH
 line after 10 seconds and then at intervals of a tenth of the time elapsed. The other options keep the
 defaults of the sampler.
 
-With `SAMPLER OPTIMISE`, the options of the method of `scipy.optimize` chosen in `SAMPLEROPTS`, e.g.
-`RUNOPTS maxiter=500` (an option that the method does not know is an error when it starts).
+With `METHOD GLOBAL`, the options of the minimiser of `scipy.optimize` (`MINIMISER`), e.g.
+`RUNOPTS maxiter=500` (an option that the minimiser does not know is an error when it starts).
 """),
     'LIKEOPTS': dict(
         group='Bayesian sampling',
         default='the defaults listed below',
         doc="""\
-Options of the likelihood of `BAYESIAN3DFIT`, as `key=value` separated by spaces, e.g.
+Options of the likelihood of 3DFIT with `METHOD` GLOBAL or BAYESIAN, as `key=value` separated by spaces, e.g.
 `LIKEOPTS likemask=none noisecorr=beam dilation=1.5,4`. A wrong name or value is an error before the
 run, and `none` gives the default. The options, with their defaults in brackets:
 
@@ -1660,14 +1669,14 @@ run, and `none` gives the default. The options, with their defaults in brackets:
   the ring parameters (`vrot`, `vdisp`, `dens`, `z0`, `inc`, `pa`, `xpos`, `ypos`, `vsys`, `vrad`,
   `vvert`, `dvdz`, `zcyl`); in Python, `like_kwargs=dict(smooth={'vrot': 5})`.
 
-BAYESIANSLITFIT has `noisecorr` (`measured`, or a number of pixels N ≥ 1), `densprof_smooth` (the
+SLITFIT has `noisecorr` (`measured`, or a number of pixels N ≥ 1), `densprof_smooth` (the
 density profile deconvolved from the flux of the lines along the slit, `NORM AZIM` and `LOCAL`), `sigma` (a
 fixed factor of the noise map, default 1) and `smooth` (as above, over the seeing FWHM; the keys `vrot`,
 `vdisp`, `vrad`, `dens`).
 
-BAYESIANWIND has its own options: `emission` (cells, shells, cone, spaxel or voxel), `cellsize`,
+WINDFIT has its own options: `emission` (cells, shells, cone, spaxel or voxel), `cellsize`,
 `marginal`, `prior` (gauss or exp), `noisecorr`, `sigma`, `datafrac`, `grow`, `emscale`, `emclump`,
-`emratio`, `emslope`, `prune` and `cones` (both, approaching or receding; see the BAYESIANWIND page).
+`emratio`, `emslope`, `prune` and `cones` (both, approaching or receding; see the WINDFIT page).
 """),
     'CONELEN': dict(
         group='Wind',
@@ -1690,7 +1699,7 @@ column). Required.
         group='Wind',
         default='0',
         doc="""\
-The full inner opening angle of the cones (degrees) of GALWIND `WTYPE` 2 and of BAYESIANWIND: the gas
+The full inner opening angle of the cones (degrees) of GALWIND `WTYPE` 2 and of WINDFIT: the gas
 fills the polar angles from OPENIN/2 to `OPENANG`/2 from the axis, a hollow cone if OPENIN > 0. One
 value, smaller than `OPENANG`. The cylinders and shells of GALWIND (`WTYPE` 0 and 1) do not use it.
 """),
@@ -1698,8 +1707,8 @@ value, smaller than `OPENANG`. The cylinders and shells of GALWIND (`WTYPE` 0 an
         group='Wind',
         default='none',
         doc="""\
-A rings file of BBarolo (e.g. the `<prefix>_rings_final1.txt` of 3DFIT or BAYESIAN3DFIT) with a disk
-that BAYESIANWIND adds to the model of the wind: its geometry and kinematics are those of the file and
+A rings file of BBarolo (e.g. the `<prefix>_rings_final1.txt` of 3DFIT) with a disk
+that WINDFIT adds to the model of the wind: its geometry and kinematics are those of the file and
 fixed, and the densities of its rings are non-negative amplitudes fitted (and marginalised) with the
 emission of the wind, so that the emission of the disk does not have to be masked.
 """),
@@ -1707,7 +1716,7 @@ emission of the wind, so that the emission of the disk does not have to be maske
         group='Wind',
         doc="""\
 The number of cylinders in each cone of GALWIND (`WTYPE` 0), or the number of spherical shells (`WTYPE`
-1 and 2, and the shells of BAYESIANWIND, whose default is one per beam up to 15), each `CONELEN`/NLAYERS
+1 and 2, and the shells of WINDFIT, whose default is one per beam up to 15), each `CONELEN`/NLAYERS
 thick. With `WTYPE` 1 the radii of the shells can be read instead from a file column or a list given
 with `RADII`. With cylinders, `VWIND`, `VDISP`, `DENS` and `VROT` given as lists or file columns must
 have NLAYERS values; with shells, at least as many values as shells.
@@ -1742,7 +1751,7 @@ cylinder, to `OPENANG`/2 from it, at the edge. The spherical model does not use 
 The geometry of the outflow of GALWIND: 0 (the default), a stack of `NLAYERS` cylinders in each cone, each
 a disk model as in GALMOD, a box `CONELEN`/`NLAYERS` high, with the vertical and radial velocities of the
 wind; 1, `NLAYERS` spherical shells, with clouds within `OPENANG`/2 of the axis moving radially; 2, the
-noise-free cones of BAYESIANWIND (bbarolo.windmodel), filled from the apex to `CONELEN` between `OPENIN`/2
+noise-free cones of WINDFIT (bbarolo.windmodel), filled from the apex to `CONELEN` between `OPENIN`/2
 and `OPENANG`/2, with `VWIND`, `VDISP`, `VROT` and `DENS` per shell (`RADII` or `NLAYERS` shells, linear
 between them), where `DENS` is an emissivity (a flux per arcsec³ in the units of the cube times km/s).
 Any other value than 0 and 2 gives shells.
@@ -1841,7 +1850,7 @@ The factor by which the beam is enlarged when no new beam is given with `NEWBEAM
 
 - `SMOOTH`: the new beam is `FACTOR` times the old one along both axes, at the angle of the old beam.
   `SMOOTH` needs either `NEWBEAM` or `FACTOR`.
-- the SMOOTH mask (`MASK SMOOTH` or `SMOOTH&SEARCH`, used by `3DFIT`, `BAYESIAN3DFIT`, `2DFIT`,
+- the SMOOTH mask (`MASK SMOOTH` or `SMOOTH&SEARCH`, used by `3DFIT`, `2DFIT`,
   `ELLPROF`, the maps and `MAKEMASK`): the cube is smoothed to `FACTOR` times its beam before the mask is
   built (−1 is taken as 2).
 - `REDUCE`, with `SMOOTH` or on its own: the integer part of `FACTOR` is the number of pixels (or
@@ -1922,13 +1931,13 @@ The size of the window of `SMOOTHSPEC`, in channels: an odd integer for all the 
 in channels for `GAUSSIAN`. It must be positive. It also sets the number of channels averaged by
 `REDUCE` with `SMOOTHSPEC`, and the window of the mask `MASK SMOOTHSPEC&SEARCH`.
 """),
-    'BAYESIANSLITFIT': dict(
+    'SLITFIT': dict(
         group='Task',
         doc="""\
 Fits the kinematics of a rotating disk to a long-slit spectrum, a 2D image of the position along the slit
-and the spectral axis (`FITSFILE`), by sampling the posterior distribution with nested sampling (see
-`SAMPLER`; `SAMPLER OPTIMISE`: the best fit by a minimisation of the same likelihood). `true` runs the
-task, which runs alone (the input is not a datacube).
+and the spectral axis (`FITSFILE`): the parameters at the maximum of the likelihood, with the errors of its
+curvature (`METHOD GLOBAL`, the default; `MINIMISER`), or their posterior distribution sampled with nested
+sampling (`METHOD BAYESIAN`; `SAMPLER`). `true` runs the task, which runs alone (the input is not a datacube).
 
 The model is a GALMOD disk with the pixels and the channels of the slit, built in the frame of the slit
 (the sky position angle plays no role: `SLITANGLE` sets the angle between the slit and the major axis), seen
@@ -1947,28 +1956,28 @@ noise map: the scatter of each channel over the positions without emission plus 
 continuum. The likelihood is Gaussian with that noise, divided by the number of pixels per independent
 measurement (the correlation of the noise along the slit and along the spectra, measured). The flux of the
 model is set by `NORM`: `AZIM` (default) the densities of the rings that reproduce the flux of the lines
-along the slit (deconvolved, as BAYESIAN3DFIT); `LOCAL` that model times one amplitude per position of the
-slit, marginalised (for asymmetric or clumpy disks: with AZIM, an asymmetric flux biases VSYS, XPOS and
-VROT); `NONE` the densities `DENS`.
+along the slit (deconvolved, as 3DFIT with METHOD GLOBAL or BAYESIAN); `LOCAL` that model times one
+amplitude per position of the slit, marginalised (for asymmetric or clumpy disks: with AZIM, an asymmetric
+flux biases VSYS, XPOS and VROT); `NONE` the densities `DENS`.
 
 BBarolo writes the rings with the errors of the free parameters (`<prefix>_slitfit_rings.txt`), the data,
 model, residuals, noise and continuum of the window (`<prefix>_slit_*.fits`), the samples
 (`<prefix>_slitfit_<method>_results.npy`) and, with `PLOTS`, the slit with the model and the residuals, the
-parameters and the corner plot, with their scripts. In Python: `bbarolo.BayesianSlitFit`. It replaces the
-SLITFIT task of BBarolo 1.8, which did not work.
+parameters and the corner plot, with their scripts. In Python: `bbarolo.SlitFit(slit, method=...)`, whose
+engine is `bbarolo.BayesianSlitFit`. It replaces the SLITFIT task of BBarolo 1.8, which did not work.
 """),
     'SLITWIDTH': dict(
         group='Model',
         default='none: required',
         doc="""\
-The width of the slit of `BAYESIANSLITFIT`, in arcsec: the model is the light of the disk, smoothed by the
+The width of the slit of `SLITFIT`, in arcsec: the model is the light of the disk, smoothed by the
 seeing (`BEAM`), that falls in the slit. It must be positive.
 """),
     'SLITANGLE': dict(
         group='Rings',
         default='AUTO',
         doc="""\
-The orientation of the disk with respect to the slit in `BAYESIANSLITFIT`: the angle, in degrees, from the
+The orientation of the disk with respect to the slit in `SLITFIT`: the angle, in degrees, from the
 direction of increasing position along the slit to the receding half of the major axis, counterclockwise
 (towards the side of the slit where `YPOS` is positive). 0 is a slit along the major axis with the receding
 side at increasing positions, 180 the same with the receding side at decreasing positions, and e.g. 10 or
@@ -1979,14 +1988,14 @@ It is not fitted: a misaligned slit not given as such biases VROT low (by about 
         group='Input',
         default='the lines over the velocity range of the emission, 600 km/s on either side',
         doc="""\
-The spectral range of the fit of `BAYESIANSLITFIT`: two values in the units of the spectral axis of the
+The spectral range of the fit of `SLITFIT`: two values in the units of the spectral axis of the
 slit (Angstrom for an axis in metres). By default it covers the lines over the velocity range of the
 emission found along the slit, plus 600 km/s on either side for the continuum.
 """),
     'SKYRESID': dict(
         group='Input',
         doc="""\
-Whether `BAYESIANSLITFIT` subtracts a residual sky: from each channel, the median of the positions of the
+Whether `SLITFIT` subtracts a residual sky: from each channel, the median of the positions of the
 slit without line emission (more than one seeing FWHM from any detection). Use it when the sky
 subtraction left residuals along the slit (e.g. stripes at the sky lines): they otherwise bias the flux of
 the lines along the slit (`NORM AZIM`) and the fit. It needs at least 5 positions without emission.
@@ -1995,7 +2004,7 @@ the lines along the slit (`NORM AZIM`) and the fit. It needs at least 5 position
         group='Input',
         default='none',
         doc="""\
-Spectral ranges left out of the fit of `BAYESIANSLITFIT`, pairs of values in the units of the spectral axis
+Spectral ranges left out of the fit of `SLITFIT`, pairs of values in the units of the spectral axis
 (e.g. strong sky lines: `MASKWAVE 7156 7159 7178 7181`). The pixels there are not data, as the blanks
 (NaN or 0) of the slit.
 """),

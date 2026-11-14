@@ -1,6 +1,6 @@
 """
 Bi-conical wind models whose emission is a set of non-negative amplitudes on cells of the cones (WindModel):
-the model engine of BAYESIANWIND (bbarolo.BayesianWind) and of GALWIND WTYPE 2.
+the model engine of WINDFIT (bbarolo.BayesianWind) and of GALWIND WTYPE 2.
 
 Geometry and conventions are those of GALWIND WTYPE 1 (galmod._galmod_wind). The two cones share the apex
 (XPOS, YPOS); their axis is the rotation axis z of a disk with inclination INC and position angle PA, so

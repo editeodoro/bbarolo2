@@ -1,5 +1,5 @@
 """
-The plots of BAYESIANSLITFIT. Each plot is a function that draws it from arrays and returns a matplotlib Figure,
+The plots of SLITFIT. Each plot is a function that draws it from arrays and returns a matplotlib Figure,
 writing nothing:
 
   plot_slit_pv          the slit: data, best model and residuals             <prefix>_slitfit_pv.pdf
@@ -18,7 +18,7 @@ from .utils import StyledFigure
 
 
 def read_slit_rings(fname):
-    """The rings of a ring file of BAYESIANSLITFIT (<prefix>_slitfit_rings.txt) as a dict of arrays, by the names of the
+    """The rings of a ring file of SLITFIT (<prefix>_slitfit_rings.txt) as a dict of arrays, by the names of the
     columns in lower case without their units (rad, vrot, e_vrot_lo, e_vrot_hi, vdisp, ...)."""
     with open(fname) as f:
         names = f.readline().lstrip("#").split()

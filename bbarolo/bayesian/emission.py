@@ -1,5 +1,5 @@
 """
-The emission of BAYESIANWIND: the amplitudes of a linear model (the emissivities of the cells of the wind, the
+The emission of WINDFIT: the amplitudes of a linear model (the emissivities of the cells of the wind, the
 densities of the rings of a fixed disk), solved at every likelihood call, and the log-likelihood of the other
 parameters marginalised over them.
 

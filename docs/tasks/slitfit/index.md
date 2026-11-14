@@ -1,18 +1,20 @@
-# BAYESIANSLITFIT
+# SLITFIT
 
-BAYESIANSLITFIT fits the kinematics of a rotating disk to a **long-slit spectrum**: a 2D image of the position
-along the slit and the spectral axis (wavelength, frequency or velocity). It samples the posterior distribution of
-the rotation curve, the velocity dispersion (and the radial motions) in rings, the systemic velocity and the centre
-along the slit with nested sampling (the nautilus included in BBarolo, `SAMPLER NAUTILUSBB`, the default; nautilus
-or dynesty), or finds the best fit by a minimisation of the same likelihood (`SAMPLER OPTIMISE`).
+SLITFIT fits the kinematics of a rotating disk to a **long-slit spectrum**: a 2D image of the position
+along the slit and the spectral axis (wavelength, frequency or velocity). By default (`METHOD GLOBAL`) it finds the
+maximum of the likelihood of the rotation curve, the velocity dispersion (and the radial motions) in rings, the
+systemic velocity and the centre along the slit, with the errors of the Laplace approximation; with
+`METHOD BAYESIAN` it samples their posterior distribution with nested sampling (the nautilus included in BBarolo,
+`SAMPLER NAUTILUSBB`, the default; nautilus or dynesty). SLITFIT runs alone, and has no CLASSIC method.
 
-The model is a GALMOD disk, as in 3DFIT and BAYESIAN3DFIT, built with the pixels and the channels of the slit and
+The model is a GALMOD disk, as in 3DFIT, built with the pixels and the channels of the slit and
 seen through the slit: the light of the disk smoothed by the seeing that falls in the slit, with the lines
 broadened by the instrumental resolution. Several lines (e.g. Hα and the [NII] doublet) are modelled together at
 the same velocities. A slit does not constrain the geometry of the disk: the inclination, the angle between the
 slit and the major axis and the distance of the slit from the centre are given, not fitted.
 
-In Python: {class}`bbarolo.BayesianSlitFit`. The default sampler needs nothing more than BBarolo; `SAMPLER NAUTILUS`
+In Python: {class}`bbarolo.SlitFit` (`method="global"` by default); the engine behind it is
+{class}`bbarolo.BayesianSlitFit`. The default sampler needs nothing more than BBarolo; `SAMPLER NAUTILUS`
 and `DYNESTY` need their packages (`pip install "bbarolo[bayesian]"`).
 
 ## Example
@@ -30,7 +32,8 @@ vacuum wavelengths (in metres, read in Angstrom), so the rest wavelengths are th
 
 ```text
 FITSFILE         2masxj1022_SALT.fits
-BAYESIANSLITFIT  true
+SLITFIT          true
+METHOD           GLOBAL       # the default; BAYESIAN samples the posterior
 SLITWIDTH        1
 BEAM             1.5
 SPECRES          1.04
@@ -50,22 +53,28 @@ THREADS          32
 :sync: py
 
 ```python
-from bbarolo import BayesianSlitFit
+from bbarolo import SlitFit
 
-f = BayesianSlitFit("2masxj1022_SALT.fits", slitwidth=1, beam=1.5, specres=1.04, inc=71, redshift=0.09143,
+f = SlitFit("2masxj1022_SALT.fits", slitwidth=1, beam=1.5, specres=1.04, inc=71, redshift=0.09143,
                     restwave=[6564.61, 6549.86, 6585.27], relint=[1, 0.117, 0.35], contsub=True,
-                    skyresid=True, norm="LOCAL")
-f.run(freepar="VROT VDISP VSYS XPOS", threads=32)
-f.print_stats()
-f.plot_pv()                   # the slit, the best model and the residuals, as a matplotlib Figure
-f.write("output/2masxj1022/")
+                    skyresid=True, norm="LOCAL", free="VROT VDISP VSYS XPOS")
+res = f.run(threads=32)       # in memory; run(method="bayesian") samples instead
+res.rings                     # the rings of the best fit, with the errors: an astropy Table
+res.model                     # the model of the slit (an HDU)
+res.samples                   # the samples (for GLOBAL, the draws of the Laplace approximation)
+res.fitter.print_stats()      # the engine, a BayesianSlitFit
+res.fitter.plot_pv()          # the slit, the best model and the residuals, as a matplotlib Figure
+res.write("output/2masxj1022/")
 ```
 :::
 ::::
 
-`SAMPLER OPTIMISE` (in Python `f.optimize()`, or `run(method='optimise')`) finds the best fit by L-BFGS-B with the
-errors of the Laplace approximation, as for {doc}`BAYESIAN3DFIT <../bayesian3dfit/index>`: about 30 seconds on 32
-processes for the example above (28 free parameters), a good way to check a setup before sampling.
+`METHOD GLOBAL` finds the best fit by L-BFGS-B (`MINIMISER` chooses another) with the errors of the Laplace
+approximation, as for {doc}`3DFIT <../3dfit/index>`: about 30 seconds on 32 processes for the example above (28 free
+parameters), a good way to check a setup before sampling with `METHOD BAYESIAN`.
+
+The engine {class}`~bbarolo.BayesianSlitFit` (for custom likelihoods and interactive work) has the methods
+`sample()` and `optimize()`; its `run()` follows METHOD.
 
 ## The input
 
@@ -99,7 +108,7 @@ The rings are `RADII`, or `NRADII` and `RADSEP`; by default one every seeing FWH
 along the slit. The values not given are estimated from Gaussian fits of the lines at each position. The default
 priors: VROT from 0 to twice the largest estimate, VDISP from 0 to three times, VSYS ± 150 km/s, XPOS ± two
 seeing FWHM; `PRIORS` changes them. The parameters free in each ring can be regularised by smoothness priors,
-as in BAYESIAN3DFIT: `LIKEOPTS smooth=(vrot=5, vdisp=3)` allows the profiles to bend by about 5 and 3 km/s over a
+as in 3DFIT with METHOD GLOBAL or BAYESIAN: `LIKEOPTS smooth=(vrot=5, vdisp=3)` allows the profiles to bend by about 5 and 3 km/s over a
 seeing FWHM (the keys `vrot`, `vdisp`, `vrad` and `dens`, in dex). `print_stats` shows the effective number of
 independent values of each profile.
 
@@ -108,7 +117,7 @@ independent values of each profile.
 `NORM` sets the flux of the model:
 
 - `AZIM` (default): the densities of the rings whose model reproduces the flux of the lines along the slit, a
-  non-negative fit with a smoothness prior (LIKEOPTS `densprof_smooth`), as BAYESIAN3DFIT deconvolves the total
+  non-negative fit with a smoothness prior (LIKEOPTS `densprof_smooth`), as 3DFIT with METHOD GLOBAL or BAYESIAN deconvolves the total
   intensity map. An axisymmetric disk: when the two sides of the slit differ in flux, the fit moves the centre and
   the systemic velocity to compensate (on a mock with a 50% asymmetry: VSYS off by 12 km/s, XPOS by one pixel,
   VROT 5 km/s low);
@@ -139,7 +148,7 @@ In the output folder, with the OBJECT of the slit as the prefix:
 - `_slitfit_rings.txt`: the rings of the best fit, with the 1σ errors of the free parameters;
 - `_slit_data.fits`, `_slit_model.fits`, `_slit_resid.fits`, `_slit_noise.fits` and (CONTSUB) `_slit_cont.fits`: the
   spectral window of the fit, with the axes of the input;
-- `_slitfit_<sampler>_results.npy`: the samples and the setup of the fit;
+- `_slitfit_<sampler>_results.npy`: the samples and the setup of the fit (METHOD GLOBAL: `_slitfit_optimize_results.npy`, the draws of the Laplace approximation);
 - with `PLOTS`: `_slitfit_pv.pdf` (the data, with the velocities of the Gaussian fits of the lines; the data with
   the contours of the model and the rotation velocities of the rings where they cross the slit, with their errors;
   the residuals; all with the line-of-sight velocities of the rings and the systemic velocity),

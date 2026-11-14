@@ -1,4 +1,4 @@
-# BAYESIANSLITFIT: how it works
+# SLITFIT: how it works
 
 ## The model seen through the slit
 
@@ -57,7 +57,7 @@ two seeing FWHM of any XPOS of the prior, with the noise map (times `SIGMA` if f
 - `NORM AZIM`: the model of the rings with the densities that reproduce the flux of the lines along the slit. The
   flux of each ring with unit density is the projection of its total intensity map (DiskModel.ring_maps), the data
   are summed over the line channels (the blanks filled along the spectrum), and the densities are the non-negative
-  least-squares solution with the smoothness prior and the exterior annulus of BAYESIAN3DFIT (bbarolo.profile). They
+  least-squares solution with the smoothness prior and the exterior annulus of 3DFIT with METHOD GLOBAL or BAYESIAN (bbarolo.profile). They
   depend on XPOS only: computed again when it changes.
 - `NORM LOCAL`: the AZIM model of each position u_j (normalised to unit flux) times an amplitude a_j ≥ 0 with a flat
   prior, integrated out exactly: with g = Σ W u², b = Σ W d u, c = Σ W d² (W the inverse variance times the
@@ -69,18 +69,18 @@ two seeing FWHM of any XPOS of the prior, with the noise map (times `SIGMA` if f
   favours narrower lines less than the profile likelihood does.
 - `NORM NONE`: the model of the rings with their densities.
 
-The smoothness priors of `LIKEOPTS smooth` are subtracted from ln L, as in BAYESIAN3DFIT (see its
-[smoothness priors](../bayesian3dfit/algorithm.md#smoothness-priors)), with the seeing FWHM as the beam: for each
+The smoothness priors of `LIKEOPTS smooth` are subtracted from ln L, as in 3DFIT with METHOD GLOBAL or BAYESIAN (see its
+[smoothness priors](../3dfit/likelihood.md#smoothness-priors)), with the seeing FWHM as the beam: for each
 parameter free in each ring, half the sum of (bend over a seeing FWHM / s)² over the inner rings, one term per FWHM
 of radius (VROT from 0 at R = 0; DENS in dex), not divided by the number of pixels per independent measurement.
 
-The sampling and the minimisation are those of BAYESIAN3DFIT (bbarolo/bayesian/sampling.py and optimize.py).
+The sampling and the minimisation are those of 3DFIT with METHOD BAYESIAN and GLOBAL (bbarolo/bayesian/sampling.py and optimize.py).
 
 ## Validation
 
 Mock slits made by the brute-force path (a full GALMOD cube, convolved in 2D, summed over the slit; Hα and the
 [NII] doublet, a linear continuum, S/N 20 at the peak of the lines, 12 rings as wide as the seeing), fitted with
-`SAMPLER OPTIMISE` (performance numbers of November 2026):
+`METHOD GLOBAL` (performance numbers of November 2026):
 
 | Mock | NORM | VROT, VDISP: rms of the pulls | VSYS (true 15 km/s) | XPOS (true 70.4) |
 |---|---|---|---|---|
@@ -98,4 +98,4 @@ and YPOS matter, and should come from the observation log and the images.
 
 The SLITFIT task of the C++ code was never finished (it modelled the HI line only, set no beam, did not subtract the
 continuum and minimised the 3DFIT residuals of a slit extracted by summing the model over the slit, with errors in the
-loops over the rows). BAYESIANSLITFIT is a new task: the C++ keyword SLITFIT is now an error that names it.
+loops over the rows). SLITFIT is now this new task, a fit of the same likelihood as 3DFIT with METHOD GLOBAL or BAYESIAN.

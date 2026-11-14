@@ -183,7 +183,7 @@ Maps in K have no HI columns. The constant is that of {ref}`MASSDENSMAP <par-map
 The profile above is that of the observed map, which the beam has smoothed: for a disk a few beams across,
 the inner rings come out too faint and the outer ones too bright. When the header has a beam, ELLPROF also
 computes the face-on surface densities of the rings whose model, convolved with the beam, reproduces the
-map. The method is that of BAYESIAN3DFIT when DENS is not free ({doc}`../bayesian3dfit/algorithm`, *The
+map. The method is that of 3DFIT with METHOD GLOBAL or BAYESIAN when DENS is not free ({doc}`../3dfit/likelihood`, *The
 density profile when DENS is not free*), here at the fixed geometry of the rings. The map of the model is
 linear in the densities $\Sigma_j$ of the rings,
 
@@ -196,7 +196,7 @@ The density is interpolated linearly between the radii (RINGMODE CENTRED), so $K
 at $R_j$; the rings have the centre, INC and PA given, and the thickness Z0 (thin if not given). Ring
 $N+1$ is an exterior annulus, from the outer edge of the rings to two beams beyond, which takes the emission
 outside the rings; its density is not used. The densities are the non-negative least-squares solution
-weighted by the noise $s(\mathbf x)$ of the map, with the smoothness term of BAYESIAN3DFIT, of weight
+weighted by the noise $s(\mathbf x)$ of the map, with the smoothness term of 3DFIT with METHOD GLOBAL or BAYESIAN, of weight
 $\alpha = 0.1$ times the mean data weight of a ring:
 
 $$
@@ -209,12 +209,12 @@ with $A_{\mathbf xj} = K_j(\mathbf x)/s(\mathbf x)$ and $L$ the second differenc
 radii. At least $2N$ pixels are needed. The data map $D$, the maps $K_j$ and the noise depend on the input:
 
 - **A cube**: $D(\mathbf x)$ is the sum of the data, not clipped, in the mask dilated by one beam FWHM and
-  by ±3 channels, as the voxels of BAYESIAN3DFIT: the faint emission around the mask, which the model
+  by ±3 channels, as the voxels of 3DFIT with METHOD GLOBAL or BAYESIAN: the faint emission around the mask, which the model
   reproduces, is included. $K_j$ is the channel sum of the ANALYTIC model of GALMOD, which does not
   depend on the kinematics. The noise is $s(\mathbf x) = \sigma_\mathrm n\sqrt{n(\mathbf x)\,L_z}$, with
   $\sigma_\mathrm n$ the scaled median absolute deviation of the data outside the mask, $n(\mathbf x)$ the
   number of channels summed and $L_z$ the spectral correlation of the noise (the conservative measure of
-  BAYESIAN3DFIT, at least one channel). The pixels are those with at least one channel summed.
+  3DFIT with METHOD GLOBAL or BAYESIAN, at least one channel). The pixels are those with at least one channel summed.
 - **A 2D map** (e.g. a moment-0 map): $D$ is the map itself, without the blank pixels, with uniform
   weights. $K_j$ is the ring projected on the sky, thin or with the vertical profile
   {ref}`LTYPE <par-3dfit-ltype>` of scale height Z0, and convolved with the beam (a normalised kernel, so
@@ -232,7 +232,7 @@ The errors are those of the noise: the profile is refitted to 200 realisations o
 Gaussian noise, and E_LO and E_HI are the distances of the 15.87th and 84.13th percentiles (±1σ) from the
 median. The
 noise is correlated as that of the data: white noise smoothed by a Gaussian of standard deviation
-$\sqrt{A_{xy}/4\pi}$ pixels, with $A_{xy}$ the spatial correlation area measured as in BAYESIAN3DFIT (at
+$\sqrt{A_{xy}/4\pi}$ pixels, with $A_{xy}$ the spatial correlation area measured as in 3DFIT with METHOD GLOBAL or BAYESIAN (at
 least one beam area; the beam area for a 2D map). Its rms is $s(\mathbf x)$ for a cube, and for a 2D map the
 rms of the residuals of the fit, which includes the structure that the rings do not describe (spiral arms,
 asymmetries), so that the errors are conservative. The geometry is fixed: the errors do not include the
@@ -312,4 +312,4 @@ The full list is in {doc}`../../reference/changes`.
   `readRings`.
 - `bbarolo/tasks.py`: `_compute_ellprof`, `_write_ellprof` (the task) and the `Ellprof` class.
 - `bbarolo/profile.py`: `ellprof_deconvolved` (the deconvolved profile), `MapRingModel` (the rings of a
-  2D map), `profile_system`, `solve_profile` (shared with BAYESIAN3DFIT).
+  2D map), `profile_system`, `solve_profile` (shared with 3DFIT with METHOD GLOBAL or BAYESIAN).

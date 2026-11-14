@@ -14,8 +14,10 @@ than a 2D velocity field, it is not biased by beam smearing and works on data of
 ports the C++ BBarolo 1.8 and its Python wrapper pyBBarolo: the same tasks (3DFIT, GALMOD, SEARCH, 2DFIT,
 moment maps, PV slices, ...), the same parameter files and the same outputs, with nothing to compile. The
 numerical kernels are compiled at run time with numba; the rest uses numpy, scipy, astropy and matplotlib.
-Its Bayesian fit, BAYESIAN3DFIT, samples the posterior of the ring parameters with nested sampling
-([nautilus](https://github.com/johannesulf/nautilus), included in the package).
+3DFIT has three methods: CLASSIC (BBarolo 1.x, ring by ring), GLOBAL (all the rings together, at the maximum of the
+likelihood) and BAYESIAN (`METHOD BAYESIAN`: the posterior of the ring parameters, sampled with nested sampling,
+[nautilus](https://github.com/johannesulf/nautilus) included in the package). WINDFIT fits bi-conical winds and SLITFIT
+long-slit spectra, with the methods GLOBAL and BAYESIAN.
 
 **Status:** under development.
 
@@ -28,7 +30,7 @@ pip install git+https://github.com/editeodoro/bbarolo2
 ```
 
 This installs the package `bbarolo` and the command `BBarolo`, with numpy, scipy, astropy, numba and
-matplotlib: everything the tasks need, BAYESIAN3DFIT included. The optional extra `bayesian` adds the samplers
+matplotlib: everything the tasks need, the Bayesian methods included. The optional extra `bayesian` adds the samplers
 dynesty and nautilus-sampler (`SAMPLER DYNESTY` and `NAUTILUS`), corner (the corner plot) and threadpoolctl.
 
 ```shell
@@ -70,7 +72,7 @@ res = f.run()                     # in memory: res.rings (the fitted rings), res
 res.write("output/")              # the files and plots of the command line
 ```
 
-and a Bayesian fit, with the posterior of the rotation velocity, the dispersion and the geometry:
+and a Bayesian fit (`method="bayesian"`; the engine `Bayesian3DFIT` is used here for the priors), with the posterior of the rotation velocity, the dispersion and the geometry:
 
 ```python
 from bbarolo import Bayesian3DFIT
@@ -81,8 +83,8 @@ f.priors["vrot"] = dict(name="uniform", loc=50, scale=200)      # km/s
 f.priors["vdisp"] = dict(name="uniform", loc=0, scale=30)       # km/s
 f.priors["inc"] = dict(name="uniform", loc=40, scale=25)        # degrees
 f.priors["phi"] = dict(name="uniform", loc=110, scale=30)       # degrees (phi is PA)
-f.run(freepar="VROT VDISP_SINGLE INC_SINGLE PA_SINGLE SIGMA RADMAX", threads=4,
-      sampler_kwargs=dict(nlive=500, seed=1), run_kwargs=dict(n_eff=3000))
+f.sample(freepar="VROT VDISP_SINGLE INC_SINGLE PA_SINGLE SIGMA RADMAX", threads=4,
+         sampler_kwargs=dict(nlive=500, seed=1), run_kwargs=dict(n_eff=3000))
 f.print_stats()                   # the median and the 68% interval of each parameter
 f.corner_plot()                   # needs the package corner
 ```
@@ -106,7 +108,7 @@ helpful in your research.
 }
 ```
 
-BAYESIAN3DFIT and BAYESIANWIND sample the posterior with nautilus
+3DFIT, WINDFIT and SLITFIT with METHOD BAYESIAN sample the posterior with nautilus
 ([Lange 2023](https://doi.org/10.1093/mnras/stad2441)): if you use them, please cite nautilus as well.
 
 ```

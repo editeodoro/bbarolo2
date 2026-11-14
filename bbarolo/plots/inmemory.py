@@ -1,5 +1,5 @@
 """
-The plots of 3DFIT and BAYESIAN3DFIT from the outputs in memory: the inputs of the functions of fit3d.py taken from
+The plots of 3DFIT (all its METHODs) from the outputs in memory: the inputs of the functions of fit3d.py taken from
 a Result (from_result) or from a Bayesian3DFIT after its fit (from_bayes) instead of the files, with the settings of
 the scripts (scripts.plot_settings). Used by Result.plot_parameters(), plot_chanmaps(), ... and by the same
 methods of Bayesian3DFIT.
@@ -29,15 +29,19 @@ def rings_dict(t):
 
 
 def from_result(res):
-    """The plots of the Result res of 3DFIT or BAYESIAN3DFIT."""
-    if "galfit" not in res:
-        raise ValueError(f"No plots of 3DFIT for a Result of {res.task}: they are for 3DFIT and BAYESIAN3DFIT.")
+    """The plots of the Result res of 3DFIT (any METHOD)."""
+    from ..galfit import Galfit
+    f = res.fitter if "fitter" in res else None
+    if res.task != "3DFIT" or f is None:
+        raise ValueError(f"No plots of 3DFIT for a Result of {res.task}.")
 
     def get(name):
         if name.startswith("_"):
             return res._output(name)
         return res[name] if name in res else None
-    return Fit3DPlots(res.galfit, get, bayes=res.bayes if "bayes" in res else None, what=f"Result of {res.task}")
+    if isinstance(f, Galfit):
+        return Fit3DPlots(f, get, bayes=None, what="Result of 3DFIT")
+    return Fit3DPlots(f._galfit, get, bayes=f, what=f"Result of 3DFIT (METHOD {res.method})")
 
 
 def from_bayes(f):
@@ -45,7 +49,7 @@ def from_bayes(f):
     outputs (Bayesian3DFIT.model_outputs) are kept for the next plots, until the best fit changes."""
     from ..galfit import ring_table
     if not f.modCalculated:
-        raise ValueError("BAYESIAN3DFIT: no best fit to plot yet: run() (or optimize(), load_results()) first.")
+        raise ValueError("Bayesian3DFIT: no best fit to plot yet: run() (or optimize(), load_results()) first.")
     key = (np.asarray(f.params, float).tobytes(), id(f.outri))
     cache = getattr(f, "_plots_cache", None)
     if cache is None or cache[0] != key:
@@ -73,9 +77,9 @@ def from_bayes(f):
 
 
 class Fit3DPlots:
-    """The inputs of the plots of 3DFIT or BAYESIAN3DFIT from the outputs in memory: gf, the Galfit of the fit;
+    """The inputs of the plots of 3DFIT from the outputs in memory: gf, the Galfit of the fit;
     get(name), the outputs as in a Result (rings, rings_stage1, densprof, densprof_deconvolved, asymdrift, maps,
-    _model_outputs, _model_norm; None if absent); bayes: the Bayesian3DFIT, or None for 3DFIT."""
+    _model_outputs, _model_norm; None if absent); bayes: the Bayesian3DFIT (METHOD GLOBAL or BAYESIAN), or None (CLASSIC)."""
 
     def __init__(self, gf, get, bayes=None, what=""):
         self.gf, self.get, self.bayes, self.what = gf, get, bayes, what

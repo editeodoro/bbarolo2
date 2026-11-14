@@ -159,7 +159,7 @@ def finalModel(c, model, rings, normtype, mask=None, par=None, seed=None):
 
 
 class ModelOutputs:
-    """The outputs of the final model of 3DFIT, GALMOD and BAYESIAN3DFIT, in memory.
+    """The outputs of the final model of 3DFIT and GALMOD, in memory.
 
     mask: the mask (bool array); ell: the radial profile of the data (an Ellprof; densprof() as a Table);
     both can be None, and are then computed when needed (the mask of the cube, built if needed, and the
@@ -314,7 +314,7 @@ class ModelOutputs:
 def deconvolved_profile(c, model, rings, par):
     """The density profile of 3DFIT deconvolved from the beam: the densities of the final rings whose
     beam-convolved model (the engine of the fit, model) reproduces the total intensity map of the data, at the
-    geometry of the rings, as for ELLPROF and BAYESIAN3DFIT (see profile.ellprof_deconvolved: the data map in
+    geometry of the rings, as for ELLPROF and 3DFIT (METHOD GLOBAL, BAYESIAN) (see profile.ellprof_deconvolved: the data map in
     the mask dilated by one beam, a smoothness prior, errors from 200 realisations of the noise; only one half
     of the galaxy with SIDE A or R). Returns its dict (with 'used': whether the final model uses it, i.e. DENS
     is not fitted), or None (no beam, or too few pixels with data)."""

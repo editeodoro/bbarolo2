@@ -1,4 +1,4 @@
-"""The BAYESIANWIND task of parameter files (BBarolo -p, bbarolo.run)."""
+"""The WINDFIT task of parameter files (BBarolo -p, bbarolo.run)."""
 
 import numpy as np
 
@@ -7,7 +7,7 @@ from .wind import BayesianWind
 
 
 def _task_wind(c, par):
-    """The BayesianWind of the BAYESIANWIND task: the parameters of par as given (but the flags of the tasks and the
+    """The BayesianWind of the WINDFIT task: the parameters of par as given (but the flags of the tasks and the
     input files), the output folder of c, and the data of c (with the changes of the tasks run before it)."""
     from ..keywords import lookup
     p = c.pars()
@@ -19,7 +19,8 @@ def _task_wind(c, par):
         prm[k] = _FromFile(v)
     prm["OUTFOLDER"] = p.outFolder
     f = BayesianWind(None, **prm)
-    f._set_cube(p.imageFile)
+    src = getattr(c, "_source_hdu", None)         # (a cube in memory: the Python task class)
+    f._set_cube(src if src is not None else p.imageFile)
     cb = f._load_cube()
     if cb.array.shape == c.array.shape and not np.array_equal(cb.array, c.array, equal_nan=True):
         cb.array[...] = c.array
@@ -28,26 +29,19 @@ def _task_wind(c, par):
 
 
 def run_task(c, par):
-    """The BAYESIANWIND task: samples the posterior with the parameters of par (FREE required; SAMPLER, SAMPLEROPTS,
-    RUNOPTS, PRIORS, LIKEOPTS), with THREADS processes. With VERBOSE it prints the statistics. Nothing is written
-    (see write_task). Returns the BayesianWind."""
-    from ..params import bayes_options
+    """The WINDFIT task: the fit with the parameters of par (METHOD GLOBAL: the maximum of the likelihood, with
+    MINIMISER; BAYESIAN: the posterior, with SAMPLER; SAMPLEROPTS, RUNOPTS, PRIORS, LIKEOPTS), with THREADS processes.
+    With VERBOSE it prints the statistics. Nothing is written (see write_task). Returns the BayesianWind."""
+    from .common import task_fit
     f = _task_wind(c, par)
     p = c.pars()
-    gf = p.gf
-    verbose = bool(p.verbose)
-    method = gf.SAMPLER.strip().lower()
-    run_kwargs = {}
-    if method == "dynesty" and not p.showbar and "print_progress" not in bayes_options(gf.RUNOPTS):
-        run_kwargs["print_progress"] = False
-    f._task_showbar = p.showbar                   # (off with LOGFILE: the progress bars of SAMPLER OPTIMISE)
-    f.run(method=method, threads=p.threads, verbose=verbose, run_kwargs=run_kwargs)
-    if verbose:
+    task_fit(f, p, "WINDFIT")
+    if p.verbose:
         f.print_stats()
     return f
 
 
 def write_task(f, c):
-    """The outputs of the BAYESIANWIND task f in the output folder of the cube c, with its PLOTS."""
+    """The outputs of the WINDFIT task f in the output folder of the cube c, with its PLOTS."""
     p = c.pars()
     f.write(outfolder=p.outFolder, plots=p.plots, verbose=bool(p.verbose))

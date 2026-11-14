@@ -39,16 +39,28 @@ def _keywords(task):
 
 
 def _default(kw, task):
-    """The default as shown: the value (in backticks), the default in words (kw.default_text), or None."""
+    """The default as shown: the value (in backticks), the default in words (kw.default_text), or None. For a
+    task with a METHOD, the default of its default method, and those that differ for its other methods."""
     from bbarolo import keywords as K
     from bbarolo.params import _default_param
-    tdef = K.TASK_DEFAULTS.get(task, {})
+    if kw.name == "METHOD" and task in K.DEFAULT_METHOD:
+        return f"`{K.DEFAULT_METHOD[task]}`"
+    tdef = K.task_defaults(task)
     if kw.name in tdef:
-        return f"`{K._fmtval(tdef[kw.name])}`"
-    if kw.default_text:
+        d = f"`{K._fmtval(tdef[kw.name])}`"
+    elif kw.default_text:
         return kw.default_text
-    s = K._fmtval(kw.value(_default_param()))
-    return None if s in ("-1", '""', "") else f"`{s}`"
+    else:
+        s = K._fmtval(kw.value(_default_param()))
+        d = None if s in ("-1", '""', "") else f"`{s}`"
+    other = {}
+    for m in K.METHODS.get(task, ()):
+        v = K.task_defaults(task, m).get(kw.name)
+        if m != K.DEFAULT_METHOD[task] and v is not None and f"`{K._fmtval(v)}`" != d:
+            other.setdefault(f"`{K._fmtval(v)}`", []).append(m)
+    for v, ms in other.items():
+        d = (d or "not set") + f"; {v} with METHOD {' or '.join(ms)}"
+    return d
 
 
 def _type(kw):
@@ -126,6 +138,7 @@ class BBParams(SphinxDirective):
         return result
 
     def _list(self, task, kws):
+        from bbarolo import keywords as K
         out = nodes.definition_list(classes=["bbparams"])
         for kw in kws:
             item = nodes.definition_list_item()
@@ -140,6 +153,9 @@ class BBParams(SphinxDirective):
             body = nodes.definition()
             text = (getattr(kw, "doc", None) or kw.help.rstrip(".") + ".").strip()
             meta = [f"*Type:* {_type(kw)}"]
+            ms = K.methods_for(kw, task)
+            if ms:                                  # (a keyword of some methods of the task only)
+                meta.append(f"*Only with:* METHOD {' or '.join(ms)}")
             d = _default(kw, task)
             meta.append(f"*Default:* {d}" if d is not None else "*Default:* not set")
             lines = text.splitlines() + ["", " · ".join(meta)]

@@ -105,14 +105,13 @@ lines of the file:
 5. SMOOTH
 6. SMOOTHSPEC
 7. SEARCH
-8. 3DFIT
-9. BAYESIAN3DFIT
-10. GALMOD
-11. SPACEPAR
-12. GALWIND
-13. 2DFIT
-14. the maps (TOTALMAP, VELOCITYMAP, DISPERSIONMAP, MASSDENSMAP, RMSMAP, GLOBALPROFILE)
-15. PVSLICE
+8. 3DFIT or WINDFIT (METHOD: CLASSIC, GLOBAL or BAYESIAN), or SLITFIT, which runs alone
+9. GALMOD
+10. SPACEPAR
+11. GALWIND
+12. 2DFIT
+13. the maps (TOTALMAP, VELOCITYMAP, DISPERSIONMAP, MASSDENSMAP, RMSMAP, GLOBALPROFILE)
+14. PVSLICE
 16. ELLPROF
 17. REND3D
 
@@ -165,7 +164,7 @@ are quoted for the shell:
 ```bash
 BBarolo -p ngc2403.par THREADS=8 FREE="VROT VDISP INC PA"
 BBarolo -c fitsfile=ngc2403.fits stats=true outfolder=stats
-BBarolo -f ngc2403.fits BAYESIAN3DFIT=true
+BBarolo -f ngc2403.fits METHOD=bayesian
 ```
 
 An override replaces the value of the file. It can also switch a task on or off: `TOTALMAP=false` after

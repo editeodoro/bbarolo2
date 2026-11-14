@@ -16,7 +16,7 @@ keywords (radii or nradii/radsep, xpos, ypos, vsys, vrot, vdisp, inc, pa, z0, vr
     >>> f.run(freepar=['vrot','vdisp_single','inc_single'], method='dynesty', threads=4)
     >>> f.print_stats(); f.write_bestmodel(); f.corner_plot()
 
-Parameter files (``BBarolo -p``, ``bbarolo.run``): the task BAYESIAN3DFIT, with the free
+Parameter files (``BBarolo -p``, ``bbarolo.run``): the task 3DFIT with METHOD GLOBAL or BAYESIAN, with the free
 parameters in FREE (e.g. VROT VDISP PA_SINGLE INC_SINGLE RADMAX; by default VROT VDISP and the
 geometry, Z0, RADMAX and FRACERR), the priors in PRIORS (e.g.
 VROT=(uniform,loc=0,scale=250) INC=(norm,60,5)), and SAMPLER, SAMPLEROPTS, RUNOPTS and
@@ -93,7 +93,7 @@ The package: fitter.py (Bayesian3DFIT: parameters, rings, priors, setup, run), l
 voxels, the region and the noise of the likelihood, the log-likelihoods), density.py (the deconvolved
 density profile), sampling.py (nautilusbb, nautilus, dynesty and the process pool), outputs.py (files,
 plots, statistics, save and load), noise.py (the correlation of the noise), rings.py, task.py
-(BAYESIAN3DFIT), nautilus/ (the copy of nautilus 1.0.6 of SAMPLER NAUTILUSBB, MIT licence).
+(3DFIT, METHOD GLOBAL or BAYESIAN), nautilus/ (the copy of nautilus 1.0.6 of SAMPLER NAUTILUSBB, MIT licence).
 """
 
 ########################################################################

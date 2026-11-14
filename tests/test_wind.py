@@ -1,4 +1,4 @@
-"""Tests of the wind models (bbarolo.windmodel), of the emission (bbarolo.bayesian.emission) and of BAYESIANWIND."""
+"""Tests of the wind models (bbarolo.windmodel), of the emission (bbarolo.bayesian.emission) and of WINDFIT."""
 
 import math
 import os
@@ -47,7 +47,7 @@ def _uniform_cone_funcs(conelen, oa, vw):
 
 
 def test_windmodel_vs_galmod3d():
-    """A uniform filled bicone with a radial wind: the engine of BAYESIANWIND gives the GalMod3D model (a Cartesian
+    """A uniform filled bicone with a radial wind: the engine of WINDFIT gives the GalMod3D model (a Cartesian
     grid in the frame of the wind, a different engine) within 0.3% of the peak rms, the same flux and the same
     velocity field: the same geometry, projection and signs."""
     from bbarolo import GalMod3D
@@ -191,7 +191,7 @@ def test_emission_solver_and_evidence():
 
 
 def test_wind_parsers_and_keywords():
-    """The free parameters, priors and options of BAYESIANWIND; its keywords and the checks of the task."""
+    """The free parameters, priors and options of WINDFIT; its keywords and the checks of the task."""
     from bbarolo.bayesian.wind import wind_freepar, wind_priors, wind_likeopts
     from bbarolo.keywords import lookup, keywords_for
     assert wind_freepar("VWIND_SINGLE vdisp INC PA OPENANG EMSCALE vrot_func") == \
@@ -209,14 +209,16 @@ def test_wind_parsers_and_keywords():
         wind_likeopts("emission=pixels")
     with pytest.raises(ValueError):
         wind_likeopts("likemask=none")
-    names = {k.name for k in keywords_for("BAYESIANWIND")}
-    assert {"OPENIN", "DISKRINGS", "FREE", "PRIORS", "LIKEOPTS", "VWIND", "OPENANG", "CONELEN", "XPOS"} <= names
-    assert lookup("BAYESIANWIND").flag
+    names = {k.name for k in keywords_for("WINDFIT")}
+    assert {"OPENIN", "DISKRINGS", "FREE", "PRIORS", "LIKEOPTS", "VWIND", "OPENANG", "CONELEN", "XPOS", "METHOD",
+            "SAMPLER", "MINIMISER"} <= names
+    assert "SAMPLER" not in {k.name for k in keywords_for("WINDFIT", "GLOBAL")} and "DELTAINC" not in names
+    assert lookup("WINDFIT").flag
     # the checks of the task: FREE required, LIKEOPTS checked
     from bbarolo.tasks import build_param
     import io
     import contextlib
-    base = dict(FITSFILE="x.fits", BAYESIANWIND=True, XPOS=10, YPOS=10, VSYS=0, INC=60, PA=30, OPENANG=60,
+    base = dict(FITSFILE="x.fits", WINDFIT=True, XPOS=10, YPOS=10, VSYS=0, INC=60, PA=30, OPENANG=60,
                 CONELEN=100, VWIND=200)
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
@@ -262,7 +264,7 @@ def test_galwind_wtype2():
 
 
 def test_bayesian_wind_quick(tmp_path):
-    """BAYESIANWIND on a tiny mock wind (GalMod3D clumps): the marginal likelihood prefers the true geometry to wider or
+    """WINDFIT on a tiny mock wind (GalMod3D clumps): the marginal likelihood prefers the true geometry to wider or
     narrower cones and slower or faster winds, EMSCALE, EMCLUMP, EMRATIO and EMSLOPE are added to the free parameters,
     a short sampling runs (dynesty, few live points: only the pipeline, not the accuracy, which is that of
     performance/wind_recovery.py) and the outputs are written: the model, the maps and PV slices of data and model in
@@ -284,7 +286,7 @@ def test_bayesian_wind_quick(tmp_path):
     best = ll(200., 60.)
     for vw, oa in ((200., 80.), (200., 40.), (140., 60.), (260., 60.)):
         assert ll(vw, oa) < best - 3, (vw, oa)
-    f.run(freepar=["vwind_single", "openang"], method="dynesty", sampler_kwargs=dict(nlive=10, seed=1),
+    f.sample(freepar=["vwind_single", "openang"], sampler="dynesty", sampler_kwargs=dict(nlive=10, seed=1),
           run_kwargs=dict(maxiter=40), like_kwargs=dict(cellsize=40.), verbose=False)
     assert f.ndim == 6 and np.all(np.isfinite(f.params)) and f.model.shape == hdu.data.shape
     files = f.write(plots=1, verbose=False)
@@ -337,43 +339,59 @@ def test_bayesian_wind_optimize(tmp_path, capsys):
 
 
 def test_bayesian_wind_optimise_task(tmp_path, capsys):
-    """BAYESIANWIND with SAMPLER OPTIMISE: the checks of SAMPLEROPTS, BBarolo -p (the optimisation and the outputs with
-    <prefix>_optimize_windresults.npy and the best fit in <prefix>_wind_params.txt), and run() with
-    method='optimise' in Python."""
+    """WINDFIT with METHOD GLOBAL (its default): the checks of SAMPLEROPTS, BBarolo -p (the optimisation and the outputs
+    with <prefix>_optimize_windresults.npy and the best fit in <prefix>_wind_params.txt), run() of the engine and
+    WindFit in Python; METHOD CLASSIC is not a method of WINDFIT."""
     from wind_mocks import mock_wind
     from bbarolo import BayesianWind
     from bbarolo.cli import main
     p = Param()
-    p.readParamString("FITSFILE m.fits\nBAYESIANWIND true\nFREE VWIND_SINGLE\nXPOS 1\nYPOS 1\nVSYS 0\nINC 60\n"
-                      "PA 30\nOPENANG 60\nVWIND 200\nCONELEN 100\nSAMPLER OPTIMISE\nSAMPLEROPTS nlive=10\n")
+    wind = "FREE VWIND_SINGLE\nXPOS 1\nYPOS 1\nVSYS 0\nINC 60\nPA 30\nOPENANG 60\nVWIND 200\nCONELEN 100\n"
+    p.readParamString("FITSFILE m.fits\nWINDFIT true\n" + wind + "SAMPLEROPTS nlive=10\n")
+    assert not p.checkPars() and p.gf.METHOD == "GLOBAL"
+    assert "WINDFIT error: SAMPLEROPTS: unknown option(s) nlive of METHOD GLOBAL" in capsys.readouterr().out
+    p = Param()
+    p.readParamString("FITSFILE m.fits\nWINDFIT true\nMETHOD classic\n" + wind)
     assert not p.checkPars()
-    assert "BAYESIANWIND error: SAMPLEROPTS: unknown option(s) nlive of SAMPLER OPTIMISE" in capsys.readouterr().out
+    assert "WINDFIT error: METHOD CLASSIC is not a method of WINDFIT (GLOBAL or BAYESIAN)" in capsys.readouterr().out
+    p = Param()
+    p.readParamString("FITSFILE m.fits\nWINDFIT true\n3DFIT true\n" + wind)
+    assert not p.checkPars() and "3DFIT and WINDFIT can not run at the same time" in capsys.readouterr().out
     hdu, tr = mock_wind(kind="clumps", seed=2, snr=15, shape=(24, 24, 20), pix=12., chan=25., beam=36.,
                         truth=dict(xpos=11.5, ypos=11.5, conelen=110., radii=[55., 110.], vwind=200.), nclumps=40,
                         clump=20.)
     fn = str(tmp_path / "wind.fits")
     hdu.writeto(fn)
     par = tmp_path / "wind.par"
-    par.write_text(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/cli\nBAYESIANWIND true\nXPOS 11.5\nYPOS 11.5\nVSYS 0\n"
+    par.write_text(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/cli\nWINDFIT true\nXPOS 11.5\nYPOS 11.5\nVSYS 0\n"
                    "INC 55\nPA 30\nOPENANG 55\nCONELEN 110\nVWIND 180\nVDISP 20\nNLAYERS 2\n"
-                   "FREE VWIND_SINGLE OPENANG\nLIKEOPTS cellsize=40\nSAMPLER OPTIMIZE\nSAMPLEROPTS errors=true\n"
+                   "FREE VWIND_SINGLE OPENANG\nLIKEOPTS cellsize=40\nSAMPLEROPTS errors=true\n"
                    "THREADS 2\nPLOTS false\n")
     assert main(["-p", str(par)]) == 0
     out = capsys.readouterr().out
-    assert "Optimisation with L-BFGS-B" in out and "BAYESIANWIND maximum likelihood (L-BFGS-B" in out
+    assert "Optimisation with L-BFGS-B" in out and "WINDFIT maximum likelihood (L-BFGS-B" in out
     files = os.listdir(str(tmp_path / "cli"))
     assert any(x.endswith("_optimize_windresults.npy") for x in files), files
     params = next(x for x in files if x.endswith("_wind_params.txt"))
     assert "maximum likelihood by L-BFGS-B" in open(str(tmp_path / "cli" / params)).readline()
     f = BayesianWind(hdu, xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, conelen=110, vwind=180, vdisp=20,
                      nlayers=2, outfolder=str(tmp_path) + "/")
-    f.run(freepar=["vwind_single", "openang"], method="optimise", like_kwargs=dict(cellsize=40.),
-          sampler_kwargs=dict(method="powell", errors=False), run_kwargs=dict(maxiter=3), verbose=False)
+    f.run(freepar=["vwind_single", "openang"], minimiser="powell", like_kwargs=dict(cellsize=40.),
+          sampler_kwargs=dict(errors=False), run_kwargs=dict(maxiter=3), verbose=False)
     assert f._method == "optimize" and f.optimum.method == "Powell" and f.optimum.cov is None
+    # WindFit: the task of parameter files, in memory
+    from bbarolo import WindFit
+    r = WindFit(hdu, xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, conelen=110, vwind=180, vdisp=20,
+                nlayers=2, free="VWIND_SINGLE OPENANG", likeopts="cellsize=40", minimiser="powell",
+                sampleropts="errors=false", runopts="maxiter=3", verbose=False, threads=2).run()
+    assert r.method == "GLOBAL" and isinstance(r.fitter, BayesianWind) and r.fitter.optimum.method == "Powell"
+    assert np.allclose(r.fitter.params, f.params) and list(r.parameters["name"])[:2] == ["vwind", "openang"]
+    assert r.model.data.shape == hdu.data.shape and len(r.shells) == 2
+    assert r.samples.colnames == list(r.fitter.freepar_names)
 
 
 def test_emission_gauss_exact():
-    """log_marginal_gauss (the default prior of BAYESIANWIND: Gaussian emissivities of mean m and scatter kappa m) is
+    """log_marginal_gauss (the default prior of WINDFIT: Gaussian emissivities of mean m and scatter kappa m) is
     the exact integral (brute force for 1-2 correlated amplitudes, the Gaussian of the data for 6), and
     log_marginal_gauss_diag its diagonal version; the posterior mean solves the regularised normal equations."""
     from scipy import integrate
@@ -480,7 +498,7 @@ def test_bayesian_wind_one_cone(tmp_path):
     best = ll(200., 60.)
     for vw, oa in ((200., 85.), (200., 35.), (130., 60.), (270., 60.)):
         assert ll(vw, oa) < best - 3, (vw, oa)
-    f.run(freepar=["vwind_single", "openang"], method="dynesty", sampler_kwargs=dict(nlive=10, seed=1),
+    f.sample(freepar=["vwind_single", "openang"], sampler="dynesty", sampler_kwargs=dict(nlive=10, seed=1),
           run_kwargs=dict(maxiter=40), like_kwargs=dict(cellsize=40., cones="approaching"), verbose=False)
     assert f.ndim == 5
     files = f.write(plots=1, verbose=False)
@@ -550,7 +568,7 @@ def test_bayesian_wind_voxel(tmp_path):
     g.like_kwargs = dict(g.like_kwargs, emission="voxel")
     with pytest.raises(BBaroloError):
         g._setup(names, verbose=False)
-    f.run(freepar=["vwind_single", "openang"], method="dynesty", sampler_kwargs=dict(nlive=10, seed=1),
+    f.sample(freepar=["vwind_single", "openang"], sampler="dynesty", sampler_kwargs=dict(nlive=10, seed=1),
           run_kwargs=dict(maxiter=40), like_kwargs=dict(emission="voxel"), verbose=False)
     assert f.ndim == 6 and np.all(np.isfinite(f.params))
     cov = f.best_details["covered"]
@@ -594,7 +612,7 @@ def test_wind_single_cell_sampled_at_the_beam():
 
 
 def test_bayesian_wind_blanks(tmp_path):
-    """The blanks of the cube (NaN in the file, 0 once read) are not data: BAYESIANWIND leaves them out of the voxels of
+    """The blanks of the cube (NaN in the file, 0 once read) are not data: WINDFIT leaves them out of the voxels of
     the likelihood and out of the noise (which they made too low: 30% of zeros pulled the median absolute deviation
     down by about a third)."""
     from wind_mocks import mock_wind

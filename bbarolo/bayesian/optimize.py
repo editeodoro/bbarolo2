@@ -1,14 +1,14 @@
 """
-The optimisation of Bayesian3DFIT and BayesianWind (their method optimize): the best fit found by a classic
-minimisation of -log L, with the likelihood of the sampling (the same function, options and free parameters), for
-testing the samplers and quick fits. The result is the maximum likelihood within the bounds of the priors (their
+METHOD GLOBAL of the fits (3DFIT, WINDFIT, SLITFIT; the method optimize of their engines Bayesian3DFIT,
+BayesianWind and BayesianSlitFit): the best fit found by a classic minimisation of -log L, with the likelihood of
+METHOD BAYESIAN (the same function, options and free parameters). The result is the maximum likelihood within the bounds of the priors (their
 support), or with posterior=True the maximum of the posterior (-log L - log prior).
 
 The search runs in the unit cube of the priors, the space of the samplers: theta = the prior transform of u, u in
 [0, 1]^ndim (1e-9 from an infinite end of a prior). Every parameter then has a range of one, the bounds are those of
 the priors, and a log-uniform prior (SIGMA, FRACERR, EMSCALE, ...) is searched in its logarithm.
 
-Methods (method):
+Minimisers (minimiser; MINIMISER in parameter files):
   'L-BFGS-B' (the default), 'TNC', 'SLSQP', 'trust-constr': quasi-Newton methods with bounds, the gradient by
              central differences of step `step` (in units of the range of each prior), its 2 ndim + 1 likelihoods
              computed at once in `threads` processes (the pool of the sampling);
@@ -16,12 +16,12 @@ Methods (method):
              many parameters, e.g. Nelder-Mead beyond ~10);
   'differential_evolution': a global search (scipy), its population computed in the processes, then polished with
              L-BFGS-B.
-The options of the method are given in `options` (scipy's, e.g. maxiter); nstart > 1 starts the local methods also
+The options of the minimiser are given in `options` (scipy's, e.g. maxiter); nstart > 1 starts the local methods also
 from nstart - 1 points drawn from the priors (seed), and keeps the best. With verbose, the progress (the likelihoods
 computed and the best log-likelihood) is printed after 10 seconds and then at intervals of a tenth of the time elapsed
 (the minimisation has no known length), and the Hessian shows the progress bar of BBarolo (showbar: SHOWBAR). In
-parameter files (and as the default of run()), SAMPLER OPTIMISE (or OPTIMIZE) runs optimize, with its arguments in
-SAMPLEROPTS and the options of the method in RUNOPTS (see sampler_options).
+parameter files, METHOD GLOBAL runs optimize with MINIMISER, its other arguments in SAMPLEROPTS and the options of
+the minimiser in RUNOPTS (see global_options).
 
 The errors (errors=True): the Laplace approximation, the inverse of the Hessian of the objective at the best fit (in
 the parameters), computed by finite differences (about ndim^2 likelihoods, steps of about four conditional sigma, see
@@ -46,10 +46,9 @@ GRADIENT_METHODS = ('L-BFGS-B', 'TNC', 'SLSQP', 'trust-constr')
 GLOBAL_METHODS = ('differential_evolution',)
 METHODS = LOCAL_METHODS + GLOBAL_METHODS
 
-# SAMPLER OPTIMISE (parameter files, run(method='optimise')): its names, and the options of SAMPLEROPTS (the arguments
-# of optimize; RUNOPTS are the options of the method)
-SAMPLER_NAMES = ('optimise', 'optimize')
-SAMPLER_OPTIONS = ('method', 'x0', 'posterior', 'errors', 'nstart', 'seed', 'step', 'nsamples')
+# METHOD GLOBAL (parameter files): the options of SAMPLEROPTS (the arguments of optimize but the minimiser, which is
+# MINIMISER; RUNOPTS are the options of the minimiser)
+GLOBAL_OPTIONS = ('x0', 'posterior', 'errors', 'nstart', 'seed', 'step', 'nsamples')
 
 _BIG = 1e30                 # the objective where the likelihood is not finite
 _U_EDGE = 1e-9              # the bound of u at an infinite end of a prior
@@ -68,8 +67,8 @@ _CHUNK = 128
 
 
 def method_name(method):
-    """ The name of an optimisation method (case-insensitive; 'lbfgsb', 'nelder-mead', 'de', ... are accepted).
-    Raises BBaroloError for an unknown method. """
+    """ The name of a minimiser (case-insensitive; 'lbfgsb', 'nelder-mead', 'de', ... are accepted).
+    Raises BBaroloError for an unknown minimiser. """
     key = str(method).strip().lower().replace('_', '').replace('-', '')
     for m in METHODS:
         if key == m.lower().replace('_', '').replace('-', ''):
@@ -78,24 +77,20 @@ def method_name(method):
         return 'differential_evolution'
     if key in ('neldermead', 'simplex'):
         return 'Nelder-Mead'
-    raise BBaroloError(f"optimize: unknown method {method!r} (methods: {', '.join(METHODS)}).")
+    raise BBaroloError(f"optimize: unknown minimiser {method!r} (minimisers: {', '.join(METHODS)}).")
 
 
-def sampler_options(sampler_kwargs, run_kwargs=None, task="BAYESIAN3DFIT"):
-    """ The arguments of optimize() for SAMPLER OPTIMISE: those of SAMPLEROPTS (sampler_kwargs: method, x0 ('centre',
-    or values separated by commas), posterior, errors, nstart, seed, step, nsamples) and, as options, RUNOPTS
-    (run_kwargs: the options of the method, e.g. maxiter; checked by the method when it starts). BBaroloError for an
-    unknown option or method. """
+def global_options(sampler_kwargs, run_kwargs=None, task="3DFIT"):
+    """ The arguments of optimize() for METHOD GLOBAL but the minimiser (MINIMISER): those of SAMPLEROPTS
+    (sampler_kwargs: x0 ('centre', or values separated by commas), posterior, errors, nstart, seed, step, nsamples)
+    and, as options, RUNOPTS (run_kwargs: the options of the minimiser, e.g. maxiter; checked by the minimiser when
+    it starts). BBaroloError for an unknown option. """
     kw = dict(sampler_kwargs or {})
-    bad = sorted(set(kw) - set(SAMPLER_OPTIONS))
+    bad = sorted(set(kw) - set(GLOBAL_OPTIONS))
     if bad:
-        raise BBaroloError(f"{task}: SAMPLEROPTS: unknown option(s) {', '.join(bad)} of SAMPLER OPTIMISE. Options: "
-                           f"{', '.join(SAMPLER_OPTIONS)} (those of the method in RUNOPTS).")
-    if kw.get('method') is not None:
-        try:
-            kw['method'] = method_name(kw['method'])
-        except BBaroloError as e:
-            raise BBaroloError(f"{task}: SAMPLEROPTS: {str(e).replace('optimize: ', '')}") from None
+        hint = " (the minimiser is MINIMISER)" if "method" in bad else ""
+        raise BBaroloError(f"{task}: SAMPLEROPTS: unknown option(s) {', '.join(bad)} of METHOD GLOBAL{hint}. "
+                           f"Options: {', '.join(GLOBAL_OPTIONS)} (those of the minimiser in RUNOPTS).")
     if isinstance(kw.get('x0'), (int, float)):
         kw['x0'] = [kw['x0']]
     if run_kwargs:
@@ -363,10 +358,10 @@ def _laplace(space, theta, H, nsamples, seed):
     return cov, cov_u, s[:nsamples], reg
 
 
-def optimize(fitter, like_kwargs, theta0, method='L-BFGS-B', threads=1, posterior=False, errors=True, nstart=1,
+def optimize(fitter, like_kwargs, theta0, minimiser='L-BFGS-B', threads=1, posterior=False, errors=True, nstart=1,
              seed=None, step=1e-3, options=None, nsamples=4000, verbose=True, showbar=True):
     """ Minimise -log L of fitter (its _log_like_func with like_kwargs, its priors and free parameters; see the
-    module documentation) from theta0 (a vector of the free parameters; NaN: the centre of the prior), with method,
+    module documentation) from theta0 (a vector of the free parameters; NaN: the centre of the prior), with minimiser,
     the likelihoods computed in threads processes. Returns an OptimizeResult: x (the best fit), logl (its
     log-likelihood), logprior, fun (the objective), u (x in the unit cube of the priors), method, success, message,
     nit, nfev (likelihoods), time (seconds), starts (the best -log L of each start), at_bound (the parameters closer to
@@ -374,7 +369,7 @@ def optimize(fitter, like_kwargs, theta0, method='L-BFGS-B', threads=1, posterio
     (its square root on the diagonal), hessian (of the objective, in the units of the parameters), steps (of the
     Hessian), samples (the draws of the Laplace approximation) and regularised (directions without constraint: their
     width is that of the prior). """
-    method = method_name(method)
+    method = method_name(minimiser)
     space = _Space(fitter)
     n = fitter.ndim
     th0 = np.asarray(theta0, float)

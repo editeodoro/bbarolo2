@@ -9,7 +9,7 @@ the surface-density profile of a galaxy for the inclination and position angle g
 The beam smooths the map, and with it the profile: for a disk a few beams across, the centre comes out too
 faint and the outer rings too bright. When the header has a beam, ELLPROF therefore also gives the profile
 deconvolved from the beam: the face-on surface densities of the rings whose model, convolved with the beam,
-reproduces the map, as {doc}`BAYESIAN3DFIT <../bayesian3dfit/index>` computes them, with their errors.
+reproduces the map, as {doc}`3DFIT with METHOD GLOBAL or BAYESIAN <../3dfit/index>` computes them, with their errors.
 
 In Python: {class}`bbarolo.Ellprof`.
 

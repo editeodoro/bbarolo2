@@ -672,6 +672,35 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **One task per fit, and METHOD chooses how: `3DFIT`, `WINDFIT` and `SLITFIT` with `METHOD = CLASSIC | GLOBAL |
+  BAYESIAN`.** The fits of a galaxy were two tasks (3DFIT, and BAYESIAN3DFIT with a sampler or `SAMPLER OPTIMISE`),
+  those of winds and slits BAYESIANWIND and BAYESIANSLITFIT. Now:
+  - `3DFIT true` with `METHOD CLASSIC` (the default: the fit ring by ring of BBarolo 1, C++ parameter files
+    unchanged), `GLOBAL` (all the parameters together at the maximum of the likelihood, with the errors of the
+    Laplace approximation: the former `SAMPLER OPTIMISE`) or `BAYESIAN` (nested sampling: the former BAYESIAN3DFIT);
+    `WINDFIT` and `SLITFIT` with `GLOBAL` (their default) or `BAYESIAN`. One METHOD per run (3DFIT and WINDFIT do
+    not run together); `BBarolo -f cube.fits METHOD=bayesian` works.
+  - The new keyword `MINIMISER` (also MINIMIZER; default L-BFGS-B) is the minimiser of GLOBAL, which was
+    `SAMPLEROPTS method=...`; SAMPLEROPTS keeps the other arguments of the minimisation. `SAMPLER` is the sampler of
+    BAYESIAN only: its value OPTIMISE is gone.
+  - BAYESIAN3DFIT, BAYESIANWIND and BAYESIANSLITFIT are removed: they are errors that name the new form (e.g.
+    `BAYESIAN3DFIT is no longer a parameter: 3DFIT with METHOD GLOBAL or BAYESIAN`). SLITFIT is a task again.
+  - A keyword given for another method gives a warning (e.g. `PRIORS` with METHOD CLASSIC, `DELTAINC` with GLOBAL).
+    `BBarolo -d 3DFIT` and `bbarolo.help("3DFIT")` list the parameters of each method; the parameter file of a run
+    (`<prefix>_params.par`) records METHOD. The output files do not change.
+  - Python: `FitMod3D(cube, method=...)`, and the new `WindFit` and `SlitFit`, as every task: `run()` computes in
+    memory and returns a `Result` for every method, with `res.method` and `res.fitter`, the engine (Galfit or
+    Bayesian3DFIT, BayesianWind, BayesianSlitFit), which replaces `res.galfit` and `res.bayes`. With GLOBAL and
+    BAYESIAN the Result of 3DFIT also has `rotation_curve`, `rings_initial`, `densprof_deconvolved` (a Table, in
+    memory) and `samples` (a Table of the samples of the posterior, or of the Laplace approximation), also from
+    `bbarolo.run` (where `samples` was the name of the file); `bbarolo.run` returns `{"3DFIT": Result}`.
+  - The engines `Bayesian3DFIT`, `BayesianWind` and `BayesianSlitFit` stay, for custom likelihoods and interactive
+    work: `run()` follows METHOD (default BAYESIAN for Bayesian3DFIT, GLOBAL for the others, as their tasks), the
+    new `sample(sampler=...)` samples (`run(method=<sampler>)` is gone) and `optimize(minimiser=...)` minimises
+    (its argument `method` is now `minimiser`). Changing only METHOD, SAMPLER, MINIMISER, SAMPLEROPTS or RUNOPTS no
+    longer re-estimates their rings.
+  - `performance/compare_examples.py --new-examples DIR`: the new code runs the parameter files of DIR (e.g. with
+    changed keywords) while the git revision runs those of `--examples`.
 - **BAYESIAN3DFIT and BAYESIANSLITFIT: `LIKEOPTS smooth` replaces `lambdas`.** The smoothness penalties are now given
   as the bend (1σ) allowed to each profile over one beam (the seeing FWHM for the slit), in the units of the
   parameter: `smooth=(vrot=5, vdisp=3)` lets the rotation curve depart from a straight line by about 5 km/s across

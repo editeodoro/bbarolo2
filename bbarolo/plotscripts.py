@@ -4,7 +4,7 @@ and of the SEARCH task (Cube::plotDetections).
 
 As in BBarolo, the scripts are written in the ``plotscripts`` sub-directory of the output
 folder (so that they can be edited and re-run by the user) and then executed in parallel.
-The plots of 3DFIT and BAYESIAN3DFIT are functions of bbarolo/plots/fit3d.py, callable in Python,
+The plots of 3DFIT are functions of bbarolo/plots/fit3d.py, callable in Python,
 whose source is copied in their scripts (plots/scripts.py). To avoid
 loading matplotlib & co. once per script, the scripts run in processes forked from a
 helper process that has already imported them (PlotRunner, _plotserver.py).
@@ -152,7 +152,7 @@ def plotAll_Python(gf, runner=None):
 
 
 def writeScripts_Python(gf):
-    """Write the plotting scripts of the fit gf (a Galfit, also that of BAYESIAN3DFIT) in <outfolder>/plotscripts/:
+    """Write the plotting scripts of the fit gf (a Galfit, also that of METHOD GLOBAL or BAYESIAN) in <outfolder>/plotscripts/:
     those of plots/scripts.py (plot_utils.py, plot_parameters.py, plot_chanmaps.py, plot_pvs.py, plot_pvslices.py,
     plot_kinmaps.py), plot_pvs_old.py (the previous style of PV plot, not run) and plot_all.py. Returns the names
     of the scripts to run."""

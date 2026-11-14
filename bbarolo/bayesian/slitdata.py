@@ -1,5 +1,5 @@
 """
-The data of BAYESIANSLITFIT: a long-slit spectrum (a 2D image, position along the slit x spectral axis), read and
+The data of SLITFIT: a long-slit spectrum (a 2D image, position along the slit x spectral axis), read and
 prepared for the fit.
 
     * reading (SlitData.read): the spectral axis is the one whose CTYPE is spectral (WAVE, AWAV, FREQ, VELO, VRAD,
@@ -135,10 +135,10 @@ class SlitData:
             data, hdr = src
             hdr = fits.Header(hdr)
         else:
-            raise TypeError("BAYESIANSLITFIT: the slit must be a FITS file name, an astropy HDU or (data, header)")
+            raise TypeError("SLITFIT: the slit must be a FITS file name, an astropy HDU or (data, header)")
         data = np.squeeze(np.asarray(data, np.float64))
         if data.ndim != 2:
-            raise BBaroloError(f"BAYESIANSLITFIT: the slit must be a 2D image (position x spectral axis), not an "
+            raise BBaroloError(f"SLITFIT: the slit must be a 2D image (position x spectral axis), not an "
                                f"array of shape {np.shape(data)}")
         hdr = fits.Header(hdr)
         naxes = [i for i in range(1, int(hdr.get("NAXIS", 2)) + 1) if int(hdr.get(f"NAXIS{i}", 1)) > 1]
@@ -146,7 +146,7 @@ class SlitData:
             naxes = [1, 2]
         kinds = [_spec_kind(hdr.get(f"CTYPE{i}", ""), hdr.get(f"CUNIT{i}", "")) for i in naxes]
         if sum(k is not None for k in kinds) != 1:
-            raise BBaroloError("BAYESIANSLITFIT: cannot tell the spectral axis of the slit from CTYPE1/2 and "
+            raise BBaroloError("SLITFIT: cannot tell the spectral axis of the slit from CTYPE1/2 and "
                                f"CUNIT1/2 ({[hdr.get(f'CTYPE{i}') for i in naxes]}, "
                                f"{[hdr.get(f'CUNIT{i}') for i in naxes]}): one must be WAVE, AWAV, FREQ or VELO")
         isp = 0 if kinds[0] is not None else 1
@@ -156,7 +156,7 @@ class SlitData:
         pu = str(hdr.get(f"CUNIT{pax}", "")).strip().lower()
         pdelt = hdr.get(f"CDELT{pax}", hdr.get(f"CD{pax}_{pax}"))
         if pdelt is None or not pu or not any(u in pu for u in ("deg", "arcm", "arcs")):
-            raise BBaroloError(f"BAYESIANSLITFIT: the position axis of the slit (axis {pax}) has no scale: give "
+            raise BBaroloError(f"SLITFIT: the position axis of the slit (axis {pax}) has no scale: give "
                                f"CDELT{pax} with CUNIT{pax} in arcsec, arcmin or deg")
         from ..bbutils import arcsconv
         pix = abs(float(pdelt)) * arcsconv(pu)
@@ -169,14 +169,14 @@ class SlitData:
         if kind == "wave":
             cu = cunit.lower()
             if cu == "" or cu not in _WAVE_UNITS:
-                raise BBaroloError(f"BAYESIANSLITFIT: unknown unit of the wavelength axis CUNIT{sax}={cunit!r} "
+                raise BBaroloError(f"SLITFIT: unknown unit of the wavelength axis CUNIT{sax}={cunit!r} "
                                    "(m, um, nm or Angstrom)")
             if cu == "m":                       # (metres: read in Angstrom)
                 crval, cdelt, cunit = crval * 1E10, cdelt * 1E10, "Angstrom"
         elif kind == "freq" and cunit.lower() not in _FREQ_UNITS:
-            raise BBaroloError(f"BAYESIANSLITFIT: unknown unit of the frequency axis CUNIT{sax}={cunit!r}")
+            raise BBaroloError(f"SLITFIT: unknown unit of the frequency axis CUNIT{sax}={cunit!r}")
         elif kind == "velo" and cunit.lower() not in _VEL_UNITS:
-            raise BBaroloError(f"BAYESIANSLITFIT: unknown unit of the velocity axis CUNIT{sax}={cunit!r}")
+            raise BBaroloError(f"SLITFIT: unknown unit of the velocity axis CUNIT{sax}={cunit!r}")
         # data (nspec, npos): numpy's axes are reversed with respect to FITS
         arr = data if sax == naxes[1] else data.T
         arr = np.array(arr, np.float64)
@@ -267,7 +267,7 @@ def _ranges_mask(values, ranges):
 def _pairs(vec, name):
     v = [float(x) for x in (vec or [])]
     if len(v) % 2:
-        raise BBaroloError(f"BAYESIANSLITFIT: {name} needs pairs of values (ranges lo hi), not {len(v)} values")
+        raise BBaroloError(f"SLITFIT: {name} needs pairs of values (ranges lo hi), not {len(v)} values")
     return [(v[i], v[i + 1]) for i in range(0, len(v), 2)]
 
 
@@ -392,7 +392,7 @@ def prepare(slit, restwave, relint, redshift, veldef, sig_instr, beam_fwhm, cont
     else:
         rw = [float(x) for x in (restwave or []) if float(x) > 0]
         if not rw:
-            raise BBaroloError(f"BAYESIANSLITFIT: RESTWAVE{' (RESTFREQ)' if sp.kind == 'freq' else ''} is required "
+            raise BBaroloError(f"SLITFIT: RESTWAVE{' (RESTFREQ)' if sp.kind == 'freq' else ''} is required "
                                f"for a {'wavelength' if sp.kind == 'wave' else 'frequency'} axis")
         rest = [w * (1 + redshift) for w in rw] if sp.kind == "wave" else [f / (1 + redshift) for f in rw]
         relint = list(relint) if relint is not None and len(relint) == len(rw) else [1.] * len(rw)
@@ -413,15 +413,15 @@ def prepare(slit, restwave, relint, redshift, veldef, sig_instr, beam_fwhm, cont
         c = np.sort(sp.chan_of_vel(np.array([-VSEARCH, VSEARCH]), l))
         near[max(int(np.floor(c[0])), 0):max(int(np.ceil(c[1])) + 1, 0)] = True
     if not np.any(near):
-        raise BBaroloError("BAYESIANSLITFIT: the lines (RESTWAVE at REDSHIFT) fall outside the spectral axis of the "
+        raise BBaroloError("SLITFIT: the lines (RESTWAVE at REDSHIFT) fall outside the spectral axis of the "
                            f"slit ({allv[0]:.6g} to {allv[-1]:.6g} {sp.cunit})")
     if waverange:
         wr = _pairs(waverange, "WAVERANGE")
         if len(wr) != 1:
-            raise BBaroloError("BAYESIANSLITFIT: WAVERANGE is one range (two values)")
+            raise BBaroloError("SLITFIT: WAVERANGE is one range (two values)")
         inwin = _ranges_mask(allv, wr)
         if inwin.sum() < 10:
-            raise BBaroloError("BAYESIANSLITFIT: WAVERANGE holds fewer than 10 channels of the slit")
+            raise BBaroloError("SLITFIT: WAVERANGE holds fewer than 10 channels of the slit")
     else:
         inwin = None
     dvch = sp.dv(0)
@@ -443,7 +443,7 @@ def prepare(slit, restwave, relint, redshift, veldef, sig_instr, beam_fwhm, cont
     if contsub:
         use = ~vlines[sl1] & ~notcont[sl1]
         if use.sum() < max(10, 3 * (contorder + 1)):
-            raise BBaroloError("BAYESIANSLITFIT: too few channels to fit the continuum (CONTSUB): the spectrum is "
+            raise BBaroloError("SLITFIT: too few channels to fit the continuum (CONTSUB): the spectrum is "
                                "too short around the lines, or EXCLWIND and MASKWAVE leave out too many channels")
         cont[sl1] = fit_continuum(data[sl1], x[sl1], use, contorder)
     work = np.where(masked[:, None], np.nan, data - cont)
@@ -457,7 +457,7 @@ def prepare(slit, restwave, relint, redshift, veldef, sig_instr, beam_fwhm, cont
     fits_ = fit_lines(stack, vgrid, snoise, sig_instr, snr=4.)
     ok = fits_["ok"]
     if ok.sum() < 3:
-        raise BBaroloError("BAYESIANSLITFIT: no line emission detected along the slit (check RESTWAVE, REDSHIFT and "
+        raise BBaroloError("SLITFIT: no line emission detected along the slit (check RESTWAVE, REDSHIFT and "
                            "the spectral axis; CONTSUB true if the slit has a continuum)")
     # isolated detections are spurious: keep the positions with a detected neighbour; so are the velocities far
     # from those of the nearby positions (e.g. a line taken for another one of the stack)
@@ -487,7 +487,7 @@ def prepare(slit, restwave, relint, redshift, veldef, sig_instr, beam_fwhm, cont
     contchan &= ~notcont
     if contsub:
         if contchan.sum() < max(6, 3 * (contorder + 1)):
-            raise BBaroloError("BAYESIANSLITFIT: too few channels to fit the continuum (CONTSUB) in the window of the "
+            raise BBaroloError("SLITFIT: too few channels to fit the continuum (CONTSUB) in the window of the "
                                "fit: widen WAVERANGE, or exclude fewer channels (EXCLWIND, MASKWAVE)")
         cont[:] = 0.
         cont[sl] = fit_continuum(data[sl], x[sl], contchan[sl], contorder)
@@ -501,7 +501,7 @@ def prepare(slit, restwave, relint, redshift, veldef, sig_instr, beam_fwhm, cont
     sky = np.zeros(k1 - k0)
     if skyresid:
         if freepos.sum() < 5:
-            raise BBaroloError(f"BAYESIANSLITFIT: SKYRESID needs positions without line emission along the slit "
+            raise BBaroloError(f"SLITFIT: SKYRESID needs positions without line emission along the slit "
                                f"(found {int(freepos.sum())})")
         with np.errstate(all="ignore"):
             sky = np.nanmedian(w[:, freepos], axis=1)

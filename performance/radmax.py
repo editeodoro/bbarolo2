@@ -119,9 +119,9 @@ def fit(job):
             if method != "evid":
                 free.append('radmax')
                 like['radmax'] = method
-            f.run(freepar=free, method='nautilus', threads=1, verbose=False, like_kwargs=like,
-                  sampler_kwargs=dict(n_live=job["nlive"], seed=g["seed"] % 2 ** 31),
-                  run_kwargs=dict(n_eff=job["neff"]))
+            f.sample(freepar=free, sampler='nautilus', threads=1, verbose=False, like_kwargs=like,
+                     sampler_kwargs=dict(n_live=job["nlive"], seed=g["seed"] % 2 ** 31),
+                     run_kwargs=dict(n_eff=job["neff"]))
             S = np.asarray(f.samples_equal)
             idx = f.freepar_idx
             q = lambda x: np.quantile(np.asarray(x, float), [0.16, 0.5, 0.84]).tolist()

@@ -159,15 +159,20 @@ VECTOR_KINDS = ("ivec", "fvec", "fvec3", "ivec6", "fvec2", "beam")
 G3 = ("gm", "gf", "gw")     # GALMOD, 3DFIT and GALWIND structures
 G2 = ("gm", "gf")           # GALMOD and 3DFIT structures
 
-# Groups of tasks (for the documentation of each keyword)
+# Groups of tasks (for the documentation of each keyword). A fit task with a METHOD (3DFIT, WINDFIT, SLITFIT) is
+# given alone (all its methods) or as TASK/METHOD (only with that METHOD), e.g. "3DFIT/CLASSIC".
 ALL = ("ALL",)
-MOD = ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR")
-RING = ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "ELLPROF")
-BAYES = ("BAYESIAN3DFIT",)
-BAYESW = ("BAYESIAN3DFIT", "BAYESIANWIND", "BAYESIANSLITFIT")      # (the options of the samplers)
-SLIT = ("BAYESIANSLITFIT",)
-WIND = ("GALWIND", "BAYESIANWIND")
-MOD3 = ("3DFIT", "GALMOD", "SPACEPAR")        # not BAYESIAN3DFIT
+FITS = ("3DFIT", "WINDFIT", "SLITFIT")       # the tasks with a METHOD
+CLASSIC = ("3DFIT/CLASSIC",)                 # 3DFIT with METHOD CLASSIC
+LIKE3 = ("3DFIT/GLOBAL", "3DFIT/BAYESIAN")   # 3DFIT with the likelihood (METHOD GLOBAL or BAYESIAN)
+LIKE = LIKE3 + ("WINDFIT", "SLITFIT")        # the options of the likelihood fits
+SAMPLE = ("3DFIT/BAYESIAN", "WINDFIT/BAYESIAN", "SLITFIT/BAYESIAN")    # METHOD BAYESIAN (the sampler)
+MINIM = ("3DFIT/GLOBAL", "WINDFIT/GLOBAL", "SLITFIT/GLOBAL")           # METHOD GLOBAL (the minimiser)
+MOD = ("3DFIT", "GALMOD", "SPACEPAR")
+RING = ("3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "ELLPROF")
+SLIT = ("SLITFIT",)
+WIND = ("GALWIND", "WINDFIT")
+MOD3 = ("3DFIT/CLASSIC", "GALMOD", "SPACEPAR")        # not 3DFIT with METHOD GLOBAL or BAYESIAN
 MAPS = ("TOTALMAP", "VELOCITYMAP", "DISPERSIONMAP", "MASSDENSMAP", "RMSMAP", "GLOBALPROFILE")
 MAPSM = ("TOTALMAP", "VELOCITYMAP", "DISPERSIONMAP", "MASSDENSMAP", "RMSMAP")   # the maps that use the mask
 
@@ -282,22 +287,22 @@ KEYWORDS = [
     K("AUTO", "flag", ["AUTO"], ALL, "Automated 3DFIT (same as BBarolo -f)"),
     K("FLUXCONVERT", "flag", ["fluxConvert"], ALL, "Whether to convert flux to Jy?"),
     K("FLAGROBUSTSTATS", "flag", ["flagRobustStats"], ALL, "Using robust statistics?", aliases=["robuststats"]),
-    K("CONTSUB", "flag", ["contsub"], ("CONTSUB",) + SLIT, "Subtract continuum from datacube (BAYESIANSLITFIT: "
+    K("CONTSUB", "flag", ["contsub"], ("CONTSUB",) + SLIT, "Subtract continuum from datacube (SLITFIT: "
       "from each position of the slit)?", flag=True),
     K("EXCLWIND", "str", ["exclude_windows"], ("CONTSUB",) + SLIT, "Channel window(s) to exclude for continuum fit"),
     K("CONTORDER", "int", ["cont_order"], ("CONTSUB",) + SLIT, "Order of polynomial for continuum fit"),
     K("MAKEMASK", "flag", ["makeMask"], ("MAKEMASK",), "Writing the mask to a fitsfile", flag=True),
-    K("MASK", "str", ["MaskType"], ("MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "BAYESIANWIND", "GALMOD", "SPACEPAR",
+    K("MASK", "str", ["MaskType"], ("MAKEMASK", "3DFIT", "WINDFIT", "GALMOD", "SPACEPAR",
                                     "2DFIT", "ELLPROF", "REND3D") + MAPSM,
       "Type of mask: SMOOTH, SEARCH, SMOOTH&SEARCH, THRESHOLD, NEGATIVE, NONE or FILE(mask.fits)"),
-    K("BLANKCUT", "float", ["blankCut"], ("MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "2DFIT",
-                                          "ELLPROF", "REND3D") + MAPSM,
+    K("BLANKCUT", "float", ["blankCut"], ("MAKEMASK", "3DFIT", "GALMOD", "SPACEPAR", "2DFIT", "ELLPROF",
+                                          "REND3D") + MAPSM,
       "S/N cut for the SMOOTH mask"),
     K("STATS", "flag", ["flagStats"], ("STATS",), "Calculate and print statistics?", flag=True),
-    K("GALMODTYPE", "ustr", ["galmodtype"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR", "GALWIND"),
+    K("GALMODTYPE", "ustr", ["galmodtype"], ("3DFIT", "GALMOD", "SPACEPAR", "GALWIND"),
       "Type of model: MC (Monte Carlo) or ANALYTIC (noiseless). Default MC, but "
-      "ANALYTIC for BAYESIAN3DFIT"),
-    K("RINGMODE", "ustr", ["ringmode"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "BAYESIANSLITFIT"),
+      "ANALYTIC for 3DFIT with METHOD GLOBAL or BAYESIAN"),
+    K("RINGMODE", "ustr", ["ringmode"], ("3DFIT", "GALMOD", "SLITFIT"),
       "Rings of the models: CENTRED (each ring is an annulus centred on its radius, reaching "
       "halfway to the next rings, as fitted by 3DFIT), NODES (values at the radii, disk from the "
       "first to the last radius) or SHIFTED (BBarolo 1.x: first and last radius moved by RADSEP/2)"),
@@ -342,8 +347,8 @@ KEYWORDS = [
     K("DISPERSIONMAP", "flag", ["ma.dispersionmap"], ("DISPERSIONMAP",),
       "Saving velocity dispersion map to FITS file?", flag=True),
     K("RMSMAP", "flag", ["ma.rmsmap"], ("RMSMAP",), "Saving RMS map to FITS file?", flag=True),
-    K("MAPTYPE", "ustr", ["ma.maptype"], ("TOTALMAP", "VELOCITYMAP", "DISPERSIONMAP", "3DFIT", "BAYESIAN3DFIT",
-                                          "BAYESIANWIND", "GALMOD"),
+    K("MAPTYPE", "ustr", ["ma.maptype"], ("TOTALMAP", "VELOCITYMAP", "DISPERSIONMAP", "3DFIT", "WINDFIT",
+                                          "GALMOD"),
       "How to extract the maps (MOMENT or GAUSSIAN)?"),
     K("SNMAP", "flag", ["ma.SNmap"], ("TOTALMAP", "SEARCH"), "Computing also S/N map for intensity map?"),
     K("TAPER", "lstr", ["ma.taper"], ("TOTALMAP",), "Type of velocity taper used for the S/N map"),
@@ -356,15 +361,13 @@ KEYWORDS = [
     K("ELLPROF", "flag", ["flagEllProf"], ("ELLPROF",), "Deriving radial intensity profile?", flag=True),
     K("3DFIT", "flag", ["gf.flagGALFIT"], ("3DFIT",), "Fitting a 3D model to the datacube?",
       aliases=["galfit", "fit3d"], flag=True),
-    K("BAYESIAN3DFIT", "flag", ["gf.flagBAYESIAN"], BAYES,
-      "Fitting a 3D model to the datacube with nested sampling (posterior of the parameters)?", flag=True),
     K("GALMOD", "flag", ["gm.flagGALMOD"], ("GALMOD",), "Writing a 3D model?", flag=True),
     K("GALWIND", "flag", ["gw.flagGALWIND"], ("GALWIND",), "Generating a 3D datacube with a wind model?",
       flag=True),
-    K("BAYESIANWIND", "flag", ["gw.flagBAYESIAN"], ("BAYESIANWIND",),
-      "Fitting a bi-conical wind to the datacube with nested sampling (posterior of the parameters)?", flag=True),
-    K("BAYESIANSLITFIT", "flag", ["flagBayesSlit"], SLIT,
-      "Fitting the kinematics of a long-slit spectrum (position x wavelength) with nested sampling?", flag=True),
+    K("WINDFIT", "flag", ["gw.flagWINDFIT"], ("WINDFIT",), "Fitting a bi-conical wind to the datacube?",
+      flag=True),
+    K("SLITFIT", "flag", ["flagSlitFit"], SLIT, "Fitting the kinematics of a long-slit spectrum (position x "
+      "wavelength)?", flag=True),
     K("SPACEPAR", "flag", ["flagSpace"], ("SPACEPAR",), "Full parameter space for a pair of parameters", flag=True),
 
     # ---------------------------------------------------------------- rings (GALMOD/3DFIT/GALWIND)
@@ -398,71 +401,79 @@ KEYWORDS = [
     K("RESTWAVE", "fvec", _g(G2, "RESTWAVE"), MOD + WIND + SLIT, "Rest wavelength(s) of the line(s)"),
     K("RESTFREQ", "fvec", _g(G2, "RESTFREQ"), MOD + WIND + SLIT, "Rest frequency(ies) of the line(s)"),
     K("RELINT", "fvec", _g(G2, "RELINT"), MOD + WIND + SLIT, "Relative intensities of the lines"),
-    K("NOISERMS", "float", _g(G2, "NOISERMS"), ("3DFIT", "GALMOD"), "RMS noise to add to the model"),
+    K("NOISERMS", "float", _g(G2, "NOISERMS"), ("3DFIT/CLASSIC", "GALMOD"), "RMS noise to add to the model"),
     K("RINGFILE", "str", _g(G2, "ringfile"), MOD, "A BBarolo output file with the rings"),
     K("EMPTY", "flag", _g(G3, "EMPTY"), MOD, "Whether to leave empty inner part"),
     K("DENSFLUX", "flag", _g(G3, "DENSFLUX"), ("GALMOD",), "Whether DENS is integrated flux / arcs2"),
 
     # ---------------------------------------------------------------- 3DFIT
-    K("DELTAINC", "float", ["gf.DELTAINC"], ("3DFIT",), "Max inclination variation from INC (degrees)"),
-    K("DELTAPA", "float", ["gf.DELTAPHI"], ("3DFIT",), "Max position angle variation from PA (degrees)",
+    K("DELTAINC", "float", ["gf.DELTAINC"], CLASSIC, "Max inclination variation from INC (degrees)"),
+    K("DELTAPA", "float", ["gf.DELTAPHI"], CLASSIC, "Max position angle variation from PA (degrees)",
       aliases=["deltaphi"]),
-    K("DELTAVROT", "float", ["gf.DELTAVROT"], ("3DFIT",), "Max rot. velocity variation from VROT (km/s)"),
-    K("MINVDISP", "float", ["gf.MINVDISP"], ("3DFIT",), "Minimum acceptable velocity dispersion (km/s)"),
-    K("MAXVDISP", "float", ["gf.MAXVDISP"], ("3DFIT",), "Maximum acceptable velocity dispersion (km/s)"),
+    K("DELTAVROT", "float", ["gf.DELTAVROT"], CLASSIC, "Max rot. velocity variation from VROT (km/s)"),
+    K("MINVDISP", "float", ["gf.MINVDISP"], CLASSIC, "Minimum acceptable velocity dispersion (km/s)"),
+    K("MAXVDISP", "float", ["gf.MAXVDISP"], CLASSIC, "Maximum acceptable velocity dispersion (km/s)"),
     K("FTYPE", "int", ["gf.FTYPE"], ("3DFIT", "SPACEPAR"),
       "Residuals to minimize (1=chi2, 2=|m-o|, 3=|m-o|/|m+o|, 4=(m-o)^2)"),
     K("WFUNC", "int", ["gf.WFUNC"], ("3DFIT", "SPACEPAR", "2DFIT"),
       "Weighting function (0=uniform, 1=|cos|, 2=cos^2, -1=|sin|, -2=sin^2)"),
-    K("TOL", "float", ["gf.TOL"], ("3DFIT",), "Minimization tolerance"),
-    K("FREE", "str", ["gf.FREE"], ("3DFIT", "BAYESIAN3DFIT", "BAYESIANWIND", "BAYESIANSLITFIT", "2DFIT"),
-      "Free parameters, case-insensitive. 3DFIT and 2DFIT: any of VROT, VDISP, DENS, Z0, INC, PA, XPOS, YPOS, "
-      "VSYS, VRAD, or ALL. BAYESIAN3DFIT: a name alone has one value per ring, NAME_SINGLE one "
+    K("TOL", "float", ["gf.TOL"], CLASSIC, "Minimization tolerance"),
+    K("FREE", "str", ["gf.FREE"], FITS + ("2DFIT",),
+      "Free parameters, case-insensitive. 3DFIT (METHOD CLASSIC) and 2DFIT: any of VROT, VDISP, DENS, Z0, INC, PA, "
+      "XPOS, YPOS, VSYS, VRAD, or ALL. 3DFIT with METHOD GLOBAL or BAYESIAN: a name alone has one value per ring, "
+      "NAME_SINGLE one "
       "value for all the rings, NAME_FUNC a function of radius (VROT, VDISP, DENS), plus SIGMA, FRACERR and "
       "RADMAX (default: VROT VDISP XPOS_SINGLE YPOS_SINGLE VSYS_SINGLE INC_SINGLE PA_SINGLE Z0_SINGLE RADMAX "
       "FRACERR)"),
-    K("GUESSTYPE", "ustr", ["gf.GUESSTYPE"], ("3DFIT", "BAYESIAN3DFIT", "2DFIT", "SPACEPAR"),
+    K("GUESSTYPE", "ustr", ["gf.GUESSTYPE"], ("3DFIT", "2DFIT", "SPACEPAR"),
       "Initial estimates of the parameters that are not given: FIT (a beam-convolved disk fitted to the "
       "total map and a 2D tilted-ring fit of the velocity field), ELLIPSE (the C++ algorithm, corrected) or "
       "LEGACY (the C++ algorithm)"),
-    K("SIDE", "ustr", ["gf.SIDE"], ("3DFIT", "BAYESIAN3DFIT", "SPACEPAR", "2DFIT", "ELLPROF"),
+    K("SIDE", "ustr", ["gf.SIDE"], ("3DFIT", "SPACEPAR", "2DFIT", "ELLPROF"),
       "Side of the galaxy to be used (A=approaching, R=receding, B=both)"),
     K("FREEANGLE", "float", ["gf.FREEANGLE"], ("2DFIT",),
       "Angle around the minor axis left out of the fit of the velocity field (degrees)"),
     K("BWEIGHT", "float", ["gf.BWEIGHT"], ("3DFIT", "SPACEPAR"), "Weight for blank pixels"),
-    K("TWOSTAGE", "flag", ["gf.TWOSTAGE"], ("3DFIT",), "Two stages minimization?"),
-    K("FLAGERRORS", "flag", ["gf.flagERRORS"], ("3DFIT",), "Estimating errors?", aliases=["errors"]),
+    K("TWOSTAGE", "flag", ["gf.TWOSTAGE"], CLASSIC, "Two stages minimization?"),
+    K("FLAGERRORS", "flag", ["gf.flagERRORS"], CLASSIC, "Estimating errors?", aliases=["errors"]),
     K("NORM", "ustr", ["gf.NORM"], MOD3 + SLIT, "Type of normalization (LOCAL, AZIM or NONE)"),
-    K("REGTYPE", "lstr", ["gf.REGTYPE"], ("3DFIT",), "Regularization of the second stage (auto, bezier, median, "
+    K("REGTYPE", "lstr", ["gf.REGTYPE"], CLASSIC, "Regularization of the second stage (auto, bezier, median, "
       "degree of polynomial)", aliases=["polyn"]),
-    K("STARTRAD", "int", ["gf.STARTRAD"], ("3DFIT", "SPACEPAR"), "Starting radius (ring index)"),
-    K("ADRIFT", "flag", ["gf.flagADRIFT"], ("3DFIT",), "Computing asymmetric drift correction?"),
-    K("ADRIFTPOL1", "int", ["gf.ADRIFTPOL1"], ("3DFIT",), "Polynomial for VDISP2 regularisation"),
-    K("ADRIFTPOL2", "int", ["gf.ADRIFTPOL2"], ("3DFIT",), "Polynomial for SIGMA regularisation"),
-    K("REVERSE", "lstr", ["gf.REVERSE"], ("3DFIT",), "Using reverse-cumulative fitting (true, false, auto)?"),
-    K("NORMALCUBE", "flag", ["gf.NORMALCUBE"], ("3DFIT", "SPACEPAR"), "Normalizing cube to help convergence?"),
-    K("BADOUT", "flag", ["gf.flagBADOUT"], ("3DFIT",), "Write unconverged rings in output (with flag)?"),
-    K("PLOTMASK", "flag", ["gf.PLOTMASK"], ("3DFIT", "BAYESIAN3DFIT"), "Overlaying mask to output plots?"),
-    K("PLOTMINCON", "float", ["gf.PLOTMINCON"], ("3DFIT", "BAYESIAN3DFIT"), "Minimum flux contour for output plots"),
+    K("STARTRAD", "int", ["gf.STARTRAD"], ("3DFIT/CLASSIC", "SPACEPAR"), "Starting radius (ring index)"),
+    K("ADRIFT", "flag", ["gf.flagADRIFT"], CLASSIC, "Computing asymmetric drift correction?"),
+    K("ADRIFTPOL1", "int", ["gf.ADRIFTPOL1"], CLASSIC, "Polynomial for VDISP2 regularisation"),
+    K("ADRIFTPOL2", "int", ["gf.ADRIFTPOL2"], CLASSIC, "Polynomial for SIGMA regularisation"),
+    K("REVERSE", "lstr", ["gf.REVERSE"], CLASSIC, "Using reverse-cumulative fitting (true, false, auto)?"),
+    K("NORMALCUBE", "flag", ["gf.NORMALCUBE"], ("3DFIT/CLASSIC", "SPACEPAR"), "Normalizing cube to help convergence?"),
+    K("BADOUT", "flag", ["gf.flagBADOUT"], CLASSIC, "Write unconverged rings in output (with flag)?"),
+    K("PLOTMASK", "flag", ["gf.PLOTMASK"], ("3DFIT",), "Overlaying mask to output plots?"),
+    K("PLOTMINCON", "float", ["gf.PLOTMINCON"], ("3DFIT",), "Minimum flux contour for output plots"),
 
-    # ---------------------------------------------------------------- BAYESIAN3DFIT
-    K("SAMPLER", "ustr", ["gf.SAMPLER"], BAYESW,
-      "Nested sampler: NAUTILUSBB (nautilus, built in), NAUTILUS (package nautilus-sampler) or DYNESTY; or "
-      "OPTIMISE, the best fit by a minimisation of the likelihood"),
-    K("PRIORS", "str", ["gf.PRIORS"], BAYESW,
+    # ---------------------------------------------------------------- METHOD (3DFIT, WINDFIT, SLITFIT)
+    K("METHOD", "ustr", ["gf.METHOD"], FITS,
+      "Fitting method: CLASSIC (3DFIT only: ring by ring, minimising the residuals), GLOBAL (all the rings "
+      "together: the maximum of the likelihood, with the errors of its curvature) or BAYESIAN (the posterior, "
+      "by nested sampling). Default CLASSIC for 3DFIT, GLOBAL for WINDFIT and SLITFIT"),
+    K("SAMPLER", "ustr", ["gf.SAMPLER"], SAMPLE,
+      "Nested sampler of METHOD BAYESIAN: NAUTILUSBB (nautilus, built in), NAUTILUS (package nautilus-sampler) or "
+      "DYNESTY"),
+    K("MINIMISER", "str", ["gf.MINIMISER"], MINIM,
+      "Minimiser of METHOD GLOBAL: L-BFGS-B, TNC, SLSQP, trust-constr, Powell, Nelder-Mead, COBYLA, COBYQA or "
+      "differential_evolution", aliases=["minimizer"]),
+    K("PRIORS", "str", ["gf.PRIORS"], LIKE,
       "Priors of the free parameters, NAME=(distribution,arguments) with the distributions of scipy.stats, "
       "e.g. VROT=(uniform,loc=0,scale=300) INC=(norm,60,5) (default: see bbarolo.Bayesian3DFIT)"),
-    K("SAMPLEROPTS", "str", ["gf.SAMPLEROPTS"], BAYESW,
-      "Options of the sampler, key=value, e.g. nlive=200 dynamic=true seed=1 (dynesty; the static sampler unless "
-      "dynamic=true) or n_live=1000 "
-      "seed=1 (nautilus, nautilusbb) or method=powell nstart=3 seed=1 errors=true (OPTIMISE)",
+    K("SAMPLEROPTS", "str", ["gf.SAMPLEROPTS"], LIKE,
+      "Options of the sampler (BAYESIAN) or of the minimisation (GLOBAL), key=value, e.g. nlive=200 dynamic=true "
+      "seed=1 (dynesty; the static sampler unless dynamic=true) or n_live=1000 seed=1 (nautilus, nautilusbb) or "
+      "nstart=3 seed=1 errors=true (GLOBAL)",
       aliases=["sampler_kwargs"]),
-    K("RUNOPTS", "str", ["gf.RUNOPTS"], BAYESW,
+    K("RUNOPTS", "str", ["gf.RUNOPTS"], LIKE,
       "Options of the sampling, key=value, e.g. dlogz=0.5 maxiter=20000 (dynesty) or f_live=0.01 "
       "(nautilus, nautilusbb) or "
-      "maxiter=500 (OPTIMISE: the options of the method of scipy)",
+      "maxiter=500 (GLOBAL: the options of the minimiser of scipy)",
       aliases=["run_kwargs"]),
-    K("LIKEOPTS", "str", ["gf.LIKEOPTS"], BAYESW,
+    K("LIKEOPTS", "str", ["gf.LIKEOPTS"], LIKE,
       "Options of the likelihood, key=value (defaults first): likemask=dilated|none, dilation=1,3 (radius in "
       "beams, channels), noisecorr=measured|beam|<voxels per independent noise value>, densprof_smooth=0.1, "
       "bbres=false|true (3DFIT residuals), radmax=edge|taper|ring (the free RADMAX: the outer edge of the disk, "
@@ -474,14 +485,14 @@ KEYWORDS = [
     K("CONELEN", "float", ["gw.CONELEN"], WIND, "Length of each cone of the wind, from the centre (arcsec)"),
     K("OPENANG", "str", ["gw.OPENANG"], WIND, "Wind opening angle (degrees)"),
     K("OPENIN", "str", ["gw.OPENIN"], WIND, "Wind inner opening angle (degrees): hollow cones (WTYPE 2 and "
-      "BAYESIANWIND; default 0)"),
-    K("NLAYERS", "int", ["gw.NLAYERS"], WIND, "Number of layers (cylinders or shells) in each cone (BAYESIANWIND: "
+      "WINDFIT; default 0)"),
+    K("NLAYERS", "int", ["gw.NLAYERS"], WIND, "Number of layers (cylinders or shells) in each cone (WINDFIT: "
       "number of shells)"),
     K("VWIND", "str", ["gw.VWIND"], WIND, "Radial velocity of the wind (km/s)"),
     K("DENSTYPE", "int", ["gw.DENSTYPE"], ("GALWIND",), "How to distribute density in layers",
       aliases=["dtype"]),
     K("WTYPE", "int", ["gw.WTYPE"], ("GALWIND",), "Cylindrical (0), spherical (1) or analytic cones (2) model"),
-    K("DISKRINGS", "str", ["gw.DISKRINGS"], ("BAYESIANWIND",), "A rings file of a fixed disk added to the wind "
+    K("DISKRINGS", "str", ["gw.DISKRINGS"], ("WINDFIT",), "A rings file of a fixed disk added to the wind "
       "model (its ring densities are fitted with the emission of the wind)"),
 
     # ---------------------------------------------------------------- SPACEPAR
@@ -493,15 +504,15 @@ KEYWORDS = [
     # ---------------------------------------------------------------- SMOOTH / SMOOTHSPEC
     K("SMOOTH", "flag", ["flagSmooth"], ("SMOOTH",), "Smoothing the datacube?", flag=True),
     K("BOX", "ivec6", ["BOX"], ("SMOOTH",), "Sub-region to be used (xmin xmax ymin ymax zmin zmax)"),
-    K("NEWBEAM", "beam", ["newbeam"], ("SMOOTH", "MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "SPACEPAR", "2DFIT",
+    K("NEWBEAM", "beam", ["newbeam"], ("SMOOTH", "MAKEMASK", "3DFIT", "SPACEPAR", "2DFIT",
                                        "ELLPROF", "REND3D") + MAPSM,
       "New beam of SMOOTH and of the SMOOTH masks, BMAJ BMIN BPA (as BEAM; BPA not given: that of the data)"),
-    K("LINEAR", "float", ["linear"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR") + WIND + SLIT,
+    K("LINEAR", "float", ["linear"], ("3DFIT", "GALMOD", "SPACEPAR") + WIND + SLIT,
       "Spectral resolution of the models (sigma, channels) when SPECRES is not given (as in C++)"),
-    K("SPECRES", "float", ["specres"], ("3DFIT", "BAYESIAN3DFIT", "GALMOD", "SPACEPAR") + WIND + SLIT,
+    K("SPECRES", "float", ["specres"], ("3DFIT", "GALMOD", "SPACEPAR") + WIND + SLIT,
       "Spectral resolution of the models (sigma, in channels; default: LINEAR if given, else "
       "1/2.355, i.e. a FWHM of one channel)"),
-    K("FACTOR", "float", ["factor"], ("SMOOTH", "MAKEMASK", "3DFIT", "BAYESIAN3DFIT", "SPACEPAR", "2DFIT", "ELLPROF",
+    K("FACTOR", "float", ["factor"], ("SMOOTH", "MAKEMASK", "3DFIT", "SPACEPAR", "2DFIT", "ELLPROF",
                                       "REND3D") + MAPSM,
       "New beam factor (times old beam), also used by the SMOOTH mask"),
     K("SCALEFACTOR", "float", ["scalefactor"], ("SMOOTH",), "Scaling factor for the smoothed cube"),
@@ -514,7 +525,7 @@ KEYWORDS = [
       "Type of smoothing window (HANNING, HANNING2, BOXCAR, BARTLETT, WELCH, BLACKMAN, FLATTOP, GAUSSIAN)"),
     K("WINDOW_SIZE", "float", ["window_size"], ("SMOOTHSPEC",), "Size of smoothing window (channels)"),
 
-    # ---------------------------------------------------------------- BAYESIANSLITFIT
+    # ---------------------------------------------------------------- SLITFIT
     K("SLITWIDTH", "float", ["slitwidth"], SLIT, "Width of the slit (arcsec)"),
     K("SLITANGLE", "ustr", ["slitangle"], SLIT, "Angle from the slit (increasing position) to the receding half of "
       "the major axis, counterclockwise (degrees), or AUTO (0 or 180 from the data)"),
@@ -557,10 +568,11 @@ _BEAM_MSG = ("{} is no longer a parameter: give the beam of the data with BEAM (
              "BMAJ and BMIN in arcsec, or in degrees with a final d, e.g. BEAM 0.01d 0.01d 45; one value is a "
              "circular beam), and the new beam of SMOOTH with NEWBEAM.")
 REMOVED = {n.lower(): _BEAM_MSG.format(n) for n in ("BMAJ", "BMIN", "BPA", "BEAMFWHM", "OBMAJ", "OBMIN", "OBPA")}
-REMOVED.update({old.lower(): f"{old} is no longer a parameter: it was renamed {new} (GALWIND, BAYESIANWIND)."
+REMOVED.update({old.lower(): f"{old} is no longer a parameter: it was renamed {new} (GALWIND, WINDFIT)."
                 for old, new in (("HTOT", "CONELEN"), ("NTOT", "NLAYERS"))})
-REMOVED["slitfit"] = ("SLITFIT is no longer a parameter: the fit of long-slit data is the task BAYESIANSLITFIT "
-                      "(BAYESIANSLITFIT true).")
+REMOVED.update({old.lower(): f"{old} is no longer a parameter: {new}." for old, new in (
+    ("BAYESIAN3DFIT", "3DFIT with METHOD GLOBAL or BAYESIAN"), ("BAYESIANWIND", "WINDFIT"),
+    ("BAYESIANSLITFIT", "SLITFIT"))})
 
 
 def check_removed(name):
@@ -605,14 +617,43 @@ def unknown_message(name):
 # --------------------------------------------------------------------------
 # Help
 # --------------------------------------------------------------------------
-TASK_NAMES = ("3DFIT", "BAYESIAN3DFIT", "BAYESIANWIND", "GALMOD", "GALWIND", "SEARCH", "2DFIT", "ELLPROF", "SMOOTH",
-              "SMOOTHSPEC", "MAPS", "PVSLICE", "SPACEPAR", "REND3D", "CONTSUB", "STATS", "MAKEMASK", "BAYESIANSLITFIT")
+TASK_NAMES = ("3DFIT", "WINDFIT", "GALMOD", "GALWIND", "SEARCH", "2DFIT", "ELLPROF", "SMOOTH",
+              "SMOOTHSPEC", "MAPS", "PVSLICE", "SPACEPAR", "REND3D", "CONTSUB", "STATS", "MAKEMASK", "SLITFIT")
 _CLASS_TASK = {"fitmod3d": "3DFIT", "galmod": "GALMOD", "galwind": "GALWIND", "search": "SEARCH",
                "fitmod2d": "2DFIT", "ellprof": "ELLPROF", "smooth": "SMOOTH", "smoothspec": "SMOOTHSPEC",
                "maps": "MAPS", "pvslice": "PVSLICE", "spacepar": "SPACEPAR", "rend3d": "REND3D",
                "contsub": "CONTSUB", "stats": "STATS", "makemask": "MAKEMASK",
-               "bayesian3dfit": "BAYESIAN3DFIT", "bayesianwind": "BAYESIANWIND",
-               "bayesianslitfit": "BAYESIANSLITFIT"}
+               "windfit": "WINDFIT", "slitfit": "SLITFIT",
+               "bayesian3dfit": "3DFIT", "bayesianwind": "WINDFIT", "bayesianslitfit": "SLITFIT"}
+
+# The methods of the fit tasks (METHOD), and the default of each task
+METHODS = {"3DFIT": ("CLASSIC", "GLOBAL", "BAYESIAN"), "WINDFIT": ("GLOBAL", "BAYESIAN"),
+           "SLITFIT": ("GLOBAL", "BAYESIAN")}
+DEFAULT_METHOD = {"3DFIT": "CLASSIC", "WINDFIT": "GLOBAL", "SLITFIT": "GLOBAL"}
+
+
+def split_tag(tag):
+    """(task, method) of an entry of Keyword.tasks: '3DFIT/CLASSIC' -> ('3DFIT', 'CLASSIC'), 'GALMOD' ->
+    ('GALMOD', None) (all the methods)."""
+    task, _, method = tag.partition("/")
+    return task, method or None
+
+
+def methods_for(kw, task):
+    """The methods of the fit task with which the keyword kw is used (a tuple, in the order of METHODS), or None
+    if it is used with all of them (or task has no METHOD, or kw is not used by task)."""
+    ms = set()
+    for t, m in map(split_tag, kw.tasks):
+        if t == task:
+            if m is None:
+                return None
+            ms.add(m)
+    return tuple(m for m in METHODS.get(task, ()) if m in ms) or None
+
+
+def uses(kw, task, method=None):
+    """Whether the keyword kw is used by task (with METHOD method, if given)."""
+    return any(t == task and (m is None or method is None or m == method) for t, m in map(split_tag, kw.tasks))
 
 
 def _fmtval(v):
@@ -641,13 +682,34 @@ def _task_of(name):
     return _CLASS_TASK.get(n.lower())
 
 
-# Defaults that differ for a task (applied by its class, e.g. Bayesian3DFIT._all_params)
-# FREE of BAYESIAN3DFIT when not given (the FREE of Param is that of 3DFIT)
+# Defaults that differ for a task, or a task with a METHOD (TASK/METHOD; applied by the classes of the fits, e.g.
+# Bayesian3DFIT._all_params): see task_defaults
+# FREE of 3DFIT with METHOD GLOBAL or BAYESIAN when not given (the FREE of Param is that of METHOD CLASSIC)
 BAYES_DEFAULT_FREE = "VROT VDISP XPOS_SINGLE YPOS_SINGLE VSYS_SINGLE INC_SINGLE PA_SINGLE Z0_SINGLE RADMAX FRACERR"
-# FREE of BAYESIANSLITFIT when not given
+# FREE of SLITFIT when not given
 SLIT_DEFAULT_FREE = "VROT VDISP VSYS XPOS"
-TASK_DEFAULTS = {"BAYESIAN3DFIT": {"GALMODTYPE": "ANALYTIC", "FREE": BAYES_DEFAULT_FREE},
-                 "BAYESIANSLITFIT": {"FREE": SLIT_DEFAULT_FREE, "NORM": "AZIM"}}
+_LIKE3_DEFAULTS = {"GALMODTYPE": "ANALYTIC", "FREE": BAYES_DEFAULT_FREE}
+TASK_DEFAULTS = {"3DFIT/GLOBAL": _LIKE3_DEFAULTS, "3DFIT/BAYESIAN": _LIKE3_DEFAULTS,
+                 "SLITFIT": {"FREE": SLIT_DEFAULT_FREE, "NORM": "AZIM"}}
+
+
+def task_defaults(task, method=None):
+    """The defaults of the keywords that differ for task with METHOD method (None: the default method), as
+    {keyword: value as in a parameter file}."""
+    method = method or DEFAULT_METHOD.get(task)
+    return {**TASK_DEFAULTS.get(task, {}), **TASK_DEFAULTS.get(f"{task}/{method}", {})}
+
+
+def _used_by(kw):
+    """The tasks of kw as text, with the methods of the fit tasks: '3DFIT (METHOD CLASSIC), SPACEPAR'."""
+    out = []
+    for tag in kw.tasks:
+        t = split_tag(tag)[0]
+        if t == "ALL" or any(o.startswith(t) for o in out):
+            continue
+        ms = methods_for(kw, t)
+        out.append(t + (f" (METHOD {' or '.join(ms)})" if ms else ""))
+    return ", ".join(out)
 
 
 def describe(kw, default=None):
@@ -672,20 +734,22 @@ def describe(kw, default=None):
         s += f"\n    Default: {kw.default_text}."
     elif default is not None:
         s += f"\n    Default: {_fmtval(default)}"
-    tasks = "all tasks" if kw.tasks == ("ALL",) else ", ".join(t for t in kw.tasks if t != "ALL")
+    tasks = "all tasks" if kw.tasks == ("ALL",) else _used_by(kw)
     s += f"   Used by: {tasks}"
     return s
 
 
-def keywords_for(task):
-    """The keywords used by a task (task name as in TASK_NAMES)."""
+def keywords_for(task, method=None):
+    """The keywords used by a task (task name as in TASK_NAMES), with METHOD method if given (otherwise with any
+    of its methods)."""
     task = task.upper()
+    method = method.upper() if method else None
     maps = task == "MAPS"
     out = []
     for k in KEYWORDS:
         if maps and any(t in MAPS for t in k.tasks):
             out.append(k)
-        elif task in k.tasks:
+        elif uses(k, task, method):
             out.append(k)
     return out
 
@@ -717,11 +781,19 @@ def help(name=None, stream=None):
     if task is not None:
         st.write(f"\nParameters of {task}" + (" (task flag set automatically by its class)" if task != "MAPS" else "")
                  + ":\n\n")
-        tdef = TASK_DEFAULTS.get(task, {})
-        for k in keywords_for(task):
-            if k.name == task:
-                continue
-            st.write(f"  {k.name:18s}{k.help} [{_fmtval(tdef.get(k.name, k.value(d)))}]\n")
+        tdef = task_defaults(task)
+        if task in DEFAULT_METHOD:
+            tdef.setdefault("METHOD", DEFAULT_METHOD[task])
+        kws = [k for k in keywords_for(task) if k.name != task]
+        sections = [None] + sorted({methods_for(k, task) for k in kws} - {None},
+                                   key=lambda ms: [METHODS[task].index(m) for m in ms])
+        for ms in sections:
+            if ms is not None:
+                st.write(f"\n  With METHOD {' or '.join(ms)} only:\n")
+                tdef = task_defaults(task, ms[0])
+            for k in kws:
+                if methods_for(k, task) == ms:
+                    st.write(f"  {k.name:18s}{k.help} [{_fmtval(tdef.get(k.name, k.value(d)))}]\n")
         st.write("\nGeneral parameters: " + ", ".join(k.name for k in KEYWORDS if k.tasks[0] == "ALL") + "\n\n")
         if kw is not None and kw.name != task:
             st.write(describe(kw, kw.value(d)) + "\n\n")
