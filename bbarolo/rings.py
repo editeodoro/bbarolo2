@@ -24,6 +24,7 @@ class Rings:
         self.radsep = 0.            # (as in C++; -1 shrank SHIFTED disks by 0.5)
         self.id = 0
         self.edge, self.edgewidth = None, 0.
+        self.empty = None           # inner part of the model empty (True/False), or None: GalmodSetup.empty
         for k in RING_KEYS:
             setattr(self, k, np.zeros(nr))
 
@@ -34,7 +35,7 @@ class Rings:
     def copy(self):
         r = Rings()
         r.radsep, r.id = self.radsep, self.id
-        r.edge, r.edgewidth = self.edge, self.edgewidth
+        r.edge, r.edgewidth, r.empty = self.edge, self.edgewidth, getattr(self, "empty", None)
         for k in RING_KEYS:
             setattr(r, k, np.array(getattr(self, k), dtype=float, copy=True))
         return r
@@ -64,7 +65,7 @@ class Rings:
     def subset(self, idx):
         r = Rings()
         r.radsep, r.id = self.radsep, self.id
-        r.edge, r.edgewidth = self.edge, self.edgewidth
+        r.edge, r.edgewidth, r.empty = self.edge, self.edgewidth, getattr(self, "empty", None)
         for k in RING_KEYS:
             setattr(r, k, np.atleast_1d(np.asarray(getattr(self, k))[idx]).astype(float))
         return r

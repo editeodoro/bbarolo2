@@ -38,12 +38,14 @@ SIDECODE = {"R": 1, "A": 2}
 # --------------------------------------------------------------------------
 @nb.njit(nogil=True, cache=True)
 def _norm(model, data, mask, blo0, blo1, x0, y0, phi, inc, r1, r2, wpow, side, ftype,
-          chan_noise, data_noise, bweight, normtype, pre, ilo, ihi, thr, P):
+          chan_noise, data_noise, bweight, normtype, pre, ilo, ihi, thr, P, foot, hmax):
     """BBarolo residual function. If pre (the non-convolved model, (ny,nx,nz)) is not
     empty, a model voxel outside the mask is counted as a blank only if the sum of pre
     over the footprint of the convolution kernel (rows j: columns x+ilo[j]..x+ihi[j]) is
     >= thr[z] (ANALYTIC models: see Galfit._support_args). P is a work array of shape
-    (ky, nx+1, nz) for the cumulative sums of pre along x of the last ky rows."""
+    (ky, nx+1, nz) for the cumulative sums of pre along x of the last ky rows.
+    foot: the region of the ring, 0 the annulus r1 <= R <= r2 in the plane of the disk, 1 the strip
+    r1 <= |x| <= r2 along the major axis, |y| <= hmax across it (pixels, in the sky)."""
     bsy, bsx, nz = model.shape
     trunc = pre.shape[0] > 0
     ky = ilo.shape[0]
@@ -63,19 +65,27 @@ def _norm(model, data, mask, blo0, blo1, x0, y0, phi, inc, r1, r2, wpow, side, f
     for y in range(bsy):
         for x in range(bsx):
             xr = -(x - x0) * sphi + (y - y0) * cphi
-            yr = (-(x - x0) * cphi - (y - y0) * sphi) / cinc
+            ys = -(x - x0) * cphi - (y - y0) * sphi
+            yr = ys / cinc
             r = math.sqrt(xr * xr + yr * yr)
             if r < 0.1:
                 th = 0.0
             else:
                 th = math.atan2(yr, xr) / F
-            if not (r >= r1 and r <= r2):
+            if foot == 1:
+                if not (abs(xr) >= r1 and abs(xr) <= r2 and abs(ys) <= hmax):
+                    continue
+                th = 0.0 if xr >= 0 else 180.0
+            elif not (r >= r1 and r <= r2):
                 continue
             if side == 1 and not (abs(th) <= 90.0):
                 continue
             if side == 2 and not (abs(th) >= 90.0):
                 continue
             inside[y, x] = True
+            if foot == 1:
+                wmap[y, x] = 1.0           # (the lines of sight of the strip cross all the azimuths)
+                continue
             if usesin:
                 wf = abs(math.sin(th * F))
             else:
@@ -407,6 +417,25 @@ def initialParametersText(inr, est):
     return s.getvalue()
 
 
+class _Context:
+    """The model of the rings around a ring fit (Galfit._context), in the box [blo, bhi) of the cube:
+    conv, convolved with the beam (ny, nx, nz); counts, the expected numbers of Monte-Carlo sub-clouds of the
+    non-convolved model for the support of ANALYTIC models (None otherwise). The box of a ring is grown by
+    grow (pixels in x, y) and kept within that of the context."""
+
+    def __init__(self, blo, bhi, conv, counts, grow=(0, 0)):
+        self.blo, self.bhi, self.conv, self.counts, self.grow = list(blo), list(bhi), conv, counts, grow
+
+    def ringbox(self, box):
+        (rlo, rhi), (gx, gy) = box, self.grow
+        blo = [max(rlo[0] - gx, self.blo[0]), max(rlo[1] - gy, self.blo[1])]
+        bhi = [min(rhi[0] + gx, self.bhi[0]), min(rhi[1] + gy, self.bhi[1])]
+        return blo, [max(bhi[0], blo[0] + 1), max(bhi[1], blo[1] + 1)]
+
+    def slices(self, blo, bhi):
+        return (slice(blo[1] - self.blo[1], bhi[1] - self.blo[1]), slice(blo[0] - self.blo[0], bhi[0] - self.blo[0]))
+
+
 class Galfit:
     """3D tilted-ring fit of a datacube (3DFIT task)."""
 
@@ -416,6 +445,9 @@ class Galfit:
     def __init__(self, cube=None, inrings=None, par=None, gfpar=None):
         self._lock = threading.Lock()
         self.reverse = False
+        self.sweeps = 0
+        self.strip = False
+        self._pass = 0
         self.second = False
         self.n_galfit = 0
         if cube is None:
@@ -517,6 +549,14 @@ class Galfit:
         self.cin = c
         self.par = copy.deepcopy(gfpar)
         par = self.par
+        self.sweeps = max(int(getattr(par, "SWEEPS", 0)), 0)
+        self.strip = str(getattr(par, "RINGREGION", "ANNULUS")).upper() == "STRIP"
+        if self.strip and not self._contexts():
+            if self.verb:
+                WarningMessage(sys.stdout, " RINGREGION STRIP needs the model of the rings around each ring, but\n"
+                                           " REVERSE (auto) was not chosen and SWEEPS is 0: the rings are fitted\n"
+                                           " in their annuli.")
+            self.strip = False
         self.inr = inrings.copy()
         self.verb = c.pars().verbose
         for ir in range(self.inr.nr):
@@ -669,7 +709,7 @@ class Galfit:
             buf = self._tls.pbuf = np.empty(n)
         return pre, ilo, ihi, thr, buf[:n].reshape(ky, nx + 1, nz)
 
-    def _norm_value(self, dring, model, blo, support=None):
+    def _norm_value(self, dring, model, blo, support=None, foot=0, hmax=0.):
         par = self.par
         ps = self.pixScale
         normtype = NORMCODE[self.norms[self.n_galfit - 1]] if self.n_galfit else 0
@@ -677,16 +717,80 @@ class Galfit:
                      dring.xpos[-1] - blo[0], dring.ypos[-1] - blo[1], dring.phi[-1], dring.inc[-1],
                      dring.radii[0] / ps, dring.radii[-1] / ps, float(self.wpow), SIDECODE.get(par.SIDE, 0),
                      par.FTYPE, self.chan_noise, float(self.data_noise), float(par.BWEIGHT), normtype,
-                     *self._support_args(support))
+                     *self._support_args(support), foot, float(hmax))
 
-    def getFuncValue(self, dring, modsoFar=None):
-        if self.reverse:
-            blo, bhi = self.model.box(self.outr)
-        else:
+    def getFuncValue(self, dring, ctx=None):
+        """The residuals of the model of the ring dring (convolved with the beam) in its annulus. ctx: the model
+        of the rings around it (see _context), added to that of the ring before the normalisation."""
+        foot, hmax = self._region(dring, ctx)
+        if ctx is None:
             blo, bhi = self.model.box(dring)
+            if foot:
+                blo, bhi = self._strip_box(dring, blo, bhi, hmax)
+            support = []
+            mod = self.model.array(dring, blo, bhi, final=False, layout="yxz", support=support)
+            return self._norm_value(dring, mod, blo, support, foot, hmax)
+        box = self.model.box(dring)
+        if foot:
+            box = self._strip_box(dring, *box, hmax)
+        blo, bhi = ctx.ringbox(box)
         support = []
-        mod = self.model.array(dring, blo, bhi, final=False, modsoFar=modsoFar, layout="yxz", support=support)
-        return self._norm_value(dring, mod, blo, support)
+        mod = self.model.array(dring, blo, bhi, final=False, layout="yxz", support=support)
+        sl = ctx.slices(blo, bhi)
+        if support and ctx.counts is not None:
+            # (the support of the ANALYTIC model: the expected numbers of sub-clouds of the ring and of the rest)
+            support[0] = support[0] + support[1] * ctx.counts[sl]
+        mod += ctx.conv[sl]
+        return self._norm_value(dring, mod, blo, support, foot, hmax)
+
+    def _region(self, dring, ctx):
+        """The region of the residuals of a ring (foot and hmax of _norm). The annulus of the ring in the plane of
+        the disk, or, with RINGREGION STRIP (for nearly edge-on disks) in the fits with the model of the rings
+        around the ring and for the outermost ring of REVERSE, the strip of the sky with major-axis distance
+        between the radii of the ring, as high as the projected ring at its initial inclination plus three
+        scale heights and half the beam: its lines of sight cross the ring and the rings outside it, all in the
+        model, and the region does not depend on the fitted inclination (the annulus becomes a thin band at
+        INC ~ 90). The first pass of SWEEPS without REVERSE fits single rings: the annulus."""
+        if not self.strip or (ctx is None and not (self.reverse and dring.id == self.inr.nr - 1)):
+            return 0, 0.
+        h = self.cin.Head()
+        beam = abs(h.Bmaj()) * 3600. if h.Bmaj() else 0.
+        ir = dring.id
+        hm = dring.radii[-1] * abs(math.cos(math.radians(self.inr.inc[ir]))) + 3 * self.inr.z0[ir] + beam / 2.
+        return 1, hm / self.pixScale
+
+    def _strip_box(self, dring, blo, bhi, hmax):
+        """The box of a ring grown to hold its strip (see _region)."""
+        dm = self.model
+        ext = int(math.ceil(max(dring.radii[-1] / self.pixScale, hmax))) + 1
+        xpos, ypos = int(math.ceil(dring.xpos[-1])), int(math.ceil(dring.ypos[-1]))
+        lo = [max(min(blo[0], xpos - ext), 0), max(min(blo[1], ypos - ext), 0)]
+        hi = [min(max(bhi[0], xpos + ext + 1), dm.cin.DimX()), min(max(bhi[1], ypos + ext + 1), dm.cin.DimY())]
+        return lo, hi
+
+    def _context(self, segs):
+        """The model of the rings around a ring fit: the segments segs (Rings, see _segment), built in the box of
+        the disk and convolved once (the model is linear in the rings), so that each evaluation of the ring fit
+        computes only the model of the ring, in its own box (C++ built and convolved the whole disk at each
+        evaluation)."""
+        dm = self.model
+        blo, bhi = dm.box(self.outr)
+        want = dm.setup.galmodtype.upper() == "ANALYTIC"
+        mod = counts = None
+        for seg in segs:
+            m = dm.setup.build(seg, blo, bhi, layout="yxz", return_unit=want)
+            if want:
+                m, unit = m
+                if unit > 0:
+                    counts = m / unit if counts is None else counts + m / unit
+            mod = m if mod is None else mod + m
+        if mod is None:
+            return None
+        grow = (0, 0)
+        if want and dm.conv is not None:
+            # (the support of a voxel sums the model within the footprint of the kernel: see _support_args)
+            grow = (dm.cfield.shape[1] // 2, dm.cfield.shape[0] // 2)
+        return _Context(blo, bhi, dm.convolve(mod, "yxz"), counts, grow)
 
     def calculateResiduals(self, r):
         return self.getFuncValue(r)
@@ -710,7 +814,7 @@ class Galfit:
                 self._rngs[tid] = r
         return r
 
-    def func3D(self, dring, zpar, modsoFar=None):
+    def func3D(self, dring, zpar, ctx=None):
         par, inr, mins, maxs = self.par, self.inr, self.mins, self.maxs
         w = dring.id
         fran = self._rng().random
@@ -764,9 +868,9 @@ class Galfit:
                 vals[key] = v; zpar[np_] = v; np_ += 1
         for k, v in vals.items():
             getattr(dring, k)[:] = v
-        return self.getFuncValue(dring, modsoFar)
+        return self.getFuncValue(dring, ctx)
 
-    def minimize(self, dring, modsoFar=None):
+    def minimize(self, dring, ctx=None):
         """Downhill simplex (Nelder & Mead, NR implementation). Returns (ok, minimum, pmin)."""
         TINY = 1.0e-10
         tol = self.par.TOL
@@ -774,7 +878,7 @@ class Galfit:
         if ndim == 0:
             # nothing left to fit: the second stage when only INC, PA, Z0, XPOS, YPOS or VSYS were free
             # (regularised, then fixed). The ring is the model at its values (C++ read beyond the simplex).
-            return True, float(self.func3D(dring, np.empty(0), modsoFar)), np.empty(0)
+            return True, float(self.func3D(dring, np.empty(0), ctx)), np.empty(0)
         NMAX = 200 * ndim
         mpts = ndim + 1
         m = self.mpar
@@ -799,7 +903,7 @@ class Galfit:
         y = np.empty(mpts)
         for i in range(mpts):
             x = p[i].copy()
-            y[i] = self.func3D(dring, x, modsoFar)
+            y[i] = self.func3D(dring, x, ctx)
         nfunc = 0
         psum = p.sum(axis=0)
         while True:
@@ -823,18 +927,18 @@ class Galfit:
             if nfunc >= NMAX:
                 return False, float(y[ilo]), p[ilo].copy()
             nfunc += 2
-            ytry = self._mtry(dring, p, y, psum, ihi, -1.0, modsoFar)
+            ytry = self._mtry(dring, p, y, psum, ihi, -1.0, ctx)
             if ytry <= y[ilo]:
-                ytry = self._mtry(dring, p, y, psum, ihi, 2.0, modsoFar)
+                ytry = self._mtry(dring, p, y, psum, ihi, 2.0, ctx)
             elif ytry >= y[inhi]:
                 ysave = y[ihi]
-                ytry = self._mtry(dring, p, y, psum, ihi, 0.5, modsoFar)
+                ytry = self._mtry(dring, p, y, psum, ihi, 0.5, ctx)
                 if ytry >= ysave:
                     for i in range(mpts):
                         if i != ilo:
                             p[i] = 0.5 * (p[i] + p[ilo])
                             ps_ = p[i].copy()
-                            y[i] = self.func3D(dring, ps_, modsoFar)
+                            y[i] = self.func3D(dring, ps_, ctx)
                             # in the C++ code psum is (ab)used as work array: the clamped values
                             # are written back to it, not to the simplex
                     nfunc += ndim
@@ -842,12 +946,12 @@ class Galfit:
             else:
                 nfunc -= 1
 
-    def _mtry(self, dring, p, y, psum, ihi, fac, modsoFar):
+    def _mtry(self, dring, p, y, psum, ihi, fac, ctx):
         ndim = self.nfree
         fac1 = (1.0 - fac) / ndim
         fac2 = fac1 - fac
         ptry = psum * fac1 - p[ihi] * fac2
-        ytry = self.func3D(dring, ptry, modsoFar)
+        ytry = self.func3D(dring, ptry, ctx)
         if ytry < y[ihi]:
             y[ihi] = ytry
             psum += ptry - p[ihi]
@@ -857,8 +961,11 @@ class Galfit:
     # ------------------------------------------------------------------
     # Fitting loops
     # ------------------------------------------------------------------
-    def _make_dring(self, ir):
+    def _make_dring(self, ir, rings=None):
+        """The ring ir as fitted: an annulus from halfway to the previous radius to halfway to the next one,
+        with the values of ring ir of rings (default: the initial rings)."""
         inr = self.inr
+        vr = inr if rings is None else rings
         if inr.nr == 1:
             w1 = w2 = inr.radsep / 2. if inr.radsep > 0 else inr.radii[0] / 2.
         elif ir == 0:
@@ -871,12 +978,78 @@ class Galfit:
         w1, w2 = np.float32(w1), np.float32(w2)
         drads = [max(float(np.float32(inr.radii[ir] - w1)), 0.), max(float(np.float32(inr.radii[ir] + w2)), 0.)]
         d = Rings()
-        d.setRings(radii=drads, xpos=inr.xpos[ir], ypos=inr.ypos[ir], vsys=inr.vsys[ir], vrot=inr.vrot[ir],
-                   vdisp=inr.vdisp[ir], vrad=inr.vrad[ir], vvert=inr.vvert[ir], dvdz=inr.dvdz[ir],
-                   zcyl=inr.zcyl[ir], dens=inr.dens[ir], z0=inr.z0[ir], inc=inr.inc[ir], phi=inr.phi[ir])
+        d.setRings(radii=drads, xpos=vr.xpos[ir], ypos=vr.ypos[ir], vsys=vr.vsys[ir], vrot=vr.vrot[ir],
+                   vdisp=vr.vdisp[ir], vrad=vr.vrad[ir], vvert=vr.vvert[ir], dvdz=vr.dvdz[ir],
+                   zcyl=vr.zcyl[ir], dens=vr.dens[ir], z0=vr.z0[ir], inc=vr.inc[ir], phi=vr.phi[ir])
         d.radsep = drads[1] - drads[0]
         d.id = ir
         return d
+
+    def _ring_edges(self):
+        """The inner and outer edges (arcsec) of the annuli of the ring fits (see _make_dring)."""
+        e = np.array([self._make_dring(ir).radii for ir in range(self.inr.nr)])
+        return e[:, 0], e[:, 1]
+
+    # (status of the rings for the models of the rings around a ring, _cstat)
+    CS_NONE, CS_OK, CS_FAILED = 0, 1, 2
+
+    def _segment(self, lo, hi, dens, rings=None, cstat=None):
+        """The rings lo..hi (included) as one model: nodes at the radii, linear in between, from the inner edge
+        of the annulus of ring lo to the outer edge of that of ring hi (the values of the end rings are kept
+        to the edges), so that the segments and the annulus of a ring fit tile the disk with no gap. The values
+        are those of rings (default: the rings fitted so far, outr), with the densities dens (all the rings, see
+        _ctx_dens). Rings with status (cstat, default _cstat) CS_NONE (not fitted, or too few pixels in the mask)
+        have no emission; CS_FAILED rings (not converged or rejected) take the values interpolated from the
+        CS_OK ones (their own if there are none)."""
+        r = self.outr if rings is None else rings
+        st = self._cstat if cstat is None else cstat
+        idx = np.arange(lo, hi + 1)
+        seg = r.subset(idx)
+        seg.dens = np.where(st[idx] == self.CS_NONE, 0., np.asarray(dens, float)[idx])
+        good = np.flatnonzero(st == self.CS_OK)
+        bad = st[idx] == self.CS_FAILED
+        if bad.any() and good.size:
+            for k in ("xpos", "ypos", "vsys", "vrot", "vdisp", "vrad", "vvert", "dvdz", "zcyl", "z0", "inc", "phi"):
+                getattr(seg, k)[bad] = np.interp(seg.radii[bad], r.radii[good], getattr(r, k)[good])
+        elo, ehi = self._ring_edges()
+        sub = self.model.setup.radsep * 60.                  # (width of the sub-rings of the model, arcsec)
+        nodes = list(range(seg.nr))
+        rad = list(seg.radii)
+        if elo[lo] < rad[0] - sub:
+            nodes.insert(0, 0)
+            rad.insert(0, elo[lo])
+        if ehi[hi] > rad[-1] + sub:
+            nodes.append(seg.nr - 1)
+            rad.append(ehi[hi])
+        seg = seg.subset(np.array(nodes))
+        seg.radii = np.array(rad, float)
+        # (the model of the rings inside is not empty only from the first ring, as the fit of that ring)
+        seg.empty = None if lo == 0 else True
+        return seg
+
+    def _profile(self, rings):
+        """The deconvolved density profile of the data for the geometry of rings (bbarolo.profile, as the density
+        profile of METHOD GLOBAL and BAYESIAN): the densities of the rings whose beam-convolved model reproduces the
+        total intensity map of the data in the mask, solved for all the rings together. Each ring fitted alone and
+        normalised to the data in its annulus takes also the beam-smeared emission of its neighbours, so the
+        normalisation factors of the ring fits are not the fluxes of the rings. Ones if there are too few pixels."""
+        from .profile import deconvolved_profile
+        blo, bhi = self.model.box(rings)
+        sl = (slice(blo[1], bhi[1]), slice(blo[0], bhi[0]))
+        m = self.mask_T[sl]
+        mom0 = np.where(m, self.data_T[sl], 0.).sum(axis=2)
+        nvox = m.sum(axis=2)
+        h = self.cin.Head()
+        prof = deconvolved_profile(self.model, rings, (blo, bhi), mom0, float(self.data_noise) * np.sqrt(nvox),
+                                   nvox > 0, beam_arcsec=abs(h.Bmaj()) * 3600. if h.Bmaj() else None)
+        return np.ones(rings.nr) if prof is None or not np.any(prof > 0) else np.asarray(prof, float)
+
+    def _ctx_dens(self, ir, dens):
+        """The densities of the rings in the model around ring ir (whose density is dens): the profile of the pass
+        (_prof), scaled to dens at ring ir. Only the ratios matter with NORM LOCAL or AZIM, which normalise the
+        model of the ring together with that of the rings around it."""
+        p = self._prof
+        return dens * p / max(p[ir], 1.E-3 * p.max())
 
     def _store(self, ir, pmin):
         k = 0
@@ -899,11 +1072,14 @@ class Galfit:
     def _check_vrot(self, ir):
         return self.outr.vrot[ir] <= self._max_vrot(ir)
 
-    def _fit_ring(self, ir, errors, fitok, nthreads, modsoFar=None):
+    def _fit_ring(self, ir, errors, fitok, nthreads, ctx=None, start=None):
         # the generator of this ring is used only during its fit (see _rng)
-        self._tls.rng = np.random.default_rng([12345, self.n_galfit, ir])
+        seed = [12345, self.n_galfit, ir] + ([self._pass] if self._pass else [])
+        self._tls.rng = np.random.default_rng(seed)
         try:
-            self._fit_one_ring(ir, errors, fitok, nthreads, modsoFar)
+            if ctx == "sweep":
+                ctx = self._sweep_context(ir)
+            self._fit_one_ring(ir, errors, fitok, nthreads, ctx, start)
         finally:
             self._tls.rng = None
             bar = getattr(self, "_bar", None)
@@ -912,26 +1088,30 @@ class Galfit:
                     self._ndone += 1
                     bar.update(self._ndone)
 
-    def _fit_one_ring(self, ir, errors, fitok, nthreads, modsoFar=None):
+    def _fit_one_ring(self, ir, errors, fitok, nthreads, ctx=None, start=None):
+        """The fit of ring ir, from the values of ring ir of start (default: the initial rings), with the model
+        of the rings around it ctx (see _context)."""
         inr = self.inr
         if self.verb >= 2 and nthreads == 1:
             print(f"\n Working on ring #{ir + 1} at radius {inr.radii[ir]:.2f} arcsec... "
                   f"[{time.strftime('%H:%M:%S')}]")
-        dring = self._make_dring(ir)
-        if modsoFar is None and not self.reverse:
-            blo, bhi = self.model.box(dring)
-            ps = self.pixScale
-            nTot, nIn = _count_ring_pixels(self.mask2D, blo[0], blo[1], bhi[0], bhi[1],
-                                           dring.xpos[-1] - blo[0], dring.ypos[-1] - blo[1],
-                                           dring.phi[-1], dring.inc[-1], dring.radii[0] / ps, dring.radii[-1] / ps)
-            if nIn < 20 and (nIn == 0 or nIn < 0.7 * nTot):
-                if self.verb >= 2:
-                    WarningMessage(sys.stdout, f" Not enough pixels to fit in ring #{ir + 1}. I will skip it.")
-                self._ringstat[ir] = ("skipped: few pixels in the mask", None)
-                fitok[ir] = False
-                return
-        ok, minimum, pmin = self.minimize(dring, modsoFar)
+        dring = self._make_dring(ir, start)
+        self._cstat[ir] = self.CS_NONE
+        # (also in REVERSE: C++ fitted the outer rings with no data, which became part of the model of the inner rings)
+        blo, bhi = self.model.box(dring)
+        ps = self.pixScale
+        nTot, nIn = _count_ring_pixels(self.mask2D, blo[0], blo[1], bhi[0], bhi[1],
+                                       dring.xpos[-1] - blo[0], dring.ypos[-1] - blo[1],
+                                       dring.phi[-1], dring.inc[-1], dring.radii[0] / ps, dring.radii[-1] / ps)
+        if nIn < 20 and (nIn == 0 or nIn < 0.7 * nTot):
+            if self.verb >= 2:
+                WarningMessage(sys.stdout, f" Not enough pixels to fit in ring #{ir + 1}. I will skip it.")
+            self._ringstat[ir] = ("skipped: few pixels in the mask", None)
+            fitok[ir] = False
+            return
+        ok, minimum, pmin = self.minimize(dring, ctx)
         fitok[ir] = ok
+        self._cstat[ir] = self.CS_OK if ok else self.CS_FAILED
         if not ok:
             self._ringstat[ir] = ("not converged", minimum)
             if self.verb >= 2:
@@ -950,13 +1130,14 @@ class Galfit:
                                            "is treated as a non-converged fit (try other initial values,\n e.g. "
                                            "a lower VROT, or a wider band).")
             fitok[ir] = False
+            self._cstat[ir] = self.CS_FAILED
             return
         self._ringstat[ir] = ("ok", minimum)
         if self.verb >= 2:
             with self._lock:
                 printRing(sys.stdout, self.outr, ir, minimum, self.mpar, nthreads)
-        if self.par.flagERRORS:
-            self.getErrors(dring, errors[ir], ir, minimum)
+        if self.par.flagERRORS and self._pass == self.sweeps:
+            self.getErrors(dring, errors[ir], ir, minimum, ctx)
 
     def galfit(self):
         """One fitting stage (port of Galfit::galfit)."""
@@ -983,10 +1164,14 @@ class Galfit:
         fitok = [False] * nr
         nthreads = p.threads
         self._ringstat, self._ndone, self._bar = {}, 0, None
+        self._cstat = np.full(nr, self.CS_NONE)
+        self._pass = 0
         start = self.par.STARTRAD if self.par.STARTRAD < nr else 0
         if self.verb == 1:                       # (VERBOSE 2: every ring, as in C++)
             self._bar = ProgressBar(True, True, p.showbar)
-            self._bar.init(f" Stage {n}: fitting {nr - start} rings with {max(1, nthreads)} threads ", nr - start)
+            nf = (nr - start) * (1 + self.sweeps)
+            self._bar.init(f" Stage {n}: fitting {nr - start} rings" + (f" ({1 + self.sweeps} passes)" if self.sweeps
+                           else "") + f" with {max(1, nthreads)} threads ", nf)
         try:
             if self.reverse:
                 self.fit_reverse(errors, fitok)
@@ -1000,6 +1185,8 @@ class Galfit:
                         futs = [ex.submit(self._fit_ring, ir, errors, fitok, nthreads) for ir in range(start, nr)]
                         for f in futs:
                             f.result()
+            for k in range(self.sweeps):
+                self._sweep(errors, fitok, start, nthreads)
         finally:
             self.data_noise, self.data_T = dn_orig, dT_orig
             self.scaled_data = c.array
@@ -1057,18 +1244,59 @@ class Galfit:
             print(line + "  " + st)
         sys.stdout.flush()
 
+    def _contexts(self):
+        """Whether the rings are fitted with the model of the rings around them (REVERSE, SWEEPS)."""
+        return self.reverse or self.sweeps > 0
+
+    def _sweep(self, errors, fitok, start, nthreads):
+        """One pass of SWEEPS: every ring fitted again, from its values of the previous pass, with the model of all
+        the other rings at their values of the previous pass (the rings are independent: threads as the first
+        pass). The fits of the previous pass model each ring alone (or with the rings outside it, REVERSE): the
+        beam-smeared emission of the neighbouring rings, which is in the data, is missing from the model."""
+        self._pass += 1
+        self._base = (self.outr.copy(), self._cstat.copy())
+        nr = self.inr.nr
+        base = self._base[0]
+        for ir in range(start, nr):
+            if self._base[1][ir] != self.CS_OK:
+                # (a ring not fitted starts again from its initial values)
+                for k in ("vrot", "vdisp", "dens", "z0", "inc", "phi", "xpos", "ypos", "vsys", "vrad"):
+                    getattr(base, k)[ir] = getattr(self.inr, k)[ir]
+        self._prof = self._profile(base)
+        if nthreads <= 1:
+            for ir in range(start, nr):
+                self._fit_ring(ir, errors, fitok, 1, "sweep", base)
+        else:
+            with ThreadPoolExecutor(nthreads) as ex:
+                futs = [ex.submit(self._fit_ring, ir, errors, fitok, nthreads, "sweep", base)
+                        for ir in range(start, nr)]
+                for f in futs:
+                    f.result()
+        self._base = None
+
+    def _sweep_context(self, ir):
+        """The model of the rings around ring ir in a sweep: all the others, at the values of the previous pass."""
+        rings, cstat = self._base
+        start = self.par.STARTRAD if self.par.STARTRAD < self.inr.nr else 0
+        dens = self._ctx_dens(ir, rings.dens[ir])
+        segs = []
+        if ir > start:
+            segs.append(self._segment(start, ir - 1, dens, rings, cstat))
+        if ir < self.inr.nr - 1:
+            segs.append(self._segment(ir + 1, self.inr.nr - 1, dens, rings, cstat))
+        return self._context(segs)
+
     def fit_reverse(self, errors, fitok):
         inr = self.inr
+        self._prof = self._profile(inr)
         start = self.par.STARTRAD if self.par.STARTRAD < inr.nr else 0
         for ir in range(inr.nr - 1, start - 1, -1):
-            modsoFar = None
+            ctx = None
             if ir != inr.nr - 1:
-                k = ir + 1
-                d2 = self.outr.subset(slice(k, inr.nr))
-                d2.id = ir + 1
-                blo, bhi = self.model.box(self.outr)
-                modsoFar = self.model.setup.build(d2, blo, bhi, layout="yxz")
-            self._fit_ring(ir, errors, fitok, 1, modsoFar=modsoFar)
+                # (C++ took the outer rings as nodes, from the radius of ring ir+1: the outer half of ring ir+1
+                # and of the last ring were missing, and the rings not fitted were in, with their values)
+                ctx = self._context([self._segment(ir + 1, inr.nr - 1, self._ctx_dens(ir, inr.dens[ir]))])
+            self._fit_ring(ir, errors, fitok, 1, ctx=ctx)
 
     # ------------------------------------------------------------------
     # Second stage
@@ -1200,7 +1428,7 @@ class Galfit:
     # ------------------------------------------------------------------
     # Errors (port of getErrors)
     # ------------------------------------------------------------------
-    def getErrors(self, dr, err, ir, minimum):
+    def getErrors(self, dr, err, ir, minimum, ctx=None):
         err[:] = 0.
         o = self.outr
         keys = {VROT: "vrot", VDISP: "vdisp", DENS: "dens", Z0: "z0", INC: "inc", PA: "phi",
@@ -1240,7 +1468,7 @@ class Galfit:
                 var_val[nm] = val - midval[nf]
                 maxval[nf] = max(maxval[nf], var_val[nm])
                 minval[nf] = min(minval[nf], var_val[nm])
-                var_func[nm] = self.getFuncValue(dr)
+                var_func[nm] = self.getFuncValue(dr, ctx)
             bin_range = (maxval[nf] - minval[nf]) / n_bin
             xx_bin = np.empty(n_bin)
             yy_bin = np.empty(n_bin)

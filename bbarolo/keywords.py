@@ -444,6 +444,8 @@ KEYWORDS = [
     K("ADRIFTPOL1", "int", ["gf.ADRIFTPOL1"], CLASSIC, "Polynomial for VDISP2 regularisation"),
     K("ADRIFTPOL2", "int", ["gf.ADRIFTPOL2"], CLASSIC, "Polynomial for SIGMA regularisation"),
     K("REVERSE", "lstr", ["gf.REVERSE"], CLASSIC, "Using reverse-cumulative fitting (true, false, auto)?"),
+    K("SWEEPS", "int", ["gf.SWEEPS"], CLASSIC, "Refits of the rings with the model of the whole disk"),
+    K("RINGREGION", "ustr", ["gf.RINGREGION"], CLASSIC, "Region of the residuals of a ring (ANNULUS or STRIP)"),
     K("NORMALCUBE", "flag", ["gf.NORMALCUBE"], ("3DFIT/CLASSIC", "SPACEPAR"), "Normalizing cube to help convergence?"),
     K("BADOUT", "flag", ["gf.flagBADOUT"], CLASSIC, "Write unconverged rings in output (with flag)?"),
     K("PLOTMASK", "flag", ["gf.PLOTMASK"], ("3DFIT",), "Overlaying mask to output plots?"),

@@ -211,8 +211,8 @@ of the run built it. It enters the fit in five places:
 - the noise of each channel: with `MASK NEGATIVE`, $\sigma_z$ is the noise of channel $z$ measured from its
   negative values; with the other masks $\sigma_z = 1$;
 - the rings with too little emission: a pixel is in the 2D mask if any voxel of its spectrum is; a ring
-  with fewer than 20 such pixels, and either none or fewer than 70% of its pixels, is skipped (not in
-  REVERSE mode);
+  with fewer than 20 such pixels, and either none or fewer than 70% of its pixels, is skipped (also in
+  REVERSE mode, where C++ fitted it);
 - the final model: the `LOCAL` normalisation, the radial profile of the `AZIM` normalisation and the
   maps of the data use the data within the mask. The maps are moments, or Gaussian fits with
   {ref}`MAPTYPE <par-maps-maptype>` `GAUSSIAN`, for the data and the model alike.
@@ -236,7 +236,17 @@ would be a disk filled from the centre: keep it `true` for the fits.
 beam spreads into the pixels of ring $k$ is in the data but not in the model; the normalisation (below)
 absorbs part of it. In REVERSE mode, the model of ring $k$ is added, before the convolution, to the model of
 the rings already fitted outside it ($k+1$ to $N$, with their fitted values interpolated between their
-radii).
+radii, from the outer edge of ring $k$ to that of ring $N$), and with {ref}`SWEEPS <par-3dfit-sweeps>` each
+further pass adds the model of all the other rings, at their values of the previous pass. Rings skipped have no
+emission there; rings not converged or rejected take the values interpolated from the fitted ones. The densities
+of these rings are the deconvolved profile of the data: the densities whose beam-convolved model reproduces the
+total intensity map of the data in the mask, solved for all the rings together (as for METHOD GLOBAL), relative
+to $\Sigma_k$; the normalisation then applies to the sum. This model is built and convolved once per ring (the
+convolution is linear), and added to the convolved model of ring $k$. With
+{ref}`RINGREGION <par-3dfit-ringregion>` `STRIP` (nearly edge-on disks), these fits compare the model with the
+data in the strip of pixels whose distance along the major axis is within the ring, up to the height of the
+projected ring at its initial inclination plus $3z_0$ and half the beam, instead of the annulus (below), with
+uniform weights.
 
 **The box.** The model is built in a box of the cube around the centre of the ring, with half-size
 
@@ -244,8 +254,10 @@ $$
 e = R_k + w_k^+ + \frac{w_k^- + w_k^+}{2} + 3 z_0 \quad \text{(arcsec)},
 $$
 
-rounded up to whole pixels on each axis and cut at the edges of the cube; in REVERSE mode, the box of all
-the rings ($e = R_N + \Delta R/2 + 3z_{0,N}$). All the channels of the cube are modelled.
+rounded up to whole pixels on each axis and cut at the edges of the cube; the model of the other rings (REVERSE,
+SWEEPS) is in the box of all the rings ($e = R_N + \Delta R/2 + 3z_{0,N}$), and with ANALYTIC models the box of
+ring $k$ grows by half the convolution kernel (for the support of the model, below). All the channels of the
+cube are modelled.
 
 **The convolution.** Each channel of the model is convolved with the beam, a 2D Gaussian with the FWHM
 BMAJ × BMIN at the angle BPA (from the header, or from the keyword {ref}`BEAM <par-all-beam>`), sampled on the
@@ -416,7 +428,9 @@ The rings are independent: each starts from its own initial values, not from the
 They are fitted in parallel, {ref}`THREADS <par-all-threads>` at a time, from the ring of index
 {ref}`STARTRAD <par-3dfit-startrad>` (counted from 0) outwards. In REVERSE mode they are fitted one after the
 other, from the outermost ring inwards to STARTRAD, and the model of each includes the rings already fitted
-outside it (see *The model of a ring*).
+outside it (see *The model of a ring*). With {ref}`SWEEPS <par-3dfit-sweeps>` $n$, $n$ more passes follow, each
+fitting every ring again (in parallel) from its values of the previous pass, with the model of all the other
+rings at those values; the errors are computed in the last pass.
 
 ## The second stage
 

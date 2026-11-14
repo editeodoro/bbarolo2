@@ -163,9 +163,22 @@ def run_scan(args):
                 d.phi[:] = g["pa"]
                 d.vsys[:] = 0.
                 d.dens[:] = t["dens"][ir]
-                F.append(gf.getFuncValue(d, None if other is None else other.copy()))
+                F.append(objective(gf, d, other))
             out.append(float(dis[int(np.argmin(F))]))
     return dict(test=name, gid=g["id"], inc=g["inc"], dinc_rings=out, dinc=float(np.median(out)) if out else np.nan)
+
+
+def objective(gf, d, other=None):
+    """The objective of 3DFIT for the ring d, with the model other (non-convolved, in the box of the ring) added to
+    that of the ring before the convolution and normalised with it."""
+    blo, bhi = gf.model.box(d)
+    support = []
+    mod = gf.model.array(d, blo, bhi, final=False, layout="yxz", support=support)
+    if other is not None:
+        mod += gf.model.convolve(other, "yxz")
+        if support:
+            support[0] = support[0] + other
+    return gf._norm_value(d, mod, blo, support)
 
 
 def table(fits, scans, path):

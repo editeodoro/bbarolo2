@@ -1446,9 +1446,55 @@ from the outermost ring inwards, the model of each ring includes the rings alrea
 (the rings are fitted one after the other, in one thread). `true`, `false` (the default) or `auto`:
 reverse if the median initial inclination is above 75°.
 
+The model of the outer rings starts at the outer edge of the ring being fitted, and their densities are
+the deconvolved profile of the data (those whose beam-convolved model reproduces the total intensity map of
+the data in the mask, solved for all the rings together, as for `METHOD` GLOBAL), relative to the `DENS` of
+the ring fitted; the normalisation (`NORM`) applies to the sum. Rings with too few pixels in the mask are
+not fitted and have no emission; rings not converged or rejected take the values interpolated from the
+fitted ones. With `FLAGERRORS`, the errors are computed with the outer rings in the model too.
+
 In reverse mode, rings narrower than the major axis of the beam are replaced by rings as wide as the
 beam, with the initial values of the given rings interpolated at their radii. Other values become
-`auto`, with an error message.
+`auto`, with an error message. See also `SWEEPS`.
+"""),
+    'SWEEPS': dict(
+        group='Free parameters and fit',
+        doc="""\
+The number of passes of 3DFIT (`METHOD` CLASSIC) after the first, in which every ring is fitted again,
+from its values of the previous pass, with the model of all the other rings (at their values of the
+previous pass, with the densities of the deconvolved profile as in `REVERSE`) added to its own before the
+convolution and the normalisation: the residuals of a ring then include the emission of its neighbours
+spread by the beam, which a ring fitted alone misses. Default 0 (none). The rings of a pass are
+independent and run in parallel threads; each pass costs about as much as the first. With `REVERSE`, the
+first pass is the reverse-cumulative one. The errors (`FLAGERRORS`) are computed in the last pass only.
+
+On simulated disks (`performance/diag_context.py`) one sweep removes the bias of the fits of single rings
+at high S/N (inclination underestimated by ~7° at peak S/N 200, dispersion overestimated), but at lower
+S/N it uncovers the bias of the mask (`MASK` SEARCH), which that bias compensates: the inclination is then
+overestimated by 4-7° and the dispersion underestimated by 20-50% below peak S/N 40. With `MASK`
+SMOOTH&SEARCH the inclination stays within 2° from S/N 20 up.
+"""),
+    'RINGREGION': dict(
+        group='Free parameters and fit',
+        doc="""\
+The region of the cube where 3DFIT (`METHOD` CLASSIC) compares the model of a ring with the data:
+`ANNULUS` (the default) or `STRIP`.
+
+- `ANNULUS`: the pixels whose radius in the plane of the disk, for the inclination and position angle of
+  the ring being fitted, falls within the ring. Near edge-on (INC ≳ 85°) this becomes a thin band along
+  the major axis, which shrinks as the fitted inclination approaches 90°.
+- `STRIP`: for nearly edge-on disks. The pixels whose distance along the major axis falls within the
+  radii of the ring, up to a height across it of the projected ring at its initial inclination, plus
+  three scale heights and half the beam. The lines of sight there cross the ring and all the rings
+  outside it, so STRIP needs those rings in the model: it applies to the fits with the model of the
+  rings around each ring (`REVERSE`, whose outermost ring is alone in its strip, and the passes of
+  `SWEEPS`), and is an input error with `REVERSE` false and `SWEEPS` 0 (with `REVERSE` auto not chosen,
+  the annulus is used, with a warning). The region does not depend on the fitted inclination, and all
+  its pixels have the same weight (`WFUNC` is not used). `SIDE` selects the half of the strip.
+
+On simulated disks with INC 80-88° at peak S/N 40 (`performance/diag_context.py`), `REVERSE` with `STRIP`
+gives a median inclination offset of +0.8° and VROT error of 1.8% (default fit: −2.0° and 5.3%; `REVERSE`
+alone: −6.6°), with the dispersion underestimated by ~13% (the bias of the mask).
 """),
     'NORMALCUBE': dict(
         group='Free parameters and fit',

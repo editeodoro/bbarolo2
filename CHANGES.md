@@ -7,6 +7,18 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **3DFIT with REVERSE: the model of the outer rings had an empty annulus outside every ring, and took in the
+  rings that were not fitted.** The outer rings were modelled from the radius of the next ring, as nodes, while
+  the ring fitted ends halfway to it: an annulus half a ring wide (half a beam, since REVERSE makes the rings
+  one beam wide) was empty just outside every ring, and the outer half of the last ring was missing. The model of
+  the outer rings now starts at the outer edge of the ring fitted and ends at that of the last ring. Rings with
+  too few pixels in the mask were fitted on the noise in REVERSE (the check was skipped) and entered the model of
+  all the inner rings, as did the rings not converged (with their initial values) and those rejected for a VROT
+  beyond the band (with the rejected values): now the first are skipped as without REVERSE and have no emission,
+  the others take the values interpolated from the fitted rings. **(C++)**
+- **3DFIT with REVERSE and FLAGERRORS: the errors were computed without the outer rings in the model**, i.e. on a
+  function other than the one minimised. **(C++)**
+
 - **METHOD GLOBAL with RADMAX free stopped with "array must not contain infs or NaNs"** (HD142527 with
   L-BFGS-B). At the lower bound of the default prior of RADMAX (the last radius minus one beam) the exterior annulus
   of the deconvolved density profile lies on the last ring, and the smoothness prior of the profile divided by their
@@ -424,6 +436,25 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **RINGREGION (3DFIT, METHOD CLASSIC): the region of the residuals of a ring, `ANNULUS` (the default, as before) or
+  `STRIP`, for nearly edge-on disks.** The annulus of a ring in the plane of the disk becomes a thin band along the
+  major axis near INC 90°, which shrinks as the fitted inclination grows (the objective could become infinite, with
+  no pixels). STRIP takes the pixels whose distance along the major axis falls within the ring, up to the height of
+  the projected ring at its initial inclination plus three scale heights and half the beam; their lines of sight
+  cross the ring and the rings outside it, so STRIP applies with the model of those rings: REVERSE (and its
+  outermost ring) and the passes of SWEEPS; without either it is an input error. On simulated disks with INC
+  80-88° (`performance/diag_context.py`, peak S/N 40) REVERSE with STRIP gives an inclination offset of +0.8° and a
+  VROT error of 1.8% (median), against −2.0° and 5.3% for the default fit and −6.6° and 4.1% for REVERSE alone.
+- **SWEEPS (3DFIT, METHOD CLASSIC): fits of every ring within the model of the whole disk.** After the first pass,
+  each of SWEEPS passes fits every ring again, from its values, with the model of all the other rings (at their
+  values of the previous pass) added to its own before the convolution, so that the residuals of a ring include
+  the beam-smeared emission of its neighbours, which a ring fitted alone misses. The rings of a pass are independent
+  (threads as the first pass). Default 0 (nothing changes). On the simulated disks of `performance/diag_context.py`
+  (INC 45-75°) one sweep removes the high-S/N bias of the fit of single rings (INC −6.7° → +1.5° at peak S/N 200,
+  VDISP +14% → −8%), but below S/N ~40 it uncovers the bias of the mask, which the normalisation bias was
+  compensating (INC +4 to +7°, VDISP −20 to −50% with MASK SEARCH); with MASK SMOOTH&SEARCH the inclination stays
+  within 2° from S/N 20 up.
+
 - **RADII as `range(Rmin,Rmax,step)`**: Rmin, Rmin+step, ... up to Rmax, included (the same radii as
   `Rmin~Rmax:step`), in every task that reads RADII (3DFIT, GALMOD, 2DFIT, ELLPROF, SPACEPAR, SLITFIT, WINDFIT,
   GALWIND), in parameter files, on the command line and in Python (`radii="range(15,135,30)"`).
@@ -683,6 +714,19 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   SPECRES is not given, as in C++.
 
 ### Changed
+
+- **3DFIT with REVERSE: the outer rings in the model of an inner ring have the deconvolved density profile of the
+  data.** They had the DENS of the rings, the same for all (1 by default) whatever the profile of the galaxy, while
+  the normalisation of the inner ring (NORM AZIM or LOCAL) rescales its model together with that of the outer
+  rings. Their densities are now those whose beam-convolved model reproduces the total intensity map of the data in
+  the mask (`bbarolo.profile`, as the density profile of METHOD GLOBAL and BAYESIAN), solved for all the rings
+  together, relative to the DENS of the ring fitted. The normalisation factors of the rings fitted alone are not
+  their fluxes: each takes also the emission of its neighbours spread by the beam into its annulus (on NGC 2403
+  with rings one beam wide, ~80% of the data in an annulus). On simulated disks the results of REVERSE alone change
+  little (INC within ~1° of the C++ scheme); the profile matters for SWEEPS.
+- **3DFIT with REVERSE is faster**: the model of the outer rings is built and convolved once per ring and added to
+  that of the ring, computed in its own box, instead of the model of the whole disk at each evaluation (the
+  convolution is linear: the residuals are the same to rounding). ~2.5 times faster on the simulated disks.
 
 - **One task per fit, and METHOD chooses how: `3DFIT`, `WINDFIT` and `SLITFIT` with `METHOD = CLASSIC | GLOBAL |
   BAYESIAN`.** The fits of a galaxy were two tasks (3DFIT, and BAYESIAN3DFIT with a sampler or `SAMPLER OPTIMISE`),

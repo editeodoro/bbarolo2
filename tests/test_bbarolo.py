@@ -3265,6 +3265,159 @@ def test_reverse_rings_by_radius(tmp_path):
 
 
 @needs_data
+def test_reverse_outer_model_no_gap_no_bad_rings(tmp_path):
+    """REVERSE: the model of the outer rings starts at the outer edge of the annulus of the ring fitted and ends at
+    that of the last ring (C++ took the rings as nodes, from the radius of the next ring: an empty annulus half a
+    ring wide outside every ring, and the outer half of the last ring missing); rings with too few pixels have no
+    emission there, rings not converged or rejected take the values interpolated from the fitted ones (they were in
+    with their initial or rejected values)."""
+    gf = _galfit_n2403(tmp_path, "RADII 30 90 150 210 270 330\nVROT 120\nFREE VROT\nREVERSE true\n")
+    n = gf.inr.nr
+    gf._cstat = np.full(n, gf.CS_OK)
+    gf._cstat[n - 1] = gf.CS_NONE
+    gf._cstat[n - 2] = gf.CS_FAILED
+    gf.outr = gf.inr.copy()
+    gf.outr.vrot[:] = [50., 60., 70., 80., 999., 120.]
+    seg = gf._segment(1, n - 1, np.ones(n))
+    elo, ehi = gf._ring_edges()
+    assert np.isclose(seg.radii[0], ehi[0]) and np.isclose(seg.radii[0], gf._make_dring(0).radii[-1])
+    assert np.isclose(seg.radii[-1], ehi[-1]) and seg.radii[-1] > gf.inr.radii[-1]
+    assert np.all(seg.dens[seg.radii >= gf.inr.radii[-1]] == 0)
+    i = int(np.flatnonzero(np.isclose(seg.radii, gf.inr.radii[n - 2]))[0])
+    assert np.isclose(seg.vrot[i], 80.)                # (from the fitted rings: the last good one, at a smaller radius)
+    assert seg.empty is True
+
+
+@needs_data
+def test_ring_context_is_the_model_of_the_disk(tmp_path):
+    """The model of the rings around a ring (REVERSE, SWEEPS) is built and convolved once per ring and added to the
+    convolved model of the ring, which is computed in its own box: the residuals are those of the model of the ring
+    and of the rest built and convolved together in the box of the disk (C++ did that at each evaluation)."""
+    gf = _galfit_n2403(tmp_path, "RADII 30 90 150 210 270 330\nVROT 120\nFREE VROT\nREVERSE true\n")
+    n = gf.inr.nr
+    gf._cstat = np.full(n, gf.CS_OK)
+    gf.outr = gf.inr.copy()
+    for ir in (0, 3):
+        segs = [gf._segment(k, n - 1, np.full(n, 2.)) for k in (ir + 1,)]
+        if ir:
+            segs.append(gf._segment(0, ir - 1, np.full(n, 2.)))
+        ctx = gf._context(segs)
+        d = gf._make_dring(ir)
+        blo, bhi = gf.model.box(gf.outr)
+        mod = gf.model.setup.build(d, blo, bhi, layout="yxz") + sum(gf.model.setup.build(s, blo, bhi, layout="yxz")
+                                                                      for s in segs)
+        ref = gf._norm_value(d, gf.model.convolve(mod, "yxz"), blo, [])
+        assert np.isclose(gf.getFuncValue(d, ctx), ref, rtol=1e-6)
+        assert gf.model.box(d)[1][0] - gf.model.box(d)[0][0] < bhi[0] - blo[0]
+
+
+def test_reverse_skips_empty_rings_and_errors_with_outer_rings(tmp_path, monkeypatch):
+    """REVERSE: rings with too few pixels in the mask are not fitted (C++ fitted them on the noise, and they became
+    part of the model of the inner rings); the errors (FLAGERRORS) are computed with the outer rings in the model, as
+    the fit (they were computed with the ring alone)."""
+    from bbarolo.galfit import Galfit
+    fn = _mock_disk(tmp_path, inc=60.)
+    p = Param()
+    p.readParamString(f"FITSFILE {fn}\n3DFIT true\nRADII 30 90 150 450\nXPOS 20\nYPOS 20\nVSYS 0\nVROT 120\nVDISP 12\n"
+                      f"INC 60\nPA 40\nZ0 0\nFREE VROT\nMASK SEARCH\nREVERSE true\nFLAGERRORS true\nTWOSTAGE false\n"
+                      f"THREADS 1\nVERBOSE false\nOUTFOLDER {tmp_path}/\n")
+    assert p.checkPars(quiet=True)
+    gf = Galfit(Cube(fn, par=p))
+    calls, st = [], dict(active=False, ctx=None, seen=[])
+    orig_err, orig_fv = Galfit.getErrors, Galfit.getFuncValue
+
+    def get_errors(self, dr, err, ir, minimum, ctx=None):
+        calls.append((ir, ctx is not None))
+        st.update(active=True, ctx=ctx)
+        try:
+            return orig_err(self, dr, err, ir, minimum, ctx)
+        finally:
+            st["active"] = False
+
+    def get_func(self, d, c=None):
+        if st["active"]:
+            st["seen"].append(c is st["ctx"])
+        return orig_fv(self, d, c)
+    monkeypatch.setattr(Galfit, "getErrors", get_errors)
+    monkeypatch.setattr(Galfit, "getFuncValue", get_func)
+    gf.galfit()
+    assert not gf.fitok[3] and gf._ringstat[3][0].startswith("skipped") and all(gf.fitok[:3])
+    assert sorted(ir for ir, c in calls if c) == [0, 1, 2] and st["seen"] and all(st["seen"])
+
+
+@needs_data
+def test_sweeps(tmp_path, monkeypatch):
+    """SWEEPS: after the first pass, each ring is fitted again from its values with the model of all the other rings
+    (inside and outside it), with the deconvolved density profile; the errors are computed in the last pass only.
+    A negative value is an input error."""
+    from bbarolo.galfit import Galfit
+    gf = _galfit_n2403(tmp_path, "RADII 60 180 300 420 540\nVROT 120\nFREE VROT VDISP\nSWEEPS 2\nTWOSTAGE false\n"
+                                 "FLAGERRORS true\n")
+    assert gf.sweeps == 2
+    segs, errs = {}, []
+    orig_ctx, orig_err = Galfit._context, Galfit.getErrors
+    monkeypatch.setattr(Galfit, "_context", lambda self, s: segs.setdefault((self._pass, len(s)), []).append(
+        [(float(x.radii[0]), float(x.radii[-1])) for x in s]) or orig_ctx(self, s))
+    monkeypatch.setattr(Galfit, "getErrors", lambda self, *a: errs.append(self._pass) or orig_err(self, *a))
+    gf.galfit()
+    assert all(gf.fitok) and gf._pass == 2
+    assert sorted(set(errs)) == [2] and len(errs) == 5
+    assert set(segs) == {(1, 1), (1, 2), (2, 1), (2, 2)}             # (the first and last rings: one segment)
+    elo, ehi = gf._ring_edges()
+    assert any(np.allclose(x, [(elo[0], ehi[1]), (elo[3], ehi[4])]) for x in segs[(1, 2)])     # (ring 2)
+    p = Param()
+    p.readParamString("FITSFILE a.fits\n3DFIT true\nSWEEPS -1\n")
+    assert not p.checkPars(quiet=True)
+
+
+def test_ringregion_strip(tmp_path):
+    """RINGREGION STRIP: the residuals of a ring in the strip along the major axis (with the rings outside it in
+    the model): on an edge-on disk with REVERSE, VROT within 3% in the rings of the disk, where the annulus (a
+    thin band at INC ~ 90) misses it by up to ~8%. The outermost ring of REVERSE and the rings with the model of
+    the rings around them use the strip, the others the annulus; STRIP without REVERSE or SWEEPS, and other
+    values, are input errors."""
+    from bbarolo import FitMod3D
+    fn = _mock_disk(tmp_path, inc=87., snr=40.)
+    err = {}
+    for reg in ("ANNULUS", "STRIP"):
+        res = FitMod3D(fn, radii=[24, 72, 120, 168, 216], xpos=20, ypos=20, vsys=0, vrot=100, vdisp=10, z0=0, inc=87,
+                       pa=40, free="VROT VDISP INC", mask="SEARCH", reverse="true", ringregion=reg, twostage=False,
+                       verbose=0, threads=1, plots=-1).run()
+        r = res["rings"]
+        err[reg] = np.abs(np.asarray(r["vrot"]) / (300 / np.pi * np.arctan(np.asarray(r["radii"]) / 40.)) - 1)[1:4]
+        gf = res["fitter"]
+        assert gf.strip == (reg == "STRIP")
+    assert np.all(err["STRIP"] < 0.03) and err["ANNULUS"].max() > 2 * err["STRIP"].max()
+    d = gf._make_dring(4)
+    assert gf._region(d, None)[0] == 1 and gf._region(gf._make_dring(2), None)[0] == 0
+    assert gf._region(gf._make_dring(2), object())[0] == 1
+    p = Param()
+    for extra, ok in (("RINGREGION strip\nREVERSE true\n", True), ("RINGREGION STRIP\nSWEEPS 1\n", True),
+                      ("RINGREGION STRIP\nREVERSE auto\n", True), ("RINGREGION STRIP\n", False),
+                      ("RINGREGION RING\nREVERSE true\n", False)):
+        p = Param()
+        p.readParamString("FITSFILE a.fits\n3DFIT true\n" + extra)
+        assert p.checkPars(quiet=True) == ok, extra
+    assert p.gf.RINGREGION == "RING"
+
+
+def test_deconvolved_profile_of_ring_fits(tmp_path):
+    """The densities of the rings in the models of the rings around a ring (REVERSE, SWEEPS) are the deconvolved
+    profile of the data: those of the simulated exponential disk (the normalisation factors of the rings fitted
+    alone take the beam-smeared emission of the neighbours too)."""
+    from bbarolo.galfit import Galfit
+    fn = _mock_disk(tmp_path, inc=60., snr=200.)
+    p = Param()
+    p.readParamString(f"FITSFILE {fn}\n3DFIT true\nRADII 24 72 120 168\nXPOS 20\nYPOS 20\nVSYS 0\nVROT 150\nVDISP 12\n"
+                      f"INC 60\nPA 40\nZ0 0\nFREE VROT\nMASK SEARCH\nVERBOSE false\nOUTFOLDER {tmp_path}/\n")
+    assert p.checkPars(quiet=True)
+    gf = Galfit(Cube(fn, par=p))
+    prof = gf._profile(gf.inr)
+    true = np.exp(-gf.inr.radii / 90.)                 # (the cube is in the units of the model: the same scale)
+    assert np.allclose(prof[1:3], true[1:3], rtol=0.03) and np.isclose(prof[0], true[0], rtol=0.15)
+
+
+@needs_data
 def test_second_stage_and_adrift_skip_failed_rings(tmp_path, monkeypatch):
     """The second stage of 3DFIT regularises only the rings fitted in the first stage (C++ used also the
     rings not fitted, with their initial values), evaluated at all the radii; when the regularisation fails,

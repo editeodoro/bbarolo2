@@ -26,6 +26,7 @@ class Spacepar(Galfit):
 
     def __init__(self, c):
         super().__init__(c)
+        self.strip = False             # (RINGREGION is for the fits of 3DFIT with the rings around each ring)
         self.n_galfit = 1   # (the normalisation of the first stage of 3DFIT, NORM)
         p = c.pars()
         self.p1, self.p2 = p.P1.upper(), p.P2.upper()

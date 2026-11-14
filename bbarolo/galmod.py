@@ -739,7 +739,9 @@ class GalmodSetup:
 
     # ------------------------------------------------------------------
     def subrings(self, rings):
-        """Port of Galmod::ringIO: interpolate the input rings onto sub-rings 0.75 pix wide.
+        """Port of Galmod::ringIO: interpolate the input rings onto sub-rings 0.75 pix wide. The model starts
+        at the first radius, or at the centre (with the values of the first ring) if the inner part is not
+        empty: rings.empty, or EMPTY if that is None.
         Returns (sr array (14,nsub), nv array)."""
         nr = rings.nr
         radsep = self.radsep
@@ -767,8 +769,9 @@ class GalmodSetup:
         f32 = np.float32
         rads = []
         segs = []          # (i-1, dr) for interpolation; -1 => constant ring 0
-        r = f32(rad[0] + radsep / 2.0) if (rad[0] != 0 and self.empty) else f32(radsep / 2.0)
-        if not (rad[0] != 0 and self.empty):
+        empty = self.empty if getattr(rings, "empty", None) is None else rings.empty
+        r = f32(rad[0] + radsep / 2.0) if (rad[0] != 0 and empty) else f32(radsep / 2.0)
+        if not (rad[0] != 0 and empty):
             while r < f32(rad[0]):
                 rads.append(r); segs.append((0, None))
                 r = f32(float(r) + radsep)
@@ -1173,7 +1176,7 @@ class DiskModel:
         bhi = [min(xpos + xdis + 1, self.cin.DimX()), min(ypos + ydis + 1, self.cin.DimY())]
         return blo, bhi
 
-    def array(self, rings, blo=None, bhi=None, final=True, ringmode=None, modsoFar=None, seed=None,
+    def array(self, rings, blo=None, bhi=None, final=True, ringmode=None, seed=None,
               galmodtype=None, layout="zyx", support=None, threads=None):
         """The model of the rings (convolved with the beam if smoothing is on) in the box
         [blo, bhi) of the cube (default: the whole cube), as a float64 array (nz, ny, nx),
@@ -1181,8 +1184,7 @@ class DiskModel:
 
         final=True: the model of a set of rings, with the ring convention (ringmode,
         default self.ringmode) and THREADS threads. final=False: the rings are used as
-        they are (nodes) with one thread, as the models of single rings in the fits;
-        modsoFar (an array (ny, nx, nz) of the box) is added before the convolution.
+        they are (nodes) with one thread, as the models of single rings in the fits.
         seed: seed of the Monte Carlo model (default ISEED). galmodtype: MC or ANALYTIC
         (default that of the setup). support: see Galfit._support_args."""
         if blo is None or bhi is None:
@@ -1195,22 +1197,27 @@ class DiskModel:
                                return_unit=want)
         if want:
             mod, unit = mod
-        if modsoFar is not None and not final:
-            mod += modsoFar
         if want:
             support.extend([mod if self.conv is not None else mod.copy(), unit])
         if self.conv is not None:
-            if final or modsoFar is not None:
-                # Dense model: batched FFT convolution
-                m = self.conv(mod.transpose(2, 0, 1), workers=nth)
-                m[m < 1.E-12] = 0.
-                if self.scalefactor != 1:
-                    m *= self.scalefactor
-                return np.ascontiguousarray(m) if layout == "zyx" else np.ascontiguousarray(m.transpose(1, 2, 0))
+            if final:
+                return self.convolve(mod, layout, nth)
             mod = _conv_sparse(mod, self.cfield, float(self.scalefactor))
         if layout == "zyx":
             return np.ascontiguousarray(mod.transpose(2, 0, 1))
         return mod
+
+    def convolve(self, mod, layout="zyx", workers=1):
+        """A dense non-convolved model (ny, nx, nz) convolved with the beam (batched FFT; values below 1E-12
+        set to zero, then the flux scaling), as an array (nz, ny, nx), or (ny, nx, nz) with layout='yxz'.
+        Without smoothing, the model itself (a copy)."""
+        if self.conv is None:
+            return np.ascontiguousarray(mod.transpose(2, 0, 1) if layout == "zyx" else mod.copy())
+        m = self.conv(mod.transpose(2, 0, 1), workers=workers)
+        m[m < 1.E-12] = 0.
+        if self.scalefactor != 1:
+            m *= self.scalefactor
+        return np.ascontiguousarray(m) if layout == "zyx" else np.ascontiguousarray(m.transpose(1, 2, 0))
 
     def _ring_weights(self, rings, ringmode):
         """Weights of the densities of the rings in the sub-rings of the model (the densities
