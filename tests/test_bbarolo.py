@@ -1673,6 +1673,41 @@ def test_rings_defaults_and_ranges():
     assert _lround(np.nan) < -1e15 and _lround(np.inf) < -1e15 and _lround(2.5) == 3 and _lround(-2.5) == -3
 
 
+def test_radii_range():
+    """RADII range(Rmin,Rmax,step) gives Rmin, Rmin+step, ... up to Rmax included, like Rmin~Rmax:step, in a
+    parameter file (spaces allowed) and in Python; a range with Rmax < Rmin or step <= 0 is an input error that
+    names RADII (Rmin~Rmax:0 gave one ring), and GALWIND reads both forms (it ignored Rmin~Rmax:step and made
+    NLAYERS shells)."""
+    from bbarolo.rings import readRings
+    from bbarolo.header import Header
+    from bbarolo.params import ring_value_problem
+    from bbarolo.galwind import _radii
+    from bbarolo import GalMod
+    h = emptyfits([32, 32, 10], [-10. / 3600., 10. / 3600., 10.], beam=30. / 3600.)
+    hh = Header()
+    hh.fromAstropy(h.header)
+    rest = "\nXPOS 10\nYPOS 10\nVSYS 0\nVROT 100\nVDISP 10\nINC 60\nPA 30\nZ0 0\n"
+    for radii in ("range(0, 300, 30)", "RANGE(0,300,30)", "0~300:30", "range(0,310,30)"):
+        p = Param()
+        p.readParamString("RADII " + radii + rest)
+        r = readRings(p.gf, hh)
+        assert np.allclose(r.radii, np.arange(0, 301, 30)) and np.isclose(r.radsep, 30.), radii
+    p = Param()
+    p.readParamString("RADII range(0,1,0.1)" + rest)
+    assert readRings(p.gf, hh).nr == 11
+    kw = dict(xpos=16, ypos=16, vsys=0, vrot=100, vdisp=10, inc=60, pa=30, z0=0, dens=1, galmodtype="ANALYTIC",
+              norm="NONE", mask="NONE", verbose=False)
+    for bad in ("range(300,0,30)", "range(0,300,0)", "range(0,300,-30)", "0~300:0"):
+        assert "RADII" in ring_value_problem("RADII", bad), bad
+        with pytest.raises(bbarolo.BBaroloError, match="RADII"):
+            GalMod(h, radii=bad, **kw).run()
+    assert "range(Rmin,Rmax,step)" in ring_value_problem("RADII", "range(0,300)")
+    m1 = GalMod(h, radii="range(15,135,30)", **kw).run().model.data
+    assert np.array_equal(m1, GalMod(h, radii=[15, 45, 75, 105, 135], **kw).run().model.data) and m1.sum() > 0
+    assert np.allclose(_radii("range(0,140,35)"), [0, 35, 70, 105, 140]) and np.allclose(_radii("0~140:35"), _radii(
+        "range(0,140,35)")) and _radii("30") is None
+
+
 @needs_data
 def test_analytic_lorentzian_layer():
     """ANALYTIC models with a Lorentzian layer (LTYPE 4) keep only the part of the layer that can fall

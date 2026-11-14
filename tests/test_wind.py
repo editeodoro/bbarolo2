@@ -636,3 +636,16 @@ def test_bayesian_wind_blanks(tmp_path):
     assert not f._ok[:, :, :7].any()
     assert np.array_equal(f._ok[:, :, 7:], full._ok[:, :, 7:])
     assert abs(f.noiserms / full.noiserms - 1) < 0.05
+
+
+def test_windfit_radii_range():
+    """WINDFIT reads RADII given as range(Rmin,Rmax,step) or Rmin~Rmax:step (the latter was a ValueError)."""
+    from wind_mocks import mock_wind
+    from bbarolo import BayesianWind
+    hdu, tr = mock_wind(kind="clumps", seed=2, snr=15, shape=(24, 24, 20), pix=12., chan=25., beam=36.,
+                        truth=dict(xpos=11.5, ypos=11.5, conelen=110., radii=[55., 110.], vwind=200.), nclumps=40,
+                        clump=20.)
+    for rad in ("range(55,110,55)", "55~110:55"):
+        f = BayesianWind(hdu, xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, conelen=110, vwind=180,
+                         vdisp=20, radii=rad, verbose=False)
+        assert np.allclose(f._initial()["radii"], [55, 110]), rad

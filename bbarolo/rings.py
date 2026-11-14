@@ -103,6 +103,31 @@ def ringTokens(s):
     return str(s).replace(",", " ").split()
 
 
+_NUM = r"\s*([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s*"
+_RADII_RANGE = re.compile(r"range\s*\(" + _NUM + "," + _NUM + "," + _NUM + r"\)", re.I)
+_RADII_TILDE = re.compile(_NUM + "~" + _NUM + ":" + _NUM)
+
+
+def radiiRange(s):
+    """The radii of RADII given as range(Rmin,Rmax,step) or Rmin~Rmax:step (arcsec): Rmin, Rmin+step, ...
+    up to Rmax, included. None if s has another form; a BBaroloError if Rmax < Rmin or step <= 0."""
+    s = str(s).strip()
+    m = _RADII_RANGE.fullmatch(s)
+    form = "range(Rmin,Rmax,step)"
+    if m is None:
+        m = _RADII_TILDE.fullmatch(s)
+        form = "Rmin~Rmax:step"
+    if m is None:
+        return None
+    Rmin, Rmax, step = (float(x) for x in m.groups())
+    if Rmax < Rmin or not step > 0:
+        raise BBaroloError(f"RADII {s}: in {form}, Rmax must not be smaller than Rmin and step must be positive")
+    # a tolerance for steps such as 0.1, which are not exact in binary (C++ summed floats, and 0~1:0.1 gave
+    # 10 or 11 radii)
+    n = int(np.floor((Rmax - Rmin) / step + 1e-6)) + 1
+    return list(Rmin + np.arange(n) * step)
+
+
 def ringList(s):
     """The values of a ring parameter given as a list of numbers ('120 125 130' or '120,125,130':
     one value per ring), or None if s is a single value (or anything else)."""
@@ -188,18 +213,9 @@ def readRings(par, h, return_fromfile=False):
     radii_b = fr["radii"] is not None
 
     if not radii_b and str(par.RADII) != "-1":
-        s = ringTokens(par.RADII)
-        if len(s) == 1 and "~" in s[0] and ":" in s[0]:
-            f1, f2 = s[0].find("~"), s[0].find(":")
-            Rmin, Rmax, step = float(s[0][:f1]), float(s[0][f1 + 1:f2]), float(s[0][f2 + 1:])
-            if Rmin > Rmax or step < 0:
-                raise ValueError(' INPUT ERROR: RADII parameter format is "Rmin~Rmax:step".')
-            # Rmin, Rmin+step, ... up to Rmax included (a tolerance for steps such as 0.1, which
-            # are not exact in binary: C++ sums floats, and 0~1:0.1 gave 10 or 11 radii)
-            n = int(np.floor((Rmax - Rmin) / step + 1e-6)) + 1 if step > 0 else 1
-            fr["radii"] = list(Rmin + np.arange(n) * step)
-        else:
-            fr["radii"] = [float(x) for x in s]
+        fr["radii"] = radiiRange(par.RADII)
+        if fr["radii"] is None:
+            fr["radii"] = [float(x) for x in ringTokens(par.RADII)]
         radii_b = len(fr["radii"]) > 0
 
     sizes = [len(v) for v in fr.values() if v is not None and len(v) > 0]

@@ -46,7 +46,7 @@ The parameters of the rings (`RADII`, `VROT`, `VDISP`, `INC`, `PA`, `Z0`, `DENS`
 | a list | `VDISP 12 11 10 9 8` (commas are also accepted) | one value per ring |
 | a column of a text file | `VROT file(curve.txt,2)` | column 2 of `curve.txt`, counted from 1 |
 | rows of a column | `VROT file(curve.txt,2,3:5)` | rows 3 to 5 (`3` alone: from row 3 to the end) |
-| a range of radii | `RADII 15~135:30` | `RADII` only: from 15 to 135 arcsec in steps of 30 |
+| a range of radii | `RADII range(15,135,30)` or `RADII 15~135:30` | `RADII` only: from 15 to 135 arcsec (included) in steps of 30 |
 | a position on the sky | `XPOS 07h36m51s`, `YPOS +65d35m20s` | `XPOS` and `YPOS` only: both are needed |
 
 In `file(...)` the rows are the lines of the file, counted from 1, and the lines without a number in that

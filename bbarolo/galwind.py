@@ -32,7 +32,7 @@ import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 
 from .galmod import GalmodSetup, _galmod_wind, _seed, _sum_chunks
-from .rings import Rings, ringList
+from .rings import Rings, ringList, radiiRange
 from .smooth import Smooth3D
 from .moments import MomentMap
 from .pvslice import PositionVelocity
@@ -46,6 +46,12 @@ def _column(s):
     per cylinder or shell, separated by spaces or commas), else None."""
     s = str(s)
     return getDataColumn(s) if "file(" in s.lower() else ringList(s)
+
+
+def _radii(s):
+    """The radii of the shells (RADII): a file column, a list, range(Rmin,Rmax,step) or Rmin~Rmax:step; else None."""
+    r = radiiRange(s)
+    return r if r is not None else _column(s)
 
 
 def _values(name, s, n):
@@ -132,7 +138,7 @@ class GalWind:
         from .bbutils import DeltaVel
         c, par = self.cin, self.par
         x0, y0 = self._center()
-        Radii = _column(par.RADII)
+        Radii = _radii(par.RADII)
         if Radii is not None:
             radii = np.asarray(Radii, float)
         else:
@@ -253,7 +259,7 @@ class GalWind:
         par = self.par
         PA, inc, Vsys = float(par.PHI), float(par.INC), float(par.VSYS)
         x0, y0 = self._center()
-        Radii = _column(par.RADII)
+        Radii = _radii(par.RADII)
         nr = int(par.NLAYERS)
         radsep = par.CONELEN / nr
         if Radii is not None:

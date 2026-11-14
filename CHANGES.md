@@ -7,6 +7,9 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **RADII given as Rmin~Rmax:step in GALWIND and WINDFIT**: GALWIND ignored it (it made NLAYERS shells) and
+  WINDFIT stopped with a ValueError; both now use those radii. A step of 0 (C++: an endless loop; the port: one
+  ring) and Rmax < Rmin are input errors that name RADII, reported by the check of the parameters. **(C++)**
 - **macOS: the fits with THREADS > 1 hung (BAYESIANSLITFIT, and any Bayesian fit whose likelihood has a large
   matrix-vector product).** numpy on macOS uses Apple's Accelerate, whose threads (GCD) do not survive a fork: the
   parent ran a threaded product during the setup (the ring maps of the slit), and the forked workers crashed
@@ -415,6 +418,9 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **RADII as `range(Rmin,Rmax,step)`**: Rmin, Rmin+step, ... up to Rmax, included (the same radii as
+  `Rmin~Rmax:step`), in every task that reads RADII (3DFIT, GALMOD, 2DFIT, ELLPROF, SPACEPAR, SLITFIT, WINDFIT,
+  GALWIND), in parameter files, on the command line and in Python (`radii="range(15,135,30)"`).
 - **BAYESIANSLITFIT: the kinematics of a long-slit spectrum, in a Bayesian framework.** A new task (and the class
   `bbarolo.BayesianSlitFit`) that fits a GALMOD disk to a 2D slit (position x wavelength, frequency or velocity):
   the model is built on a thin grid around the slit with its pixels and channels, in the frame of the slit

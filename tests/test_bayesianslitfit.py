@@ -388,3 +388,12 @@ def test_slit_keywords():
     assert slit_freepar("VROT VDISP_SINGLE VSYS_SINGLE XPOS") == ["vrot", "vdisp_single", "vsys", "xpos"]
     with pytest.raises(ValueError, match="fixed"):
         slit_freepar("VROT INC")
+
+
+def test_slit_radii_range(mock_slit):
+    """SLITFIT reads RADII given as range(Rmin,Rmax,step), like Rmin~Rmax:step: Rmax included."""
+    fname, R = mock_slit
+    for rad in ("range(0.6,3.6,1)", "0.6~3.6:1"):
+        f = _fit(fname, radii=rad)
+        f._load()
+        assert np.allclose(f.initial["radii"], [0.6, 1.6, 2.6, 3.6]), rad

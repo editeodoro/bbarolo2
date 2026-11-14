@@ -373,7 +373,7 @@ KEYWORDS = [
     # ---------------------------------------------------------------- rings (GALMOD/3DFIT/GALWIND)
     K("NRADII", "int", _g(G2, "NRADII"), RING + SLIT, "Number of radii"),
     K("RADII", "str", _g(G3, "RADII"), RING + WIND + SLIT,
-      "Radii for rings (arcsec): list of values, Rmin~Rmax:step or file()"),
+      "Radii for rings (arcsec): list of values, range(Rmin,Rmax,step), Rmin~Rmax:step or file()"),
     K("RADSEP", "float", _g(G2, "RADSEP"), RING + SLIT, "Separation between radii (arcsec)"),
     K("VROT", "str", _g(G3, "VROT"), RING + WIND + SLIT, "Rotation velocity (km/s)"),
     K("VRAD", "str", _g(G2, "VRAD"), RING + SLIT, "Radial velocity (km/s)"),

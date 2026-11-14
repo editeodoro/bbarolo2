@@ -333,7 +333,7 @@ class BayesianWind(Task):
     def _initial(self):
         """The initial wind from the parameters (as GALWIND): a dict of the scalars (pixels, km/s, degrees, arcsec) and
         the shells (radii, vwind, vdisp, vrot)."""
-        from ..rings import ringList, getDataColumn as _gdc
+        from ..rings import ringList, radiiRange, getDataColumn as _gdc
         c = self._cube_obj if self._cube_obj is not None else self._load_cube()
         gw = self._par.gw
 
@@ -362,7 +362,8 @@ class BayesianWind(Task):
         radii = None
         rs = str(gw.RADII).strip()
         if rs not in ("", "-1"):
-            radii = values("RADII", rs)
+            radii = radiiRange(rs)
+            radii = values("RADII", rs) if radii is None else np.asarray(radii)
         else:
             n = (int(gw.NLAYERS) if "NLAYERS" in self._params
                  else max(1, min(15, int(round(ini["conelen"] / self._beam)))))

@@ -349,7 +349,7 @@ class BayesianSlitFit(Task):
         RADII every seeing FWHM out to the farthest emission (RADSEP and NRADII if given). Sets self.initial (a dict)
         and the rings _fit0 (a _RingDict)."""
         from .rings import _RingDict
-        from ..rings import Rings, ringTokens
+        from ..rings import Rings, radiiRange
         par, prep = self._par, self.prep
         gf = par.gf
         L = prep.lines
@@ -392,16 +392,11 @@ class BayesianSlitFit(Task):
         R = np.abs(s) * q
         cphi = np.sign(s) * math.cos(d) / q
         # the rings
-        radii = _ring_values(gf.RADII)
-        if isinstance(radii, float) or (radii is None and str(gf.RADII).strip() not in ("", "-1")):
-            tok = ringTokens(gf.RADII)
-            if len(tok) == 1 and "~" in tok[0] and ":" in tok[0]:
-                a, rest_ = tok[0].split("~")
-                b, st = rest_.split(":")
-                a, b, st = float(a), float(b), float(st)
-                radii = list(a + np.arange(int(np.floor((b - a) / st + 1e-6)) + 1) * st)
-            else:
-                radii = [float(radii)]
+        radii = radiiRange(gf.RADII)
+        if radii is None:
+            radii = _ring_values(gf.RADII)
+            if isinstance(radii, float):
+                radii = [radii]
         if radii is None:
             sep = gf.RADSEP if gf.RADSEP > 0 else self._beam
             if gf.NRADII > 0:

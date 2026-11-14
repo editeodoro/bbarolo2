@@ -92,22 +92,28 @@ def unknown_keyword(name):
 
 def ring_value_problem(key, value):
     """None if value is acceptable for the ring parameter key (RADII, VROT, XPOS, ...), otherwise a
-    message: a number, one number per ring, file(name,col) or, for RADII, Rmin~Rmax:step; for XPOS and
-    YPOS also a WCS value (123.4d, 07:36:51, 07h36m51s)."""
+    message: a number, one number per ring, file(name,col) or, for RADII, range(Rmin,Rmax,step) or
+    Rmin~Rmax:step; for XPOS and YPOS also a WCS value (123.4d, 07:36:51, 07h36m51s)."""
     import re
+    from .rings import radiiRange
+    from .bbutils import BBaroloError
     v = str(value).strip()
     if v in ("", "-1") or "file(" in v.lower():
         return None
+    if key == "RADII":
+        try:
+            if radiiRange(v) is not None:
+                return None
+        except BBaroloError as e:
+            return str(e)
     toks = v.replace(",", " ").split()
-    if key == "RADII" and len(toks) == 1 and re.fullmatch(_NUM + "~" + _NUM + ":" + _NUM, toks[0]):
-        return None
     ok = re.compile(_NUM + "$")
     wcs = re.compile(r"[+-]?[\d.:]+(d|deg|h)?([\d.]+m)?([\d.]+s)?$|[+-]?\d+[hd]\d*m?[\d.]*s?$")
     for t in toks:
         if ok.match(t) or (key in ("XPOS", "YPOS") and wcs.match(t.lower())):
             continue
         return (f"{key}={v!r} is not valid: give a number, one number per ring, file(name,column)"
-                + (" or Rmin~Rmax:step" if key == "RADII" else "")
+                + (", range(Rmin,Rmax,step) or Rmin~Rmax:step" if key == "RADII" else "")
                 + (", or a WCS position (e.g. 123.4d, 07:36:51, 07h36m51s)" if key in ("XPOS", "YPOS") else ""))
     return None
 

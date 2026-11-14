@@ -824,8 +824,9 @@ of rings from the extent of the emission (see `GUESSTYPE`). GALMOD and ELLPROF n
         doc="""\
 The radii of the rings (arcsec), in increasing order, as an alternative to `NRADII` and `RADSEP`. It can
 be a list of values separated by spaces or commas (`30 60 90 120`; in Python, a list or an array);
-`Rmin~Rmax:step`, e.g. `60~180:60` for 60, 120 and 180 arcsec (up to Rmax, included); or a column of a text
-file, `file(name,column)` or `file(name,column,rows)` (see `VROT`).
+`range(Rmin,Rmax,step)` or `Rmin~Rmax:step`, e.g. `range(60,180,60)` or `60~180:60` for 60, 120 and 180 arcsec
+(up to Rmax, included; step must be positive); or a column of a text file, `file(name,column)` or
+`file(name,column,rows)` (see `VROT`).
 
 The separation of the rings is then the mean difference between consecutive radii (`RADSEP` is
 ignored, except with a single radius R, where it is `RADSEP` if given, otherwise R/2). In the fits,
