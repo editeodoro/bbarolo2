@@ -7,6 +7,12 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **METHOD GLOBAL with RADMAX free stopped with "array must not contain infs or NaNs"** (HD142527 with
+  L-BFGS-B). At the lower bound of the default prior of RADMAX (the last radius minus one beam) the exterior annulus
+  of the deconvolved density profile lies on the last ring, and the smoothness prior of the profile divided by their
+  zero distance: the likelihood was NaN there. L-BFGS-B evaluates at the bounds (Powell and the samplers hardly
+  ever do). Radii that coincide are now 1e-6 of their extent apart, which gives the limit of the likelihood, continuous
+  there; nothing changes elsewhere.
 - **RADII given as Rmin~Rmax:step in GALWIND and WINDFIT**: GALWIND ignored it (it made NLAYERS shells) and
   WINDFIT stopped with a ValueError; both now use those radii. A step of 0 (C++: an endless loop; the port: one
   ring) and Rmax < Rmin are input errors that name RADII, reported by the check of the parameters. **(C++)**

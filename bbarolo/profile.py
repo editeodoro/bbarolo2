@@ -57,15 +57,20 @@ def profile_system(model, rings, box, data_map, rms_map, ok_map, beam_arcsec=Non
 
 def solve_profile(A, b, radii, smooth=0.1):
     """Non-negative least-squares solution of A dens = b (all the columns, including the exterior
-    annulus), with the smoothness prior of weight smooth on the profile at the radii."""
+    annulus), with the smoothness prior of weight smooth on the profile at the radii. Two radii that
+    coincide (the exterior annulus on the last ring: RADMAX one beam inside it, the lower bound of its
+    prior) are taken 1e-6 of the extent of the radii apart: the limit of the solution, which is
+    continuous there (it was NaN)."""
     from scipy.optimize import nnls
     n = A.shape[1]
     alpha = float(smooth or 0.)
     if alpha > 0 and n >= 3:
         R = np.asarray(radii, float)
+        tiny = 1e-6 * max(float(np.ptp(R)), 1e-300)
         L = np.zeros((n - 2, n))
         for i in range(1, n - 1):                   # second differences (any spacing)
             d1, d2 = R[i] - R[i - 1], R[i + 1] - R[i]
+            d1, d2 = (tiny if abs(d) < tiny else d for d in (d1, d2))
             L[i - 1, i - 1:i + 2] = np.array([1. / d1, -1. / d1 - 1. / d2, 1. / d2]) * 2. / (d1 + d2)
         L *= math.sqrt(alpha * np.sum(A * A) / max(np.sum(L * L), 1e-300))
         A, b = np.vstack([A, L]), np.r_[b, np.zeros(n - 2)]

@@ -2460,6 +2460,26 @@ def test_bayesian_geometry_model_error(tmp_path):
     assert g.freepar_names == ['inc', 'fracerr'] and np.all(np.isfinite(g.params))
 
 
+def test_bayesian_radmax_lower_bound(tmp_path):
+    """RADMAX at the lower bound of its prior (the last radius - one beam) puts the exterior annulus of the
+    deconvolved density profile on the last ring: the smoothness prior divided by their zero distance and the
+    likelihood was NaN (METHOD GLOBAL with L-BFGS-B, which evaluates at the bounds, stopped with 'array must not
+    contain infs or NaNs'). Now the limit, which is continuous."""
+    from bbarolo.profile import solve_profile
+    rng = np.random.default_rng(1)
+    A, b = rng.random((50, 4)), rng.random(50)
+    lim = solve_profile(A, b, [1., 2., 3., 3. + 1e-9])
+    assert np.all(np.isfinite(solve_profile(A, b, [1., 2., 3., 3.]))) and np.allclose(
+        solve_profile(A, b, [1., 2., 3., 3.]), lim)
+    assert np.array_equal(solve_profile(A, b, [1., 2., 3., 4.5]), solve_profile(A, b, [1., 2., 3., 4.5]))
+    f = _bayes_mock(tmp_path)
+    f._setup(['vrot_single', 'radmax'])
+    lo = f.prior_distr['radmax'].ppf(0.)
+    assert lo == 110.
+    L = [f._log_likelihood(np.array([150., e])) for e in (lo, lo + 1e-7, lo + 1e-4)]
+    assert np.all(np.isfinite(L)) and abs(L[0] - L[1]) < 1e-3 and abs(L[0] - L[2]) < 0.05
+
+
 def test_bayesian_radmax_edge(tmp_path):
     """RADMAX as the outer edge of the disk (like_kwargs radmax='edge', the default, or 'taper'): the
     rings do not move, the model has no emission beyond the edge (also with the deconvolved density
