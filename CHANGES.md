@@ -7,6 +7,8 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **The PV plots of a cube with blanks (NaN) had an empty grey scale**: its top was `np.percentile` of the data,
+  NaN with any blank. The plot functions (and so the plot scripts) now use `np.nanpercentile`.
 - **METHOD GLOBAL with RADMAX free stopped with "array must not contain infs or NaNs"** (HD142527 with
   L-BFGS-B). At the lower bound of the default prior of RADMAX (the last radius minus one beam) the exterior annulus
   of the deconvolved density profile lies on the last ring, and the smoothness prior of the profile divided by their

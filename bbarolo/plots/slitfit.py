@@ -59,8 +59,8 @@ def plot_slit_pv(data, model, resid, *, offsets, spec, specunit="", curves=(), p
     ds = spec[1] - spec[0] if spec.size > 1 else 1.
     ext = [offsets[0] - dx / 2, offsets[-1] + dx / 2, spec[0] - ds / 2, spec[-1] + ds / 2]
     fin = data[np.isfinite(data)]
-    norm = ImageNormalize(vmin=max(cont / 3., np.percentile(fin, 1) if fin.size else 0.),
-                          vmax=np.percentile(fin, 99.8) if fin.size else 1., stretch=PowerStretch(0.5))
+    norm = ImageNormalize(vmin=max(cont / 3., np.nanpercentile(fin, 1) if fin.size else 0.),
+                          vmax=np.nanpercentile(fin, 99.8) if fin.size else 1., stretch=PowerStretch(0.5))
     cpt, crc = "#00C853", "gold"                                # (the measured velocities, the rings)
     with mpl.rc_context(style):
         fig = plt.figure(FigureClass=StyledFigure, style=style, figsize=(16, 6.5), dpi=150)

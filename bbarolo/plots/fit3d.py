@@ -388,7 +388,7 @@ def plot_pvs(data, model, rings, mom0, mom1, mask=None, *, box, cont, pixscale, 
         s, x, y = build_path(x0, y0, rads / cdeltsp, theta, xsize, ysize)
         pv_data = extract_pv(data, x, y, order=0)
         pv_mod = extract_pv(data_mod, x, y)
-        norm = ImageNormalize(vmin=cont, vmax=np.percentile(data, 99.8), stretch=PowerStretch(0.5))
+        norm = ImageNormalize(vmin=cont, vmax=np.nanpercentile(data, 99.8), stretch=PowerStretch(0.5))
 
         s_arcsec = s * cdeltsp
         ext = [s_arcsec[0], s_arcsec[-1], zmin_wcs - vsys_m, zmax_wcs - vsys_m]

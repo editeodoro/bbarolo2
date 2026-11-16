@@ -4889,3 +4889,25 @@ def test_bayesian_plots_in_memory(tmp_path):
     assert sorted(os.listdir(tmp_path / "bbb")) == sorted(os.path.basename(x) for x in files) == \
         ["MOCK_chanmaps_none.pdf", "MOCK_maps_none.pdf", "MOCK_parameters.pdf", "MOCK_pv_none.pdf",
          "MOCK_pvslices_none.pdf"]
+
+
+def test_plot_pvs_blanked_cube():
+    """The grey scale of the PV slices of a cube with blanks (NaN): its top is the 99.8th percentile of the
+    valid pixels (np.percentile gave NaN, and an empty grey scale)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from bbarolo.plots import fit3d
+    nz, ny, nx = 20, 40, 40
+    z, y, x = np.mgrid[:nz, :ny, :nx]
+    data = np.exp(-((x - 20.) ** 2 + (y - 20.) ** 2) / 50. - (z - 10. - 0.2 * (x - 20.)) ** 2 / 8.)
+    data[:, :3] = np.nan                                         # blanked rows
+    rings = {k: np.full(4, v) for k, v in dict(vrot=50., inc=60., pa=90., xpos=20., ypos=20., vsys=0.).items()}
+    rings["rad"] = np.array([5., 10., 15., 20.])
+    mom0 = np.nansum(data, axis=0)
+    mom1 = np.nansum(data * (z - 10.), axis=0) / np.where(mom0 > 0, mom0, 1.)
+    fig = fit3d.plot_pvs(data, 0.9 * data, rings, mom0, mom1, box=(0, nx - 1, 0, ny - 1, 0, nz - 1), cont=0.05,
+                         pixscale=1., vrange=(-50., 50.))
+    vmax = fig.axes[0].images[0].norm.vmax
+    assert np.isfinite(vmax) and vmax == np.nanpercentile(data, 99.8)
+    plt.close(fig)
