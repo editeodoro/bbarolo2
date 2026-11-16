@@ -456,7 +456,10 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   given that overlap, a NOTE, and zero likelihood where Z0THICK < Z0); FTHICK above 1 has zero likelihood. With
   FTHICK free the model keeps two layers also at FTHICK 0 (`Rings.twolayer`), so the likelihood is continuous
   there. Errors when the layer cannot be identified (Z0THICK or VDISPTHICK free without a thick layer, a thick
-  layer without Z0THICK). The outputs have the three with their errors after the other vertical columns
+  layer without Z0THICK). `Z0THICK Z0` (`z0thick="z0"`) ties the scale height of the thick layer to Z0 in every
+  ring, also when Z0 is fitted (two layers at the same heights, with different dispersion and lag): no ordering,
+  the priors of Z0 unchanged, and the outputs give Z0THICK = Z0 with the errors of Z0, as VDISPTHICK not given
+  has those of VDISP. The outputs have the three with their errors after the other vertical columns
   (`Z0THICK(arcs)`, `FTHICK`, `VDISPTHICK(km/s)` in `<prefix>_rings_final1.txt`, read back by RINGFILE and the
   plotting scripts; columns of `Result.rings`; rows of `<prefix>_parameters.pdf`, taller with more than 5 rows,
   and of `plot_profiles()`). The region of the likelihood and the flux check reach 3 times the upper end of the

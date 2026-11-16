@@ -755,7 +755,8 @@ class GalmodSetup:
         empty: rings.empty, or EMPTY if that is None.
         With a thick layer (rings.thick()) the sub-rings are twice as many: the thin layer, with the column
         density dens (1 - fthick), scale height z0 and no lag (dvdz 0), then the thick layer, with dens fthick,
-        z0thick, vdispthick (vdisp if negative) and the lag; fthick, z0thick and vdispthick are interpolated as the
+        z0thick (z0 if negative), vdispthick (vdisp if negative) and the lag; fthick, z0thick and vdispthick are
+        interpolated as the
         other values. The kernels take each sub-ring on its own, so the model is the sum of the two layers.
         Returns (sr array (14,nsub), nv array)."""
         nr = rings.nr
@@ -774,8 +775,6 @@ class GalmodSetup:
             raise ValueError("GALMOD ERROR: Negative scale height not allowed.")
         thick = rings.thick() if hasattr(rings, "thick") else False
         if thick:
-            if np.any(np.asarray(rings.z0thick) < 0):
-                raise ValueError("GALMOD ERROR: Negative scale height of the thick layer (Z0THICK) not allowed.")
             if np.any((np.asarray(rings.fthick) < 0) | (np.asarray(rings.fthick) > 1)):
                 raise ValueError("GALMOD ERROR: The fraction of gas in the thick layer (FTHICK) must be 0 to 1.")
         # values in internal units: radius(arcmin) handled separately
@@ -789,7 +788,7 @@ class GalmodSetup:
         if thick:                       # (rows 14-16 of the sub-rings: fthick, z0thick, vdispthick)
             vdt = np.asarray(rings.vdispthick, float)
             vdt = np.where(vdt >= 0, vdt, np.asarray(rings.vdisp, float))
-            V = np.vstack([V, np.asarray(rings.fthick, float), np.asarray(rings.z0thick, float) / 60.,
+            V = np.vstack([V, np.asarray(rings.fthick, float), rings.thick_z0() / 60.,
                            vdt * 1000.])
         # sub-ring radii, emulating the float accumulation of the C++ code
         f32 = np.float32

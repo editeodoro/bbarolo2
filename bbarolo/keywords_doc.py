@@ -935,7 +935,9 @@ The scale height (arcsec) of the thick layer of the disk, with the same `LTYPE` 
 thick layer has its own velocity dispersion `VDISPTHICK`, and the lag (`DVDZ`, `ZCYL`) is that of the thick
 layer only: the thin layer rotates at `VROT` at all heights. Without a thick layer (`FTHICK` 0) the lag is
 that of the only layer, as before. One value, one value per ring or `file(name,column)` (see `VROT`); 0 if
-not given, and not negative. The models of GALMOD, 3DFIT and SPACEPAR use the value given.
+not given, and not negative. `Z0THICK Z0` (in Python `z0thick="z0"`) gives the thick layer the scale height
+`Z0` of the thin one in every ring, also when `Z0` is fitted: the two layers then differ only in velocity
+dispersion and lag. The models of GALMOD, 3DFIT and SPACEPAR use the value given.
 
 3DFIT with `METHOD` GLOBAL or BAYESIAN fits Z0THICK, `FTHICK` and `VDISPTHICK` when `FREE` includes them (e.g.
 `FREE VROT VDISP_SINGLE Z0THICK_SINGLE FTHICK_SINGLE VDISPTHICK_SINGLE DVDZ_SINGLE`), and writes them with

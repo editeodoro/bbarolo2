@@ -382,6 +382,9 @@ class OutputsMixin(object):
         if a not in PARAMS or a == 'radii':
             raise ValueError(f"ring_errors: unknown ring parameter {param!r}.")
         nr = self.outri.nr
+        from ..galfit import TIED
+        if a in TIED and not self._free(a) and np.all(np.asarray(self.outri.r[a], float) < 0):
+            return self.ring_errors(TIED[a])        # (Z0THICK Z0, VDISPTHICK not given: the errors of Z0, VDISP)
         if a in self.freepar_idx:
             q = self.quantiles[:, self.freepar_idx[a]]
             lo, hi = q[1] - q[0], q[2] - q[1]
@@ -406,6 +409,7 @@ class OutputsMixin(object):
         PA, Z0, XPOS, YPOS, VSYS and, in a fourth row, the vertical motions when they are fitted or not zero
         (VVERT, DVDZ, ZCYL; see _vertical_params) """
         import matplotlib.pyplot as plt
+        from ..galfit import TIED
         if not self.modCalculated:
             print("Sampler has not been run yet. Please run run() before running this function "
                   "or load samples with load_results().")
@@ -435,8 +439,8 @@ class OutputsMixin(object):
         for i, a in enumerate(toplot):
             err_low, err_up = self.ring_errors(a)
             y = np.asarray(rings[a], float)
-            if a == 'vdispthick':                       # (not given: VDISP)
-                y = np.where(y >= 0, y, np.asarray(rings['vdisp'], float))
+            if a in TIED:                               # (VDISPTHICK not given, Z0THICK Z0: VDISP, Z0)
+                y = np.where(y >= 0, y, np.asarray(rings[TIED[a]], float))
             ax[i].errorbar(rings['radii'], y, yerr=[np.asarray(err_low), np.asarray(err_up)], fmt='o',
                            **{'c': '#B22222', 'ecolor': '#B22222', **kwargs})
             ax[i].set_ylabel(labels[i])

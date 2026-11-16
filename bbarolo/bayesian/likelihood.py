@@ -536,8 +536,9 @@ class LikelihoodMixin(object):
             return True
         if self._free('fthick') and np.any(rings.r['fthick'] > 1):
             return True
+        z0t = rings.r['z0thick']                    # (negative: tied to Z0, the same height)
         return bool((self._free('z0') or self._free('z0thick')) and self._thick()
-                    and np.any(rings.r['z0thick'] < rings.r['z0']))
+                    and np.any((z0t >= 0) & (z0t < rings.r['z0'])))
 
     def _log_likelihood(self, theta, **kwargs):
         """ Log-likelihood of the parameters theta.

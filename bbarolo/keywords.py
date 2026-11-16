@@ -382,7 +382,7 @@ KEYWORDS = [
     K("VVERT", "str", _g(G2, "VVERT"), MOD, "Vertical velocity (km/s)"),
     K("DVDZ", "str", _g(G2, "DVDZ"), MOD, "Vertical gradient of rotation velocity (km/s/arcs)"),
     K("ZCYL", "str", _g(G2, "ZCYL"), MOD, "Height where the gradient begins (arcs)"),
-    K("Z0THICK", "str", _g(G2, "Z0THICK"), MOD, "Scale height of the thick layer (arcsec)"),
+    K("Z0THICK", "str", _g(G2, "Z0THICK"), MOD, "Scale height of the thick layer (arcsec; Z0: that of the thin one)"),
     K("FTHICK", "str", _g(G2, "FTHICK"), MOD, "Fraction of the column density in the thick layer (0-1)"),
     K("VDISPTHICK", "str", _g(G2, "VDISPTHICK"), MOD, "Velocity dispersion of the thick layer (km/s; default VDISP)"),
     K("VDISP", "str", _g(G3, "VDISP"), MOD + WIND + SLIT, "Velocity dispersion (km/s)"),

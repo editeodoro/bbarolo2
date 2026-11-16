@@ -476,14 +476,14 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         default priors of Z0 and Z0THICK do not overlap, so that the layers cannot swap: Z0 0 to half a beam FWHM,
         Z0THICK from the top of the range of Z0 (the upper end of its prior if free, its largest value otherwise) to
         3 beams above it. A NOTE if the priors given overlap (the likelihood is zero where the thick layer is the
-        thinner, see _negative). """
+        thinner, see _negative). With Z0THICK tied to Z0 (Z0THICK Z0) the priors do not change. """
         from ..bbutils import arcsconv
         thick = self._thick()
         if self._inri.twolayer != (True if thick else None):
             self._inri.twolayer = True if thick else None
             self._inri.make_object()
-        if not thick:
-            return
+        if not thick or (not self._free('z0thick') and np.all(np.asarray(self._inri.r['z0thick'], float) < 0)):
+            return                                  # (Z0THICK Z0: one scale height, the priors of Z0 as without it)
         h = self._cube_obj.Head() if self._cube_obj is not None else self._load_cube().Head()
         beam = abs(h.Bmaj()) * arcsconv(h.Cunit(0))
         dflt = self._default_pri
@@ -513,9 +513,12 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             if self._free(name) and not layer:
                 raise BBaroloError(f"{self.taskname}: {name.upper()} is free, but FTHICK is 0 and not free: there is "
                                    "no thick layer. Give FTHICK > 0, or make it free (e.g. FREE ... FTHICK_SINGLE).")
-        if layer and not (self._free('z0thick') or bool(np.any(np.asarray(r['z0thick'], float) > 0))):
-            raise BBaroloError(f"{self.taskname}: a thick layer (FTHICK) needs its scale height: give Z0THICK > 0, or "
-                               "make it free (e.g. FREE ... Z0THICK_SINGLE FTHICK_SINGLE).")
+        z0t = np.asarray(r['z0thick'], float)
+        z0given = self._free('z0') or bool(np.any(np.asarray(r['z0'], float) > 0))
+        if layer and not (self._free('z0thick') or bool(np.any(z0t > 0)) or (bool(np.any(z0t < 0)) and z0given)):
+            raise BBaroloError(f"{self.taskname}: a thick layer (FTHICK) needs its scale height: give Z0THICK > 0 (or "
+                               "Z0THICK Z0 with Z0 > 0 or free), or make it free (e.g. FREE ... Z0THICK_SINGLE "
+                               "FTHICK_SINGLE).")
         # (with a thick layer the lag is that of the thick layer, which has a thickness)
         thick = layer or self._free('z0') or bool(np.any(np.asarray(r['z0'], float) > 0))
         lag = self._free('dvdz') or bool(np.any(np.asarray(r['dvdz'], float) != 0))

@@ -21,7 +21,8 @@ class Rings:
     galmod.edge_weights. Used by Bayesian3DFIT for RADMAX.
 
     The thick layer: a fraction fthick (0-1) of the column density of each ring lies in a second layer of scale
-    height z0thick (arcsec) and velocity dispersion vdispthick (km/s; negative: vdisp), with the same LTYPE; the
+    height z0thick (arcsec; negative: z0, the keyword Z0THICK Z0) and velocity dispersion vdispthick (km/s;
+    negative: vdisp), with the same LTYPE; the
     lag (dvdz, zcyl) is then that of the thick layer only (the thin layer rotates at vrot at all heights). Without
     a thick layer (fthick 0 in all the rings) the lag is that of the single layer. twolayer (default None: a thick
     layer if fthick > 0 in some ring) sets it: True keeps the two layers also where fthick is 0 (a fit of fthick,
@@ -98,7 +99,7 @@ class Rings:
              f"    DVDZ   = {self.dvdz[n]:8.2f}  km/s/arcs\n")
         if self.thick():
             vdt = self.vdispthick[n] if self.vdispthick[n] >= 0 else self.vdisp[n]
-            s += (f"    Z0THICK= {self.z0thick[n]:8.2f}  arcs          FTHICK = {self.fthick[n]:7.3f}\n"
+            s += (f"    Z0THICK= {self.thick_z0()[n]:8.2f}  arcs          FTHICK = {self.fthick[n]:7.3f}\n"
                   f"    VDISPTHICK = {vdt:6.2f}  km/s\n")
         if stream is None:
             print(s, end="")
@@ -120,13 +121,20 @@ class Rings:
         tl = getattr(self, "twolayer", None)
         return bool(tl) if tl is not None else bool(np.any(np.asarray(self.fthick, float) > 0))
 
+    def thick_z0(self):
+        """The scale height (arcsec) of the thick layer in each ring: z0thick, or z0 where z0thick is negative (tied
+        to Z0: the keyword Z0THICK Z0)."""
+        z = np.asarray(self.z0thick, float)
+        return np.where(z >= 0, z, np.asarray(self.z0, float))
+
     def layer_height(self):
-        """The scale height (arcsec) of the thicker layer of each ring: z0, or z0thick where it is larger and the
-        thick layer holds some gas (the model extends to about 3 times this above the plane)."""
+        """The scale height (arcsec) of the thicker layer of each ring: z0, or that of the thick layer (thick_z0)
+        where it is larger and the thick layer holds some gas (the model extends to about 3 times this above the
+        plane)."""
         z0 = np.asarray(self.z0, float)
         if not self.thick():
             return z0
-        return np.where(np.asarray(self.fthick, float) > 0, np.maximum(z0, np.asarray(self.z0thick, float)), z0)
+        return np.where(np.asarray(self.fthick, float) > 0, np.maximum(z0, self.thick_z0()), z0)
 
 
 def ringTokens(s):
@@ -229,15 +237,22 @@ def check_ring_column(pkey, val):
     raise BBaroloError(f"{name} {val}: {what}; {name} is column {cols[pkey]}")
 
 
+def z0thick_tied(value):
+    """True if the value of Z0THICK is Z0 (case-insensitive): the thick layer has the scale height Z0 of the thin
+    one in every ring, also when Z0 is fitted (Z0THICK -1 in the rings)."""
+    return str(value).strip().upper() == "Z0"
+
+
 def readRings(par, h, return_fromfile=False):
     """Build a Rings object from a GALFIT/GALMOD parameter structure (port of readRings)."""
     fr = {}
+    tie_z0 = z0thick_tied(getattr(par, "Z0THICK", "-1"))        # (Z0THICK Z0: the thick layer has Z0)
     for key, pkey in (("radii", "RADII"), ("xpos", "XPOS"), ("ypos", "YPOS"), ("vsys", "VSYS"),
                       ("vrot", "VROT"), ("vrad", "VRAD"), ("vvert", "VVERT"), ("dvdz", "DVDZ"),
                       ("zcyl", "ZCYL"), ("vdisp", "VDISP"), ("z0", "Z0"), ("dens", "DENS"),
                       ("inc", "INC"), ("phi", "PHI"), ("z0thick", "Z0THICK"), ("fthick", "FTHICK"),
                       ("vdispthick", "VDISPTHICK")):
-        val = str(getattr(par, pkey))
+        val = str(getattr(par, pkey)) if not (key == "z0thick" and tie_z0) else "-1"
         if "file(" in val.lower():
             check_ring_column(pkey, val)
         fr[key] = getDataColumn(val) if "file(" in val.lower() else None
@@ -246,7 +261,7 @@ def readRings(par, h, return_fromfile=False):
                       ("vvert", "VVERT"), ("dvdz", "DVDZ"), ("zcyl", "ZCYL"), ("vdisp", "VDISP"), ("z0", "Z0"),
                       ("dens", "DENS"), ("inc", "INC"), ("phi", "PHI"), ("z0thick", "Z0THICK"), ("fthick", "FTHICK"),
                       ("vdispthick", "VDISPTHICK")):
-        if fr[key] is None:
+        if fr[key] is None and not (key == "z0thick" and tie_z0):
             fr[key] = ringList(getattr(par, pkey))      # one value per ring
     radii_b = fr["radii"] is not None
 
@@ -271,7 +286,8 @@ def readRings(par, h, return_fromfile=False):
     defaults = dict(vsys=pval(par.VSYS, 0), vrot=pval(par.VROT, 0), vrad=pval(par.VRAD, 0),
                     vvert=pval(par.VVERT, 0), dvdz=pval(par.DVDZ, 0), zcyl=pval(par.ZCYL, 0),
                     vdisp=pval(par.VDISP, 0), z0=pval(par.Z0, 0), dens=pval(par.DENS, 1),
-                    inc=pval(par.INC, 0), phi=pval(par.PHI, 0), z0thick=pval(par.Z0THICK, 0),
+                    inc=pval(par.INC, 0), phi=pval(par.PHI, 0),
+                    z0thick=-1. if tie_z0 else pval(par.Z0THICK, 0),
                     fthick=pval(par.FTHICK, 0), vdispthick=pval(par.VDISPTHICK, -1))
     xpos = ypos = 0.
     if str(par.XPOS) != "-1" and str(par.YPOS) != "-1":

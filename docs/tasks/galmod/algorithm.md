@@ -169,7 +169,8 @@ weighted with the fraction of the layer around it (below). $z_0 = 0$ gives a dis
 in two layers with the same profile (LTYPE): the thin one, with the surface density $(1 - f_{\rm t})\,\Sigma$,
 the scale height $z_0$, the dispersion $\sigma_{\rm gas}$ and no lag, and the thick one, with $f_{\rm t}\,\Sigma$,
 $z_{0,\rm t}$ ({ref}`Z0THICK <par-galmod-z0thick>`), $\sigma_{\rm t}$ ({ref}`VDISPTHICK <par-galmod-vdispthick>`;
-$\sigma_{\rm gas}$ if not given) and the lag ($\partial V/\partial z$, $z_{\rm cyl}$). The density is then
+$\sigma_{\rm gas}$ if not given) and the lag ($\partial V/\partial z$, $z_{\rm cyl}$); `Z0THICK Z0` gives it
+$z_{0,\rm t} = z_0$ in every ring. The density is then
 
 $$
 \rho(z) = (1 - f_{\rm t})\,\frac{\Sigma}{z_0}\,\ell\!\left(\frac{z}{z_0}\right)

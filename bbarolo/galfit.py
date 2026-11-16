@@ -1608,11 +1608,16 @@ VERTICAL_COLUMNS = {"vvert": ("VVERT(km/s)", "E_VVERT", "km/s", ".3f"),
                     "vdispthick": ("VDISPTHICK(km/s)", "E_VDISPTHICK", "km/s", ".3f")}
 
 
+# the parameters of the thick layer that follow those of the thin one when negative (not given, or Z0THICK Z0)
+TIED = {"z0thick": "z0", "vdispthick": "vdisp"}
+
+
 def vertical_values(r, name):
-    """The values of the column name of VERTICAL_COLUMNS in the rings r: VDISPTHICK not given (negative) is VDISP."""
+    """The values of the column name of VERTICAL_COLUMNS in the rings r: VDISPTHICK not given (negative) is VDISP,
+    Z0THICK tied to Z0 (negative) is Z0."""
     v = np.asarray(getattr(r, name), float)
-    if name == "vdispthick":
-        v = np.where(v >= 0, v, np.asarray(r.vdisp, float))
+    if name in TIED:
+        v = np.where(v >= 0, v, np.asarray(getattr(r, TIED[name]), float))
     return v
 
 

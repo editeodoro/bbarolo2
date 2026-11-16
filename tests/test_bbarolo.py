@@ -1380,9 +1380,13 @@ def test_galmod_thick_layer(synthetic_cube):
     # the box: 3 Z0THICK above the last radius + half a ring
     blo, bhi = m.box(_thick_rings(z0thick=60.))
     assert bhi[0] - blo[0] > blo[0] and m.box(_thick_rings(fthick=0., z0thick=60.)) != (blo, bhi)
-    for kw, msg in ((dict(fthick=1.5), "FTHICK"), (dict(z0thick=-1.), "Z0THICK")):
-        with pytest.raises((ValueError, BBaroloError), match=msg):
-            m.array(_thick_rings(**kw), *full)
+    with pytest.raises((ValueError, BBaroloError), match="FTHICK"):
+        m.array(_thick_rings(fthick=1.5), *full)
+    # Z0THICK tied to Z0 (negative, the keyword Z0THICK Z0): the scale height Z0 of each ring
+    r = _thick_rings(z0=np.linspace(3., 8., 5), z0thick=-1.)
+    assert np.allclose(r.thick_z0(), r.z0) and np.allclose(r.layer_height(), r.z0)
+    a = m.array(r, *full)
+    assert np.abs(a - m.array(_thick_rings(z0=r.z0, z0thick=r.z0), *full)).max() < 1e-9 * a.max()
 
 
 def test_galmod_thick_layer_keywords(tmp_path):
@@ -1406,6 +1410,16 @@ def test_galmod_thick_layer_keywords(tmp_path):
     p.readParamFile(str(par))
     r = readRings(p.gm if hasattr(p, "gm") else p.gf, Cube(str(tmp_path / "t.fits"), par=p).Head())
     assert list(r.z0thick) == [30.] * 3 and list(r.fthick) == [.1, .2, .3] and list(r.vdispthick) == [-1.] * 3
+    # Z0THICK Z0: the thick layer has the scale height Z0 (z0thick -1 in the rings), in parameter files and in Python
+    par.write_text(par.read_text().replace("Z0THICK 30", "Z0THICK z0"))
+    p = Param()
+    p.readParamFile(str(par))
+    r = readRings(p.gm, Cube(str(tmp_path / "t.fits"), par=p).Head())
+    assert list(r.z0thick) == [-1.] * 3 and list(r.thick_z0()) == [4.] * 3
+    kw2 = dict(kw, fthick=0.3)
+    a = np.asarray(GalMod(tmpl, **kw2, z0thick="Z0").run().model.data, float)
+    b = np.asarray(GalMod(tmpl, **kw2, z0thick=4.).run().model.data, float)
+    assert np.abs(a - b).max() < 1e-9 * b.max()
 
 
 def test_bayesian_lag_identifiable(tmp_path):
@@ -1540,6 +1554,20 @@ def test_bayesian_thick_layer_setup(tmp_path, capsys):
     h._setup(["vdisp_single"])
     rings = h._update_rings(h._fit0.copy(), np.array([13.]))
     assert np.all(rings.object.vdispthick == -1.) and np.all(rings.object.vdisp == 13.)
+    # Z0THICK Z0: the thick layer follows the free Z0 (no ordering, the priors of Z0 unchanged); its outputs are
+    # those of Z0, with its errors; it needs Z0 > 0 or free
+    with pytest.raises(BBaroloError, match="needs its scale height"):
+        Bayesian3DFIT(fn, **prm, z0=0, z0thick="z0", fthick=0.3)._setup(["vrot_single"])
+    t = Bayesian3DFIT(fn, **prm, z0=4, z0thick="z0", fthick=0.3)
+    t._setup(["z0_single"])
+    assert t.priors["z0"] == dict(name="uniform", loc=0., scale=20.) and np.all(t._inri.r["z0thick"] == -1.)
+    assert np.isfinite(t._log_likelihood(np.array([15.])))
+    t.optimize(["z0_single"], verbose=False)
+    assert "z0thick" in t._vertical_params()
+    for a, b in zip(t.ring_errors("z0thick"), t.ring_errors("z0")):
+        assert np.all(a == b) and np.all(b > 0)
+    from bbarolo.galfit import vertical_values
+    assert np.allclose(vertical_values(t.outri.object, "z0thick"), t.outri.r["z0"])
 
 
 def test_fit_method(tmp_path, capsys):

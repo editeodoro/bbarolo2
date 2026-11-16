@@ -106,7 +106,10 @@ thick, lagging one. All three can be free, as any ring parameter (e.g. `FREE VRO
 FTHICK_SINGLE VDISPTHICK_SINGLE DVDZ_SINGLE`). There is a thick layer when FTHICK is free or above 0 in some ring;
 the model then keeps both layers for any FTHICK, 0 included, so that the likelihood is continuous at FTHICK = 0
 (a model of one lagging layer there would jump). Z0THICK or VDISPTHICK free without a thick layer, or a thick
-layer without Z0THICK (> 0 or free), stop the fit with an error. The two layers must not swap: the default priors
+layer without Z0THICK (> 0, free, or `Z0THICK Z0`), stop the fit with an error. `Z0THICK Z0` ties the scale height
+of the thick layer to Z0, also when Z0 is free: the two layers then differ only in VDISPTHICK and the lag, the
+priors of Z0 do not change, and the outputs give Z0THICK = Z0 with the errors of Z0 (as VDISPTHICK not given
+has the value and errors of VDISP). Otherwise the two layers must not swap: the default priors
 of Z0 and Z0THICK do not overlap (Z0 0 to half a beam, Z0THICK from the top of the range of Z0 to 3 beams above
 it), and with priors that do (a NOTE is printed) the likelihood is zero where Z0THICK < Z0. FTHICK above 1 has
 zero likelihood. On a mock at INC 87° (thin layer Z0 4" with no lag; thick layer with 30% of the gas, Z0THICK

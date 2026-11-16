@@ -98,7 +98,7 @@ def ring_value_problem(key, value):
     from .rings import radiiRange
     from .bbutils import BBaroloError
     v = str(value).strip()
-    if v in ("", "-1") or "file(" in v.lower():
+    if v in ("", "-1") or "file(" in v.lower() or (key == "Z0THICK" and v.upper() == "Z0"):
         return None
     if key == "RADII":
         try:
