@@ -504,11 +504,12 @@ class LikelihoodMixin(object):
             nvox = getattr(self, 'nvox', 1)
         return 0.5 * ss + 0.5 * nvox * np.log(2. * np.pi * s2) + 0.5 * lg
 
-    # Ring parameters that cannot be negative
-    _POSITIVE = ('vrot', 'vdisp', 'inc', 'xpos', 'ypos', 'z0', 'dens')
+    # Ring parameters that cannot be negative (ZCYL: a lag that begins below the plane would be a lag in the plane
+    # too, the same as a lower VROT)
+    _POSITIVE = ('vrot', 'vdisp', 'inc', 'xpos', 'ypos', 'z0', 'dens', 'zcyl')
 
     def _negative(self, rings, theta):
-        """ True if RADMAX, or a value in the rings of a free VROT, VDISP, INC, XPOS, YPOS, Z0 or DENS
+        """ True if RADMAX, or a value in the rings of a free VROT, VDISP, INC, XPOS, YPOS, Z0, DENS or ZCYL
         (per ring, single or function of radius), is negative: the likelihood is then zero. The
         parameters of a function of radius may be negative (e.g. the slope of VDISP). """
         if 'radmax' in self.freepar_idx and theta[self.freepar_idx['radmax'][0]] < 0:

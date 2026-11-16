@@ -249,12 +249,14 @@ def initialRingsText(inr):
     return s
 
 
-def ring_table(r, mpar=None, errors=None, fitok=None, extra=None):
+def ring_table(r, mpar=None, errors=None, fitok=None, extra=None, vertical=None):
     """The rings r (a Rings object) as an astropy Table at full precision, with the columns of the ring files
     (rings_final1.txt, ...): radii (arcsec), vrot, vdisp (km/s), inc, pa (deg), z0 (arcsec), dens, xpos, ypos
     (pixels), vsys, vrad (km/s); with errors (array nr x 2 x number of free parameters, the free parameters
-    mpar), the lower (negative) and upper errors e_<name>1, e_<name>2 of the free parameters; with fitok, a
-    column fitok (False for the rings whose fit failed); extra: {name: values} as more columns."""
+    mpar), the lower (negative) and upper errors e_<name>1, e_<name>2 of the free parameters; vertical: {name:
+    errors (nr x 2)} of the vertical motions vvert (km/s), dvdz (km/s/arcsec), zcyl (arcsec), as the columns
+    <name>, e_<name>1, e_<name>2 (METHOD GLOBAL and BAYESIAN, see VERTICAL_COLUMNS); with fitok, a column fitok
+    (False for the rings whose fit failed); extra: {name: values} as more columns."""
     from astropy.table import Table
     import astropy.units as u
     kms, arcs = u.km / u.s, u.arcsec
@@ -278,6 +280,13 @@ def ring_table(r, mpar=None, errors=None, fitok=None, extra=None):
                     if unit is not None:
                         t[f"e_{name}{j + 1}"].unit = unit
                 kk += 1
+    for name, e in (vertical or {}).items():
+        unit = u.Unit(VERTICAL_COLUMNS[name][2])
+        t[name] = np.asarray(getattr(r, name), float)[:n]
+        t[name].unit = unit
+        for j in (0, 1):
+            t[f"e_{name}{j + 1}"] = np.asarray(e, float)[:n, j]
+            t[f"e_{name}{j + 1}"].unit = unit
     if fitok is not None:
         t["fitok"] = np.asarray(fitok, bool)[:n]
     for name, v in (extra or {}).items():
@@ -288,8 +297,9 @@ def ring_table(r, mpar=None, errors=None, fitok=None, extra=None):
 def ringfile_values(par):
     """RINGFILE: the ring parameters that are not given (par, a GalfitPar, changed in place)
     are read from the columns of a BBarolo ring file (e.g. rings_final1.txt), found by their names in
-    the header (files of bbarolo2 and of C++ BBarolo, whose columns differ); a file without a header
-    must have the columns of the ring files of C++ BBarolo."""
+    the header (files of bbarolo2 and of C++ BBarolo, whose columns differ; VVERT, DVDZ and ZCYL when the file has
+    them, the files of METHOD GLOBAL and BAYESIAN that fitted them); a file without a header must have the columns
+    of the ring files of C++ BBarolo."""
     if not par.ringfile:
         return
     rf = par.ringfile
@@ -298,7 +308,7 @@ def ringfile_values(par):
         cols = dict(RADII=2, VROT=3, VDISP=4, INC=5, PHI=6, Z0=8, DENS=9, XPOS=10, YPOS=11, VSYS=12, VRAD=13)
     if par.RADII == "-1" and (par.NRADII == -1 or par.RADSEP == -1) and "RADII" in cols:
         par.RADII = f"file({rf},{cols['RADII']})"
-    for k in ("VROT", "VDISP", "INC", "PHI", "Z0", "DENS", "XPOS", "YPOS", "VSYS", "VRAD"):
+    for k in ("VROT", "VDISP", "INC", "PHI", "Z0", "DENS", "XPOS", "YPOS", "VSYS", "VRAD", "VVERT", "DVDZ", "ZCYL"):
         if getattr(par, k) == "-1" and k in cols:
             setattr(par, k, f"file({rf},{cols[k]})")
 
@@ -1515,17 +1525,19 @@ class Galfit:
     # ------------------------------------------------------------------
     # Outputs
     # ------------------------------------------------------------------
-    def writeRingFile(self, filename, r, errors=None, extra=None):
+    def writeRingFile(self, filename, r, errors=None, extra=None, vertical=None):
         """<prefix>_<filename> in the output folder: the rings r (and the errors of the free parameters).
         extra: {NAME: integer value of each ring}, written as the last columns (e.g. INDISK of
-        Bayesian3DFIT)."""
+        Bayesian3DFIT); vertical: {name: errors (nrings x 2)} of the vertical motions written after the
+        errors (VERTICAL_COLUMNS: VVERT, DVDZ, ZCYL with their errors, METHOD GLOBAL and BAYESIAN)."""
         fileo = self.cin.pars().outFolder + self.cin.pars().outPrefix + "_" + filename
         extra = extra or {}
+        vertical = vertical or {}
         with open(fileo, "w") as fout:
-            writeHeader(fout, self.mpar, self.par.flagERRORS, False, extra=list(extra))
+            writeHeader(fout, self.mpar, self.par.flagERRORS, False, extra=list(extra), vertical=list(vertical))
             for i in range(r.nr):
                 writeRing(fout, r, i, self.nfree, self.par.flagERRORS and errors is not None, errors, False, False,
-                          extra=[v[i] for v in extra.values()])
+                          extra=[v[i] for v in extra.values()], vertical=vertical)
 
     def showInitial(self, inr, stream, pp=None):
         stream.write(initialParametersText(inr, getattr(self, "_estimated", {})))
@@ -1576,9 +1588,15 @@ class Galfit:
 RING_COLUMNS = ("RAD(arcs)", "VROT(km/s)", "DISP(km/s)", "INC(deg)", "P.A.(deg)", "Z0(arcs)", "DENS(un)",
                 "XPOS(pix)", "YPOS(pix)", "VSYS(km/s)", "VRAD(km/s)")
 NCOLS = len(RING_COLUMNS)
+# The vertical motions (METHOD GLOBAL and BAYESIAN, when they are fitted or not zero: see
+# Bayesian3DFIT._vertical_params), each followed by its lower (negative) and upper errors, after the errors of the
+# other free parameters: {name: (column, name of the error columns without 1 or 2, unit of ring_table, format)}.
+VERTICAL_COLUMNS = {"vvert": ("VVERT(km/s)", "E_VVERT", "km/s", ".3f"),
+                    "dvdz": ("DVDZ(km/s/arcs)", "E_DVDZ", "km/(s arcsec)", ".4f"),
+                    "zcyl": ("ZCYL(arcs)", "E_ZCYL", "arcsec", ".3f")}
 
 
-def writeHeader(fout, mpar, writeErrors, writeBadRings, extra=()):
+def writeHeader(fout, mpar, writeErrors, writeBadRings, extra=(), vertical=()):
     m = 10
     s = (f"{'#RAD(arcs)':<{m + 1}}{'VROT(km/s)':<{m + 1}}{'DISP(km/s)':<{m + 1}}{'INC(deg)':<{m}}"
          f"{'P.A.(deg)':<{m}}{'Z0(arcs)':<{m}}{'DENS(un)':<{m}}{'XPOS(pix)':<{m}}{'YPOS(pix)':<{m}}"
@@ -1588,6 +1606,9 @@ def writeHeader(fout, mpar, writeErrors, writeBadRings, extra=()):
         for i, nm in enumerate(names):
             if mpar[i]:
                 s += f"{'E_' + nm + '1':<{m}}{'E_' + nm + '2':<{m}}"
+    for k in vertical:
+        col, err = VERTICAL_COLUMNS[k][:2]
+        s += f"{col:<{max(m, len(col) + 1)}}{err + '1':<{m}}{err + '2':<{m}}"
     if writeBadRings:
         s += f"{'FITOK':<{m}}"
     for nm in extra:
@@ -1595,7 +1616,9 @@ def writeHeader(fout, mpar, writeErrors, writeBadRings, extra=()):
     fout.write(s + "\n")
 
 
-def writeRing(fout, r, i, nfree, writeErrors, errors, writeBadRings, fitOK, extra=()):
+def writeRing(fout, r, i, nfree, writeErrors, errors, writeBadRings, fitOK, extra=(), vertical=None):
+    """One ring of a ring file (see writeHeader). vertical: {name: errors (nrings x 2, lower negative, upper)} of the
+    vertical motions written (VERTICAL_COLUMNS)."""
     m = 10
     s = (f"{r.radii[i]:<{m + 1}.3f}{r.vrot[i]:<{m + 1}.3f}{r.vdisp[i]:<{m + 1}.3f}"
          f"{r.inc[i]:<{m}.3f}{r.phi[i]:<{m}.3f}{r.z0[i]:<{m}.3f}"
@@ -1603,6 +1626,10 @@ def writeRing(fout, r, i, nfree, writeErrors, errors, writeBadRings, fitOK, extr
     if writeErrors:
         for kk in range(nfree):
             s += f"{errors[i][0][kk]:<{m}.3f}{errors[i][1][kk]:<{m}.3f}"
+    for k, e in (vertical or {}).items():
+        col, _, _, fmt = VERTICAL_COLUMNS[k]
+        s += (f"{float(getattr(r, k)[i]):<{max(m, len(col) + 1)}{fmt}}{float(e[i][0]):<{m}{fmt}}"
+              f"{float(e[i][1]):<{m}{fmt}}")
     if writeBadRings:
         s += f"{int(fitOK):<{m}d}"
     for v in extra:

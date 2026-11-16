@@ -1220,6 +1220,104 @@ def test_bayesian_optimise_task(tmp_path, capsys):
     assert "(METHOD GLOBAL)" in repr(r) and len(r.samples) == 1 and r.samples.colnames == r.fitter.freepar_names
 
 
+def _lag_cube(tmp_path, dvdz=1.5, zcyl=0., z0=15., inc=87., snr=20., seed=5):
+    """A nearly edge-on thick disk whose rotation lags with height: VROT 150 km/s (flat) in the plane, VROT - DVDZ (|z|
+    - ZCYL) above ZCYL, VDISP 10 km/s, Z0 0.75 beam (beam 20", 5 rings of one beam, PA 40, centre 22,22); returns the
+    file and the radii."""
+    from astropy.io import fits
+    from bbarolo import GalMod
+    n, beam, pix, dv = 45, 20., 6., 8.
+    tmpl = emptyfits([n, n, 48], [-pix / 3600., pix / 3600., dv], beam=beam / 3600., bunit="JY/BEAM", obj="LAG")
+    rs = np.arange(1, 6) * 20.
+    gm = GalMod(tmpl, radii=rs, xpos=22, ypos=22, vsys=0., vrot=150., vdisp=10., z0=z0, dvdz=dvdz, zcyl=zcyl, inc=inc,
+                pa=40., dens=np.exp(-rs / 60.), norm="NONE", mask="NONE", galmodtype="ANALYTIC", threads=1,
+                verbose=False)
+    clean = gm.run().model
+    noisy = gm.diskmodel.addnoise(clean.data, float(clean.data.max()) / snr, seed=seed)
+    fn = str(tmp_path / "lag.fits")
+    fits.PrimaryHDU(data=noisy, header=tmpl.header).writeto(fn, overwrite=True)
+    return fn, rs
+
+
+def test_bayesian_lag_global(tmp_path):
+    """3DFIT with METHOD GLOBAL fits the lag of a thick disk, DVDZ and ZCYL in FREE: on a nearly edge-on mock (INC 87,
+    given) whose rotation drops by 1.5 km/s per arcsec above the plane (ZCYL 0), VROT, VDISP, Z0, DVDZ and ZCYL are
+    recovered within 3 sigma, and the lag is detected. The outputs have DVDZ and ZCYL with their errors: Result.rings,
+    <prefix>_rings_final1.txt (read back by the plots and by RINGFILE), the plot of the parameters (one more row, Z0,
+    DVDZ and ZCYL). The default priors: DVDZ 0 to 2 x VROT per beam, ZCYL 0 to one beam. (Before, DVDZ and ZCYL were
+    fitted but in none of the outputs.)"""
+    import astropy.units as u
+    from bbarolo import FitMod3D
+    from bbarolo.galfit import ringfile_values
+    from bbarolo.params import GalfitPar
+    from bbarolo.bbutils import getDataColumn
+    from bbarolo.plots.fit3d import read_rings
+    fn, rs = _lag_cube(tmp_path)
+    out = tmp_path / "out"
+    r = FitMod3D(fn, radii=rs, xpos=22, ypos=22, vsys=0, vrot=120, vdisp=15, z0=10, inc=87, pa=40, mask="SEARCH",
+                 free="VROT VDISP_SINGLE Z0_SINGLE DVDZ_SINGLE ZCYL_SINGLE", method="GLOBAL", threads=4, plots=0,
+                 verbose=0, outfolder=str(out)).run()
+    f = r.fitter
+    assert f.priors["dvdz"] == dict(name="uniform", loc=0., scale=2. * 120. / 20.)
+    assert f.priors["zcyl"] == dict(name="uniform", loc=0., scale=20.)
+    t = r.rings
+    assert t["dvdz"].unit == u.km / u.s / u.arcsec and t["zcyl"].unit == u.arcsec
+    assert t["e_dvdz2"].unit == t["dvdz"].unit
+    for name, truth in (("vrot", 150.), ("vdisp", 10.), ("z0", 15.), ("dvdz", 1.5), ("zcyl", 0.)):
+        v, lo, hi = (np.asarray(t[c], float) for c in (name, f"e_{name}1", f"e_{name}2"))
+        err = np.where(v > truth, -lo, hi)
+        assert np.all(err > 0) and np.all(np.abs(v - truth) <= 3. * err), (name, v, lo, hi)
+    assert t["dvdz"][0] > 5. * -t["e_dvdz1"][0]                       # the lag is detected
+    assert "vvert" not in t.colnames
+    fig = r.plot_parameters()
+    assert len(fig.axes) == 12 and [a.get_ylabel() for a in fig.axes[9:]] == \
+        ["z$_0$ (arcsec)", r"dV$_\mathrm{rot}$/dz (km/s/arcsec)", r"z$_\mathrm{cyl}$ (arcsec)"]
+    # the ring file: the columns of DVDZ and ZCYL with their errors, after the other errors; read by the plotting
+    # scripts and by RINGFILE
+    r.write()
+    rf = str(out / "LAG_rings_final1.txt")
+    head = open(rf).readline().lstrip("#").split()
+    assert head[-6:] == ["DVDZ(km/s/arcs)", "E_DVDZ1", "E_DVDZ2", "ZCYL(arcs)", "E_ZCYL1", "E_ZCYL2"]
+    rr = read_rings(rf)
+    assert np.allclose(rr["dvdz"], t["dvdz"], atol=1e-4) and np.allclose(rr["err_zcyl"][1], t["e_zcyl2"], atol=1e-3)
+    par = GalfitPar()
+    par.ringfile = rf
+    ringfile_values(par)
+    assert np.allclose(getDataColumn(par.DVDZ), t["dvdz"], atol=1e-4) and np.allclose(getDataColumn(par.ZCYL),
+                                                                                     t["zcyl"], atol=1e-3)
+    assert par.VVERT == "-1"
+
+
+def test_bayesian_lag_identifiable(tmp_path):
+    """DVDZ and ZCYL free must change the model: DVDZ needs a thick disk (Z0 > 0 or Z0 free), ZCYL a lag (DVDZ free or
+    not zero); otherwise an error that names the parameters. ZCYL cannot be negative (a lag below the plane is a lower
+    VROT), and VVERT is in the outputs when it is free or not zero."""
+    from bbarolo.bayesian import Bayesian3DFIT
+    from bbarolo.bbutils import BBaroloError
+    fn, rs = _lag_cube(tmp_path, snr=50.)
+    prm = dict(radii=rs, xpos=22, ypos=22, vsys=0, vrot=150, vdisp=10, inc=87, pa=40, mask="SEARCH",
+               outfolder=str(tmp_path / "out"))
+    for kw, free, msg in ((dict(z0=0), ["vrot_single", "dvdz_single"], "DVDZ is free, but Z0 is 0 and not free"),
+                          (dict(z0=0, dvdz=1), ["zcyl_single"], "ZCYL is free, but Z0 is 0 and not free"),
+                          (dict(z0=15), ["vrot_single", "zcyl"], "ZCYL is free, but DVDZ is 0 and not free")):
+        f = Bayesian3DFIT(fn, **prm, **kw)
+        with pytest.raises(BBaroloError, match=msg):
+            f._setup(free)
+    for kw, free in ((dict(z0=0), ["dvdz_single", "z0_single"]), (dict(z0=15, dvdz=1), ["zcyl_single"]),
+                     (dict(z0=15), ["dvdz", "zcyl_single"])):
+        Bayesian3DFIT(fn, **prm, **kw)._setup(free)
+    f = Bayesian3DFIT(fn, **prm, z0=15, priors="ZCYL=(uniform,-5,10)")
+    f._setup(["dvdz_single", "zcyl_single"])
+    assert np.isfinite(f._log_likelihood(np.array([1.5, 0.]))) and f._log_likelihood(np.array([1.5, -1.])) == -np.inf
+    # VVERT free: in the outputs, alone (no DVDZ, ZCYL)
+    f = Bayesian3DFIT(fn, **prm, z0=15, dvdz=1.5)
+    f.optimize(["vvert_single"], verbose=False, errors=False)
+    assert f._vertical_params() == ["vvert", "dvdz", "zcyl"] and abs(f.outri.r["vvert"][0]) < 3.
+    f = Bayesian3DFIT(fn, **prm, z0=15)
+    f.optimize(["vvert_single"], verbose=False, errors=False)
+    assert f._vertical_params() == ["vvert"] and len(f.plot_parameters().axes) == 10
+
+
 def test_fit_method(tmp_path, capsys):
     """METHOD of the fits: CLASSIC (3DFIT), GLOBAL (WINDFIT, SLITFIT) by default, checked, one per run; the old tasks
     BAYESIAN3DFIT, BAYESIANWIND and BAYESIANSLITFIT are errors that name the new form; a keyword of another method

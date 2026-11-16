@@ -907,8 +907,10 @@ rotates at `VROT` − DVDZ·(|z| − `ZCYL`), so a positive value gives a thick 
 plane (it needs `Z0` > 0). One value, one value per ring or `file(name,column)` (see `VROT`); 0 if not
 given.
 
-3DFIT with `METHOD` GLOBAL or BAYESIAN fits it when `FREE` includes it; the models of 3DFIT and SPACEPAR use
-the value given, fixed. (2DFIT of BBarolo 1.8 read DVDZ as the angle around the minor axis left out of the
+3DFIT with `METHOD` GLOBAL or BAYESIAN fits it when `FREE` includes it (e.g. `FREE VROT VDISP Z0_SINGLE
+DVDZ_SINGLE`), with `Z0` free or > 0 (otherwise an error: the lag would have no effect), and writes it with
+its errors in the ring file, `Result.rings` and the plot of the parameters; the models of 3DFIT and SPACEPAR
+use the value given, fixed. (2DFIT of BBarolo 1.8 read DVDZ as the angle around the minor axis left out of the
 fit, now `FREEANGLE`.)"""),
     'ZCYL': dict(
         group='Rings',
@@ -916,10 +918,12 @@ fit, now `FREEANGLE`.)"""),
         doc="""\
 The height above the plane of the disk (arcsec) where the vertical gradient of rotation `DVDZ` begins:
 closer to the plane the gas rotates at `VROT`. One value, one value per ring or `file(name,column)` (see
-`VROT`); 0 if not given.
+`VROT`); 0 if not given, and not negative.
 
-3DFIT with `METHOD` GLOBAL or BAYESIAN fits it when `FREE` includes it; the models of 3DFIT and SPACEPAR use
-the value given, fixed."""),
+3DFIT with `METHOD` GLOBAL or BAYESIAN fits it when `FREE` includes it, with a lag (`DVDZ` free or not zero)
+in a thick disk (`Z0` free or > 0; otherwise an error); it is strongly correlated with `DVDZ` and `VROT`, and
+not constrained where `DVDZ` is consistent with zero. The models of 3DFIT and SPACEPAR use the value given,
+fixed."""),
     'VDISP': dict(
         group={'GALWIND': 'Wind', 'WINDFIT': 'Wind', '*': 'Rings'},
         default='8 km/s, or estimated with GUESSTYPE FIT (GALMOD, GALWIND: required)',
@@ -1159,7 +1163,8 @@ SPACEPAR does not use it.
 A ring file written by BBarolo, e.g. `<prefix>_rings_final1.txt`, `<prefix>_rings_final2.txt`,
 `<prefix>_rings_initial.txt` or `<prefix>_rings_model.txt` (also those of BBarolo 1.8), from which the
 ring parameters that are not given are read: the radii, `VROT`, `VDISP`, `INC`, `PA`, `Z0`, `DENS`,
-`XPOS`, `YPOS`, `VSYS` and `VRAD`. The parameters given take precedence; the radii are read unless
+`XPOS`, `YPOS`, `VSYS` and `VRAD`, and `VVERT`, `DVDZ` and `ZCYL` from the files of 3DFIT with `METHOD`
+GLOBAL or BAYESIAN that have them. The parameters given take precedence; the radii are read unless
 `RADII`, or both `NRADII` and `RADSEP`, are given.
 
 The columns are found by their names in the header of the file; a file without a header must have the
@@ -1598,7 +1603,8 @@ largest + w:
   `LIKEOPTS radmax=edge` or `taper` (the edge of the disk) up to the outer edge of the last ring (the last
   radius with `RINGMODE NODES`), beyond which the edge has no effect; with `radmax=ring` (the last ring
   moves) beyond the middle of the last two radii;
-- `VRAD` 0–50 km/s, `VVERT` 0–30 km/s, `ZCYL` 0–5 arcsec, `DVDZ` 0–2, `DENS` 0.1–200.1 (a flux per unit
+- `DVDZ` 0 to twice the largest initial VROT per beam FWHM (km/s/arcsec), `ZCYL` 0 to one beam FWHM;
+- `VRAD` 0–50 km/s, `VVERT` 0–30 km/s, `DENS` 0.1–200.1 (a flux per unit
   area: the flux units of the cube × km/s per arcsec², see `DENS`; give a prior suited to the units of the
   cube);
 - `SIGMA` log-uniform between 0.5 and 1000 times the noise rms, `FRACERR` log-uniform between 0.001 and 1;

@@ -16,11 +16,12 @@ _TABLE_COLUMNS = dict(rad="radii", disp="vdisp")
 
 def rings_dict(t):
     """The rings of a ring table (an astropy Table of a Result) as a dict like fit3d.read_rings: only the rings
-    fitted (column fitok), with the errors e_<name>1, e_<name>2 as err_<key>."""
+    fitted (column fitok), with the errors e_<name>1, e_<name>2 as err_<key>, and the vertical motions vvert,
+    dvdz, zcyl if the table has them (METHOD GLOBAL and BAYESIAN)."""
     if "fitok" in t.colnames:
         t = t[np.asarray(t["fitok"], bool)]
     out = {}
-    for k in fit3d.RING_KEYS:
+    for k in fit3d.RING_KEYS + tuple(c for c in fit3d.VERTICAL_KEYS if c in t.colnames):
         col = _TABLE_COLUMNS.get(k, k)
         out[k] = np.asarray(t[col], float)
         if f"e_{col}1" in t.colnames:
@@ -65,7 +66,7 @@ def from_bayes(f):
     def get(name):
         if name == "rings":
             mpar, errors = f._posterior_errors()
-            return ring_table(f.outri.object, mpar, errors)
+            return ring_table(f.outri.object, mpar, errors, vertical=f._vertical_errors())
         if name == "_model_outputs":
             return mo()
         if name == "_model_norm":

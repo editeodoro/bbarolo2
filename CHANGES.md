@@ -426,6 +426,19 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **3DFIT with METHOD GLOBAL or BAYESIAN fits the lag of a thick disk (DVDZ, ZCYL in FREE) and shows it.** FREE
+  accepted DVDZ and ZCYL (and VVERT) and the model used them, but none of the outputs did. Now the vertical motions
+  that are free or not zero are written after the error columns of `<prefix>_rings_final1.txt`, each with its lower
+  and upper errors (`VVERT(km/s)`, `DVDZ(km/s/arcs)`, `ZCYL(arcs)`; DVDZ and ZCYL together), are columns of
+  `Result.rings` (`vvert`, `dvdz`, `zcyl`, with `e_<name>1`, `e_<name>2`), have one more row in
+  `<prefix>_parameters.pdf` (Z0, DVDZ, ZCYL; VVERT) and in `plot_profiles()`, and are in `ring_errors()`. RINGFILE
+  reads VVERT, DVDZ and ZCYL from such a file (by the names of the columns). A fit whose lag cannot change the
+  model stops with an error that says why: DVDZ or ZCYL free with Z0 = 0 and not free, ZCYL free with DVDZ = 0 and
+  not free. ZCYL cannot be negative (L = 0, as for VROT and the others), and a fit whose DVDZ is consistent with zero
+  says that ZCYL is not constrained. On a mock at INC 87° (Z0 0.75 beam, DVDZ 1.5 km/s/arcsec from the plane, S/N
+  20, three noise realisations) GLOBAL recovers VROT, VDISP, Z0, DVDZ and ZCYL within 1 sigma, and detects the
+  lag at 9–13 sigma.
+
 - **SWEEPS and RINGREGION (3DFIT with REVERSE)**: the number of passes of REVERSE after the first (default 1), and
   the region of a ring in them, `STRIP` (the default) or `ANNULUS`. STRIP takes the pixels whose distance along the
   major axis falls within the ring, up to the height of the projected ring at its initial inclination plus three
@@ -694,6 +707,11 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   SPECRES is not given, as in C++.
 
 ### Changed
+
+- **The default priors of DVDZ and ZCYL (3DFIT with METHOD GLOBAL or BAYESIAN) follow the cube.** They were the
+  fixed 0–2 km/s/arcsec and 0–5 arcsec of the original module, which missed the lags of distant galaxies (15
+  km/s/kpc is 3.6 km/s/arcsec at 50 Mpc). Now DVDZ is 0 to twice the largest initial VROT per beam FWHM (a lag that
+  can stop the rotation within half a beam of the plane) and ZCYL 0 to one beam FWHM, as Z0.
 
 - **3DFIT REVERSE refits the rings from the outside in, each with the model of the whole disk.** C++ fitted the
   rings once, from the outermost inwards, each with the model of the rings already fitted outside it: the first

@@ -265,7 +265,7 @@ def _compute_bayesian(c, par):
     f = run_task(c, par)
     mpar, errors = f._posterior_errors()
     extra = None if f.disk_edge is None else {"indisk": np.asarray(f.in_disk, bool)}
-    out = Outputs(rings=ring_table(f.outri.object, mpar, errors, extra=extra))
+    out = Outputs(rings=ring_table(f.outri.object, mpar, errors, extra=extra, vertical=f._vertical_errors()))
     out["rotation_curve"] = _rotation_curve(out["rings"])
     out["rings_initial"] = ring_table(f._inri.object)
     # The best model and its outputs, computed when used (by the plots, e.g.); write() computes them again

@@ -328,13 +328,16 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
           VSYS    initial +- 5 channels, at least +- 20 km/s;
           VDISP   0 to 2 x the largest initial VDISP, at least 0-50 km/s;
           Z0      0 to one beam FWHM (arcsec);
+          DVDZ    0 to the upper end of VROT (2 x the largest initial VROT) per beam FWHM (km/s/arcsec): a lag
+                  that can stop the rotation within half a beam of the plane, whatever the distance and the
+                  resolution (the fixed 0-2 km/s/arcsec of the original module missed the lags of distant galaxies);
+          ZCYL    0 to one beam FWHM (arcsec), as Z0;
           RADMAX  the estimated outer radius (_radmax_guess, the last initial radius) - one beam FWHM to
                   + one beam FWHM, within the rings (see _prior_kwargs and _rings_for_radmax);
           VROT_P1 (the amplitude of the arctan curve) 1 km/s to 2 x the largest initial VROT.
-        The others do not depend on the rings: VRAD 0-50 km/s, VVERT 0-30 km/s, DVDZ 0-2 km/s/arcsec,
-        ZCYL 0-5 arcsec, DENS 0.1-200.1, SIGMA and FRACERR log-uniform (see _prior_kwargs), and those of
-        the functions of radius. A prior that was changed (in priors, or with PRIORS) is kept: only
-        those equal to the previous defaults (_default_pri) follow the rings. """
+        The others do not depend on the rings: VRAD 0-50 km/s, VVERT 0-30 km/s, DENS 0.1-200.1, SIGMA and
+        FRACERR log-uniform (see _prior_kwargs), and those of the functions of radius. A prior that was changed (in
+        priors, or with PRIORS) is kept: only those equal to the previous defaults (_default_pri) follow the rings. """
         from ..bbutils import DeltaVel, arcsconv
         rr = {k: np.asarray(v, dtype=float) for k, v in self._inri.r.items()}
         h = self._cube_obj.Head()
@@ -357,8 +360,8 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             inc=around(rr['inc'], 10., 0., 90.),                              # +- 10 degrees
             phi=around(np.degrees(np.unwrap(np.radians(rr['phi']))), 15.),    # +- 15 degrees
             vvert=dict(name='uniform', loc=0, scale=30),                      # 0-30 km/s
-            dvdz=dict(name='uniform', loc=0, scale=2),                        # 0-2 km/s/arcsec
-            zcyl=dict(name='uniform', loc=0, scale=5),                        # 0-5 arcsec
+            dvdz=dict(name='uniform', loc=0., scale=vtop / beam if beam > 0 else 2.),    # 0 - 2 x VROT per beam
+            zcyl=dict(name='uniform', loc=0., scale=beam),                    # 0 - 1 beam
             dens=dict(name='uniform', loc=0.1, scale=200),                    # 0.1-200.1 (flux units x km/s/arcsec2)
             z0=dict(name='uniform', loc=0., scale=beam),                     # 0 - 1 beam
             sigma=dict(name='loguniform', a=None, b=None),                    # None: 0.5 and 1000 x noise rms
@@ -405,6 +408,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         self._parse_freepar(freepar)
         if self._rings_for_radmax(kwargs.get('verbose', True)):
             self._parse_freepar(freepar)
+        self._check_vertical()
         self._setup_engine()
         self._setup_radmax()
         self._freeze_priors()
@@ -451,6 +455,29 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                         self.freepar_names.append(f'{s[0]}{i + 1}')
             else:
                 raise ValueError(f"ERROR! Cannot interpret free parameter '{pname}'.")
+
+    def _free(self, name):
+        """ True if the ring parameter name is free, in any form (per ring, _SINGLE, _FUNC). """
+        return any(k == name or k.startswith(name + '_p') for k in self.freepar_idx)
+
+    def _check_vertical(self):
+        """ The lag of a thick disk is identifiable: DVDZ (the vertical gradient of rotation) needs a layer with
+        a thickness, Z0 > 0 in some ring or Z0 free; ZCYL (the height where the gradient begins) needs a lag too,
+        DVDZ free or not zero. BBaroloError otherwise: the likelihood would not depend on them. (With Z0 or DVDZ
+        free, their priors may include 0, where DVDZ or ZCYL has no effect: a degeneracy of the posterior that the
+        data resolve, and that the errors show.) """
+        r = self._inri.r
+        thick = self._free('z0') or bool(np.any(np.asarray(r['z0'], float) > 0))
+        lag = self._free('dvdz') or bool(np.any(np.asarray(r['dvdz'], float) != 0))
+        for name in ('dvdz', 'zcyl'):
+            if self._free(name) and not thick:
+                raise BBaroloError(f"{self.taskname}: {name.upper()} is free, but Z0 is 0 and not free: the "
+                                   "rotation of a disk with no thickness does not depend on height. Give Z0 > 0, or "
+                                   "make it free (e.g. FREE ... Z0_SINGLE).")
+        if self._free('zcyl') and not lag:
+            raise BBaroloError(f"{self.taskname}: ZCYL is free, but DVDZ is 0 and not free: the height where the lag "
+                               "begins has no effect without a lag. Make DVDZ free too (e.g. FREE ... DVDZ_SINGLE "
+                               "ZCYL_SINGLE), or give DVDZ.")
 
     def _setup_engine(self):
         """ The 3DFIT engine (Galfit) of the cube with the initial rings, the data, the mask and the
@@ -859,6 +886,11 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         if self.useNorm and not self.useBBres:
             self._set_density(self.outri)
         self._galfit.outr = self.outri.object.copy()
+        if verbose and self._free('zcyl') and self._free('dvdz'):
+            dvdz, lo = np.asarray(self.outri.r['dvdz'], float), self.ring_errors('dvdz')[0]
+            if np.all(np.abs(dvdz) <= 2. * lo):
+                print("NOTE: DVDZ is consistent with 0 (no lag), so ZCYL, the height where the lag begins, is not "
+                      "constrained.")
         if self.deconvolved_profile_errors() is not None and verbose:
             dp = self.dens_profile
             print(f"Deconvolved density profile: errors from {dp['nsamples']} posterior samples (geometry) and "

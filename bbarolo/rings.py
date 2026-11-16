@@ -148,16 +148,19 @@ def firstValue(s):
 
 
 # The ring parameters in the columns of BBarolo ring files (rings_final1.txt, rings_initial.txt, ...,
-# of bbarolo2 and of C++), by the name of the column in the header. The other columns (RAD(Kpc) and
+# of bbarolo2 and of C++), by the name of the column in the header (VVERT, DVDZ and ZCYL only in the files of 3DFIT
+# with METHOD GLOBAL or BAYESIAN that fitted them, see galfit.VERTICAL_COLUMNS). The other columns (RAD(Kpc) and
 # Z0(pc) of the C++ files, the errors) hold none.
 _RING_FILE_NAMES = {"RAD(ARCS)": "RADII", "VROT(KM/S)": "VROT", "DISP(KM/S)": "VDISP", "INC(DEG)": "INC",
                     "P.A.(DEG)": "PHI", "Z0(ARCS)": "Z0", "DENS(UN)": "DENS", "SIG(E20)": "DENS",
-                    "XPOS(PIX)": "XPOS", "YPOS(PIX)": "YPOS", "VSYS(KM/S)": "VSYS", "VRAD(KM/S)": "VRAD"}
+                    "XPOS(PIX)": "XPOS", "YPOS(PIX)": "YPOS", "VSYS(KM/S)": "VSYS", "VRAD(KM/S)": "VRAD",
+                    "VVERT(KM/S)": "VVERT", "DVDZ(KM/S/ARCS)": "DVDZ", "ZCYL(ARCS)": "ZCYL"}
 
 
 def ring_file_columns(filename):
     """The columns (1-based) of the ring parameters in a BBarolo ring file, from its header: a dict
-    {parameter: column} (RADII, VROT, VDISP, INC, PHI, Z0, DENS, XPOS, YPOS, VSYS, VRAD) and the list of
+    {parameter: column} (RADII, VROT, VDISP, INC, PHI, Z0, DENS, XPOS, YPOS, VSYS, VRAD; VVERT, DVDZ, ZCYL)
+    and the list of
     the names of the columns; (None, None) if the file has no header of a ring file."""
     try:
         with open(os.path.expanduser(str(filename))) as f:

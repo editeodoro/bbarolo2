@@ -48,6 +48,8 @@ _IMPORTS = ("import os\n"
 # Galfit.getErrorColumns)
 RING_KEYS = ("rad", "vrot", "disp", "inc", "pa", "z0", "dens", "xpos", "ypos", "vsys", "vrad")
 PAR_KEYS = ("vrot", "disp", "dens", "z0", "inc", "pa", "xpos", "ypos", "vsys", "vrad")
+# the vertical motions, in the ring files of METHOD GLOBAL and BAYESIAN that fitted them (galfit.VERTICAL_COLUMNS)
+VERTICAL_KEYS = ("vvert", "dvdz", "zcyl")
 
 # the labels of the rows of the maps plot (MAPTYPE MOMENT, GAUSSIAN)
 MAPNAMES = (("MOMENT 0TH", "MOMENT 1ST", "MOMENT 2ND"), ("GAUSS INTENSITY", "GAUSS VELOCITY", "GAUSS DISPERSION"))
@@ -57,12 +59,22 @@ MAPNAMES = (("MOMENT 0TH", "MOMENT 1ST", "MOMENT 2ND"), ("GAUSS INTENSITY", "GAU
 def read_rings(fname, errcols=None):
     """The rings of a ring file of BBarolo (<prefix>_rings_final1.txt, ...) as a dict of arrays: rad (arcsec), vrot,
     disp (km/s), inc, pa (deg), z0 (arcsec), dens, xpos, ypos (pixels), vsys, vrad (km/s), the columns 0-10 of the
-    file. errcols: {name: column of its lower error} adds err_<name>, the lower (negative) and upper errors."""
+    file. errcols: {name: column of its lower error} adds err_<name>, the lower (negative) and upper errors. The
+    vertical motions of METHOD GLOBAL and BAYESIAN, vvert (km/s), dvdz (km/s/arcsec) and zcyl (arcsec), with their
+    errors, are read when the file has them, from the names of the columns in its header."""
     keys = ("rad", "vrot", "disp", "inc", "pa", "z0", "dens", "xpos", "ypos", "vsys", "vrad")
     t = np.genfromtxt(fname, ndmin=2)
     rings = {k: t[:, i] for i, k in enumerate(keys)}
     for k, c in (errcols or {}).items():
         rings["err_" + k] = np.array([t[:, c], t[:, c + 1]])
+    with open(fname) as f:
+        head = f.readline().lstrip("#").split()
+    for k, col in (("vvert", "VVERT(km/s)"), ("dvdz", "DVDZ(km/s/arcs)"), ("zcyl", "ZCYL(arcs)")):
+        if col in head:
+            rings[k] = t[:, head.index(col)]
+            e = "E_" + k.upper()
+            if e + "1" in head and e + "2" in head:
+                rings["err_" + k] = np.array([t[:, head.index(e + "1")], t[:, head.index(e + "2")]])
     return rings
 
 
@@ -101,7 +113,8 @@ def ring_errors(rings, key):
 def plot_parameters(rings, rings2=None, sdens=None, sdens_obs=None, sdens_label=None, faceon=False, radmax=None,
                     bunit="JY/BEAM * KM/S"):
     """The parameters of the rings against radius (<prefix>_parameters.pdf): VROT, VDISP, the surface density, INC,
-    XPOS, VRAD, PA, YPOS and VSYS, with their errors.
+    XPOS, VRAD, PA, YPOS and VSYS, with their errors, and in one more row the vertical motions of METHOD GLOBAL and
+    BAYESIAN when the rings have them (keys vvert, dvdz, zcyl): Z0, DVDZ and ZCYL (the lag of a thick disk), VVERT.
 
     rings: the rings of the first stage (as read_rings, with the errors err_<name>); rings2: those of the second
     stage (TWOSTAGE), drawn on top of the first, or None. sdens: the surface density profile (radii in arcsec,
@@ -123,6 +136,9 @@ def plot_parameters(rings, rings2=None, sdens=None, sdens_obs=None, sdens_label=
         max_rad = 1.1 * np.nanmax(r2["rad"])
         max_vrot, max_vdisp = np.maximum(max_vrot, np.nanmax(r2["vrot"])), np.maximum(max_vdisp, np.nanmax(r2["disp"]))
 
+    # the vertical motions (one more row, or two): Z0 with the lag (DVDZ, ZCYL), then VVERT
+    vert = (["z0", "dvdz", "zcyl"] if "dvdz" in rings or "zcyl" in rings else []) + \
+        (["vvert"] if "vvert" in rings else [])
     with mpl.rc_context(style):
         # Defining figure and axes
         fig = plt.figure(FigureClass=StyledFigure, style=style, figsize=(11, 11), dpi=150)
@@ -130,14 +146,17 @@ def plot_parameters(rings, rings2=None, sdens=None, sdens_obs=None, sdens_label=
         xlen, ylen = 0.27, 0.13
         x_sep, y_sep = 0.07, 0.015
         bottom_corner = [0.1, 0.7]
-        for i in range(nrows):
+        npanels = nrows * ncols + len(vert)
+        for i in range(nrows + (len(vert) + ncols - 1) // ncols):
             bottom_corner[0], yl = 0.1, ylen
             if i == 0:
                 yl *= 1.8
             for j in range(ncols):
+                if i * ncols + j >= npanels:
+                    break
                 fig.add_axes([bottom_corner[0], bottom_corner[1], xlen, yl])
                 fig.axes[-1].set_xlim(0, max_rad)
-                fig.axes[-1].tick_params(labelbottom=(i == nrows - 1))
+                fig.axes[-1].tick_params(labelbottom=(i * ncols + j + ncols >= npanels))     # (the lowest panels)
                 bottom_corner[0] += xlen + x_sep
             bottom_corner[1] -= (ylen + y_sep)
         ax = fig.axes
@@ -190,24 +209,32 @@ def plot_parameters(rings, rings2=None, sdens=None, sdens_obs=None, sdens_label=
 
         # Position angle
         ax[6].set_ylabel(r"$\phi$ (deg)", fontsize=lsize)
-        ax[6].set_xlabel("Radius (arcsec)", fontsize=lsize, labelpad=10)
         ax[6].errorbar(rad, rings["pa"], yerr=ring_errors(rings, "pa"), fmt="o", color=color)
         if r2 is not None:
             ax[6].errorbar(r2["rad"], r2["pa"], yerr=ring_errors(r2, "pa"), fmt="o-", color=color2)
 
         # y-centre
         ax[7].set_ylabel(r"y$_0$ (pix)", fontsize=lsize)
-        ax[7].set_xlabel("Radius (arcsec)", fontsize=lsize, labelpad=10)
         ax[7].errorbar(rad, rings["ypos"], yerr=ring_errors(rings, "ypos"), fmt="o", color=color)
         if r2 is not None:
             ax[7].errorbar(r2["rad"], r2["ypos"], yerr=ring_errors(r2, "ypos"), fmt="o-", color=color2)
 
         # Systemic velocity
         ax[8].set_ylabel(r"v$_\mathrm{sys}$ (km/s)", fontsize=lsize)
-        ax[8].set_xlabel("Radius (arcsec)", fontsize=lsize, labelpad=10)
         ax[8].errorbar(rad, rings["vsys"], yerr=ring_errors(rings, "vsys"), fmt="o", color=color)
         if r2 is not None:
             ax[8].errorbar(r2["rad"], r2["vsys"], yerr=ring_errors(r2, "vsys"), fmt="o", color=color2)
+
+        # The vertical motions: the scale height and the lag of a thick disk, the vertical velocity
+        vlabels = dict(z0=r"z$_0$ (arcsec)", dvdz=r"dV$_\mathrm{rot}$/dz (km/s/arcsec)",
+                       zcyl=r"z$_\mathrm{cyl}$ (arcsec)", vvert=r"V$_\mathrm{vert}$ (km/s)")
+        for a, k in zip(ax[9:], vert):
+            a.set_ylabel(vlabels[k], fontsize=lsize)
+            a.errorbar(rad, rings[k], yerr=ring_errors(rings, k), fmt="o", color=color)
+            if r2 is not None and k in r2:
+                a.errorbar(r2["rad"], r2[k], yerr=ring_errors(r2, k), fmt="o", color=color2)
+        for j in range(ncols):                        # (the lowest panel of each column)
+            ax[max(i for i in range(j, len(ax), ncols))].set_xlabel("Radius (arcsec)", fontsize=lsize, labelpad=10)
 
         # Beyond the outer edge of the disk (RADMAX) the model has no gas: the rings there are extrapolations
         if radmax is not None:

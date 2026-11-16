@@ -236,6 +236,30 @@ class OutputsMixin(object):
 
     # Ring parameters in the order of the 3DFIT tables and error columns
     _RING_NAMES = ('vrot', 'vdisp', 'dens', 'z0', 'inc', 'phi', 'xpos', 'ypos', 'vsys', 'vrad')
+    # The vertical motions, written after them when they are fitted or not zero (see _vertical_params)
+    _VERTICAL = ('vvert', 'dvdz', 'zcyl')
+
+    def _vertical_params(self):
+        """ The vertical motions of the best fit in the outputs (the ring file, Result.rings, the plots), in the
+        order of _VERTICAL: VVERT if it is free or not zero; DVDZ and ZCYL, the lag of a thick disk, together if
+        one of them is free or DVDZ is not zero (ZCYL alone has no effect). The 3DFIT tables have no columns for
+        them, as in C++, when none is fitted or used. """
+        r = self.outri.r
+        out = []
+        if self._free('vvert') or np.any(np.asarray(r['vvert'], float) != 0):
+            out.append('vvert')
+        if self._free('dvdz') or self._free('zcyl') or np.any(np.asarray(r['dvdz'], float) != 0):
+            out += ['dvdz', 'zcyl']
+        return out
+
+    def _vertical_errors(self):
+        """ {name: errors} of the vertical motions in the outputs (_vertical_params): errors[ring, 0 = lower
+        (negative) / 1 = upper (positive)], as the error columns of the 3DFIT tables (zero if fixed). """
+        out = {}
+        for n in self._vertical_params():
+            lo, hi = self.ring_errors(n)
+            out[n] = np.stack([-np.asarray(lo, float), np.asarray(hi, float)], axis=1)
+        return out
 
     def _posterior_errors(self):
         """ The ring parameters that were sampled (flags in the order of _RING_NAMES) and
@@ -276,8 +300,10 @@ class OutputsMixin(object):
 
     @contextlib.contextmanager
     def _errors_in_outputs(self):
-        """ Writes <prefix>_rings_final1.txt with the errors from the posterior (and, with RADMAX as the edge
-        of the disk, the column INDISK: 1 for the rings within the edge, 0 beyond it, see in_disk). Inside
+        """ Writes <prefix>_rings_final1.txt with the errors from the posterior, the columns of the vertical
+        motions VVERT, DVDZ, ZCYL with their errors when they are fitted or not zero (see _vertical_params; after
+        the errors of the other parameters) and, with RADMAX as the edge of the disk, the column INDISK: 1 for the
+        rings within the edge, 0 beyond it, see in_disk. Inside
         the context, the free parameters of the sampling (instead of FREE) and the error columns are
         used by the outputs of the 3DFIT engine, so that the plots (_parameters.pdf) show the errors
         (and the region beyond the edge). """
@@ -288,7 +314,8 @@ class OutputsMixin(object):
         gf._disk_edge = self.disk_edge
         extra = {} if self.disk_edge is None else {'INDISK': self.in_disk.astype(int)}
         try:
-            gf.writeRingFile("rings_final1.txt", self.outri.object, errors, extra=extra)
+            gf.writeRingFile("rings_final1.txt", self.outri.object, errors, extra=extra,
+                             vertical=self._vertical_errors())
             yield
         finally:
             gf.mpar, gf.nfree, gf.par.flagERRORS, gf._disk_edge = old
@@ -340,12 +367,13 @@ class OutputsMixin(object):
 
         param: vrot, vdisp (or disp), dens, z0, inc, phi (or pa), xpos, ypos, vsys, vrad,
         vvert, dvdz, zcyl, case-insensitive. Without param: a dictionary with the errors of
-        vrot, vdisp, dens, z0, inc, phi, xpos, ypos, vsys and vrad. These are the errors of
+        vrot, vdisp, dens, z0, inc, phi, xpos, ypos, vsys and vrad, and of the vertical motions in the outputs
+        (vvert, dvdz, zcyl when fitted or not zero, see _vertical_params). These are the errors of
         <prefix>_rings_final1.txt and of plot_profiles. Needs run() or load_results(). """
         if not self.modCalculated or self.outri is None:
             raise ValueError("ring_errors: run the sampling (run) or load the results (load_results) first.")
         if param is None:
-            return {n: self.ring_errors(n) for n in self._RING_NAMES}
+            return {n: self.ring_errors(n) for n in self._RING_NAMES + tuple(self._vertical_params())}
         a = str(param).strip().lower()
         a = self._ERR_ALIASES.get(a, a)
         if a not in PARAMS or a == 'radii':
@@ -371,7 +399,9 @@ class OutputsMixin(object):
         return lo, hi
 
     def plot_profiles(self, **kwargs):
-        """ Plot the best-fit radial profiles of the ring parameters (with 1-sigma errors) """
+        """ Plot the best-fit radial profiles of the ring parameters (with 1-sigma errors): VROT, VDISP, DENS, INC,
+        PA, Z0, XPOS, YPOS, VSYS and, in a fourth row, the vertical motions when they are fitted or not zero
+        (VVERT, DVDZ, ZCYL; see _vertical_params) """
         import matplotlib.pyplot as plt
         if not self.modCalculated:
             print("Sampler has not been run yet. Please run run() before running this function "
@@ -381,12 +411,21 @@ class OutputsMixin(object):
         toplot = ['vrot', 'vdisp', 'dens', 'inc', 'phi', 'z0', 'xpos', 'ypos', 'vsys']
         labels = [r'$V_\mathrm{rot}$ (km/s)', r'$\sigma$ (km/s)', 'Density', 'Inclination (deg)',
                   'Position angle (deg)', r'$z_0$ (arcsec)', 'Xpos (pix)', 'Ypos (pix)', r'$V_\mathrm{sys}$ (km/s)']
-        fig, axes = plt.subplots(3, 3, figsize=(12, 9), sharex=True,
-                                 gridspec_kw=dict(height_ratios=[1.6, 1, 1], hspace=0.05, wspace=0.3))
-        for k, a in enumerate(axes.flat):
+        vlabels = dict(vvert=r'$V_\mathrm{vert}$ (km/s)', dvdz=r'$dV_\mathrm{rot}/dz$ (km/s/arcsec)',
+                       zcyl=r'$z_\mathrm{cyl}$ (arcsec)')
+        vert = self._vertical_params()
+        toplot += vert
+        labels += [vlabels[k] for k in vert]
+        nrows = 3 + (len(vert) + 2) // 3
+        fig, axes = plt.subplots(nrows, 3, figsize=(12, 9 + 2.5 * (nrows - 3)), sharex=True,
+                                 gridspec_kw=dict(height_ratios=[1.6] + [1] * (nrows - 1), hspace=0.05, wspace=0.3))
+        for a in axes.flat[len(toplot):]:
+            a.remove()
+        for k, a in enumerate(axes.flat[:len(toplot)]):
             a.tick_params(direction='in', top=True, right=True)
-            if k >= 6:
+            if k + 3 >= len(toplot):                     # (the lowest panel of its column)
                 a.set_xlabel('Radius (arcsec)', fontsize=14)
+                a.tick_params(labelbottom=True)
         axes[0, 0].set_xlim(0, rings['radii'][-1] * 1.05)
         ax = axes.ravel()
         for i, a in enumerate(toplot):

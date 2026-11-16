@@ -79,9 +79,22 @@ estimates of {ref}`GUESSTYPE <par-3dfit-guesstype>` (the rings, the centre, VSYS
 and VDISP from the second moment with GUESSTYPE FIT), and otherwise VDISP 8 km/s, Z0 one pixel, DENS 1 and
 VRAD, VVERT, DVDZ, ZCYL 0. (3DFIT then changes its rings for REVERSE and, with PA free, refines PA and VROT
 with a 2D fit of the velocity field: these are steps of its fit, which GLOBAL and BAYESIAN do not take.) A point
-$\boldsymbol\theta$ for which a free VROT, VDISP, INC, XPOS, YPOS, Z0 or DENS is negative in some ring, or
+$\boldsymbol\theta$ for which a free VROT, VDISP, INC, XPOS, YPOS, Z0, ZCYL or DENS is negative in some ring, or
 RADMAX is negative, has $\mathcal L = 0$. The parameters of a function of radius may be negative (e.g. the
 slope of VDISP).
+
+**The lag of a thick disk.** {ref}`DVDZ <par-3dfit-dvdz>` and {ref}`ZCYL <par-3dfit-zcyl>` describe a rotation that
+drops with height: above $|z| = $ ZCYL the gas rotates at VROT − DVDZ $(|z| - $ ZCYL$)$. Both can be free, as any
+ring parameter (e.g. `FREE VROT VDISP Z0_SINGLE DVDZ_SINGLE ZCYL_SINGLE`), and must change the model: DVDZ needs a
+layer with a thickness, Z0 > 0 in some ring or Z0 free, and ZCYL needs a lag, DVDZ free or not zero; otherwise the
+fit stops with an error. ZCYL cannot be negative (a lag that begins below the plane is a lag in the plane too, the
+same as a lower VROT). Where the priors allow DVDZ = 0 (or Z0 = 0), ZCYL (or DVDZ) has no effect there: the
+posterior is wide in that direction, and a fit whose DVDZ is consistent with zero prints that ZCYL is not
+constrained. The lag is measured best in a disk seen nearly edge-on with Z0 of a beam or more, where gas at
+different heights falls in different pixels. DVDZ, ZCYL and VROT are strongly correlated (correlation coefficients
+of about 0.9 on a mock at INC 87° with Z0 one beam and ZCYL half of it): a lag that begins higher is mimicked by a
+smaller lag from the plane and a higher VROT, and GLOBAL can stop along that valley short of the maximum
+(within the errors); `SAMPLEROPTS nstart=3`, or BAYESIAN, explores it.
 
 ### Priors
 
@@ -105,9 +118,11 @@ the initial values of all the rings, from the smallest − $w$ to the largest + 
 | XPOS, YPOS | initial ± 2 beam FWHM |
 | VSYS | initial ± 5 channels, at least ± 20 km/s |
 | Z0 | 0 to one beam FWHM |
+| DVDZ | 0 to twice the largest initial VROT per beam FWHM (km/s/arcsec): a lag that can stop the rotation within half a beam of the plane |
+| ZCYL | 0 to one beam FWHM |
 
-The others (VRAD, VVERT, DVDZ, ZCYL, DENS and the parameters of the functions of radius) are fixed ranges,
-listed under PRIORS. VROT uses the largest initial value, so that the prior of every ring holds the flat part
+The others (VRAD, VVERT, DENS and the parameters of the functions of radius) are fixed ranges, listed under
+PRIORS. VROT uses the largest initial value, so that the prior of every ring holds the flat part
 of the rotation curve: the value of each ring would give the inner rings of a rising curve a prior narrower
 than their uncertainty. The priors follow the rings when they change (in Python, `update()`), but those given
 are kept. Where the data constrain a parameter poorly (Z0, the INC of a nearly face-on disk), the posterior
@@ -604,8 +619,12 @@ parameters), with the density profile recomputed at the best-fit geometry when D
 written in `<prefix>_rings_final1.txt`, with the columns of 3DFIT and the error columns of the sampled
 parameters: a parameter free in each ring has its own percentiles in each ring; a `_SINGLE` one the same
 errors in all the rings; for a `_FUNC` one, the percentiles of $g(R_j)$ over the posterior samples, relative
-to the best-fit value; DENS not free, the errors of the deconvolved profile. The column INDISK marks the
-rings within RADMAX.
+to the best-fit value; DENS not free, the errors of the deconvolved profile. The vertical motions follow, each
+with its two error columns: VVERT(km/s) when VVERT is free or not zero, DVDZ(km/s/arcs) and ZCYL(arcs) when DVDZ
+or ZCYL is free or DVDZ is not zero (3DFIT CLASSIC, as C++, has none of these columns). The column INDISK marks
+the rings within RADMAX. In Python, `Result.rings` has the same columns (`vvert`, `dvdz`, `zcyl`, with
+`e_dvdz1`, `e_dvdz2`, ...), and {ref}`RINGFILE <par-3dfit-ringfile>` reads VVERT, DVDZ and ZCYL back from such a
+file.
 
 ### Files
 
@@ -614,7 +633,8 @@ The task writes in {ref}`OUTFOLDER <par-all-outfolder>`, with the prefix
 
 - `<prefix>_rings_final1.txt`: the best-fit rings with their errors;
 - `<prefix>_mod_none.fits`, the best model, with its moment maps, position–velocity slices and the plots of
-  3DFIT (with the posterior errors) as for 3DFIT: `<prefix>_parameters.pdf` shows the rings against radius;
+  3DFIT (with the posterior errors) as for 3DFIT: `<prefix>_parameters.pdf` shows the rings against radius,
+  with one more row for the vertical motions in the ring file (Z0, DVDZ and ZCYL; VVERT);
 - `<prefix>_densprof.txt`: the observed profile, the face-on average of the total intensity map of the
   voxels of the likelihood along the best-fit rings (an output only);
 - `<prefix>_densprof_deconvolved.txt` (DENS not free): the deconvolved profile with its lower and upper
@@ -629,8 +649,8 @@ With `PLOTS -1` only the rings and the samples are written, no model. With
 nothing (`Result.write()` writes the files), as does the engine's `run()`, `sample()` and `optimize()`, whose
 `write(outfolder=None, plots=None)` writes these files as the task does. `write_bestmodel`
 writes only the best model with its outputs and the rings; `corner_plot` and `plot_profiles` (VROT, VDISP,
-DENS, INC, PA, Z0, XPOS, YPOS and VSYS against radius, with their errors; not written by `write`) return the
-figures; `print_stats`,
+DENS, INC, PA, Z0, XPOS, YPOS and VSYS against radius, with their errors, and VVERT, DVDZ, ZCYL as in the ring file;
+not written by `write`) return the figures; `print_stats`,
 `ring_errors` and `chi2_reduced` give the statistics; `save_results` writes the samples, and `load_results`
 reads them back into an object made with the same cube (`Bayesian3DFIT(cube)`, since the cube is
 not saved): it takes the saved parameters, repeats the setup with the saved options of the
