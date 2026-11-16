@@ -1555,14 +1555,16 @@ def recordParam(stream, name, desc, value):
     stream.write(f"{desc:.<{widthText}}{name}  =  {_fmt(value)}\n")
 
 
-def _likefit_rows(R, p, ml, wind=False):
+def _likefit_rows(R, p, ml, wind=False, errors=True):
     """The rows of printParams of the options of METHOD GLOBAL and BAYESIAN: only those of the METHOD of p (both,
-    labelled by ml, for the defaults)."""
+    labelled by ml, for the defaults); errors: also FLAGERRORS (GLOBAL; not when the rows of CLASSIC list it)."""
     gf = p.gf
     m = gf.METHOD
     labelled = ml("   x") != "   x"
     if labelled or m == "GLOBAL":
         R("[MINIMISER]", ml("   Minimiser", "GLOBAL"), gf.MINIMISER)
+        if errors:
+            R("[FLAGERRORS]", ml("   Estimating errors?", "GLOBAL"), stringize(gf.flagERRORS))
     if labelled or m == "BAYESIAN":
         R("[SAMPLER]", ml("   Nested sampler", "BAYESIAN"), gf.SAMPLER)
     R("[PRIORS]", ml("   Priors of the free parameters"), gf.PRIORS or "default")
@@ -1736,7 +1738,7 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
             R("[TOL]", mc("   Minimization tolerance"), gf.TOL)
             R("[TWOSTAGE]", mc("   Two stages minimization?"), stringize(gf.TWOSTAGE))
             if gf.TWOSTAGE or defaults: R("[REGTYPE]", mc("     Degree of polynomial fitting angles?"), gf.REGTYPE)
-            R("[FLAGERRORS]", mc("   Estimating errors?"), stringize(gf.flagERRORS))
+            R("[FLAGERRORS]", ml("   Estimating errors?", "CLASSIC, GLOBAL"), stringize(gf.flagERRORS))
             R("[ADRIFT]", mc("   Computing asymmetric drift correction?"), stringize(gf.flagADRIFT))
             if gf.flagADRIFT or defaults:
                 R("[ADRIFTPOL1]", mc("     Polynomial for VDISP2 regularisation?"), gf.ADRIFTPOL1)
@@ -1751,7 +1753,7 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
             R("[PLOTMASK]", "   Overlaying mask to output plots?", stringize(gf.PLOTMASK))
             R("[PLOTMINCON]", "   Minimum flux contour for output plots", gf.PLOTMINCON)
         if isBayes:
-            _likefit_rows(R, p, ml)
+            _likefit_rows(R, p, ml, errors=not isClassic)
         if isClassic or isGalmod or isSpacepar: R("[NOISERMS]", "   RMS noise to add to the model", gf.NOISERMS)
         if isSpacepar:
             R("[SPACEPAR]", "Full parameter space for a pair of parameters", stringize(p.flagSpace))

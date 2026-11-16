@@ -749,6 +749,16 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **METHOD GLOBAL computes the errors only with `FLAGERRORS true`** (3DFIT, WINDFIT, SLITFIT), as METHOD CLASSIC
+  of 3DFIT. The errors of the Laplace approximation need a Hessian of about n² likelihoods (n free parameters),
+  often longer than the minimisation; they were computed by default, and `SAMPLEROPTS errors=false` turned them off.
+  FLAGERRORS (default false) is now a keyword of METHOD GLOBAL, and `errors` is no longer an option of SAMPLEROPTS
+  (an error that names FLAGERRORS). Without it the outputs have the best fit alone, as METHOD CLASSIC without
+  FLAGERRORS: no error columns (`errors=false` wrote columns of zeros) in the ring files and `Result.rings`
+  (3DFIT, SLITFIT), `_wind_params.txt`, `_wind_shells.txt`, `Result.parameters` and `Result.shells` (WINDFIT) and
+  `_densprof_deconvolved.txt` (no errors of the deconvolved profile either), and no corner plot. In Python,
+  `flagerrors=True` (FitMod3D, WindFit, SlitFit and the engines); the argument `errors` of `optimize()` of the
+  engines defaults to the parameter FLAGERRORS.
 - **The lag of a thick disk never reverses the rotation** (GALMOD and every model, MC and ANALYTIC). Above ZCYL the
   rotation is VROT − DVDZ (|z| − ZCYL), as in C++, but it stops at zero: C++ (and the port until now) made the gas
   counter-rotate above the height ZCYL + VROT/DVDZ. A fit of NGC 891 with one exponential layer found DVDZ 6.7

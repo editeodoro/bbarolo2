@@ -95,12 +95,12 @@ def show_bar(fitter):
 
 def _resets(params):
     """ Whether changing params resets a fit engine (its rings, model engine, ...): not when they are only the method
-    and the algorithm and its options (METHOD, SAMPLER, MINIMISER, SAMPLEROPTS, RUNOPTS), which do not change the
-    model. """
+    and the algorithm and its options (METHOD, SAMPLER, MINIMISER, SAMPLEROPTS, RUNOPTS, FLAGERRORS), which do not
+    change the model. """
     from ..keywords import lookup
     for k in params:
         kw = lookup(k)
-        if kw is None or kw.name not in ("METHOD", "SAMPLER", "MINIMISER", "SAMPLEROPTS", "RUNOPTS"):
+        if kw is None or kw.name not in ("METHOD", "SAMPLER", "MINIMISER", "SAMPLEROPTS", "RUNOPTS", "FLAGERRORS"):
             return True
     return False
 
@@ -116,29 +116,50 @@ def fit_method(engine, default):
     return m
 
 
+def flag_errors(engine):
+    """ FLAGERRORS of a fit engine: whether METHOD GLOBAL computes the errors (the parameter as given, default
+    false). """
+    s = engine._params.get("FLAGERRORS")
+    if s is None:
+        return False
+    from ..tasks import build_param
+    return bool(build_param({"FLAGERRORS": s}).gf.flagERRORS)
+
+
+def has_errors(fitter):
+    """ Whether the results of a fit engine have errors: all but those of METHOD GLOBAL without FLAGERRORS (an
+    optimisation without the Hessian, optimum.cov None), whose outputs have no error columns. """
+    opt = getattr(fitter, "optimum", None)
+    return not (getattr(fitter, "_method", None) == "optimize" and opt is not None and opt.get("cov") is None)
+
+
 def global_arguments(engine, defaults, sampler_kwargs, run_kwargs, task):
-    """ The arguments of optimize() for METHOD GLOBAL (run()): minimiser MINIMISER (default L-BFGS-B), the options of
-    SAMPLEROPTS with sampler_kwargs, and those of RUNOPTS with run_kwargs as the options of the minimiser (defaults:
-    the options of the parameters, see _run_defaults; see optimize.global_options). """
+    """ The arguments of optimize() for METHOD GLOBAL (run()): minimiser MINIMISER (default L-BFGS-B), errors
+    FLAGERRORS (default false), the options of SAMPLEROPTS with sampler_kwargs, and those of RUNOPTS with run_kwargs
+    as the options of the minimiser (defaults: the options of the parameters, see _run_defaults; see
+    optimize.global_options). """
     from .optimize import global_options
     kw = global_options({**defaults.get("SAMPLEROPTS", {}), **dict(sampler_kwargs or {})},
                         {**defaults.get("RUNOPTS", {}), **dict(run_kwargs or {})}, task=task)
     kw["minimiser"] = str(engine._params.get("MINIMISER") or "L-BFGS-B").strip()
+    kw["errors"] = flag_errors(engine)
     return kw
 
 
 def task_fit(f, p, task, freepar=None):
     """ The fit of a task of parameter files (run_task of task.py, windtask.py, slittask.py) with the engine f and the
-    METHOD of p (a checked Param, METHOD set by checkPars): GLOBAL, optimize() with MINIMISER, SAMPLEROPTS and RUNOPTS;
-    BAYESIAN, sample() with SAMPLER (dynesty without its progress line when the progress bars are off, e.g. LOGFILE);
-    in THREADS processes. freepar: the free parameters (None: those of the parameter FREE of f, or the default). """
+    METHOD of p (a checked Param, METHOD set by checkPars): GLOBAL, optimize() with MINIMISER, FLAGERRORS, SAMPLEROPTS
+    and RUNOPTS; BAYESIAN, sample() with SAMPLER (dynesty without its progress line when the progress bars are off,
+    e.g. LOGFILE); in THREADS processes. freepar: the free parameters (None: those of the parameter FREE of f, or the
+    default). """
     from ..params import bayes_options
     gf = p.gf
     verbose = bool(p.verbose)
     f._task_showbar = p.showbar                   # (off with LOGFILE: the progress bars of METHOD GLOBAL)
     if gf.METHOD == "GLOBAL":
-        f.optimize(freepar, threads=p.threads, verbose=verbose,
-                   **global_arguments(f, f._run_defaults(), {}, {}, task))
+        kw = global_arguments(f, f._run_defaults(), {}, {}, task)
+        kw["errors"] = bool(gf.flagERRORS)
+        f.optimize(freepar, threads=p.threads, verbose=verbose, **kw)
         return f
     sampler = gf.SAMPLER.strip().lower()
     run_kwargs = {}

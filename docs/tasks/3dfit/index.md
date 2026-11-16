@@ -12,7 +12,7 @@ fitted to the data (the model is the same):
 | METHOD | What it does | Result | Time |
 |---|---|---|---|
 | `CLASSIC` (the default) | the rings are fitted one at a time, minimising the residuals with a downhill simplex: the 3DFIT of BBarolo 1.x | one solution per ring, with optional errors (`FLAGERRORS`) | seconds |
-| `GLOBAL` | all the parameters of all the rings are fitted together, at the maximum of the likelihood ({doc}`likelihood`), with a minimiser of scipy ({ref}`MINIMISER <par-3dfit-minimiser>`) | the best fit, with the errors of the Laplace approximation (the inverse Hessian) | seconds to minutes |
+| `GLOBAL` | all the parameters of all the rings are fitted together, at the maximum of the likelihood ({doc}`likelihood`), with a minimiser of scipy ({ref}`MINIMISER <par-3dfit-minimiser>`) | the best fit, with `FLAGERRORS` the errors of the Laplace approximation (the inverse Hessian) | seconds to minutes |
 | `BAYESIAN` | the posterior probability distribution of all the parameters is sampled with nested sampling ({ref}`SAMPLER <par-3dfit-sampler>`) | the median and the 68% credible interval of each parameter, with the correlations | minutes to hours |
 
 In Python: {class}`bbarolo.FitMod3D`, with `method="classic"`, `"global"` or `"bayesian"`.
@@ -219,22 +219,24 @@ Marginal posteriors of the six free parameters (`f.corner_plot()`): the rotation
 
 The same fit by minimisation takes seconds where the sampling takes minutes. `METHOD GLOBAL` finds the maximum of
 the same likelihood, with the free parameters, the options of the likelihood and the priors of BAYESIAN (the ranges
-of the priors bound the search). The errors are those of the Laplace approximation, the inverse of the Hessian of
-the log-likelihood at the best fit, and 4000 draws of that Gaussian stand in for the posterior samples
-(`res.samples`, the corner plot, the errors of the tables).
+of the priors bound the search). With {ref}`FLAGERRORS <par-3dfit-flagerrors>`, the errors are those of the Laplace
+approximation, the inverse of the Hessian of the log-likelihood at the best fit, and 4000 draws of that Gaussian stand
+in for the posterior samples (`res.samples`, the corner plot, the errors of the tables); without it, the best fit
+alone, without error columns.
 
 ```text
 3DFIT         true
 METHOD        GLOBAL
+FLAGERRORS    true                             # the errors (Laplace approximation)
 MINIMISER     L-BFGS-B                         # the default; e.g. Powell, Nelder-Mead
-SAMPLEROPTS   nstart=1                         # x0, nstart, seed, posterior, errors, nsamples, step
+SAMPLEROPTS   nstart=1                         # x0, nstart, seed, posterior, nsamples, step
 RUNOPTS       maxiter=500                      # the options of the minimiser (scipy.optimize)
 ```
 
 ```python
 res = FitMod3D("ngc2403.fits", method="global", free="VROT VDISP_SINGLE INC_SINGLE PA_SINGLE",
                radii=[120, 240, 360, 480], vrot=100, vdisp=10, inc=60, pa=123.7, z0=10,
-               xpos=77, ypos=77, vsys=132.8, mask="SEARCH").run(threads=16)
+               xpos=77, ypos=77, vsys=132.8, mask="SEARCH", flagerrors=True).run(threads=16)
 res.rings                 # the best fit, with the errors
 res.fitter.optimum        # the details: log-likelihood, number of likelihoods, covariance, ...
 ```
@@ -255,7 +257,7 @@ them in memory as attributes of the {class}`~bbarolo.Result`, and `res.write()` 
 | File | `Result` | Content |
 |---|---|---|
 | `_rings_initial.txt` | `rings_initial` | the initial rings |
-| `_rings_final1.txt` | `rings_stage1` | CLASSIC: the rings of the first stage, with the errors if any. GLOBAL and BAYESIAN: the best-fit rings with the errors (`rings`) |
+| `_rings_final1.txt` | `rings_stage1` | CLASSIC: the rings of the first stage, with the errors if any. GLOBAL and BAYESIAN: the best-fit rings with the errors (`rings`; GLOBAL: without errors unless FLAGERRORS) |
 | `_rings_final2.txt` | `rings` | CLASSIC: the rings of the second stage (TWOSTAGE); without it, `rings` is the first stage |
 | `_densprof.txt` | `densprof` | the radial profile of the data in the final rings |
 | `_densprof_deconvolved.txt` | `densprof_deconvolved` | the density profile deconvolved from the beam, at the geometry of the final rings; with CLASSIC its densities build the final model ({ref}`NORM <par-3dfit-norm>`); with GLOBAL and BAYESIAN it is the profile used by the model when DENS is not free, with its errors |

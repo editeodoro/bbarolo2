@@ -438,7 +438,8 @@ KEYWORDS = [
       "Angle around the minor axis left out of the fit of the velocity field (degrees)"),
     K("BWEIGHT", "float", ["gf.BWEIGHT"], ("3DFIT", "SPACEPAR"), "Weight for blank pixels"),
     K("TWOSTAGE", "flag", ["gf.TWOSTAGE"], CLASSIC, "Two stages minimization?"),
-    K("FLAGERRORS", "flag", ["gf.flagERRORS"], CLASSIC, "Estimating errors?", aliases=["errors"]),
+    K("FLAGERRORS", "flag", ["gf.flagERRORS"], CLASSIC + MINIM, "Estimating errors? (GLOBAL: from the curvature of "
+      "the likelihood)", aliases=["errors"]),
     K("NORM", "ustr", ["gf.NORM"], MOD3 + SLIT, "Type of normalization (LOCAL, AZIM or NONE)"),
     K("REGTYPE", "lstr", ["gf.REGTYPE"], CLASSIC, "Regularization of the second stage (auto, bezier, median, "
       "degree of polynomial)", aliases=["polyn"]),
@@ -459,8 +460,8 @@ KEYWORDS = [
     # ---------------------------------------------------------------- METHOD (3DFIT, WINDFIT, SLITFIT)
     K("METHOD", "ustr", ["gf.METHOD"], FITS,
       "Fitting method: CLASSIC (3DFIT only: ring by ring, minimising the residuals), GLOBAL (all the rings "
-      "together: the maximum of the likelihood, with the errors of its curvature) or BAYESIAN (the posterior, "
-      "by nested sampling). Default CLASSIC for 3DFIT, GLOBAL for WINDFIT and SLITFIT"),
+      "together: the maximum of the likelihood, with FLAGERRORS the errors of its curvature) or BAYESIAN (the "
+      "posterior, by nested sampling). Default CLASSIC for 3DFIT, GLOBAL for WINDFIT and SLITFIT"),
     K("SAMPLER", "ustr", ["gf.SAMPLER"], SAMPLE,
       "Nested sampler of METHOD BAYESIAN: NAUTILUSBB (nautilus, built in), NAUTILUS (package nautilus-sampler) or "
       "DYNESTY"),
@@ -473,7 +474,7 @@ KEYWORDS = [
     K("SAMPLEROPTS", "str", ["gf.SAMPLEROPTS"], LIKE,
       "Options of the sampler (BAYESIAN) or of the minimisation (GLOBAL), key=value, e.g. nlive=200 dynamic=true "
       "seed=1 (dynesty; the static sampler unless dynamic=true) or n_live=1000 seed=1 (nautilus, nautilusbb) or "
-      "nstart=3 seed=1 errors=true (GLOBAL)",
+      "nstart=3 seed=1 (GLOBAL)",
       aliases=["sampler_kwargs"]),
     K("RUNOPTS", "str", ["gf.RUNOPTS"], LIKE,
       "Options of the sampling, key=value, e.g. dlogz=0.5 maxiter=20000 (dynesty) or f_live=0.01 "

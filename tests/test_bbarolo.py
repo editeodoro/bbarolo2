@@ -1030,7 +1030,7 @@ def test_bayesian_optimize(tmp_path, capsys):
     the best fit is within 4 sigma of the truth, its errors (Laplace) are those of the curvature of the likelihood
     along each parameter within the correlations, params is the best fit, print_stats shows it, nothing is written,
     write() writes the rings and <prefix>_optimize_results.npy, and load_results restores the fit; nstart, x0='centre'
-    and errors=False."""
+    and errors=False; errors follows FLAGERRORS (default false: no Hessian)."""
     from scipy.ndimage import gaussian_filter
     from astropy.io import fits
     from bbarolo.bayesian import Bayesian3DFIT
@@ -1047,7 +1047,7 @@ def test_bayesian_optimize(tmp_path, capsys):
     fn = str(tmp_path / "mock.fits")
     fits.writeto(fn, (model + 0.005 * n / n.std()).astype(np.float32), fits.getheader(N2403))
     g = Bayesian3DFIT(fn, outfolder=str(tmp_path / "b") + "/", **kw)
-    g.optimize(freepar=['vrot', 'vdisp_single'], verbose=False)
+    g.optimize(freepar=['vrot', 'vdisp_single'], errors=True, verbose=False)
     opt = g.optimum
     assert opt.method == "L-BFGS-B" and np.array_equal(g.params, opt.x) and g._method == "optimize"
     assert np.all(np.abs(opt.x - truth) < 4 * opt.errors), (opt.x, opt.errors)
@@ -1075,6 +1075,12 @@ def test_bayesian_optimize(tmp_path, capsys):
     assert len(g.optimum.starts) == 2 and g.optimum.cov is None
     assert np.all(np.abs(g.params - opt.x) < 0.5 * opt.errors)
     assert np.all(g.ring_errors('vrot')[0] == 0)
+    # errors=None (the default): FLAGERRORS, given to optimize or to the engine (default false)
+    g.optimize(freepar=['vrot', 'vdisp_single'], minimiser="powell", options=dict(maxiter=2), verbose=False)
+    assert g.optimum.cov is None and np.all(g.ring_errors('vrot')[0] == 0)
+    g.optimize(freepar=['vrot', 'vdisp_single'], minimiser="powell", options=dict(maxiter=2), flagerrors=True,
+               verbose=False)
+    assert g.optimum.cov is not None and np.all(g.optimum.errors > 0)
     with pytest.raises(BBaroloError, match="x0"):
         g.optimize(freepar=['vrot', 'vdisp_single'], x0="middle", verbose=False)
     # the progress bar of the Hessian: SHOWBAR as given (the engine of the fit runs with VERBOSE, hence SHOWBAR, off)
@@ -1197,6 +1203,8 @@ def test_bayesian_optimise_task(tmp_path, capsys):
     p.readParamString("FITSFILE m.fits\n3DFIT true\nMETHOD global\nMINIMIZER nelder-mead\nSAMPLEROPTS nstart=2\n")
     assert p.checkPars(quiet=True) and p.gf.METHOD == "GLOBAL" and p.gf.MINIMISER == "nelder-mead"
     for opts, msg in (("SAMPLEROPTS nlive=20", "SAMPLEROPTS: unknown option(s) nlive of METHOD GLOBAL"),
+                      ("SAMPLEROPTS errors=true", "SAMPLEROPTS: unknown option(s) errors of METHOD GLOBAL (the "
+                                                  "errors are FLAGERRORS)"),
                       ("SAMPLEROPTS method=powell", "SAMPLEROPTS: unknown option(s) method of METHOD GLOBAL (the "
                                                      "minimiser is MINIMISER)"),
                       ("MINIMISER annealing", "MINIMISER: unknown minimiser 'annealing'")):
@@ -1213,7 +1221,7 @@ def test_bayesian_optimise_task(tmp_path, capsys):
     par.write_text(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/cli\n3DFIT true\nMETHOD GLOBAL\nNRADII 4\nRADSEP 40\n"
                    "XPOS 31.5\nYPOS 31.5\nVSYS 0\nVROT 120\nVDISP 15\nZ0 0\nINC 60\nPA 45\nMASK SEARCH\n"
                    "GALMODTYPE ANALYTIC\nLINEAR 0\nFREE VROT_SINGLE VDISP_SINGLE INC_SINGLE\nMINIMISER Powell\n"
-                   "RUNOPTS maxiter=50\nTHREADS 2\nPLOTS false\n")
+                   "RUNOPTS maxiter=50\nTHREADS 2\nPLOTS false\nFLAGERRORS true\n")
     assert main(["-p", str(par)]) == 0
     out = capsys.readouterr().out
     assert "Optimisation with Powell (maximum likelihood)" in out and "(maximum likelihood by Powell; errors: " in out
@@ -1223,9 +1231,10 @@ def test_bayesian_optimise_task(tmp_path, capsys):
     g = Bayesian3DFIT(fn, outfolder=str(tmp_path / "re"))
     g.load_results(str(cli / "MOCK_optimize_results.npy"))
     assert g._method == "optimize" and g.optimum.method == "Powell" and 140 < g.params[0] < 160
-    assert abs(g.params[2] - 60.) < 2.
-    # Python: METHOD GLOBAL in run() (the engine and FitMod3D), MINIMISER, SAMPLEROPTS its arguments
-    h = Bayesian3DFIT.from_parfile(str(par), minimiser="tnc", sampleropts="errors=false",
+    assert abs(g.params[2] - 60.) < 2. and g.optimum.cov is not None          # (FLAGERRORS true)
+    assert "E_VROT1" in open(cli / "MOCK_rings_final1.txt").readline()
+    # Python: METHOD GLOBAL in run() (the engine and FitMod3D), MINIMISER, FLAGERRORS (default false: no errors)
+    h = Bayesian3DFIT.from_parfile(str(par), minimiser="tnc", flagerrors=None,
                                    runopts="maxfun=40", outfolder=str(tmp_path / "py"))
     h.run(verbose=False)
     assert h._method == "optimize" and h.optimum.method == "TNC" and h.optimum.cov is None
@@ -1233,9 +1242,13 @@ def test_bayesian_optimise_task(tmp_path, capsys):
     with pytest.raises(BBaroloError, match="Unknown solver options: maxfunn"):
         h.run(run_kwargs=dict(maxfunn=40), verbose=False)
     from bbarolo import FitMod3D
-    r = FitMod3D.from_parfile(str(par), minimiser="tnc", sampleropts="errors=false", runopts="maxfun=40",
+    r = FitMod3D.from_parfile(str(par), minimiser="tnc", flagerrors=None, runopts="maxfun=40",
                               verbose=False).run()
     assert r.method == "GLOBAL" and isinstance(r.fitter, Bayesian3DFIT) and r.fitter.optimum.method == "TNC"
+    assert r.fitter.optimum.cov is None and not any(c.startswith("e_") for c in r.rings.colnames)
+    r.write(str(tmp_path / "noerr"))
+    assert "E_VROT1" not in open(tmp_path / "noerr" / "MOCK_rings_final1.txt").readline()
+    assert not (tmp_path / "noerr" / "MOCK_corner.pdf").exists()
     assert np.allclose(r.fitter.params, h.params)
     assert "(METHOD GLOBAL)" in repr(r) and len(r.samples) == 1 and r.samples.colnames == r.fitter.freepar_names
 
@@ -1275,8 +1288,8 @@ def test_bayesian_lag_global(tmp_path):
     fn, rs = _lag_cube(tmp_path)
     out = tmp_path / "out"
     r = FitMod3D(fn, radii=rs, xpos=22, ypos=22, vsys=0, vrot=120, vdisp=15, z0=10, inc=87, pa=40, mask="SEARCH",
-                 free="VROT VDISP_SINGLE Z0_SINGLE DVDZ_SINGLE ZCYL_SINGLE", method="GLOBAL", threads=4, plots=0,
-                 verbose=0, outfolder=str(out)).run()
+                 free="VROT VDISP_SINGLE Z0_SINGLE DVDZ_SINGLE ZCYL_SINGLE", method="GLOBAL", flagerrors=True,
+                 threads=4, plots=0, verbose=0, outfolder=str(out)).run()
     f = r.fitter
     assert f.priors["dvdz"] == dict(name="uniform", loc=0., scale=2. * 120. / 20.)
     assert f.priors["zcyl"] == dict(name="uniform", loc=0., scale=20.)
@@ -1488,7 +1501,7 @@ def test_bayesian_thick_layer_global(tmp_path):
     out = tmp_path / "out"
     r = FitMod3D(fn, radii=rs, xpos=22, ypos=22, vsys=0, vrot=120, vdisp=10, z0=4, inc=87, pa=40, mask="SEARCH",
                  free="VROT VDISP_SINGLE Z0THICK_SINGLE FTHICK_SINGLE VDISPTHICK_SINGLE DVDZ_SINGLE", method="GLOBAL",
-                 threads=4, plots=0, verbose=0, outfolder=str(out)).run()
+                 flagerrors=True, threads=4, plots=0, verbose=0, outfolder=str(out)).run()
     f = r.fitter
     assert f.priors["z0thick"] == dict(name="uniform", loc=4., scale=60.)       # (Z0 fixed at 4": from 4")
     assert f.priors["fthick"] == dict(name="uniform", loc=0., scale=1.)
@@ -1562,12 +1575,21 @@ def test_bayesian_thick_layer_setup(tmp_path, capsys):
     t._setup(["z0_single"])
     assert t.priors["z0"] == dict(name="uniform", loc=0., scale=20.) and np.all(t._inri.r["z0thick"] == -1.)
     assert np.isfinite(t._log_likelihood(np.array([15.])))
-    t.optimize(["z0_single"], verbose=False)
+    t.optimize(["z0_single"], errors=True, verbose=False)
     assert "z0thick" in t._vertical_params()
     for a, b in zip(t.ring_errors("z0thick"), t.ring_errors("z0")):
         assert np.all(a == b) and np.all(b > 0)
     from bbarolo.galfit import vertical_values
     assert np.allclose(vertical_values(t.outri.object, "z0thick"), t.outri.r["z0"])
+    # without errors (FLAGERRORS false): the vertical columns without their error columns, in the table and the file
+    t.optimize(["z0_single"], minimiser="powell", options=dict(maxiter=2), verbose=False)
+    from bbarolo.galfit import ring_table
+    mpar, errors = t._posterior_errors()
+    tab = ring_table(t.outri.object, mpar, errors, vertical=t._vertical_errors())
+    assert errors is None and "z0thick" in tab.colnames and not any(c.startswith("e_") for c in tab.colnames)
+    t.write(outfolder=str(tmp_path / "noerr"), plots=-1, verbose=False)
+    head = open(tmp_path / "noerr" / "THICK_rings_final1.txt").readline().split()
+    assert "Z0THICK(arcs)" in head and not any(c.startswith("E_") for c in head), head
 
 
 def test_fit_method(tmp_path, capsys):
@@ -1626,13 +1648,13 @@ def test_fit_method(tmp_path, capsys):
     inri = f._inri
     with pytest.raises(BBaroloError, match="METHOD CLASSIC"):
         f.run(method="classic", freepar=["vrot_single"], verbose=False)
-    f.run(method="global", freepar=["vrot_single"], sampleropts="errors=false", verbose=False)
+    f.run(method="global", freepar=["vrot_single"], verbose=False)
     assert f._method == "optimize" and f.optimum.method == "L-BFGS-B" and f._inri is inri   # (rings not reset)
     # FitMod3D with the likelihood, on a cube in memory (an HDU)
     from astropy.io import fits
     hdu = fits.open(str(tmp_path / "mock.fits"))[0]
     r = FitMod3D(hdu, nradii=4, radsep=40, xpos=31.5, ypos=31.5, vsys=0, vrot=120, vdisp=15, z0=0, inc=60, pa=45,
-                 mask="SEARCH", linear=0, free="VROT_SINGLE", sampleropts="errors=false", verbose=False,
+                 mask="SEARCH", linear=0, free="VROT_SINGLE", verbose=False,
                  threads=1).run(method="global")
     assert r.method == "GLOBAL" and isinstance(r.fitter, Bayesian3DFIT) and len(r.rings) == 4
     assert np.allclose(r.rings["vrot"], f.outri.r["vrot"])
@@ -3959,7 +3981,8 @@ def test_bayesian_smoothness_stats(tmp_path, capsys):
     nd = {}
     for s in (1e3, 0.01):
         f = Bayesian3DFIT(N2403, **kw)
-        f.optimize(freepar=['vrot', 'vdisp_single'], like_kwargs=dict(smooth=dict(vrot=s, vdisp=1.)), verbose=False)
+        f.optimize(freepar=['vrot', 'vdisp_single'], like_kwargs=dict(smooth=dict(vrot=s, vdisp=1.)), errors=True,
+                   verbose=False)
         capsys.readouterr()
         f.print_stats()
         out = capsys.readouterr().out

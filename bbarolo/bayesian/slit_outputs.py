@@ -1,7 +1,8 @@
 """
 The outputs of SLITFIT (BayesianSlitFit.write), in the output folder, named after the OBJECT of the slit:
 
-  <prefix>_slitfit_rings.txt          the rings of the best fit with the 1-sigma errors of the free parameters
+  <prefix>_slitfit_rings.txt          the rings of the best fit with the 1-sigma errors of the free parameters (none
+                                      for METHOD GLOBAL without FLAGERRORS)
   <prefix>_slit_data.fits             the spectral window of the fit (continuum and residual sky subtracted)
   <prefix>_slit_model.fits            the best model (the positions of the likelihood; NaN elsewhere)
   <prefix>_slit_resid.fits            data - model
@@ -25,12 +26,14 @@ _COLS = (("RAD(arcs)", "radii"), ("VROT(km/s)", "vrot"), ("VDISP(km/s)", "vdisp"
 
 def rings_text(f):
     """The text of <prefix>_slitfit_rings.txt: one line per ring, a column per parameter, then the lower and upper
-    1-sigma errors of the free ones (E_<NAME>_LO, E_<NAME>_HI; 0 for the fixed ones)."""
+    1-sigma errors of the free ones (E_<NAME>_LO, E_<NAME>_HI; 0 for the fixed ones; none for METHOD GLOBAL without
+    FLAGERRORS)."""
+    from .common import has_errors
     t = f.ring_table()
     names = [n for n, _ in _COLS]
     keys = [k for _, k in _COLS]
     cols = [np.asarray(t[k.upper()] if k != "radii" else t["RADII"], float) for k in keys]
-    for n, k in _COLS[1:6]:
+    for n, k in (_COLS[1:6] if has_errors(f) else ()):
         K = k.upper()
         names += [f"E_{K}_LO", f"E_{K}_HI"]
         lo = np.asarray(t[f"E_{K}_LO"], float) if f"E_{K}_LO" in t.colnames else np.zeros(len(t))
@@ -156,7 +159,8 @@ def _scalar_text(f, key, fmt):
         i = int(f.freepar_idx[key][0])
         lo, med, hi = f.quantiles[i]
         val = f.params[i]
-        return f"{val:{fmt}} (-{med - lo:.2g}, +{hi - med:.2g})"
+        from .common import has_errors
+        return f"{val:{fmt}} (-{med - lo:.2g}, +{hi - med:.2g})" if has_errors(f) else f"{val:{fmt}}"
     return f"{float(np.median(f.best['rings'].r[key])):{fmt}} (fixed)"
 
 
@@ -246,7 +250,7 @@ def _write_plots(f, of):
         files.append(pre + "_slitfit_parameters.pdf")
     except Exception as e:                                  # (the plots must not lose the other outputs)
         print(f" SLITFIT WARNING: the plots failed: {e}")
-    if np.all(np.ptp(np.asarray(f.samples_equal), axis=0) > 0):   # (no errors, METHOD GLOBAL, errors=false: none)
+    if np.all(np.ptp(np.asarray(f.samples_equal), axis=0) > 0):   # (none for METHOD GLOBAL without FLAGERRORS)
         try:
             import corner                                       # noqa: F401
             fig = f.corner_plot()

@@ -593,11 +593,12 @@ whose length is not known in advance, prints the likelihoods computed and the be
 and then at intervals of a tenth of the time elapsed; the Hessian shows the progress bar (`SHOWBAR`). In parameter
 files,
 {ref}`MINIMISER <par-3dfit-minimiser>` (alias MINIMIZER) chooses the method, `SAMPLEROPTS` gives the other
-arguments of `optimize` (`x0`, `nstart`, `seed`, `posterior`, `errors`, `nsamples`, `step`) and `RUNOPTS` the options
-of the method; in Python, `run(method="global", minimiser="powell")` (or `METHOD` given to the object) does the same
+arguments of `optimize` (`x0`, `nstart`, `seed`, `posterior`, `nsamples`, `step`), {ref}`FLAGERRORS
+<par-3dfit-flagerrors>` its argument `errors` and `RUNOPTS` the options of the method; in Python, `run(method="global", minimiser="powell")` (or `METHOD` given to the object) does the same
 with `sampleropts` and `runopts`.
 
-The errors are those of the Laplace approximation: the covariance is the inverse of the Hessian $\mathrm H$ of
+The errors, computed only with `FLAGERRORS` (`errors=True` of `optimize`, whose default is the parameter), are
+those of the Laplace approximation: the covariance is the inverse of the Hessian $\mathrm H$ of
 the objective at the best fit, computed by finite differences in the parameters ($n^2+n+1$ likelihoods, and a
 few $n$ more to choose the steps) with steps of about four conditional σ, a change of 8 in $-\ln\mathcal L$. The
 likelihood of the discretised models has a jitter of about 0.2 in $\ln\mathcal L$ on scales smaller than the
@@ -608,8 +609,8 @@ VDISP did not change). The directions that the data constrain less than the prio
 the parameters closer to a bound of their prior than their error are listed in `f.optimum.at_bound` (a
 warning): the Laplace approximation does not hold there. The outputs use 4000 draws of the Gaussian, truncated
 to the supports of the priors, as the samples of the posterior (errors in the tables, corner plot, errors of the
-deconvolved profile), but the best fit is `f.params`, not their median. `errors=False` skips the Hessian (zero
-errors, no corner plot). `<prefix>_optimize_results.npy` holds the draws and the optimisation, and
+deconvolved profile), but the best fit is `f.params`, not their median. Without `FLAGERRORS` (the default),
+there is no Hessian: the tables have no error columns, and there is no corner plot. `<prefix>_optimize_results.npy` holds the draws and the optimisation, and
 `load_results` reads it.
 
 On a mock of NGC 2403 (the model at six rings with VROT 60–124 km/s, VDISP 12 km/s, INC 62°, PA 124.5°, plus

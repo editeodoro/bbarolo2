@@ -12,7 +12,7 @@ from scipy import stats
 from ..tasks import FitMod3D, build_param, _checked
 from ..bbutils import BBaroloError
 from .common import (vprint, banner, get_distribution, fast_ppf, resample_equal, show_bar, SIGMA_QUANTILES, fit_method,
-                     global_arguments, check_sampler, _resets)
+                     global_arguments, flag_errors, has_errors, check_sampler, _resets)
 from .rings import _RingDict
 from .likelihood import LikelihoodMixin
 from .density import DensityMixin
@@ -735,18 +735,19 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         return self._finish_fit(like_kwargs, custom, verbose)
 
     def optimize(self, freepar=None, minimiser='L-BFGS-B', threads=None, *, log_like=None, like_kwargs: dict = {},
-                 x0=None, posterior=False, errors=True, nstart=1, seed=None, step=1e-3, options: dict = {},
+                 x0=None, posterior=False, errors=None, nstart=1, seed=None, step=1e-3, options: dict = {},
                  nsamples=4000, **kwargs):
         """ Find the best fit by a classic minimisation of -log L (METHOD GLOBAL), with the likelihood of sample() (the
         same free parameters, options and priors: see sample). Nothing is written (see write). Returns self.
 
         The result is the maximum likelihood within the bounds of the priors (posterior=True: the maximum of the
         posterior, likelihood x prior), searched in the unit cube of the priors (see bbarolo.bayesian.optimize).
-        Its errors (errors=True) are those of the Laplace approximation (the inverse Hessian of -log L at the best
-        fit, about ndim^2 likelihoods), and nsamples draws of it serve as the samples of the posterior in the
-        outputs (errors in the tables, corner plot, ring_errors, the errors of the deconvolved profile); errors=False:
-        no errors (zero). The best fit is in params (not the median of the draws), the details in self.optimum (see
-        bbarolo.bayesian.optimize.optimize).
+        Its errors (errors=True; default FLAGERRORS, false) are those of the Laplace approximation (the inverse Hessian
+        of -log L at the best fit, about ndim^2 likelihoods), and nsamples draws of it serve as the samples of the
+        posterior in the outputs (errors in the tables, corner plot, ring_errors, the errors of the deconvolved
+        profile); errors=False: no errors (the outputs have no error columns and no corner plot, and the
+        deconvolved profile no errors). The best fit is in params (not the median of the draws), the details in
+        self.optimum (see bbarolo.bayesian.optimize.optimize).
 
         Args:
           freepar, threads, log_like, like_kwargs: as in sample (threads: the processes of the likelihoods of a
@@ -760,7 +761,8 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                                 'centre' (the centres of the priors) or a vector of the free parameters (NaN: the
                                 centre of the prior)
           posterior (bool):     maximise the posterior instead of the likelihood (default False)
-          errors (bool):        the errors from the Hessian (default True)
+          errors (bool):        the errors from the Hessian (default None: the parameter FLAGERRORS, default
+                                false)
           nstart (int):         local methods: also start from nstart - 1 points drawn from the priors (seed), and
                                 keep the best (default 1)
           step (float):         the step of the gradient, in units of the range of each prior (default 1e-3: the
@@ -774,6 +776,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         self._check_moved(kwargs, 'optimize')
         if params:
             self.update(**params)
+        errors = flag_errors(self) if errors is None else bool(errors)
         kwargs = {k: v for k, v in kwargs.items() if k == 'verbose'}
         like_kwargs, threads, custom = self._start_fit(freepar, threads, log_like, like_kwargs, kwargs, 'optimize')
         verbose = kwargs.get('verbose', True)
@@ -952,7 +955,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             if np.all(np.abs(dvdz) <= 2. * lo):
                 print("NOTE: DVDZ is consistent with 0 (no lag), so ZCYL, the height where the lag begins, is not "
                       "constrained.")
-        if self.deconvolved_profile_errors() is not None and verbose:
+        if self._profile_errors() is not None and verbose and has_errors(self):
             dp = self.dens_profile
             print(f"Deconvolved density profile: errors from {dp['nsamples']} posterior samples (geometry) and "
                   f"{dp['nmc']} noise realisations (see f.dens_profile, print_stats)")

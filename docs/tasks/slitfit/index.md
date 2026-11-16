@@ -3,7 +3,7 @@
 SLITFIT fits the kinematics of a rotating disk to a **long-slit spectrum**: a 2D image of the position
 along the slit and the spectral axis (wavelength, frequency or velocity). By default (`METHOD GLOBAL`) it finds the
 maximum of the likelihood of the rotation curve, the velocity dispersion (and the radial motions) in rings, the
-systemic velocity and the centre along the slit, with the errors of the Laplace approximation; with
+systemic velocity and the centre along the slit (with `FLAGERRORS`, the errors of the Laplace approximation); with
 `METHOD BAYESIAN` it samples their posterior distribution with nested sampling (the nautilus included in BBarolo,
 `SAMPLER NAUTILUSBB`, the default; nautilus or dynesty). SLITFIT runs alone, and has no CLASSIC method.
 
@@ -34,6 +34,7 @@ vacuum wavelengths (in metres, read in Angstrom), so the rest wavelengths are th
 FITSFILE         2masxj1022_SALT.fits
 SLITFIT          true
 METHOD           GLOBAL       # the default; BAYESIAN samples the posterior
+FLAGERRORS       true         # the errors of GLOBAL (Laplace approximation)
 SLITWIDTH        1
 BEAM             1.5
 SPECRES          1.04
@@ -57,7 +58,7 @@ from bbarolo import SlitFit
 
 f = SlitFit("2masxj1022_SALT.fits", slitwidth=1, beam=1.5, specres=1.04, inc=71, redshift=0.09143,
                     restwave=[6564.61, 6549.86, 6585.27], relint=[1, 0.117, 0.35], contsub=True,
-                    skyresid=True, norm="LOCAL", free="VROT VDISP VSYS XPOS")
+                    skyresid=True, norm="LOCAL", free="VROT VDISP VSYS XPOS", flagerrors=True)
 res = f.run(threads=32)       # in memory; run(method="bayesian") samples instead
 res.rings                     # the rings of the best fit, with the errors: an astropy Table
 res.model                     # the model of the slit (an HDU)
@@ -69,8 +70,8 @@ res.write("output/2masxj1022/")
 :::
 ::::
 
-`METHOD GLOBAL` finds the best fit by L-BFGS-B (`MINIMISER` chooses another) with the errors of the Laplace
-approximation, as for {doc}`3DFIT <../3dfit/index>`: about 30 seconds on 32 processes for the example above (28 free
+`METHOD GLOBAL` finds the best fit by L-BFGS-B (`MINIMISER` chooses another), with `FLAGERRORS` the errors of the
+Laplace approximation, as for {doc}`3DFIT <../3dfit/index>`: about 30 seconds on 32 processes for the example above (28 free
 parameters), a good way to check a setup before sampling with `METHOD BAYESIAN`.
 
 The engine {class}`~bbarolo.BayesianSlitFit` (for custom likelihoods and interactive work) has the methods

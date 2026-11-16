@@ -7,7 +7,7 @@ import numpy as np
 
 from ..tasks import FitMod3D, _FromFile
 from .rings import PARAMS, RING_PARAMS, isIterable
-from .common import vprint, SIGMA_QUANTILES
+from .common import vprint, has_errors, SIGMA_QUANTILES
 
 
 class OutputsMixin(object):
@@ -76,7 +76,7 @@ class OutputsMixin(object):
         import warnings
         import matplotlib.pyplot as plt
         from ..bbutils import shortpath
-        if self._method == 'optimize' and self.optimum.get('cov') is None:
+        if not has_errors(self):
             return
         out = os.path.join(of, f"{pre}_corner.pdf")
         root = logging.getLogger()
@@ -160,11 +160,17 @@ class OutputsMixin(object):
         gf = self._galfit
         return ModelOutputs(self._cube_obj, gf.outr, gf.mask, ell, {"none": mod}, fluxconv=True)
 
+    def _profile_errors(self):
+        """ deconvolved_profile_errors at the end of a fit (run, load_results): none for METHOD GLOBAL without
+        errors (FLAGERRORS false), whose dens_profile then has the profile with zero errors. """
+        return self.deconvolved_profile_errors(*(() if has_errors(self) else (0, 0)))
+
     def deconvolved_profile_table(self):
         """ The density profile of the model deconvolved from the beam (DENS not fitted), as
         <prefix>_densprof_deconvolved.txt lists it, in a Table: radii (arcsec), dens_model with its 1-sigma errors e_lo,
         e_hi, dens_obs (the observed profile) and the errors from the geometry and from the noise (e_geom_lo, e_geom_hi,
-        e_noise_lo, e_noise_hi), in the units of DENS. None if DENS is fitted. Needs run(). """
+        e_noise_lo, e_noise_hi), in the units of DENS (no errors for METHOD GLOBAL without FLAGERRORS). None if DENS
+        is fitted. Needs run(). """
         from astropy.table import Table
         if not self.useNorm or self.useBBres:
             return None
@@ -179,10 +185,12 @@ class OutputsMixin(object):
         t = Table()
         t['radii'] = np.asarray(r['radii'], float)
         t['dens_model'] = np.asarray(r['dens'], float)
-        t['e_lo'], t['e_hi'] = e['err_lo'], e['err_hi']
+        if has_errors(self):
+            t['e_lo'], t['e_hi'] = e['err_lo'], e['err_hi']
         t['dens_obs'] = [abs(ell.getSurfDensFaceOn(i)) for i in range(nr)]
-        t['e_geom_lo'], t['e_geom_hi'] = e['err_geom_lo'], e['err_geom_hi']
-        t['e_noise_lo'], t['e_noise_hi'] = e['err_noise_lo'], e['err_noise_hi']
+        if has_errors(self):
+            t['e_geom_lo'], t['e_geom_hi'] = e['err_geom_lo'], e['err_geom_hi']
+            t['e_noise_lo'], t['e_noise_hi'] = e['err_noise_lo'], e['err_noise_hi']
         return t
 
     def _write_deconvolved_profile(self):
@@ -190,8 +198,8 @@ class OutputsMixin(object):
         model (deconvolved, at the best-fit geometry) with its 1-sigma errors (see
         deconvolved_profile_errors), the observed profile (face-on average of the total
         intensity map in each ring, the profile of the original module), and the errors from
-        the geometry and from the noise, in the units of DENS. Needs the Ellprof profile along
-        self.outri (see write_bestmodel). """
+        the geometry and from the noise, in the units of DENS (no errors for METHOD GLOBAL without
+        FLAGERRORS). Needs the Ellprof profile along self.outri (see write_bestmodel). """
         p_ = self._cube_obj.pars()
         fn = os.path.join(p_.outFolder, p_.outPrefix + "_densprof_deconvolved.txt")
         r = self.outri.r
@@ -200,18 +208,22 @@ class OutputsMixin(object):
         z = np.zeros(nr)
         e = {k: (dp[k] if dp is not None else z) for k in ('err_lo', 'err_hi', 'err_geom_lo', 'err_geom_hi',
                                                             'err_noise_lo', 'err_noise_hi')}
+        errs = has_errors(self)
         with open(fn, "w") as f:
             f.write("# Density profile of the model (DENS_MODEL: the densities whose beam-convolved model\n"
                     "# reproduces the total intensity map) and the observed profile (DENS_OBS: the face-on\n"
-                    "# average of the map in each ring, the profile of the original module).\n"
-                    "# E_LO, E_HI: 1-sigma errors of DENS_MODEL, the errors from the geometry (posterior samples:\n"
-                    f"# {dp['nsamples'] if dp else 0}) and from the noise (realisations: {dp['nmc'] if dp else 0}) "
-                    "added in quadrature.\n")
-            f.write(f"{'#RAD(arcs)':<12s}" + "".join(f"{c:>14s}" for c in (
-                'DENS_MODEL', 'E_LO', 'E_HI', 'DENS_OBS', 'E_GEOM_LO', 'E_GEOM_HI', 'E_NOISE_LO', 'E_NOISE_HI')) + "\n")
+                    "# average of the map in each ring, the profile of the original module).\n")
+            if errs:
+                f.write("# E_LO, E_HI: 1-sigma errors of DENS_MODEL, the errors from the geometry (posterior samples:\n"
+                        f"# {dp['nsamples'] if dp else 0}) and from the noise (realisations: {dp['nmc'] if dp else 0}) "
+                        "added in quadrature.\n")
+            cols = ('DENS_MODEL', 'E_LO', 'E_HI', 'DENS_OBS', 'E_GEOM_LO', 'E_GEOM_HI', 'E_NOISE_LO', 'E_NOISE_HI')
+            f.write(f"{'#RAD(arcs)':<12s}" + "".join(f"{c:>14s}" for c in cols if errs or not c.startswith('E_'))
+                    + "\n")
             for i in range(nr):
                 vals = (r['dens'][i], e['err_lo'][i], e['err_hi'][i], abs(self._ellprof.getSurfDensFaceOn(i)),
                         e['err_geom_lo'][i], e['err_geom_hi'][i], e['err_noise_lo'][i], e['err_noise_hi'][i])
+                vals = vals if errs else (vals[0], vals[3])
                 f.write(f"{r['radii'][i]:<12.3f}" + "".join(f"{v:>14.6e}" for v in vals) + "\n")
 
     def _model_dens_profile(self):
@@ -257,7 +269,10 @@ class OutputsMixin(object):
 
     def _vertical_errors(self):
         """ {name: errors} of the vertical motions in the outputs (_vertical_params): errors[ring, 0 = lower
-        (negative) / 1 = upper (positive)], as the error columns of the 3DFIT tables (zero if fixed). """
+        (negative) / 1 = upper (positive)], as the error columns of the 3DFIT tables (zero if fixed); None for
+        METHOD GLOBAL without errors (FLAGERRORS false: no error columns). """
+        if not has_errors(self):
+            return {n: None for n in self._vertical_params()}
         out = {}
         for n in self._vertical_params():
             lo, hi = self.ring_errors(n)
@@ -267,11 +282,14 @@ class OutputsMixin(object):
     def _posterior_errors(self):
         """ The ring parameters that were sampled (flags in the order of _RING_NAMES) and
         their 1-sigma errors from the posterior, as the 3DFIT error columns:
-        errors[ring, 0 = lower (negative) / 1 = upper (positive), k-th free parameter]. """
+        errors[ring, 0 = lower (negative) / 1 = upper (positive), k-th free parameter]; None for METHOD GLOBAL
+        without errors (FLAGERRORS false: no error columns). """
         base = {k.split('_')[0] for k in self.freepar_idx}
         if getattr(self, 'dens_profile', None) is not None:
             base.add('dens')                          # errors of the deconvolved profile
         mpar = [n in base for n in self._RING_NAMES]
+        if not has_errors(self):
+            return mpar, None
         free = [n for n, m in zip(self._RING_NAMES, mpar) if m]
         errors = np.zeros((self.outri.nr, 2, len(free)))
         for k, n in enumerate(free):
@@ -313,7 +331,7 @@ class OutputsMixin(object):
         gf = self._galfit
         old = (gf.mpar, gf.nfree, gf.par.flagERRORS, getattr(gf, '_disk_edge', None))
         mpar, errors = self._posterior_errors()
-        gf.mpar, gf.nfree, gf.par.flagERRORS = mpar, int(sum(mpar)), bool(any(mpar))
+        gf.mpar, gf.nfree, gf.par.flagERRORS = mpar, int(sum(mpar)), bool(any(mpar)) and errors is not None
         gf._disk_edge = self.disk_edge
         extra = {} if self.disk_edge is None else {'INDISK': self.in_disk.astype(int)}
         try:
@@ -514,20 +532,28 @@ class OutputsMixin(object):
         elif getattr(self, 'ess', np.inf) < 20:
             print(f"  (effective sample size of the posterior: {self.ess:.1f}: the errors are not reliable)")
         q = np.quantile(self.samples_equal, quantiles, axis=0)
+        errs = has_errors(self)
         for i in range(len(self.freepar_names)):
             d = np.diff(q[:, i])
             val = self.params[i] if opt is not None else q[1, i]       # (an optimisation: the best fit)
-            print("  %10s = %10.3f %+10.3f %+10.3f" % (self.freepar_names[i], val, -d[0], d[1]))
+            if errs:
+                print("  %10s = %10.3f %+10.3f %+10.3f" % (self.freepar_names[i], val, -d[0], d[1]))
+            else:
+                print("  %10s = %10.3f" % (self.freepar_names[i], val))
         from .common import smoothness_result
         sm = smoothness_result(self.smoothness_stats())
         if sm:
             print(f"\nSmoothness: {sm}")
         dp = getattr(self, 'dens_profile', None)
-        if dp is not None:
+        if dp is not None and errs:
             print("\nDeconvolved density profile (DENS, not fitted; errors from the geometry and the noise):")
             for i in range(len(dp['radii'])):
                 print("  R = %8.2f   %10.4g %+10.3g %+10.3g" % (dp['radii'][i], dp['dens'][i], -dp['err_lo'][i],
                                                                 dp['err_hi'][i]))
+        elif dp is not None:
+            print("\nDeconvolved density profile (DENS, not fitted):")
+            for i in range(len(dp['radii'])):
+                print("  R = %8.2f   %10.4g" % (dp['radii'][i], dp['dens'][i]))
         edge = self.disk_edge
         out = np.flatnonzero(~self.in_disk)
         if edge is not None and out.size:
@@ -681,4 +707,4 @@ class OutputsMixin(object):
         if self.useNorm and not self.useBBres:
             self._set_density(self.outri)
         self._galfit.outr = self.outri.object.copy()
-        self.deconvolved_profile_errors()
+        self._profile_errors()

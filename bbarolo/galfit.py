@@ -255,7 +255,8 @@ def ring_table(r, mpar=None, errors=None, fitok=None, extra=None, vertical=None)
     (pixels), vsys, vrad (km/s); with errors (array nr x 2 x number of free parameters, the free parameters
     mpar), the lower (negative) and upper errors e_<name>1, e_<name>2 of the free parameters; vertical: {name:
     errors (nr x 2)} of the vertical motions vvert (km/s), dvdz (km/s/arcsec), zcyl (arcsec), as the columns
-    <name>, e_<name>1, e_<name>2 (METHOD GLOBAL and BAYESIAN, see VERTICAL_COLUMNS); with fitok, a column fitok
+    <name>, e_<name>1, e_<name>2 (METHOD GLOBAL and BAYESIAN, see VERTICAL_COLUMNS; errors None: <name> alone,
+    METHOD GLOBAL without errors); with fitok, a column fitok
     (False for the rings whose fit failed); extra: {name: values} as more columns."""
     from astropy.table import Table
     import astropy.units as u
@@ -284,6 +285,8 @@ def ring_table(r, mpar=None, errors=None, fitok=None, extra=None, vertical=None)
         unit = u.Unit(VERTICAL_COLUMNS[name][2])
         t[name] = vertical_values(r, name)[:n]
         t[name].unit = unit
+        if e is None:
+            continue
         for j in (0, 1):
             t[f"e_{name}{j + 1}"] = np.asarray(e, float)[:n, j]
             t[f"e_{name}{j + 1}"].unit = unit
@@ -1537,13 +1540,14 @@ class Galfit:
     def writeRingFile(self, filename, r, errors=None, extra=None, vertical=None):
         """<prefix>_<filename> in the output folder: the rings r (and the errors of the free parameters).
         extra: {NAME: integer value of each ring}, written as the last columns (e.g. INDISK of
-        Bayesian3DFIT); vertical: {name: errors (nrings x 2)} of the vertical motions written after the
-        errors (VERTICAL_COLUMNS: VVERT, DVDZ, ZCYL with their errors, METHOD GLOBAL and BAYESIAN)."""
+        Bayesian3DFIT); vertical: {name: errors (nrings x 2), or None: no error columns} of the vertical motions
+        written after the errors (VERTICAL_COLUMNS: VVERT, DVDZ, ZCYL with their errors, METHOD GLOBAL and
+        BAYESIAN)."""
         fileo = self.cin.pars().outFolder + self.cin.pars().outPrefix + "_" + filename
         extra = extra or {}
         vertical = vertical or {}
         with open(fileo, "w") as fout:
-            writeHeader(fout, self.mpar, self.par.flagERRORS, False, extra=list(extra), vertical=list(vertical))
+            writeHeader(fout, self.mpar, self.par.flagERRORS, False, extra=list(extra), vertical=vertical)
             for i in range(r.nr):
                 writeRing(fout, r, i, self.nfree, self.par.flagERRORS and errors is not None, errors, False, False,
                           extra=[v[i] for v in extra.values()], vertical=vertical)
@@ -1621,7 +1625,9 @@ def vertical_values(r, name):
     return v
 
 
-def writeHeader(fout, mpar, writeErrors, writeBadRings, extra=(), vertical=()):
+def writeHeader(fout, mpar, writeErrors, writeBadRings, extra=(), vertical=None):
+    """The header of a ring file. vertical: {name: errors, or None without error columns} of the vertical motions
+    written (VERTICAL_COLUMNS)."""
     m = 10
     s = (f"{'#RAD(arcs)':<{m + 1}}{'VROT(km/s)':<{m + 1}}{'DISP(km/s)':<{m + 1}}{'INC(deg)':<{m}}"
          f"{'P.A.(deg)':<{m}}{'Z0(arcs)':<{m}}{'DENS(un)':<{m}}{'XPOS(pix)':<{m}}{'YPOS(pix)':<{m}}"
@@ -1631,10 +1637,12 @@ def writeHeader(fout, mpar, writeErrors, writeBadRings, extra=(), vertical=()):
         for i, nm in enumerate(names):
             if mpar[i]:
                 s += f"{'E_' + nm + '1':<{m}}{'E_' + nm + '2':<{m}}"
-    for k in vertical:
+    for k, e in (vertical or {}).items():
         col, err = VERTICAL_COLUMNS[k][:2]
         we = max(m, len(err) + 2)                   # (E_VDISPTHICK1: the names stay apart)
-        s += f"{col:<{max(m, len(col) + 1)}}{err + '1':<{we}}{err + '2':<{we}}"
+        s += f"{col:<{max(m, len(col) + 1)}}"
+        if e is not None:
+            s += f"{err + '1':<{we}}{err + '2':<{we}}"
     if writeBadRings:
         s += f"{'FITOK':<{m}}"
     for nm in extra:
@@ -1643,8 +1651,8 @@ def writeHeader(fout, mpar, writeErrors, writeBadRings, extra=(), vertical=()):
 
 
 def writeRing(fout, r, i, nfree, writeErrors, errors, writeBadRings, fitOK, extra=(), vertical=None):
-    """One ring of a ring file (see writeHeader). vertical: {name: errors (nrings x 2, lower negative, upper)} of the
-    vertical motions written (VERTICAL_COLUMNS)."""
+    """One ring of a ring file (see writeHeader). vertical: {name: errors (nrings x 2, lower negative, upper), or None
+    without error columns} of the vertical motions written (VERTICAL_COLUMNS)."""
     m = 10
     s = (f"{r.radii[i]:<{m + 1}.3f}{r.vrot[i]:<{m + 1}.3f}{r.vdisp[i]:<{m + 1}.3f}"
          f"{r.inc[i]:<{m}.3f}{r.phi[i]:<{m}.3f}{r.z0[i]:<{m}.3f}"
@@ -1655,8 +1663,9 @@ def writeRing(fout, r, i, nfree, writeErrors, errors, writeBadRings, fitOK, extr
     for k, e in (vertical or {}).items():
         col, err, _, fmt = VERTICAL_COLUMNS[k]
         we = max(m, len(err) + 2)
-        s += (f"{float(vertical_values(r, k)[i]):<{max(m, len(col) + 1)}{fmt}}{float(e[i][0]):<{we}{fmt}}"
-              f"{float(e[i][1]):<{we}{fmt}}")
+        s += f"{float(vertical_values(r, k)[i]):<{max(m, len(col) + 1)}{fmt}}"
+        if e is not None:
+            s += f"{float(e[i][0]):<{we}{fmt}}{float(e[i][1]):<{we}{fmt}}"
     if writeBadRings:
         s += f"{int(fitOK):<{m}d}"
     for v in extra:

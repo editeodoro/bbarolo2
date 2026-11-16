@@ -48,7 +48,7 @@ from ..tasks import Task, build_param, _checked
 from ..bbutils import BBaroloError
 from .common import (vprint, banner, get_distribution, fast_ppf, show_bar, smoothness_penalty, smoothness_summary,
                      smoothness_text, smoothness_result, SIGMA_QUANTILES,
-                     fit_method, global_arguments, check_sampler, _resets)
+                     fit_method, global_arguments, flag_errors, has_errors, check_sampler, _resets)
 from .sampling import sample, sampler_options
 
 SLIT_RING_PARS = ("vrot", "vdisp", "vrad", "dens")
@@ -818,16 +818,18 @@ class BayesianSlitFit(Task):
         return self
 
     def optimize(self, freepar=None, minimiser="L-BFGS-B", threads=None, *, like_kwargs: dict = {}, x0=None,
-                 posterior=False, errors=True, nstart=1, seed=None, step=1e-3, options: dict = {}, nsamples=4000,
+                 posterior=False, errors=None, nstart=1, seed=None, step=1e-3, options: dict = {}, nsamples=4000,
                  verbose=True, **params):
         """Find the best fit by a classic minimisation of -log L (METHOD GLOBAL), with the likelihood of sample() (the same free
         parameters, options and priors), searched in the unit cube of the priors (see bbarolo.bayesian.optimize and
         Bayesian3DFIT.optimize: method, x0 None (the initial rings) or 'centre' or a vector, posterior, errors from the
-        Laplace approximation, nstart, seed, step, options, nsamples). Nothing is written. Returns self."""
+        Laplace approximation (default None: the parameter FLAGERRORS, default false), nstart, seed, step, options,
+        nsamples). Nothing is written. Returns self."""
         from .optimize import optimize as _optimize, summary, method_name
         method = method_name(minimiser)
         if params:
             self.update(**params)
+        errors = flag_errors(self) if errors is None else bool(errors)
         dflt = self._run_defaults()
         freepar = self._fit_options(freepar, like_kwargs, dflt)
         threads = self._threads(threads)
@@ -990,7 +992,8 @@ class BayesianSlitFit(Task):
     def ring_table(self):
         """The best-fit rings with the 1-sigma errors of the free parameters: an astropy Table (radii in arcsec; VROT,
         VDISP, VRAD, VSYS in km/s; XPOS in pixels of the slit; DENS the densities of the model; E_<NAME>_LO/HI the
-        errors), from the posterior samples (or the Laplace draws of optimize)."""
+        errors), from the posterior samples (or the Laplace draws of optimize; no errors for METHOD GLOBAL without
+        FLAGERRORS)."""
         from astropy.table import Table
         rd = self.best["rings"]
         nr = rd.nr
@@ -1005,7 +1008,7 @@ class BayesianSlitFit(Task):
                 t[name] = np.asarray(self.best["dens"], float)
             else:
                 t[name] = np.asarray(rd.r[key], float)
-            lo, hi = self._ring_errors(key, nr)
+            lo, hi = self._ring_errors(key, nr) if has_errors(self) else (None, None)
             if lo is not None:
                 t[f"E_{name}_LO"], t[f"E_{name}_HI"] = lo, hi
         return t
@@ -1039,9 +1042,11 @@ class BayesianSlitFit(Task):
             st.write(f"\n SLITFIT {'maximum a posteriori' if opt.posterior else 'maximum likelihood'} "
                      f"({opt.method}, NORM {self._norm()}; errors: "
                      f"{'Laplace approximation' if opt.cov is not None else 'not computed'}):\n")
+        errs = has_errors(self)
         for name, val, (lo, med, hi) in zip(self.freepar_names, self.params, self.quantiles):
             val = med if opt is None else val
-            st.write(f"   {name:12s} = {val:12.4g}  -{med - lo:<10.3g} +{hi - med:<10.3g}\n")
+            st.write(f"   {name:12s} = {val:12.4g}" + (f"  -{med - lo:<10.3g} +{hi - med:<10.3g}" if errs else "")
+                     + "\n")
         if self.best is not None:
             st.write(f"   reduced chi-square of the best fit: {self.best['chi2_reduced']:.3g}\n")
         sm = smoothness_result(self.smoothness_stats())

@@ -37,7 +37,7 @@ The rings of 3DFIT (every METHOD) and GALMOD (`_rings_initial.txt`, `_rings_fina
 | `DENS` | gas density (`SIG(E20)` in the initial rings) | the units of the model, see {doc}`../tasks/galmod/index` |
 | `XPOS`, `YPOS` | centre | pixels |
 | `VSYS`, `VRAD` | systemic and radial velocity | km/s |
-| `E_VROT1`, `E_VROT2`, `E_DISP1`, ... | with {ref}`FLAGERRORS <par-3dfit-flagerrors>` or METHOD GLOBAL or BAYESIAN of 3DFIT: the lower (negative) and upper errors of each free parameter | as the parameter |
+| `E_VROT1`, `E_VROT2`, `E_DISP1`, ... | with {ref}`FLAGERRORS <par-3dfit-flagerrors>` or METHOD GLOBAL or BAYESIAN of 3DFIT: the lower (negative) and upper errors of each free parameter (GLOBAL: only with FLAGERRORS) | as the parameter |
 
 `_rings_initial.txt` and `_rings_model.txt` have no `VRAD` column. The values have three decimals. The rows of the rings
 whose fit failed are left out (unless {ref}`BADOUT <par-3dfit-badout>`). The other text tables

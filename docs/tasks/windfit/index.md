@@ -1,7 +1,8 @@
 # WINDFIT
 
 WINDFIT fits a bi-conical wind to an emission-line datacube. By default (`METHOD GLOBAL`) it finds the maximum
-of the likelihood of its geometry and kinematics, with the errors of the Laplace approximation, in seconds; with
+of the likelihood of its geometry and kinematics, in seconds (with `FLAGERRORS`, the errors of the Laplace
+approximation); with
 `METHOD BAYESIAN` it samples their posterior distribution with nested sampling (nautilus or dynesty). The wind is the model of
 {doc}`GALWIND <../galwind/index>`: two opposite cones with their apex at the centre, along the rotation axis
 of a disk of inclination `INC` and position angle `PA`, between the opening angles `OPENIN` and `OPENANG`,
@@ -74,8 +75,8 @@ res.write("output/wind/")
 
 `METHOD GLOBAL`, the default (in Python `WindFit(...).run()`, or `BayesianWind.optimize(freepar=...)`), finds the best
 fit by a classic minimisation of the same likelihood (the hyperparameters of the emission added as in the
-sampling), in seconds, to try a setup before a sampling: L-BFGS-B by default (`MINIMISER` chooses another), with the
-errors of the Laplace approximation (see {doc}`3DFIT <../3dfit/index>` for the minimisers, `SAMPLEROPTS` and
+sampling), in seconds, to try a setup before a sampling: L-BFGS-B by default (`MINIMISER` chooses another), with
+`FLAGERRORS` the errors of the Laplace approximation (see {doc}`3DFIT <../3dfit/index>` for the minimisers, `SAMPLEROPTS` and
 `RUNOPTS`, and the errors). On a clumpy mock wind with five free parameters and the four of the emission, L-BFGS-B
 took 5 seconds on 16 processes and nautilus 15 minutes: the best fit was within 0.3σ of the medians of the
 posterior, and the errors within 10% of its widths.
@@ -135,7 +136,7 @@ In the output folder, with the prefix of the cube:
   the cones (`_pv_a`, along `PA`) and along it (`_pv_b`, `PA` + 90), as 3DFIT;
 - `_<sampler>_windresults.npy`: the samples, their weights and the setup of the fit (METHOD GLOBAL:
   `_optimize_windresults.npy`, with the best fit and the optimisation; `_wind_params.txt` then gives the best fit
-  and the errors of the Laplace approximation);
+  and, with `FLAGERRORS`, the errors of the Laplace approximation);
 - `plotscripts/`: the plotting scripts (with `PLOTS` ≥ 0), run with `PLOTS` > 0. They produce
   `_chanmaps_wind.pdf` (channel maps of the data with the contours of the model), `_maps_wind.pdf` (moment
   maps of the data, the model and the residuals) and `_pv_wind.pdf` (slices along the axis of the cones and

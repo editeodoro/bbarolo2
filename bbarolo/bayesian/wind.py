@@ -81,7 +81,7 @@ from ..windmodel import WindModel, WindCells, WindPars, Boxes
 from .emission import (log_marginal, log_marginal_diag, log_profile, log_marginal_gauss, log_marginal_gauss_diag,
                        log_detection)
 from .common import (vprint, banner, get_distribution, fast_ppf, show_bar, SIGMA_QUANTILES, fit_method,
-                     global_arguments, check_sampler, _resets)
+                     global_arguments, flag_errors, has_errors, check_sampler, _resets)
 from .sampling import sample, sampler_options
 
 WIND_SHELL_PARS = ("vwind", "vdisp", "vrot")
@@ -885,7 +885,7 @@ class BayesianWind(Task):
         return self
 
     def optimize(self, freepar=None, minimiser="L-BFGS-B", threads=None, *, like_kwargs: dict = {}, x0=None,
-                 posterior=False, errors=True, nstart=1, seed=None, step=1e-3, options: dict = {}, nsamples=4000,
+                 posterior=False, errors=None, nstart=1, seed=None, step=1e-3, options: dict = {}, nsamples=4000,
                  verbose=True, **params):
         """Find the best fit by a classic minimisation of -log L (METHOD GLOBAL), with the likelihood of sample() (the same free
         parameters, with the hyperparameters of the emission added, options and priors), e.g. to test the sampling.
@@ -901,14 +901,16 @@ class BayesianWind(Task):
         centres of the priors) or a vector of the free parameters (NaN: the centre of the prior); nstart > 1 also
         starts from nstart - 1 points drawn from the priors (seed) and keeps the best.
 
-        The errors (errors=True) are those of the Laplace approximation (the inverse Hessian at the best fit, about
-        ndim^2 likelihoods), and nsamples draws of it serve as the samples of the posterior in the outputs (errors of
-        the tables, of the emission, corner plot); errors=False: none (zero). The best fit is in params (not the median
-        of the draws), the details in self.optimum (see bbarolo.bayesian.optimize.optimize)."""
+        The errors (errors=True; default None: the parameter FLAGERRORS, default false) are those of the Laplace
+        approximation (the inverse Hessian at the best fit, about ndim^2 likelihoods), and nsamples draws of it serve
+        as the samples of the posterior in the outputs (errors of the tables, of the emission, corner plot);
+        errors=False: none (the outputs have no error columns and no corner plot). The best fit is in params (not the
+        median of the draws), the details in self.optimum (see bbarolo.bayesian.optimize.optimize)."""
         from .optimize import optimize as _optimize, summary, method_name
         method = method_name(minimiser)
         if params:
             self.update(**params)
+        errors = flag_errors(self) if errors is None else bool(errors)
         dflt = self._run_defaults()
         freepar = self._fit_options(freepar, like_kwargs, dflt)
         threads = self._threads(threads)
@@ -1079,9 +1081,11 @@ class BayesianWind(Task):
             st.write(f"\n WINDFIT {'maximum a posteriori' if opt.posterior else 'maximum likelihood'} "
                      f"({opt.method}, emission {self.like_kwargs['emission']}, {self._likelihood_name()} likelihood; "
                      f"errors: {'Laplace approximation' if opt.cov is not None else 'not computed'}):\n")
+        errs = has_errors(self)
         for name, val, (lo, med, hi) in zip(self.freepar_names, self.params, self.quantiles):
             val = med if opt is None else val                 # (an optimisation: the best fit)
-            st.write(f"   {name:12s} = {val:12.4g}  -{med - lo:<10.3g} +{hi - med:<10.3g}\n")
+            st.write(f"   {name:12s} = {val:12.4g}" + (f"  -{med - lo:<10.3g} +{hi - med:<10.3g}" if errs else "")
+                     + "\n")
         st.write("\n")
 
     def _likelihood_name(self):
@@ -1102,9 +1106,17 @@ class BayesianWind(Task):
     def emission_errors(self, nsamp=50, seed=0):
         """The emission of each shell and cone at the best fit and its 1-sigma interval over nsamp posterior samples:
         a dict with radii (bin centres), and for each cone (1: +z, receding; -1: approaching) the flux (emissivity
-        times volume: the units of the cube times pixels and channels) median, low and high."""
+        times volume: the units of the cube times pixels and channels) best, low and high (None for METHOD GLOBAL
+        without errors, FLAGERRORS false)."""
         if self.like_kwargs["emission"] in ("spaxel", "voxel"):
             return None
+        if not has_errors(self):
+            best = self._shell_flux(self.best_details)
+            redges = self._wm.cells.redges
+            res = dict(radii=0.5 * (redges[1:] + redges[:-1]), edges=redges)
+            for ic, c in enumerate(self._wm.cells.cones):
+                res[c] = dict(best=best[ic], lo=None, hi=None)
+            return res
         rng = np.random.default_rng(seed)
         cells = self._wm.cells
         nr = cells.nr
@@ -1144,22 +1156,30 @@ class BayesianWind(Task):
 
     def parameters_table(self):
         """The free parameters of the fit (those of <prefix>_wind_params.txt) as a Table: name, value (the median of the
-        posterior, or the best fit of METHOD GLOBAL), err_lo and err_hi (1-sigma, from the quantiles)."""
+        posterior, or the best fit of METHOD GLOBAL), err_lo and err_hi (1-sigma, from the quantiles; none for METHOD
+        GLOBAL without errors, FLAGERRORS false)."""
         from astropy.table import Table
         opt = self.optimum if self._method == "optimize" else None
+        errs = has_errors(self)
         rows = []
         for name, val, (lo, med, hi) in zip(self.freepar_names, self.params, self.quantiles):
-            rows.append((str(name), float(med if opt is None else val), float(med - lo), float(hi - med)))
-        return Table(rows=rows, names=("name", "value", "err_lo", "err_hi")) if rows else None
+            row = (str(name), float(med if opt is None else val))
+            rows.append(row + ((float(med - lo), float(hi - med)) if errs else ()))
+        names = ("name", "value", "err_lo", "err_hi") if errs else ("name", "value")
+        return Table(rows=rows, names=names) if rows else None
 
     def shells_table(self):
-        """The shells of the best fit: radius, VWIND, VDISP, VROT, each with its 1-sigma errors (lower, upper; 0 for
-        fixed parameters): a dict of arrays."""
+        """The shells of the best fit: radius, VWIND, VDISP, VROT, each with its 1-sigma errors (<name>_lo, <name>_hi;
+        0 for fixed parameters; none for METHOD GLOBAL without errors, FLAGERRORS false): a dict of arrays."""
         R = self._init["radii"]
         tab = dict(radii=R)
         eq = self.samples_equal
+        errs = has_errors(self)
         for base in WIND_SHELL_PARS:
             best = getattr(self.best, base)
+            if not errs:
+                tab[base] = best
+                continue
             vals = None
             if base in self.freepar_idx:
                 idx = self.freepar_idx[base]

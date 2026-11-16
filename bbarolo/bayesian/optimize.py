@@ -20,15 +20,15 @@ The options of the minimiser are given in `options` (scipy's, e.g. maxiter); nst
 from nstart - 1 points drawn from the priors (seed), and keeps the best. With verbose, the progress (the likelihoods
 computed and the best log-likelihood) is printed after 10 seconds and then at intervals of a tenth of the time elapsed
 (the minimisation has no known length), and the Hessian shows the progress bar of BBarolo (showbar: SHOWBAR). In
-parameter files, METHOD GLOBAL runs optimize with MINIMISER, its other arguments in SAMPLEROPTS and the options of
-the minimiser in RUNOPTS (see global_options).
+parameter files, METHOD GLOBAL runs optimize with MINIMISER, errors with FLAGERRORS, its other arguments in SAMPLEROPTS
+and the options of the minimiser in RUNOPTS (see global_options).
 
-The errors (errors=True): the Laplace approximation, the inverse of the Hessian of the objective at the best fit (in
-the parameters), computed by finite differences (about ndim^2 likelihoods, steps of about four conditional sigma, see
-_TARGET), with draws of the Gaussian truncated to the supports of the priors (nsamples) that serve as the samples of
-the posterior in the outputs (errors, tables, corner plot). Directions that the likelihood does not constrain
-(eigenvalues of the Hessian below that of the prior, 12 in u) get the width of the prior; a parameter closer to a
-bound of its prior than its error is flagged (the Laplace approximation does not hold there).
+The errors (errors=True; FLAGERRORS in parameter files): the Laplace approximation, the inverse of the Hessian of the
+objective at the best fit (in the parameters), computed by finite differences (about ndim^2 likelihoods, steps of about
+four conditional sigma, see _TARGET), with draws of the Gaussian truncated to the supports of the priors (nsamples) that
+serve as the samples of the posterior in the outputs (errors, tables, corner plot). Directions that the likelihood does
+not constrain (eigenvalues of the Hessian below that of the prior, 12 in u) get the width of the prior; a parameter
+closer to a bound of its prior than its error is flagged (the Laplace approximation does not hold there).
 """
 
 import math
@@ -47,8 +47,8 @@ GLOBAL_METHODS = ('differential_evolution',)
 METHODS = LOCAL_METHODS + GLOBAL_METHODS
 
 # METHOD GLOBAL (parameter files): the options of SAMPLEROPTS (the arguments of optimize but the minimiser, which is
-# MINIMISER; RUNOPTS are the options of the minimiser)
-GLOBAL_OPTIONS = ('x0', 'posterior', 'errors', 'nstart', 'seed', 'step', 'nsamples')
+# MINIMISER, and errors, which is FLAGERRORS; RUNOPTS are the options of the minimiser)
+GLOBAL_OPTIONS = ('x0', 'posterior', 'nstart', 'seed', 'step', 'nsamples')
 
 _BIG = 1e30                 # the objective where the likelihood is not finite
 _U_EDGE = 1e-9              # the bound of u at an infinite end of a prior
@@ -81,14 +81,15 @@ def method_name(method):
 
 
 def global_options(sampler_kwargs, run_kwargs=None, task="3DFIT"):
-    """ The arguments of optimize() for METHOD GLOBAL but the minimiser (MINIMISER): those of SAMPLEROPTS
-    (sampler_kwargs: x0 ('centre', or values separated by commas), posterior, errors, nstart, seed, step, nsamples)
+    """ The arguments of optimize() for METHOD GLOBAL but the minimiser (MINIMISER) and errors (FLAGERRORS): those of
+    SAMPLEROPTS (sampler_kwargs: x0 ('centre', or values separated by commas), posterior, nstart, seed, step, nsamples)
     and, as options, RUNOPTS (run_kwargs: the options of the minimiser, e.g. maxiter; checked by the minimiser when
     it starts). BBaroloError for an unknown option. """
     kw = dict(sampler_kwargs or {})
     bad = sorted(set(kw) - set(GLOBAL_OPTIONS))
     if bad:
-        hint = " (the minimiser is MINIMISER)" if "method" in bad else ""
+        hint = "".join(h for k, h in (("method", " (the minimiser is MINIMISER)"),
+                                      ("errors", " (the errors are FLAGERRORS)")) if k in bad)
         raise BBaroloError(f"{task}: SAMPLEROPTS: unknown option(s) {', '.join(bad)} of METHOD GLOBAL{hint}. "
                            f"Options: {', '.join(GLOBAL_OPTIONS)} (those of the minimiser in RUNOPTS).")
     if isinstance(kw.get('x0'), (int, float)):

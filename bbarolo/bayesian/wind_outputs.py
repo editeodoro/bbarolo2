@@ -24,7 +24,7 @@ the cube (<prefix>):
 import os
 import numpy as np
 
-from .common import vprint
+from .common import vprint, has_errors
 
 
 def _prefix(f, outfolder):
@@ -62,32 +62,42 @@ def write_outputs(f, outfolder=None, plots=None, verbose=True):
                       f"(errors: {'Laplace approximation' if opt.cov is not None else 'not computed'}), "
                       f"log-likelihood at the best fit {f.best_logl:.6g}\n")
         col = "MEDIAN" if opt is None else "BEST"
-        out.write(f"#{'NAME':>13s} {col:>14s} {'ERR_LO':>12s} {'ERR_HI':>12s}   PRIOR\n")
+        errs = has_errors(f)
+        out.write(f"#{'NAME':>13s} {col:>14s}" + (f" {'ERR_LO':>12s} {'ERR_HI':>12s}" if errs else "") + "   PRIOR\n")
         for name, val, (lo, med, hi) in zip(f.freepar_names, f.params, f.quantiles):
             key = name if name in f.priors else name.rstrip("0123456789")
             val = med if opt is None else val
-            out.write(f" {name:>13s} {val:14.6g} {med - lo:12.5g} {hi - med:12.5g}   {f.priors.get(key, '')}\n")
+            out.write(f" {name:>13s} {val:14.6g}" + (f" {med - lo:12.5g} {hi - med:12.5g}" if errs else "")
+                      + f"   {f.priors.get(key, '')}\n")
     files.append(fn)
     # the shells
     tab = f.shells_table()
     em = f.emission_errors()
     fn = pre + "_wind_shells.txt"
     with open(fn, "w") as out:
-        out.write("# RADIUS(arcsec) VWIND(km/s) E_LO E_HI VDISP(km/s) E_LO E_HI VROT(km/s) E_LO E_HI\n")
+        if errs:
+            out.write("# RADIUS(arcsec) VWIND(km/s) E_LO E_HI VDISP(km/s) E_LO E_HI VROT(km/s) E_LO E_HI\n")
+        else:
+            out.write("# RADIUS(arcsec) VWIND(km/s) VDISP(km/s) VROT(km/s)\n")
         for i, r in enumerate(tab["radii"]):
-            out.write(f" {r:12.4f}" + "".join(f" {tab[b][i]:10.3f} {tab[b + '_lo'][i]:8.3f} {tab[b + '_hi'][i]:8.3f}"
+            out.write(f" {r:12.4f}" + "".join(f" {tab[b][i]:10.3f}" + (f" {tab[b + '_lo'][i]:8.3f} "
+                                                                        f"{tab[b + '_hi'][i]:8.3f}" if errs else "")
                                               for b in ("vwind", "vdisp", "vrot")) + "\n")
         if em is not None:
             out.write("#\n# The flux of the cones in the radial bins of the emission (emissivity x volume: the units "
-                      "of the cube x pixels x channels), best fit and 1-sigma interval\n")
-            out.write("# R0(arcsec) R1(arcsec) FLUX_REC LO HI FLUX_APP LO HI\n")
+                      "of the cube x pixels x channels), best fit" + (" and 1-sigma interval" if errs else "") + "\n")
+            out.write("# R0(arcsec) R1(arcsec) " + ("FLUX_REC LO HI FLUX_APP LO HI" if errs else "FLUX_REC FLUX_APP")
+                      + "\n")
             e = em["edges"]
             for i in range(len(e) - 1):
                 row = f"# {e[i]:10.3f} {e[i + 1]:10.3f}"
                 for cone in (1, -1):
                     d = em.get(cone)
-                    row += (f" {d['best'][i]:12.5g} {d['lo'][i]:12.5g} {d['hi'][i]:12.5g}" if d is not None
-                            else f" {'-':>12s} {'-':>12s} {'-':>12s}")
+                    if errs:
+                        row += (f" {d['best'][i]:12.5g} {d['lo'][i]:12.5g} {d['hi'][i]:12.5g}" if d is not None
+                                else f" {'-':>12s} {'-':>12s} {'-':>12s}")
+                    else:
+                        row += f" {d['best'][i]:12.5g}" if d is not None else f" {'-':>12s}"
                 out.write(row + "\n")
     files.append(fn)
     # the cells
@@ -184,7 +194,7 @@ def _plots(f, of, prefix, run=True, verbose=True):
     matplotlib.use("Agg", force=False)
     import matplotlib.pyplot as plt
     try:
-        if f._method == "optimize" and f.optimum.get("cov") is None:
+        if not has_errors(f):
             raise ValueError("an optimisation without errors")
         fig = f.corner_plot()
         fn = pre + "_wind_corner.pdf"
@@ -200,7 +210,8 @@ def _plots(f, of, prefix, run=True, verbose=True):
     em = f.emission_errors()
     fig, ax = plt.subplots(1, 4, figsize=(16, 3.6))
     for a, base in zip(ax, ("vwind", "vdisp", "vrot")):
-        a.errorbar(tab["radii"], tab[base], yerr=[tab[base + "_lo"], tab[base + "_hi"]], fmt="o-", color="firebrick")
+        yerr = [tab[base + "_lo"], tab[base + "_hi"]] if base + "_lo" in tab else None
+        a.errorbar(tab["radii"], tab[base], yerr=yerr, fmt="o-", color="firebrick")
         a.set_xlabel("r (arcsec)")
         a.set_ylabel(f"{base.upper()} (km/s)")
     if em is not None:
@@ -208,7 +219,8 @@ def _plots(f, of, prefix, run=True, verbose=True):
             dd = em.get(cone)
             if dd is None:
                 continue
-            ax[3].fill_between(em["radii"], dd["lo"], dd["hi"], color=col, alpha=0.3)
+            if dd["lo"] is not None:
+                ax[3].fill_between(em["radii"], dd["lo"], dd["hi"], color=col, alpha=0.3)
             ax[3].plot(em["radii"], dd["best"], color=col, label=lab)
         ax[3].set_xlabel("r (arcsec)")
         ax[3].set_ylabel("flux per bin")

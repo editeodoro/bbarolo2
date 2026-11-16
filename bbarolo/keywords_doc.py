@@ -698,8 +698,8 @@ methods (`METHOD`):
   models of the ring convolved with the beam. With `TWOSTAGE`, the geometry is regularised and the rings
   are fitted again.
 - `GLOBAL`: all the rings and parameters together, at the maximum of a Gaussian likelihood (within the
-  bounds of the priors), with the errors of its curvature (the Laplace approximation): seconds or
-  minutes. The minimiser is `MINIMISER`.
+  bounds of the priors), with `FLAGERRORS` the errors of its curvature (the Laplace approximation):
+  seconds or minutes. The minimiser is `MINIMISER`.
 - `BAYESIAN`: the same likelihood, the posterior distribution of the free parameters sampled with nested
   sampling (`SAMPLER`): errors that do not assume a Gaussian posterior, at the cost of a longer run.
 
@@ -707,9 +707,9 @@ The ring parameters that are not given are estimated from the data (`GUESSTYPE`)
 and `FREE` lists those that are fitted (with `GLOBAL` and `BAYESIAN`, also `NAME_SINGLE`, one value for
 all the rings, and `NAME_FUNC`, a function of radius; the default is `VROT VDISP XPOS_SINGLE YPOS_SINGLE
 VSYS_SINGLE INC_SINGLE PA_SINGLE Z0_SINGLE RADMAX FRACERR`). Some parameters belong to one method:
-`DELTAINC`, `TWOSTAGE`, `FLAGERRORS`, `NORM` and the other options of the minimisation ring by ring to
-`CLASSIC`; `PRIORS`, `LIKEOPTS`, `SAMPLEROPTS` and `RUNOPTS` to `GLOBAL` and `BAYESIAN` (a warning says when
-one is given for another method).
+`DELTAINC`, `TWOSTAGE`, `NORM` and the other options of the minimisation ring by ring to `CLASSIC`;
+`FLAGERRORS` to `CLASSIC` and `GLOBAL`; `PRIORS`, `LIKEOPTS`, `SAMPLEROPTS` and `RUNOPTS` to `GLOBAL` and
+`BAYESIAN` (a warning says when one is given for another method).
 
 With `GLOBAL` and `BAYESIAN` the models are ANALYTIC by default (`GALMODTYPE`), with one set of rings (no
 second stage), and `NORM` is not used: unless `DENS` is free, the density profile is deconvolved from the
@@ -723,7 +723,8 @@ The outputs are the ring tables `<prefix>_rings_initial.txt` (the values given o
 rings of `REVERSE`), `<prefix>_rings_final1.txt` (and `<prefix>_rings_final2.txt` with `TWOSTAGE`), the
 model `<prefix>_mod_<norm>.fits` with its moment maps and position-velocity slices, the radial profile
 `<prefix>_densprof.txt` and the plots. With `GLOBAL` and `BAYESIAN` the errors of the rings are those of
-the posterior (the 16th and 84th percentiles; `GLOBAL`: of the Laplace approximation), the best fit is the
+the posterior (the 16th and 84th percentiles; `GLOBAL`: of the Laplace approximation, with `FLAGERRORS`;
+without it, no error columns and no corner plot), the best fit is the
 median of the posterior (`GLOBAL`: the maximum of the likelihood), and BBarolo also writes, when `DENS` is
 not free, `<prefix>_densprof_deconvolved.txt`, the samples in `<prefix>_<sampler>_results.npy`
 (`_optimize_results.npy` for `GLOBAL`), the corner plot `<prefix>_corner.pdf` and, with `VERBOSE`, the
@@ -1396,9 +1397,12 @@ The second stage runs only if one of those geometric parameters is free; it is s
 regularisation fails (or no ring was fitted), and the rings not fitted are then empty in the final model.
 """),
     'FLAGERRORS': dict(
-        group='Free parameters and fit',
+        group={'3DFIT': 'Free parameters and fit', '*': 'Bayesian sampling'},
         doc="""\
-Whether 3DFIT estimates the errors of the free parameters of each ring. For each parameter, the
+Whether the fit estimates the errors of the free parameters (3DFIT with `METHOD CLASSIC` or `GLOBAL`,
+WINDFIT and SLITFIT with `METHOD GLOBAL`).
+
+With `METHOD CLASSIC`, the errors of the free parameters of each ring. For each parameter, the
 residuals are computed for 100 random values around the best fit (VROT ± VROT/3, VDISP ± 15 km/s, the
 others within their limits of the fit), with the other parameters at their best values; a cubic fitted
 to them gives the interval where the residuals are within 5% of the minimum. The lower and upper errors
@@ -1409,6 +1413,14 @@ As in BBarolo 1.8: an error that cannot be estimated (e.g. too few points near t
 by the mean of the errors of the ring, all the parameters together; a VDISP error smaller than half the
 dispersion of a channel (ΔV/2.355/2) is raised to it plus a random 0–1 km/s; with `FREE` `ALL` the
 errors of DENS are not meaningful (its interval of random values is empty).
+
+With `METHOD GLOBAL` (3DFIT, WINDFIT, SLITFIT), the errors are those of the Laplace approximation: the
+inverse of the Hessian of −log L at the best fit, computed by finite differences (about n² likelihoods for n
+free parameters), whose draws (`SAMPLEROPTS nsamples`, default 4000) stand in for the samples of the
+posterior in the outputs (the error columns of the tables, the corner plot, the errors of the deconvolved
+profile). Without `FLAGERRORS` (the default) there is no Hessian: the outputs have the best fit alone,
+without error columns (as `METHOD CLASSIC` without `FLAGERRORS`), and no corner plot. `METHOD BAYESIAN`
+always has the errors of the posterior.
 """),
     'NORM': dict(
         group={'3DFIT': 'Free parameters and fit', '*': 'Model'},
@@ -1573,9 +1585,9 @@ The method of the fits `3DFIT`, `WINDFIT` and `SLITFIT` (case-insensitive):
 - `CLASSIC` (3DFIT only, its default): the rings fitted one at a time by minimising the residuals between
   model and data, as in BBarolo 1.
 - `GLOBAL` (the default of WINDFIT and SLITFIT): all the parameters together, at the maximum of the
-  likelihood within the bounds of the priors (`MINIMISER`), with the errors of the Laplace approximation
-  (the inverse Hessian at the best fit), whose draws stand in for the samples of the posterior in the
-  outputs: seconds or minutes, to fit or to test a setup before a sampling.
+  likelihood within the bounds of the priors (`MINIMISER`), with `FLAGERRORS` the errors of the Laplace
+  approximation (the inverse Hessian at the best fit), whose draws stand in for the samples of the posterior
+  in the outputs: seconds or minutes, to fit or to test a setup before a sampling.
 - `BAYESIAN`: the posterior distribution of the free parameters, sampled with nested sampling (`SAMPLER`).
 
 `GLOBAL` and `BAYESIAN` use the same likelihood, free parameters (`FREE`), priors (`PRIORS`) and options
@@ -1689,8 +1701,8 @@ With `METHOD GLOBAL`, the options are those of the minimisation (the minimiser i
   one value per free parameter separated by commas;
 - `nstart=N`: also N − 1 starts drawn from the priors, keeping the best (with `seed=N`, reproducible);
 - `posterior=true`: the maximum of the posterior instead of the likelihood;
-- `errors=false`: no Hessian (zero errors, no corner plot); `nsamples` (default 4000): the draws of the
-  Laplace approximation used as samples;
+- `nsamples` (default 4000): the draws of the Laplace approximation used as samples (with `FLAGERRORS`,
+  which computes the errors);
 - `step`: the step of the gradient, in units of the range of each prior (default 0.001).
 """),
     'RUNOPTS': dict(

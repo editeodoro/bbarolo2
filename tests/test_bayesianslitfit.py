@@ -205,7 +205,7 @@ def test_slit_fit_optimise(mock_slit):
     Laplace approximation (and the noise map: reduced chi-square close to 1)."""
     fname, R = mock_slit
     f = _fit(fname, radii=list(R))
-    f.run(threads=4, verbose=False)
+    f.run(threads=4, verbose=False, flagerrors=True)
     assert f._method == "optimize"
     t = f.ring_table()
     pull = (np.asarray(t["VROT"]) - _vrot(R)) / (0.5 * (t["E_VROT_LO"] + t["E_VROT_HI"]))
@@ -240,7 +240,7 @@ def test_slit_task_parfile(mock_slit, tmp_path):
     par.write_text(f"FITSFILE {fname}\nSLITFIT true\nSLITWIDTH 1\nBEAM 1.2\nSPECRES 1.2\nINC 60\n"
                    f"REDSHIFT {Z}\nRESTWAVE {' '.join(map(str, REST))}\nRELINT {' '.join(map(str, RELINT))}\n"
                    f"CONTSUB true\nNORM LOCAL\nFREE VROT VDISP_SINGLE VSYS XPOS\nMETHOD GLOBAL\n"
-                   f"SAMPLEROPTS errors=false\nTHREADS 4\nPLOTS 1\nVERBOSE 0\nOUTFOLDER {tmp_path}/out\n")
+                   f"THREADS 4\nPLOTS 1\nVERBOSE 0\nOUTFOLDER {tmp_path}/out\n")
     res = bbarolo.run(str(par))
     out = tmp_path / "out"
     for suffix in ("_slitfit_rings.txt", "_slit_data.fits", "_slit_model.fits", "_slit_resid.fits",
@@ -248,15 +248,19 @@ def test_slit_task_parfile(mock_slit, tmp_path):
         assert (out / ("MOCKSLIT" + suffix)).is_file(), suffix
     assert (out / "plotscripts" / "plot_slitfit_pv.py").is_file()
     assert len(res["SLITFIT"].rings) == len(R) and res["SLITFIT"].method == "GLOBAL"
+    assert res["SLITFIT"].fitter.optimum.cov is None             # (no errors without FLAGERRORS: no error columns)
+    assert not any(c.startswith("E_") for c in res["SLITFIT"].rings.colnames)
+    assert "E_VROT_LO" not in open(out / "MOCKSLIT_slitfit_rings.txt").readline()
+    assert not (out / "MOCKSLIT_slitfit_corner.pdf").exists()
     rings = np.loadtxt(out / "MOCKSLIT_slitfit_rings.txt")
-    assert rings.shape[0] == len(R) and np.all(np.abs(rings[:, 2] - rings[0, 2]) < 1e-6)   # (VDISP_SINGLE)
+    assert rings.shape == (len(R), 10) and np.all(np.abs(rings[:, 2] - rings[0, 2]) < 1e-6)   # (VDISP_SINGLE)
     from astropy.io import fits
     assert fits.getheader(out / "MOCKSLIT_slit_model.fits")["BBTASK"] == "SLITFIT"
     # SlitFit: the same fit in memory, also of a slit in memory (an HDU)
     from bbarolo import SlitFit, BayesianSlitFit
     hdu = fits.open(fname)[0]
     kw = dict(slitwidth=1, beam=1.2, specres=1.2, inc=60, redshift=Z, restwave=list(REST), relint=list(RELINT),
-              contsub=True, norm="LOCAL", free="VROT VDISP_SINGLE VSYS XPOS", sampleropts="errors=false", threads=4,
+              contsub=True, norm="LOCAL", free="VROT VDISP_SINGLE VSYS XPOS", threads=4,
               verbose=False)
     for slit in (fname, hdu):
         r = SlitFit(slit, **kw).run()

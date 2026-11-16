@@ -314,7 +314,7 @@ def test_bayesian_wind_optimize(tmp_path, capsys):
                         clump=20.)
     f = BayesianWind(hdu, xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, conelen=110, vwind=180, vdisp=20,
                      nlayers=2, outfolder=str(tmp_path) + "/")
-    f.optimize(freepar=["vwind_single", "openang"], like_kwargs=dict(cellsize=40.), verbose=False)
+    f.optimize(freepar=["vwind_single", "openang"], like_kwargs=dict(cellsize=40.), flagerrors=True, verbose=False)
     opt = f.optimum
     assert f.freepar_names == ["vwind", "openang", "emscale", "emclump", "emratio", "emslope"]
     assert f._method == "optimize" and np.array_equal(f.params, opt.x) and np.isclose(f.best.openang, opt.x[1])
@@ -351,6 +351,10 @@ def test_bayesian_wind_optimise_task(tmp_path, capsys):
     assert not p.checkPars() and p.gf.METHOD == "GLOBAL"
     assert "WINDFIT error: SAMPLEROPTS: unknown option(s) nlive of METHOD GLOBAL" in capsys.readouterr().out
     p = Param()
+    p.readParamString("FITSFILE m.fits\nWINDFIT true\n" + wind + "SAMPLEROPTS errors=true\nFLAGERRORS true\n")
+    assert not p.checkPars() and p.gf.flagERRORS
+    assert "unknown option(s) errors of METHOD GLOBAL (the errors are FLAGERRORS)" in capsys.readouterr().out
+    p = Param()
     p.readParamString("FITSFILE m.fits\nWINDFIT true\nMETHOD classic\n" + wind)
     assert not p.checkPars()
     assert "WINDFIT error: METHOD CLASSIC is not a method of WINDFIT (GLOBAL or BAYESIAN)" in capsys.readouterr().out
@@ -365,7 +369,7 @@ def test_bayesian_wind_optimise_task(tmp_path, capsys):
     par = tmp_path / "wind.par"
     par.write_text(f"FITSFILE {fn}\nOUTFOLDER {tmp_path}/cli\nWINDFIT true\nXPOS 11.5\nYPOS 11.5\nVSYS 0\n"
                    "INC 55\nPA 30\nOPENANG 55\nCONELEN 110\nVWIND 180\nVDISP 20\nNLAYERS 2\n"
-                   "FREE VWIND_SINGLE OPENANG\nLIKEOPTS cellsize=40\nSAMPLEROPTS errors=true\n"
+                   "FREE VWIND_SINGLE OPENANG\nLIKEOPTS cellsize=40\nFLAGERRORS true\n"
                    "THREADS 2\nPLOTS false\n")
     assert main(["-p", str(par)]) == 0
     out = capsys.readouterr().out
@@ -373,18 +377,25 @@ def test_bayesian_wind_optimise_task(tmp_path, capsys):
     files = os.listdir(str(tmp_path / "cli"))
     assert any(x.endswith("_optimize_windresults.npy") for x in files), files
     params = next(x for x in files if x.endswith("_wind_params.txt"))
-    assert "maximum likelihood by L-BFGS-B" in open(str(tmp_path / "cli" / params)).readline()
+    assert "errors: Laplace approximation" in open(str(tmp_path / "cli" / params)).readline()
     f = BayesianWind(hdu, xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, conelen=110, vwind=180, vdisp=20,
                      nlayers=2, outfolder=str(tmp_path) + "/")
     f.run(freepar=["vwind_single", "openang"], minimiser="powell", like_kwargs=dict(cellsize=40.),
-          sampler_kwargs=dict(errors=False), run_kwargs=dict(maxiter=3), verbose=False)
+          run_kwargs=dict(maxiter=3), verbose=False)
     assert f._method == "optimize" and f.optimum.method == "Powell" and f.optimum.cov is None
     # WindFit: the task of parameter files, in memory
     from bbarolo import WindFit
     r = WindFit(hdu, xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, conelen=110, vwind=180, vdisp=20,
                 nlayers=2, free="VWIND_SINGLE OPENANG", likeopts="cellsize=40", minimiser="powell",
-                sampleropts="errors=false", runopts="maxiter=3", verbose=False, threads=2).run()
+                runopts="maxiter=3", verbose=False, threads=2).run()
     assert r.method == "GLOBAL" and isinstance(r.fitter, BayesianWind) and r.fitter.optimum.method == "Powell"
+    assert r.fitter.optimum.cov is None                     # (FLAGERRORS false, the default: no error columns)
+    assert r.parameters.colnames == ["name", "value"] and "vwind_lo" not in r.shells.colnames
+    files = r.write(str(tmp_path / "noerr"))
+    shells = next(x for x in files if x.endswith("_wind_shells.txt"))
+    assert open(shells).readline().split() == ["#", "RADIUS(arcsec)", "VWIND(km/s)", "VDISP(km/s)", "VROT(km/s)"]
+    params = next(x for x in files if x.endswith("_wind_params.txt"))
+    assert "ERR_LO" not in open(params).read().splitlines()[1]
     assert np.allclose(r.fitter.params, f.params) and list(r.parameters["name"])[:2] == ["vwind", "openang"]
     assert r.model.data.shape == hdu.data.shape and len(r.shells) == 2
     assert r.samples.colnames == list(r.fitter.freepar_names)

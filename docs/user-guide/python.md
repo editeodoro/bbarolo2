@@ -153,7 +153,7 @@ The three fits, {class}`~bbarolo.FitMod3D` (3DFIT), {class}`~bbarolo.WindFit` (W
 {class}`~bbarolo.SlitFit` (SLITFIT), are tasks like the others, and `method=` is the keyword
 {ref}`METHOD <par-3dfit-method>` (so are `sampler=` and `minimiser=`): `"classic"` (3DFIT only, and its default:
 the rings fitted one at a time), `"global"` (all the parameters together, at the maximum of the likelihood, with
-the errors of the Laplace approximation; the default of WindFit and SlitFit) or `"bayesian"` (nested sampling of
+`flagerrors=True` the errors of the Laplace approximation; the default of WindFit and SlitFit) or `"bayesian"` (nested sampling of
 the posterior). GLOBAL and BAYESIAN share `free`, `priors`, `likeopts`, `sampleropts` and `runopts`, so changing
 between them is one word. `run(**params)` changes any parameter, the method included, and returns a Result;
 `write()` writes the files.
@@ -199,8 +199,9 @@ tasks do, but keep their results themselves: there is no Result. Use them for a 
 tasks; CLASSIC is an error) and returns the object, writing nothing. The two methods are also explicit:
 `f.sample(freepar=None, sampler=None, threads=None, ...)` samples the posterior (`sampler=` is one of `"nautilusbb"`,
 `"nautilus"` and `"dynesty"`), and `f.optimize(freepar=None, minimiser="L-BFGS-B", ...)` finds the best fit by a
-classic minimisation of the same likelihood, with the errors of the Laplace approximation. Changing only METHOD,
-SAMPLER, MINIMISER, SAMPLEROPTS or RUNOPTS does not reset the rings of the engine.
+classic minimisation of the same likelihood, with the errors of the Laplace approximation if `errors=True` (the
+default is the parameter FLAGERRORS, false). Changing only METHOD, SAMPLER, MINIMISER, SAMPLEROPTS, RUNOPTS or
+FLAGERRORS does not reset the rings of the engine.
 
 ```python
 f = Bayesian3DFIT("ngc2403.fits", radii=[120, 240, 360, 480], vrot=100, vdisp=10, inc=60, pa=123.7, ...)
