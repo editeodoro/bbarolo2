@@ -487,8 +487,9 @@ class Galfit:
         if "auto" in par.REVERSE and not isgalmod:
             if findMedian(inR.inc) > 75:
                 if self.verb:
-                    print("\n 3DFIT WARNING: because the galaxy is highly inclined, I recommend to try \n"
-                          " a reverse-cumulative fitting scheme (REVERSE=true) with ring width=beam size.")
+                    print("\n 3DFIT WARNING: the galaxy is highly inclined: I will fit the rings again from the\n"
+                          " outside in, each with the model of the whole disk (REVERSE), with rings as wide as\n"
+                          " the beam.")
                 self.reverse = True
                 print()
         elif "true" in par.REVERSE:
@@ -549,16 +550,11 @@ class Galfit:
         self.cin = c
         self.par = copy.deepcopy(gfpar)
         par = self.par
-        self.sweeps = max(int(getattr(par, "SWEEPS", 0)), 0)
-        self.strip = str(getattr(par, "RINGREGION", "ANNULUS")).upper() == "STRIP"
-        if self.strip and not self._contexts():
-            if self.verb:
-                WarningMessage(sys.stdout, " RINGREGION STRIP needs the model of the rings around each ring, but\n"
-                                           " REVERSE (auto) was not chosen and SWEEPS is 0: the rings are fitted\n"
-                                           " in their annuli.")
-            self.strip = False
         self.inr = inrings.copy()
         self.verb = c.pars().verbose
+        # the outside-in passes of REVERSE (see _sweep), and the region of the rings in them
+        self.sweeps = max(int(getattr(par, "SWEEPS", 1)), 1) if self.reverse else 0
+        self.strip = self.reverse and str(getattr(par, "RINGREGION", "STRIP")).upper() == "STRIP"
         for ir in range(self.inr.nr):
             if ir and self.inr.radii[ir] <= self.inr.radii[ir - 1]:
                 raise BBaroloError("3DFIT ERROR: Radii not in increasing order.")
@@ -745,13 +741,13 @@ class Galfit:
 
     def _region(self, dring, ctx):
         """The region of the residuals of a ring (foot and hmax of _norm). The annulus of the ring in the plane of
-        the disk, or, with RINGREGION STRIP (for nearly edge-on disks) in the fits with the model of the rings
-        around the ring and for the outermost ring of REVERSE, the strip of the sky with major-axis distance
-        between the radii of the ring, as high as the projected ring at its initial inclination plus three
-        scale heights and half the beam: its lines of sight cross the ring and the rings outside it, all in the
-        model, and the region does not depend on the fitted inclination (the annulus becomes a thin band at
-        INC ~ 90). The first pass of SWEEPS without REVERSE fits single rings: the annulus."""
-        if not self.strip or (ctx is None and not (self.reverse and dring.id == self.inr.nr - 1)):
+        the disk, or, with RINGREGION STRIP (the default) in the passes of REVERSE, where the model of the rings
+        around the ring is in, the strip of the sky with major-axis distance between the radii of the
+        ring, as high as the projected ring at its initial inclination plus three scale heights and half the beam:
+        its lines of sight cross the ring and the rings outside it, all in the model, and the region does not
+        depend on the fitted inclination (the annulus becomes a thin band at INC ~ 90). The first pass fits single
+        rings: the annulus."""
+        if not self.strip or ctx is None:
             return 0, 0.
         h = self.cin.Head()
         beam = abs(h.Bmaj()) * 3600. if h.Bmaj() else 0.
@@ -1077,8 +1073,6 @@ class Galfit:
         seed = [12345, self.n_galfit, ir] + ([self._pass] if self._pass else [])
         self._tls.rng = np.random.default_rng(seed)
         try:
-            if ctx == "sweep":
-                ctx = self._sweep_context(ir)
             self._fit_one_ring(ir, errors, fitok, nthreads, ctx, start)
         finally:
             self._tls.rng = None
@@ -1173,20 +1167,16 @@ class Galfit:
             self._bar.init(f" Stage {n}: fitting {nr - start} rings" + (f" ({1 + self.sweeps} passes)" if self.sweeps
                            else "") + f" with {max(1, nthreads)} threads ", nf)
         try:
-            if self.reverse:
-                self.fit_reverse(errors, fitok)
+            if nthreads <= 1:
+                for ir in range(start, nr):
+                    self._fit_ring(ir, errors, fitok, 1)
             else:
-                start = self.par.STARTRAD if self.par.STARTRAD < nr else 0
-                if nthreads <= 1:
-                    for ir in range(start, nr):
-                        self._fit_ring(ir, errors, fitok, 1)
-                else:
-                    with ThreadPoolExecutor(nthreads) as ex:
-                        futs = [ex.submit(self._fit_ring, ir, errors, fitok, nthreads) for ir in range(start, nr)]
-                        for f in futs:
-                            f.result()
+                with ThreadPoolExecutor(nthreads) as ex:
+                    futs = [ex.submit(self._fit_ring, ir, errors, fitok, nthreads) for ir in range(start, nr)]
+                    for f in futs:
+                        f.result()
             for k in range(self.sweeps):
-                self._sweep(errors, fitok, start, nthreads)
+                self._sweep(errors, fitok, start)
         finally:
             self.data_noise, self.data_T = dn_orig, dT_orig
             self.scaled_data = c.array
@@ -1244,59 +1234,38 @@ class Galfit:
             print(line + "  " + st)
         sys.stdout.flush()
 
-    def _contexts(self):
-        """Whether the rings are fitted with the model of the rings around them (REVERSE, SWEEPS)."""
-        return self.reverse or self.sweeps > 0
-
-    def _sweep(self, errors, fitok, start, nthreads):
-        """One pass of SWEEPS: every ring fitted again, from its values of the previous pass, with the model of all
-        the other rings at their values of the previous pass (the rings are independent: threads as the first
-        pass). The fits of the previous pass model each ring alone (or with the rings outside it, REVERSE): the
-        beam-smeared emission of the neighbouring rings, which is in the data, is missing from the model."""
+    def _sweep(self, errors, fitok, start):
+        """One pass of REVERSE (SWEEPS passes after the first): the rings fitted again one after the other, from the
+        outermost inwards, each from its values of the previous pass and with the model of all the other rings: those
+        outside it at their values of this pass, those inside at their values of the previous pass (Gauss-Seidel).
+        The fits of the first pass model each ring alone: the emission of the neighbouring rings that the beam, or
+        the projection of a highly inclined disk, brings into the region of a ring is in the data but not in the
+        model. C++ fitted the rings once, from the outermost inwards, each with the model of the rings outside it
+        only: the first rings fitted, the least constrained, entered the model of all the others, and the
+        missing inner rings left the fits of single rings biased. Fitting all the rings at once with the
+        others at the values of the previous pass (Jacobi) oscillates on edge-on disks."""
         self._pass += 1
-        self._base = (self.outr.copy(), self._cstat.copy())
         nr = self.inr.nr
-        base = self._base[0]
+        prev = self.outr.copy()
         for ir in range(start, nr):
-            if self._base[1][ir] != self.CS_OK:
+            if self._cstat[ir] != self.CS_OK:
                 # (a ring not fitted starts again from its initial values)
                 for k in ("vrot", "vdisp", "dens", "z0", "inc", "phi", "xpos", "ypos", "vsys", "vrad"):
-                    getattr(base, k)[ir] = getattr(self.inr, k)[ir]
-        self._prof = self._profile(base)
-        if nthreads <= 1:
-            for ir in range(start, nr):
-                self._fit_ring(ir, errors, fitok, 1, "sweep", base)
-        else:
-            with ThreadPoolExecutor(nthreads) as ex:
-                futs = [ex.submit(self._fit_ring, ir, errors, fitok, nthreads, "sweep", base)
-                        for ir in range(start, nr)]
-                for f in futs:
-                    f.result()
-        self._base = None
+                    getattr(prev, k)[ir] = getattr(self.inr, k)[ir]
+        self._prof = self._profile(prev)
+        for ir in range(nr - 1, start - 1, -1):
+            self._fit_ring(ir, errors, fitok, 1, self._ring_context(ir, start, prev.dens[ir]), prev)
 
-    def _sweep_context(self, ir):
-        """The model of the rings around ring ir in a sweep: all the others, at the values of the previous pass."""
-        rings, cstat = self._base
-        start = self.par.STARTRAD if self.par.STARTRAD < self.inr.nr else 0
-        dens = self._ctx_dens(ir, rings.dens[ir])
+    def _ring_context(self, ir, start, dens):
+        """The model of the rings around ring ir (whose density is dens) in a pass of REVERSE: all the others fitted,
+        at their current values (see _sweep), or None if there are none."""
+        dens = self._ctx_dens(ir, dens)
         segs = []
         if ir > start:
-            segs.append(self._segment(start, ir - 1, dens, rings, cstat))
+            segs.append(self._segment(start, ir - 1, dens))
         if ir < self.inr.nr - 1:
-            segs.append(self._segment(ir + 1, self.inr.nr - 1, dens, rings, cstat))
-        return self._context(segs)
-
-    def fit_reverse(self, errors, fitok):
-        inr = self.inr
-        self._prof = self._profile(inr)
-        start = self.par.STARTRAD if self.par.STARTRAD < inr.nr else 0
-        for ir in range(inr.nr - 1, start - 1, -1):
-            ctx = None
-            if ir != inr.nr - 1:
-                # (C++ took the outer rings as nodes, from the radius of ring ir+1: the outer half of ring ir+1
-                # and of the last ring were missing, and the rings not fitted were in, with their values)
-                ctx = self._context([self._segment(ir + 1, inr.nr - 1, self._ctx_dens(ir, inr.dens[ir]))])
-            self._fit_ring(ir, errors, fitok, 1, ctx=ctx)
+            segs.append(self._segment(ir + 1, self.inr.nr - 1, dens))
+        return self._context(segs) if segs else None
 
     # ------------------------------------------------------------------
     # Second stage

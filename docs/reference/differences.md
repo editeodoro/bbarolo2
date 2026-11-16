@@ -285,7 +285,7 @@ summary: {doc}`changes` has the details and the size of each change.
 | 3DFIT | The second stage regularised all the rings, also those not fitted; the rings that failed kept their DENS in the final model; ADRIFT used them too |
 | 3DFIT | VDISP trial values out of [MINVDISP, MAXVDISP] were redrawn across the other bound |
 | 3DFIT | REVERSE: the beam-wide rings took the initial values of the ring with the same index, not interpolated ones |
-| 3DFIT | REVERSE: the model of the outer rings left an empty annulus half a ring wide outside each ring and missed the outer half of the last ring; rings with no data were fitted on the noise, and they, the rings not converged and the rejected ones were in the model of the inner rings; the errors were computed without the outer rings |
+| 3DFIT | REVERSE (replaced by passes from the outside in with the model of the whole disk): the model of the outer rings left an empty annulus half a ring wide outside each ring and missed the outer half of the last ring; rings with no data were fitted on the noise, and they, the rings not converged and the rejected ones were in the model of the inner rings; the errors were computed without the outer rings |
 | 3DFIT | A fixed VROT was replaced by that of the 2D fit when PA was free |
 | 3DFIT | RADSEP without NRADII: the extent of the rings scaled with RADSEP |
 | 3DFIT, GALMOD, SPACEPAR | `NORM AZIMUTHAL` was used as LOCAL; a NORM with two values made GALMOD write no model |

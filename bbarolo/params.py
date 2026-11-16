@@ -193,8 +193,8 @@ class GalfitPar(GalmodPar):
     ADRIFTPOL1: int = 3
     ADRIFTPOL2: int = 3
     REVERSE: str = "false"
-    SWEEPS: int = 0
-    RINGREGION: str = "ANNULUS"
+    SWEEPS: int = 1
+    RINGREGION: str = "STRIP"
     NORMALCUBE: bool = True
     flagBADOUT: bool = False
     PLOTMASK: bool = False
@@ -580,13 +580,9 @@ class Param:
                 gf.RINGREGION = gf.RINGREGION.upper()
                 if gf.RINGREGION not in ("ANNULUS", "STRIP"):
                     out(f"3DFIT error: RINGREGION ({gf.RINGREGION}) can be ANNULUS or STRIP."); good = False
-                elif gf.RINGREGION == "STRIP" and "false" in gf.REVERSE and gf.SWEEPS <= 0:
-                    out("3DFIT error: RINGREGION STRIP needs the model of the rings around each ring: REVERSE true "
-                        "(or auto) or SWEEPS > 0.")
-                    good = False
-            if classic and gf.SWEEPS < 0:
-                out(f"3DFIT error: SWEEPS ({gf.SWEEPS}) is the number of fits of the rings with the model of the "
-                    "whole disk after the first: 0 or more.")
+            if classic and gf.SWEEPS < 1:
+                out(f"3DFIT error: SWEEPS ({gf.SWEEPS}) is the number of passes of REVERSE after the first: "
+                    "1 or more.")
                 good = False
             if (classic or self.flagSpace) and gf.STARTRAD < 0:
                 out(f"3DFIT error: STARTRAD ({gf.STARTRAD}) is the index of the first ring to fit: 0 or more.")
@@ -1739,9 +1735,9 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
             if gf.flagADRIFT or defaults:
                 R("[ADRIFTPOL1]", mc("     Polynomial for VDISP2 regularisation?"), gf.ADRIFTPOL1)
                 R("[ADRIFTPOL2]", mc("     Polynomial for SIGMA regularisation?"), gf.ADRIFTPOL2)
-            R("[REVERSE]", mc("   Using reverse-cumulative fitting?"), gf.REVERSE)
-            R("[SWEEPS]", mc("   Refits of the rings within the whole disk?"), gf.SWEEPS)
-            R("[RINGREGION]", mc("   Region of the residuals of a ring?"), gf.RINGREGION)
+            R("[REVERSE]", mc("   Refitting the rings from the outside in?"), gf.REVERSE)
+            R("[SWEEPS]", mc("   Passes of REVERSE after the first?"), gf.SWEEPS)
+            R("[RINGREGION]", mc("   Region of the rings in the passes of REVERSE?"), gf.RINGREGION)
             R("[NORMALCUBE]", mc("   Normalizing cube to help convergence?"), stringize(gf.NORMALCUBE))
             R("[BADOUT]", mc("   Write unconverged rings in output (with flag)?"), stringize(gf.flagBADOUT))
         if isGalfit:

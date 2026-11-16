@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-3DFIT with the model of the rings around each ring: REVERSE (the outer rings) and SWEEPS (all the other
-rings, refitted in passes), against the fits of single rings. Flat disks of the geometry experiment fitted
-from the true INC and PA with DELTAINC = 15 (as diag_incbias.py), FREE = VROT VDISP INC PA, two stages:
+3DFIT with REVERSE (the rings fitted again from the outside in, each with the model of the whole disk) against
+the fits of single rings. Flat disks of the geometry experiment fitted from the true INC and PA with DELTAINC = 15
+(as diag_incbias.py), FREE = VROT VDISP INC PA, two stages:
 
-  mid   twelve disks with 45 <= INC < 75 deg (the first six are those of diag_incbias.py), at peak S/N 10, 20,
-        40 and 200;
-  edge  twelve disks of the geometry experiment with INC set to 80-88 deg, at peak S/N 40, also with the
-        strip region of the rings (RINGREGION STRIP).
+  mid    twelve disks with 45 <= INC < 75 deg (the first six are those of diag_incbias.py), at peak S/N 10, 20,
+         40 and 200;
+  steep  twelve disks of the geometry experiment with INC set to 72-80 deg, at peak S/N 20 and 40;
+  edge   the same disks with INC set to 80-88 deg, at peak S/N 20 and 40.
 
-For each fit: the median over the fitted rings of the INC offset, of the VDISP error and of the VROT error
+Each with the region of the rings ANNULUS or STRIP (RINGREGION), and with other masks and normalisations. For
+each fit: the median over the fitted rings of the INC offset, of the VDISP error and of the VROT error
 (relative), and the time.
 
     python diag_context.py --procs 60          # writes results/diag_context.json and prints a summary
@@ -33,36 +34,33 @@ import diag_incbias as di                              # noqa: E402
 
 TESTS = {                   # name: (label, changes; ringwidth in beams)
     "default": ("rings beam/2, one pass", {}),
-    "w1": ("rings one beam wide", dict(ringwidth=1.)),
-    "reverse": ("REVERSE (rings one beam wide)", dict(reverse="true")),
-    "sweeps1": ("SWEEPS 1", dict(sweeps=1)),
-    "sweeps2": ("SWEEPS 2", dict(sweeps=2)),
-    "w1_sweeps1": ("rings one beam wide, SWEEPS 1", dict(ringwidth=1., sweeps=1)),
-    "reverse_sweeps1": ("REVERSE, SWEEPS 1", dict(reverse="true", sweeps=1)),
-    "reverse_strip": ("REVERSE, strip regions", dict(reverse="true", ringregion="STRIP")),
-    "reverse_sweeps1_strip": ("REVERSE, SWEEPS 1, strip regions", dict(reverse="true", sweeps=1, ringregion="STRIP")),
-    "w1_sweeps1_strip": ("rings one beam wide, SWEEPS 1, strip regions",
-                         dict(ringwidth=1., sweeps=1, ringregion="STRIP")),
+    "w1": ("rings one beam wide, one pass", dict(ringwidth=1.)),
+    "reverse": ("REVERSE", dict(reverse="true")),
+    "reverse_sw2": ("REVERSE, SWEEPS 2", dict(reverse="true", sweeps=2)),
+    "reverse_strip": ("REVERSE, RINGREGION STRIP", dict(reverse="true", ringregion="STRIP")),
+    "reverse_sw2_strip": ("REVERSE, SWEEPS 2, RINGREGION STRIP", dict(reverse="true", sweeps=2, ringregion="STRIP")),
     "smooth": ("MASK SMOOTH&SEARCH", dict(mask="SMOOTH&SEARCH")),
-    "sweeps1_smooth": ("SWEEPS 1, MASK SMOOTH&SEARCH", dict(sweeps=1, mask="SMOOTH&SEARCH")),
-    "bw0": ("BWEIGHT 0", dict(bweight=0.)),
-    "sweeps1_bw0": ("SWEEPS 1, BWEIGHT 0", dict(sweeps=1, bweight=0.)),
+    "reverse_smooth": ("REVERSE, MASK SMOOTH&SEARCH", dict(reverse="true", mask="SMOOTH&SEARCH")),
+    "reverse_strip_smooth": ("REVERSE, STRIP, MASK SMOOTH&SEARCH",
+                             dict(reverse="true", ringregion="STRIP", mask="SMOOTH&SEARCH")),
     "local": ("NORM LOCAL", dict(norm="LOCAL")),
-    "sweeps1_local": ("SWEEPS 1, NORM LOCAL", dict(sweeps=1, norm="LOCAL")),
+    "reverse_local": ("REVERSE, NORM LOCAL", dict(reverse="true", norm="LOCAL")),
 }
-SETS = {"mid": dict(snrs=(10., 20., 40., 200.), tests=[t for t in TESTS if "strip" not in t]),
-        "edge": dict(snrs=(40.,), tests=list(TESTS))}
+SETS = {"mid": dict(snrs=(10., 20., 40., 200.), tests=list(TESTS)),
+        "steep": dict(snrs=(20., 40.), tests=list(TESTS)),
+        "edge": dict(snrs=(20., 40.), tests=list(TESTS))}
 NGAL = 12
 EDGE_INC = tuple(np.linspace(80., 88., NGAL))
+STEEP_INC = tuple(np.linspace(72., 80., NGAL))
 
 
 def galaxies(kind):
     if kind == "mid":
         return [j["galaxy"] for j in di.galaxies(NGAL)]
     gs = []
-    for k, inc in enumerate(EDGE_INC):
+    for k, inc in enumerate(EDGE_INC if kind == "edge" else STEEP_INC):
         g = rs.draw_galaxy("geometry", 100 + k, 2026)
-        g.update(id=100 + k, inc=inc)
+        g.update(id=100 + k + (0 if kind == "edge" else 100), inc=inc)
         gs.append(g)
     return gs
 

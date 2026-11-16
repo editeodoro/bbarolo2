@@ -191,13 +191,13 @@ finite (and $V_\mathrm{rot} > 0$); ring 1 takes the $\phi$ of ring 2. $V_\mathrm
 is free: a fixed rotation velocity is kept. The fit is written in
 `<prefix>_2drings.txt`; `<prefix>_rings_initial.txt` has the values before this step.
 
-### Reverse-cumulative rings
+### Rings of REVERSE
 
 With {ref}`REVERSE <par-3dfit-reverse>` `true`, or `auto` and a median initial inclination above 75°, the
-rings are fitted from the outside inwards (see below). If the rings are narrower than the beam ($\Delta R <
-B$), they are replaced by $\lceil R_N/B \rceil$ rings of width $B$ at the radii $(k - \tfrac12)B$, with the
-initial values of the given rings interpolated linearly at the new radii (the values of the first or last ring
-beyond them; $\phi$ is unwrapped first).
+rings are fitted again from the outside inwards with the model of the whole disk (see below). If the rings
+are narrower than the beam ($\Delta R < B$), they are replaced by $\lceil R_N/B \rceil$ rings of width $B$ at
+the radii $(k - \tfrac12)B$, with the initial values of the given rings interpolated linearly at the new radii
+(the values of the first or last ring beyond them; $\phi$ is unwrapped first).
 
 ## The mask
 
@@ -234,19 +234,19 @@ would be a disk filled from the centre: keep it `true` for the fits.
 
 **The neighbouring rings.** The model holds only ring $k$. The emission of the neighbouring rings that the
 beam spreads into the pixels of ring $k$ is in the data but not in the model; the normalisation (below)
-absorbs part of it. In REVERSE mode, the model of ring $k$ is added, before the convolution, to the model of
-the rings already fitted outside it ($k+1$ to $N$, with their fitted values interpolated between their
-radii, from the outer edge of ring $k$ to that of ring $N$), and with {ref}`SWEEPS <par-3dfit-sweeps>` each
-further pass adds the model of all the other rings, at their values of the previous pass. Rings skipped have no
-emission there; rings not converged or rejected take the values interpolated from the fitted ones. The densities
-of these rings are the deconvolved profile of the data: the densities whose beam-convolved model reproduces the
-total intensity map of the data in the mask, solved for all the rings together (as for METHOD GLOBAL), relative
-to $\Sigma_k$; the normalisation then applies to the sum. This model is built and convolved once per ring (the
-convolution is linear), and added to the convolved model of ring $k$. With
-{ref}`RINGREGION <par-3dfit-ringregion>` `STRIP` (nearly edge-on disks), these fits compare the model with the
-data in the strip of pixels whose distance along the major axis is within the ring, up to the height of the
-projected ring at its initial inclination plus $3z_0$ and half the beam, instead of the annulus (below), with
-uniform weights.
+absorbs part of it. In the passes of REVERSE (see *Order of the rings*) the model of ring $k$ is added, before
+the convolution, to the model of all the other rings fitted: two segments, from the inner edge of the first
+ring to the inner edge of ring $k$ and from the outer edge of ring $k$ to that of the last ring, with the
+values of the rings at their radii, linear in between and constant to the edges. Rings skipped have no
+emission there; rings not converged or rejected take the values interpolated from the fitted ones. The
+densities of these rings are the deconvolved profile of the data: the densities whose beam-convolved model
+reproduces the total intensity map of the data in the mask, solved for all the rings together (as for METHOD
+GLOBAL) with the geometry of the previous pass, relative to $\Sigma_k$; the normalisation then applies to the
+sum. This model is built and convolved once per ring (the convolution is linear), and added to the convolved
+model of ring $k$. With {ref}`RINGREGION <par-3dfit-ringregion>` `STRIP` (the default) these fits compare the
+model with the data in the strip of pixels whose distance along the major axis is within the ring, up to the
+height of the projected ring at its initial inclination plus $3z_0$ and half the beam, instead of the annulus
+(below), with uniform weights.
 
 **The box.** The model is built in a box of the cube around the centre of the ring, with half-size
 
@@ -254,8 +254,8 @@ $$
 e = R_k + w_k^+ + \frac{w_k^- + w_k^+}{2} + 3 z_0 \quad \text{(arcsec)},
 $$
 
-rounded up to whole pixels on each axis and cut at the edges of the cube; the model of the other rings (REVERSE,
-SWEEPS) is in the box of all the rings ($e = R_N + \Delta R/2 + 3z_{0,N}$), and with ANALYTIC models the box of
+rounded up to whole pixels on each axis and cut at the edges of the cube; the model of the other rings (REVERSE)
+is in the box of all the rings ($e = R_N + \Delta R/2 + 3z_{0,N}$), and with ANALYTIC models the box of
 ring $k$ grows by half the convolution kernel (for the support of the model, below). All the channels of the
 cube are modelled.
 
@@ -426,11 +426,13 @@ DENS is set to 0, so they are empty in the final model.
 
 The rings are independent: each starts from its own initial values, not from the result of a neighbour.
 They are fitted in parallel, {ref}`THREADS <par-all-threads>` at a time, from the ring of index
-{ref}`STARTRAD <par-3dfit-startrad>` (counted from 0) outwards. In REVERSE mode they are fitted one after the
-other, from the outermost ring inwards to STARTRAD, and the model of each includes the rings already fitted
-outside it (see *The model of a ring*). With {ref}`SWEEPS <par-3dfit-sweeps>` $n$, $n$ more passes follow, each
-fitting every ring again (in parallel) from its values of the previous pass, with the model of all the other
-rings at those values; the errors are computed in the last pass.
+{ref}`STARTRAD <par-3dfit-startrad>` (counted from 0) outwards. With REVERSE, {ref}`SWEEPS <par-3dfit-sweeps>`
+passes (default 1) follow: the rings are fitted again one after the other, from the outermost inwards to
+STARTRAD, each from its values of the previous pass and with the model of all the other rings (see *The model of
+a ring*): those outside it at their values of this pass, those inside at those of the previous pass
+(Gauss-Seidel). A ring not fitted in the previous pass starts again from its initial values. The errors are
+computed in the last pass. C++ fitted the rings once, one after the other from the outermost inwards, each with
+the model of the rings already fitted outside it only.
 
 ## The second stage
 

@@ -3266,11 +3266,11 @@ def test_reverse_rings_by_radius(tmp_path):
 
 @needs_data
 def test_reverse_outer_model_no_gap_no_bad_rings(tmp_path):
-    """REVERSE: the model of the outer rings starts at the outer edge of the annulus of the ring fitted and ends at
-    that of the last ring (C++ took the rings as nodes, from the radius of the next ring: an empty annulus half a
-    ring wide outside every ring, and the outer half of the last ring missing); rings with too few pixels have no
-    emission there, rings not converged or rejected take the values interpolated from the fitted ones (they were in
-    with their initial or rejected values)."""
+    """REVERSE: the model of the rings outside a ring starts at the outer edge of the annulus of the ring fitted and
+    ends at that of the last ring (C++ took the rings as nodes, from the radius of the next ring: an empty annulus
+    half a ring wide outside every ring, and the outer half of the last ring missing); rings with too few pixels have
+    no emission there, rings not converged or rejected take the values interpolated from the fitted ones (they were
+    in with their initial or rejected values)."""
     gf = _galfit_n2403(tmp_path, "RADII 30 90 150 210 270 330\nVROT 120\nFREE VROT\nREVERSE true\n")
     n = gf.inr.nr
     gf._cstat = np.full(n, gf.CS_OK)
@@ -3306,8 +3306,10 @@ def test_ring_context_is_the_model_of_the_disk(tmp_path):
         blo, bhi = gf.model.box(gf.outr)
         mod = gf.model.setup.build(d, blo, bhi, layout="yxz") + sum(gf.model.setup.build(s, blo, bhi, layout="yxz")
                                                                       for s in segs)
-        ref = gf._norm_value(d, gf.model.convolve(mod, "yxz"), blo, [])
-        assert np.isclose(gf.getFuncValue(d, ctx), ref, rtol=1e-6)
+        for strip in (True, False):
+            gf.strip = strip
+            ref = gf._norm_value(d, gf.model.convolve(mod, "yxz"), blo, [], *gf._region(d, ctx))
+            assert np.isclose(gf.getFuncValue(d, ctx), ref, rtol=1e-6)
         assert gf.model.box(d)[1][0] - gf.model.box(d)[0][0] < bhi[0] - blo[0]
 
 
@@ -3346,55 +3348,72 @@ def test_reverse_skips_empty_rings_and_errors_with_outer_rings(tmp_path, monkeyp
 
 
 @needs_data
-def test_sweeps(tmp_path, monkeypatch):
-    """SWEEPS: after the first pass, each ring is fitted again from its values with the model of all the other rings
-    (inside and outside it), with the deconvolved density profile; the errors are computed in the last pass only.
-    A negative value is an input error."""
+def test_reverse_passes(tmp_path, monkeypatch):
+    """REVERSE: after the first pass (the rings fitted alone, as without REVERSE), SWEEPS passes fit the rings again
+    one after the other from the outermost inwards, each with the model of all the other rings: those outside at
+    their values of this pass, those inside at those of the previous pass (C++ fitted the rings once, from the
+    outside in, with the outer rings only). The errors are computed in the last pass. SWEEPS must be 1 or more;
+    without REVERSE there is one pass."""
     from bbarolo.galfit import Galfit
-    gf = _galfit_n2403(tmp_path, "RADII 60 180 300 420 540\nVROT 120\nFREE VROT VDISP\nSWEEPS 2\nTWOSTAGE false\n"
-                                 "FLAGERRORS true\n")
-    assert gf.sweeps == 2
-    segs, errs = {}, []
-    orig_ctx, orig_err = Galfit._context, Galfit.getErrors
-    monkeypatch.setattr(Galfit, "_context", lambda self, s: segs.setdefault((self._pass, len(s)), []).append(
-        [(float(x.radii[0]), float(x.radii[-1])) for x in s]) or orig_ctx(self, s))
+    gf = _galfit_n2403(tmp_path, "RADII 60 180 300 420 540\nVROT 120\nFREE VROT VDISP\nREVERSE true\nSWEEPS 2\n"
+                                 "TWOSTAGE false\nFLAGERRORS true\n")
+    assert gf.reverse and gf.sweeps == 2
+    elo, ehi = gf._ring_edges()
+    fits, vals, seen, errs = [], {}, {}, []
+    orig_fit, orig_ctx, orig_err = Galfit._fit_ring, Galfit._context, Galfit.getErrors
+
+    def fit_ring(self, ir, errors, fitok, nthreads, ctx=None, start=None):
+        fits.append((self._pass, ir, ctx is not None))
+        orig_fit(self, ir, errors, fitok, nthreads, ctx, start)
+        vals[(self._pass, ir)] = float(self.outr.vrot[ir])
+
+    def context(self, segs):
+        if self._pass == 1 and len(segs) == 2 and np.isclose(segs[1].radii[0], ehi[2]):      # (ring 2)
+            seen["inner"] = float(np.interp(180., segs[0].radii, segs[0].vrot))
+            seen["outer"] = float(np.interp(420., segs[1].radii, segs[1].vrot))
+            seen["extent"] = [(float(x.radii[0]), float(x.radii[-1])) for x in segs]
+        return orig_ctx(self, segs)
+    monkeypatch.setattr(Galfit, "_fit_ring", fit_ring)
+    monkeypatch.setattr(Galfit, "_context", context)
     monkeypatch.setattr(Galfit, "getErrors", lambda self, *a: errs.append(self._pass) or orig_err(self, *a))
     gf.galfit()
-    assert all(gf.fitok) and gf._pass == 2
-    assert sorted(set(errs)) == [2] and len(errs) == 5
-    assert set(segs) == {(1, 1), (1, 2), (2, 1), (2, 2)}             # (the first and last rings: one segment)
-    elo, ehi = gf._ring_edges()
-    assert any(np.allclose(x, [(elo[0], ehi[1]), (elo[3], ehi[4])]) for x in segs[(1, 2)])     # (ring 2)
-    p = Param()
-    p.readParamString("FITSFILE a.fits\n3DFIT true\nSWEEPS -1\n")
-    assert not p.checkPars(quiet=True)
+    assert all(gf.fitok)
+    assert sorted(ir for p, ir, c in fits if p == 0 and not c) == [0, 1, 2, 3, 4]
+    for k in (1, 2):
+        assert [(ir, c) for p, ir, c in fits if p == k] == [(4, True), (3, True), (2, True), (1, True), (0, True)]
+    assert np.allclose(seen["extent"], [(elo[0], ehi[1]), (ehi[2], ehi[4])])
+    assert np.isclose(seen["outer"], vals[(1, 3)]) and np.isclose(seen["inner"], vals[(0, 1)])
+    assert errs == [2] * 5
+    for extra, ok in (("SWEEPS 0\nREVERSE true\n", False), ("SWEEPS 3\nREVERSE true\n", True)):
+        p = Param()
+        p.readParamString("FITSFILE a.fits\n3DFIT true\n" + extra)
+        assert p.checkPars(quiet=True) == ok
+    assert _galfit_n2403(tmp_path, "RADII 60 180 300\nVROT 120\nFREE VROT\nSWEEPS 3\n").sweeps == 0
 
 
 def test_ringregion_strip(tmp_path):
-    """RINGREGION STRIP: the residuals of a ring in the strip along the major axis (with the rings outside it in
-    the model): on an edge-on disk with REVERSE, VROT within 3% in the rings of the disk, where the annulus (a
-    thin band at INC ~ 90) misses it by up to ~8%. The outermost ring of REVERSE and the rings with the model of
-    the rings around them use the strip, the others the annulus; STRIP without REVERSE or SWEEPS, and other
-    values, are input errors."""
+    """RINGREGION STRIP (the default): the residuals of a ring in the strip along the major axis in the passes of
+    REVERSE (with the model of the rings around the ring); the first pass, and fits without REVERSE, use the annulus.
+    On an edge-on disk VROT is within 3% in the rings of the disk (the annulus is a thin band at INC ~ 90). Values
+    other than STRIP and ANNULUS are input errors."""
     from bbarolo import FitMod3D
     fn = _mock_disk(tmp_path, inc=87., snr=40.)
-    err = {}
-    for reg in ("ANNULUS", "STRIP"):
+    for reg in ("ANNULUS", "STRIP", None):
+        kw = dict(ringregion=reg) if reg else {}
         res = FitMod3D(fn, radii=[24, 72, 120, 168, 216], xpos=20, ypos=20, vsys=0, vrot=100, vdisp=10, z0=0, inc=87,
-                       pa=40, free="VROT VDISP INC", mask="SEARCH", reverse="true", ringregion=reg, twostage=False,
-                       verbose=0, threads=1, plots=-1).run()
-        r = res["rings"]
-        err[reg] = np.abs(np.asarray(r["vrot"]) / (300 / np.pi * np.arctan(np.asarray(r["radii"]) / 40.)) - 1)[1:4]
+                       pa=40, free="VROT VDISP INC", mask="SEARCH", reverse="true", twostage=False, verbose=0,
+                       threads=1, plots=-1, **kw).run()
         gf = res["fitter"]
-        assert gf.strip == (reg == "STRIP")
-    assert np.all(err["STRIP"] < 0.03) and err["ANNULUS"].max() > 2 * err["STRIP"].max()
-    d = gf._make_dring(4)
-    assert gf._region(d, None)[0] == 1 and gf._region(gf._make_dring(2), None)[0] == 0
-    assert gf._region(gf._make_dring(2), object())[0] == 1
-    p = Param()
-    for extra, ok in (("RINGREGION strip\nREVERSE true\n", True), ("RINGREGION STRIP\nSWEEPS 1\n", True),
-                      ("RINGREGION STRIP\nREVERSE auto\n", True), ("RINGREGION STRIP\n", False),
-                      ("RINGREGION RING\nREVERSE true\n", False)):
+        assert gf.strip == (reg != "ANNULUS")
+        if reg is None:
+            r = res["rings"]
+            err = np.abs(np.asarray(r["vrot"]) / (300 / np.pi * np.arctan(np.asarray(r["radii"]) / 40.)) - 1)[1:4]
+            assert np.all(err < 0.03)
+    assert gf._region(gf._make_dring(4), None)[0] == 0 and gf._region(gf._make_dring(2), object())[0] == 1
+    gf = FitMod3D(fn, radii=[24, 72, 120], xpos=20, ypos=20, vsys=0, vrot=100, vdisp=10, z0=0, inc=87, pa=40,
+                  free="VROT", twostage=False, verbose=0, threads=1, plots=-1).run()["fitter"]
+    assert not gf.strip and gf.sweeps == 0
+    for extra, ok in (("RINGREGION annulus\n", True), ("RINGREGION STRIP\n", True), ("RINGREGION RING\n", False)):
         p = Param()
         p.readParamString("FITSFILE a.fits\n3DFIT true\n" + extra)
         assert p.checkPars(quiet=True) == ok, extra

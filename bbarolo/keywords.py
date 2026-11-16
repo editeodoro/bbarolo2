@@ -443,9 +443,11 @@ KEYWORDS = [
     K("ADRIFT", "flag", ["gf.flagADRIFT"], CLASSIC, "Computing asymmetric drift correction?"),
     K("ADRIFTPOL1", "int", ["gf.ADRIFTPOL1"], CLASSIC, "Polynomial for VDISP2 regularisation"),
     K("ADRIFTPOL2", "int", ["gf.ADRIFTPOL2"], CLASSIC, "Polynomial for SIGMA regularisation"),
-    K("REVERSE", "lstr", ["gf.REVERSE"], CLASSIC, "Using reverse-cumulative fitting (true, false, auto)?"),
-    K("SWEEPS", "int", ["gf.SWEEPS"], CLASSIC, "Refits of the rings with the model of the whole disk"),
-    K("RINGREGION", "ustr", ["gf.RINGREGION"], CLASSIC, "Region of the residuals of a ring (ANNULUS or STRIP)"),
+    K("REVERSE", "lstr", ["gf.REVERSE"], CLASSIC, "Refitting the rings from the outside in, each with the model of the "
+      "whole disk (true, false, auto)?"),
+    K("SWEEPS", "int", ["gf.SWEEPS"], CLASSIC, "Number of passes of REVERSE after the first"),
+    K("RINGREGION", "ustr", ["gf.RINGREGION"], CLASSIC, "Region of the rings in the passes of REVERSE (STRIP or "
+      "ANNULUS)"),
     K("NORMALCUBE", "flag", ["gf.NORMALCUBE"], ("3DFIT/CLASSIC", "SPACEPAR"), "Normalizing cube to help convergence?"),
     K("BADOUT", "flag", ["gf.flagBADOUT"], CLASSIC, "Write unconverged rings in output (with flag)?"),
     K("PLOTMASK", "flag", ["gf.PLOTMASK"], ("3DFIT",), "Overlaying mask to output plots?"),
