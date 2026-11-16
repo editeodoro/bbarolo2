@@ -14,7 +14,7 @@ processes. Times are wall-clock times on that machine; they depend on it.
 ### Rings and free parameters
 
 The rings must cover the whole disk (the fit below finds gas out to at least 900 arcsec): with rings that stop at 480 arcsec,
-the code warns that 23% of the flux of the total intensity map lies beyond the last ring and that the model
+the code warns that 34% of the flux of the total intensity map lies outside the disk of the rings and that the model
 cannot reproduce it. We use three rings of 300 arcsec, at 300, 600 and 900 arcsec, which is coarse (the
 beam is 59 arcsec) but keeps the fit short: the time grows with the number of rings and of free parameters,
 and with the number of voxels in the region of the likelihood, which grows with the radius of the last ring.

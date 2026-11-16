@@ -308,9 +308,12 @@ median centre at their median position angle (the pixels on the axis belong to b
 fixed during the sampling, also when the centre or PA are free, so that the likelihood always compares the
 model with the same voxels; the density profile, computed in the region, uses that half too.
 
-Before sampling, a warning is printed when more than 5% of the flux of the total intensity map lies beyond
-the outermost ring plus half a beam, at the initial geometry: the model cannot reproduce it, and since the
-region is that of the lowest inclination allowed, with a wide prior of INC it biases INC low.
+Before sampling, a warning is printed when more than 5% of the flux of the total intensity map lies outside
+the disk of the rings at the initial geometry: farther than half a beam from the projection of the disk within
+the outermost ring and within 3 Z0 of the plane (3 times the upper end of the prior of Z0 if Z0 is free). The
+model cannot reproduce it, and since the region is that of the lowest inclination allowed, with a wide prior of
+INC it biases INC low. The thickness matters for nearly edge-on disks, where the emission of the layer extends
+much farther from the major axis than the projected rings.
 
 ### The Gaussian likelihood
 

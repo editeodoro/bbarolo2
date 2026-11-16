@@ -848,9 +848,11 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             if not useBBres and (log_like is None or log_like == self._log_likelihood_geometry):
                 fb = self._flux_beyond_rings()
                 if fb > 0.05:
-                    print(f"WARNING: {fb:.0%} of the flux of the total intensity map lies beyond the outermost ring "
-                          "(+ half a beam,\n         at the initial geometry): the model cannot reproduce it, and "
-                          "with a wide prior\n         of INC it biases INC low. Extend the rings to the whole disk.")
+                    print(f"WARNING: {fb:.0%} of the flux of the total intensity map lies outside the disk of the "
+                          "rings (beyond the\n         outermost ring or farther than 3 Z0 from the plane, + half a "
+                          "beam, at the initial\n         geometry): the model cannot reproduce it, and with a wide "
+                          "prior of INC it biases\n         INC low. Extend the rings to the whole disk, or let it be "
+                          "thicker (Z0).")
             if 'radmax' in self.freepar_idx:
                 print("\n" + dict(ring="RADMAX: the radius of the last ring (the ring moves)",
                            edge="RADMAX: the outer edge of the disk (sharp; the rings do not move)",

@@ -635,26 +635,43 @@ class LikelihoodMixin(object):
         return -self.likefactor2d * res
 
     def _flux_beyond_rings(self):
-        """ The fraction of the flux of the total intensity map of the likelihood (data_mom0, in the
-        region) beyond the outer edge of the initial rings plus half a beam, at their geometry (that
-        of the last ring). The model cannot reproduce it, and the region of the likelihood is that
-        of the lowest INC allowed by the prior: with a wide prior of INC, it biases INC low (NGC
-        2403, rings to 720" with 8% of the flux beyond them: the INC of the map 30-45 instead of
-        51 deg, and 0 with fracerr). """
+        """ The fraction of the flux of the total intensity map of the likelihood (data_mom0: the voxels of the
+        likelihood mask in the whole map, in the half of SIDE) outside the disk of the initial rings, at their
+        geometry (that of the last ring): farther than half a beam from the projection of the disk within the outer
+        edge of the rings and within 3 Z0 of the plane (Z0: the largest initial value, or the upper end of its prior
+        if Z0 is free, as the region of the likelihood). The model cannot reproduce it, and the region of the
+        likelihood is that of the lowest INC allowed by the prior: with a wide prior of INC, it biases INC low (NGC
+        2403, rings to 720" with 8% of the flux beyond them: the INC of the map 30-45 instead of 51 deg, and 0 with
+        fracerr).
+        (It was the flux in the region of the likelihood beyond the edge plus half a beam in deprojected radius, as
+        for a thin disk: at high INC that is all the flux farther than about R cos(INC) from the major axis, 45% of
+        NGC 891 at INC 87 with rings out to its edge. The whole map: the region ends a few Z0 and half a beam
+        beyond the disk, so with INC fixed it held almost none of the disk beyond the rings.) """
+        from scipy.ndimage import distance_transform_edt
         from ..galmod import outer_edge
         h = self._cube_obj.Head()
         pix = 0.5 * (abs(h.Cdelt(0)) + abs(h.Cdelt(1))) * 3600.
         r = self._inri.r
-        edge = outer_edge(self._inri.object, self._galfit.model.ringmode) + 0.5 * abs(h.Bmaj()) * 3600.
+        edge = outer_edge(self._inri.object, self._galfit.model.ringmode)
+        z0 = float(np.max(r['z0']))
+        d = self.prior_distr.get('z0') if 'z0' in self.freepar_idx else None
+        if d is not None:
+            z0 = max(z0, float(d.ppf(1.)) if np.isfinite(d.ppf(1.)) else float(d.ppf(1 - 1e-6)))
         ny, nx = self.data_mom0.shape
         yy, xx = np.mgrid[:ny, :nx]
         dx, dy = (xx - float(r['xpos'][-1])) * pix, (yy - float(r['ypos'][-1])) * pix
         sp, cp = math.sin(math.radians(float(r['phi'][-1]))), math.cos(math.radians(float(r['phi'][-1])))
-        cinc = max(math.cos(math.radians(float(r['inc'][-1]))), 1e-3)
-        rr = np.hypot(-dx * sp + dy * cp, (-dx * cp - dy * sp) / cinc)
-        m = self._region & np.isfinite(self.data_mom0)
+        inc = math.radians(float(r['inc'][-1]))
+        # the smallest radius of the points of the layer (|z| <= 3 z0) that project on each pixel: the minor-axis
+        # offset less the projected height 3 z0 sin(INC), deprojected
+        yr = np.maximum(np.abs(-dx * cp - dy * sp) - 3. * z0 * abs(math.sin(inc)), 0.) / max(math.cos(inc), 1e-3)
+        disk = np.hypot(-dx * sp + dy * cp, yr) <= edge
+        # the distance (arcsec) from the projected disk (from its centre if it covers no pixel centre)
+        dist = distance_transform_edt(~disk) * pix if disk.any() else np.hypot(dx, dy) - edge
+        m = self._side_region(np.isfinite(self.data_mom0))
         tot = float(np.sum(self.data_mom0[m]))
-        return float(np.sum(self.data_mom0[m & (rr > edge)]) / tot) if tot > 0 else 0.
+        out = dist > 0.5 * abs(h.Bmaj()) * 3600. + 0.5 * pix
+        return float(np.sum(self.data_mom0[m & out]) / tot) if tot > 0 else 0.
 
     def chi2_reduced(self, theta=None, fracerr=False):
         """ Reduced chi-square of the (Gaussian) likelihood for the parameters theta (default:

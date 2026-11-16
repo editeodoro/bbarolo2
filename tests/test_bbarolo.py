@@ -2663,7 +2663,25 @@ def test_bayesian_flux_beyond_rings(tmp_path, capsys):
     assert g._flux_beyond_rings() > 0.05
     g.sample(sampler='dynesty', freepar=['vrot_single'], threads=1, dynamic=False, sampler_kwargs=dict(nlive=15, seed=1),
           run_kwargs=dict(maxiter=20, print_progress=False))
-    assert "lies beyond the outermost ring" in capsys.readouterr().out
+    assert "lies outside the disk of the rings" in capsys.readouterr().out
+
+
+def test_bayesian_flux_beyond_rings_thick(tmp_path):
+    """The flux outside the disk of the rings counts the thickness of the layer (3 Z0, or 3 x the upper end of the
+    prior of Z0 if free) and half a beam on the sky: on a thick disk nearly edge-on (INC 87, Z0 15", beam 20") with
+    rings out to its edge, nothing lies outside (it was 75%: the check was that of a thin disk, everything farther
+    than R cos(INC) + half a beam x cos(INC) from the major axis); rings that stop at half the disk still miss it."""
+    from bbarolo.bayesian import Bayesian3DFIT
+    fn, rs = _lag_cube(tmp_path, dvdz=0.)
+    prm = dict(xpos=22, ypos=22, vsys=0, vrot=150, vdisp=10, inc=87, pa=40, mask="SEARCH",
+               outfolder=str(tmp_path / "out"), verbose=False)
+    for kw, free in ((dict(radii=rs, z0=15), ["vrot_single"]), (dict(radii=rs, z0=5), ["vrot_single", "z0_single"])):
+        f = Bayesian3DFIT(fn, **prm, **kw)
+        f._setup(free)
+        assert f._flux_beyond_rings() < 0.02
+    f = Bayesian3DFIT(fn, **prm, radii=rs[:2], z0=15)
+    f._setup(["vrot_single"])
+    assert f._flux_beyond_rings() > 0.15
 
 
 def test_bayesian_initial_rings_as_3dfit(tmp_path):

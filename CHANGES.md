@@ -7,6 +7,16 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **3DFIT GLOBAL/BAYESIAN: the warning about the flux beyond the outermost ring was wrong for thick disks seen
+  nearly edge-on.** It measured the flux beyond the outer edge plus half a beam in deprojected radius, as for a thin
+  disk: at INC 87 that is all the emission farther than about R cos(INC) from the major axis, so NGC 891 with rings
+  out to its edge and Z0 free gave "45% beyond the outermost ring" (3% lies beyond the ends of the rings). Now it
+  counts the flux farther than half a beam on the sky from the projection of the disk within the outer edge and
+  within 3 Z0 of the plane (3 times the upper end of the prior of Z0 if free, as the region of the likelihood): NGC
+  891 3%, or 11% with Z0 fixed at 9" (its HI halo). It also counts the whole map (the voxels of the likelihood
+  mask, in the half of SIDE), not only the region of the likelihood, which ends a few Z0 and half a beam beyond
+  the disk: with INC fixed it held almost none of the disk beyond the rings. The message says "outside the disk of
+  the rings" and suggests a thicker disk too. NGC 2403 with rings to 480" (the Bayesian example): 34% (was 23%).
 - **The warning "dynesty prints values below -1e6 as -inf" appeared with every sampler** (and with METHOD GLOBAL)
   when the log-likelihood at the centre of the priors is below -1e6. It is about dynesty's output only: it now
   appears only with `SAMPLER DYNESTY`.
