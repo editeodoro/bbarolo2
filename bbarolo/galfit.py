@@ -282,7 +282,7 @@ def ring_table(r, mpar=None, errors=None, fitok=None, extra=None, vertical=None)
                 kk += 1
     for name, e in (vertical or {}).items():
         unit = u.Unit(VERTICAL_COLUMNS[name][2])
-        t[name] = np.asarray(getattr(r, name), float)[:n]
+        t[name] = vertical_values(r, name)[:n]
         t[name].unit = unit
         for j in (0, 1):
             t[f"e_{name}{j + 1}"] = np.asarray(e, float)[:n, j]
@@ -308,7 +308,8 @@ def ringfile_values(par):
         cols = dict(RADII=2, VROT=3, VDISP=4, INC=5, PHI=6, Z0=8, DENS=9, XPOS=10, YPOS=11, VSYS=12, VRAD=13)
     if par.RADII == "-1" and (par.NRADII == -1 or par.RADSEP == -1) and "RADII" in cols:
         par.RADII = f"file({rf},{cols['RADII']})"
-    for k in ("VROT", "VDISP", "INC", "PHI", "Z0", "DENS", "XPOS", "YPOS", "VSYS", "VRAD", "VVERT", "DVDZ", "ZCYL"):
+    for k in ("VROT", "VDISP", "INC", "PHI", "Z0", "DENS", "XPOS", "YPOS", "VSYS", "VRAD", "VVERT", "DVDZ", "ZCYL",
+              "Z0THICK", "FTHICK", "VDISPTHICK"):
         if getattr(par, k) == "-1" and k in cols:
             setattr(par, k, f"file({rf},{cols[k]})")
 
@@ -1601,7 +1602,18 @@ NCOLS = len(RING_COLUMNS)
 # other free parameters: {name: (column, name of the error columns without 1 or 2, unit of ring_table, format)}.
 VERTICAL_COLUMNS = {"vvert": ("VVERT(km/s)", "E_VVERT", "km/s", ".3f"),
                     "dvdz": ("DVDZ(km/s/arcs)", "E_DVDZ", "km/(s arcsec)", ".4f"),
-                    "zcyl": ("ZCYL(arcs)", "E_ZCYL", "arcsec", ".3f")}
+                    "zcyl": ("ZCYL(arcs)", "E_ZCYL", "arcsec", ".3f"),
+                    "z0thick": ("Z0THICK(arcs)", "E_Z0THICK", "arcsec", ".3f"),
+                    "fthick": ("FTHICK", "E_FTHICK", "", ".4f"),
+                    "vdispthick": ("VDISPTHICK(km/s)", "E_VDISPTHICK", "km/s", ".3f")}
+
+
+def vertical_values(r, name):
+    """The values of the column name of VERTICAL_COLUMNS in the rings r: VDISPTHICK not given (negative) is VDISP."""
+    v = np.asarray(getattr(r, name), float)
+    if name == "vdispthick":
+        v = np.where(v >= 0, v, np.asarray(r.vdisp, float))
+    return v
 
 
 def writeHeader(fout, mpar, writeErrors, writeBadRings, extra=(), vertical=()):
@@ -1616,7 +1628,8 @@ def writeHeader(fout, mpar, writeErrors, writeBadRings, extra=(), vertical=()):
                 s += f"{'E_' + nm + '1':<{m}}{'E_' + nm + '2':<{m}}"
     for k in vertical:
         col, err = VERTICAL_COLUMNS[k][:2]
-        s += f"{col:<{max(m, len(col) + 1)}}{err + '1':<{m}}{err + '2':<{m}}"
+        we = max(m, len(err) + 2)                   # (E_VDISPTHICK1: the names stay apart)
+        s += f"{col:<{max(m, len(col) + 1)}}{err + '1':<{we}}{err + '2':<{we}}"
     if writeBadRings:
         s += f"{'FITOK':<{m}}"
     for nm in extra:
@@ -1635,9 +1648,10 @@ def writeRing(fout, r, i, nfree, writeErrors, errors, writeBadRings, fitOK, extr
         for kk in range(nfree):
             s += f"{errors[i][0][kk]:<{m}.3f}{errors[i][1][kk]:<{m}.3f}"
     for k, e in (vertical or {}).items():
-        col, _, _, fmt = VERTICAL_COLUMNS[k]
-        s += (f"{float(getattr(r, k)[i]):<{max(m, len(col) + 1)}{fmt}}{float(e[i][0]):<{m}{fmt}}"
-              f"{float(e[i][1]):<{m}{fmt}}")
+        col, err, _, fmt = VERTICAL_COLUMNS[k]
+        we = max(m, len(err) + 2)
+        s += (f"{float(vertical_values(r, k)[i]):<{max(m, len(col) + 1)}{fmt}}{float(e[i][0]):<{we}{fmt}}"
+              f"{float(e[i][1]):<{we}{fmt}}")
     if writeBadRings:
         s += f"{int(fitOK):<{m}d}"
     for v in extra:

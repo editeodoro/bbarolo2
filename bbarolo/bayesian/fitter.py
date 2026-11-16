@@ -332,6 +332,8 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                   that can stop the rotation within half a beam of the plane, whatever the distance and the
                   resolution (the fixed 0-2 km/s/arcsec of the original module missed the lags of distant galaxies);
           ZCYL    0 to one beam FWHM (arcsec), as Z0;
+          FTHICK  0 to 1; VDISPTHICK as VDISP; with a thick layer (FTHICK free or > 0), Z0 0 to half a beam FWHM and
+                  Z0THICK from the top of the range of Z0 to 3 beams above it (see _thick_layer_priors);
           RADMAX  the estimated outer radius (_radmax_guess, the last initial radius) - one beam FWHM to
                   + one beam FWHM, within the rings (see _prior_kwargs and _rings_for_radmax);
           VROT_P1 (the amplitude of the arctan curve) 1 km/s to 2 x the largest initial VROT.
@@ -362,6 +364,9 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             vvert=dict(name='uniform', loc=0, scale=30),                      # 0-30 km/s
             dvdz=dict(name='uniform', loc=0., scale=vtop / beam if beam > 0 else 2.),    # 0 - 2 x VROT per beam
             zcyl=dict(name='uniform', loc=0., scale=beam),                    # 0 - 1 beam
+            z0thick=dict(name='uniform', loc=beam, scale=3. * beam),          # 1 - 4 beams (see _thick_layer_priors)
+            fthick=dict(name='uniform', loc=0., scale=1.),                    # 0 - 1
+            vdispthick=dict(name='uniform', loc=0., scale=max(2. * float(rr['vdisp'].max()), 50.)),   # as VDISP
             dens=dict(name='uniform', loc=0.1, scale=200),                    # 0.1-200.1 (flux units x km/s/arcsec2)
             z0=dict(name='uniform', loc=0., scale=beam),                     # 0 - 1 beam
             sigma=dict(name='loguniform', a=None, b=None),                    # None: 0.5 and 1000 x noise rms
@@ -409,6 +414,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         if self._rings_for_radmax(kwargs.get('verbose', True)):
             self._parse_freepar(freepar)
         self._check_vertical()
+        self._thick_layer_priors(kwargs.get('verbose', True))
         self._setup_engine()
         self._setup_radmax()
         self._freeze_priors()
@@ -460,6 +466,41 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         """ True if the ring parameter name is free, in any form (per ring, _SINGLE, _FUNC). """
         return any(k == name or k.startswith(name + '_p') for k in self.freepar_idx)
 
+    def _thick(self):
+        """ True if the model has a thick layer: FTHICK free, or above 0 in some ring (see Rings.thick). """
+        return self._free('fthick') or bool(np.any(np.asarray(self._inri.r['fthick'], float) > 0))
+
+    def _thick_layer_priors(self, verbose=True):
+        """ With a thick layer, the rings of the model keep the two layers for any FTHICK, 0 included (twolayer: the
+        lag is that of the thick layer, so the model must not switch to a single lagging layer at FTHICK 0), and the
+        default priors of Z0 and Z0THICK do not overlap, so that the layers cannot swap: Z0 0 to half a beam FWHM,
+        Z0THICK from the top of the range of Z0 (the upper end of its prior if free, its largest value otherwise) to
+        3 beams above it. A NOTE if the priors given overlap (the likelihood is zero where the thick layer is the
+        thinner, see _negative). """
+        from ..bbutils import arcsconv
+        thick = self._thick()
+        if self._inri.twolayer != (True if thick else None):
+            self._inri.twolayer = True if thick else None
+            self._inri.make_object()
+        if not thick:
+            return
+        h = self._cube_obj.Head() if self._cube_obj is not None else self._load_cube().Head()
+        beam = abs(h.Bmaj()) * arcsconv(h.Cunit(0))
+        dflt = self._default_pri
+        if self.priors.get('z0') == dflt.get('z0'):
+            self.priors['z0'] = dflt['z0'] = dict(name='uniform', loc=0., scale=0.5 * beam)
+        if self._free('z0'):
+            z0top = float(get_distribution(self.priors['z0']['name'], **self._prior_kwargs('z0')).ppf(1.))
+        else:
+            z0top = float(np.max(self._inri.r['z0']))
+        if self.priors.get('z0thick') == dflt.get('z0thick'):
+            self.priors['z0thick'] = dflt['z0thick'] = dict(name='uniform', loc=z0top, scale=3. * beam)
+        if verbose and self._free('z0') and self._free('z0thick'):
+            lo = float(get_distribution(self.priors['z0thick']['name'], **self._prior_kwargs('z0thick')).ppf(0.))
+            if lo < z0top:
+                print(f"NOTE: the priors of Z0 (up to {z0top:.4g}) and Z0THICK (from {lo:.4g}) overlap: the likelihood "
+                      "is zero where Z0THICK < Z0.")
+
     def _check_vertical(self):
         """ The lag of a thick disk is identifiable: DVDZ (the vertical gradient of rotation) needs a layer with
         a thickness, Z0 > 0 in some ring or Z0 free; ZCYL (the height where the gradient begins) needs a lag too,
@@ -467,7 +508,16 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         free, their priors may include 0, where DVDZ or ZCYL has no effect: a degeneracy of the posterior that the
         data resolve, and that the errors show.) """
         r = self._inri.r
-        thick = self._free('z0') or bool(np.any(np.asarray(r['z0'], float) > 0))
+        layer = self._thick()
+        for name in ('z0thick', 'vdispthick'):
+            if self._free(name) and not layer:
+                raise BBaroloError(f"{self.taskname}: {name.upper()} is free, but FTHICK is 0 and not free: there is "
+                                   "no thick layer. Give FTHICK > 0, or make it free (e.g. FREE ... FTHICK_SINGLE).")
+        if layer and not (self._free('z0thick') or bool(np.any(np.asarray(r['z0thick'], float) > 0))):
+            raise BBaroloError(f"{self.taskname}: a thick layer (FTHICK) needs its scale height: give Z0THICK > 0, or "
+                               "make it free (e.g. FREE ... Z0THICK_SINGLE FTHICK_SINGLE).")
+        # (with a thick layer the lag is that of the thick layer, which has a thickness)
+        thick = layer or self._free('z0') or bool(np.any(np.asarray(r['z0'], float) > 0))
         lag = self._free('dvdz') or bool(np.any(np.asarray(r['dvdz'], float) != 0))
         for name in ('dvdz', 'zcyl'):
             if self._free(name) and not thick:
@@ -543,7 +593,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             self._set_density(self._fit0)
             # The profile changes during the fit only if the geometry (or the thickness) is fitted
             self.update_prof = any(sub in string for string in self.freepar_names
-                                   for sub in ['inc', 'phi', 'xpos', 'ypos', 'radmax', 'z0'])
+                                   for sub in ['inc', 'phi', 'xpos', 'ypos', 'radmax', 'z0', 'fthick'])
         self._work = self._fit0.copy()
 
     def _prior_kwargs(self, key):
@@ -762,6 +812,10 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                 th[idx] = self._radmax_guess if getattr(self, '_radmax_mode', 'edge') != 'ring' else r['radii'][-1]
             elif key in r and '_p' not in key:
                 v = np.asarray(r[key], float)
+                if key in ('z0thick', 'fthick') and not np.any(v > 0):
+                    continue                            # (not given: the centre of the prior)
+                if key == 'vdispthick':
+                    v = np.where(v >= 0, v, np.asarray(r['vdisp'], float))      # (not given: VDISP)
                 th[idx] = v if idx.size == v.size else np.median(v)
         return th
 

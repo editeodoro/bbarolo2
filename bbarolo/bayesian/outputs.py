@@ -236,20 +236,23 @@ class OutputsMixin(object):
 
     # Ring parameters in the order of the 3DFIT tables and error columns
     _RING_NAMES = ('vrot', 'vdisp', 'dens', 'z0', 'inc', 'phi', 'xpos', 'ypos', 'vsys', 'vrad')
-    # The vertical motions, written after them when they are fitted or not zero (see _vertical_params)
-    _VERTICAL = ('vvert', 'dvdz', 'zcyl')
+    # The vertical motions and the thick layer, written after them when they are fitted or used (see _vertical_params)
+    _VERTICAL = ('vvert', 'dvdz', 'zcyl', 'z0thick', 'fthick', 'vdispthick')
 
     def _vertical_params(self):
         """ The vertical motions of the best fit in the outputs (the ring file, Result.rings, the plots), in the
         order of _VERTICAL: VVERT if it is free or not zero; DVDZ and ZCYL, the lag of a thick disk, together if
-        one of them is free or DVDZ is not zero (ZCYL alone has no effect). The 3DFIT tables have no columns for
-        them, as in C++, when none is fitted or used. """
+        one of them is free or DVDZ is not zero (ZCYL alone has no effect); Z0THICK, FTHICK and VDISPTHICK, the
+        thick layer, together if there is one (_thick). The 3DFIT tables have no columns for them, as in C++, when
+        none is fitted or used. """
         r = self.outri.r
         out = []
         if self._free('vvert') or np.any(np.asarray(r['vvert'], float) != 0):
             out.append('vvert')
         if self._free('dvdz') or self._free('zcyl') or np.any(np.asarray(r['dvdz'], float) != 0):
             out += ['dvdz', 'zcyl']
+        if self._thick():
+            out += ['z0thick', 'fthick', 'vdispthick']
         return out
 
     def _vertical_errors(self):
@@ -412,7 +415,8 @@ class OutputsMixin(object):
         labels = [r'$V_\mathrm{rot}$ (km/s)', r'$\sigma$ (km/s)', 'Density', 'Inclination (deg)',
                   'Position angle (deg)', r'$z_0$ (arcsec)', 'Xpos (pix)', 'Ypos (pix)', r'$V_\mathrm{sys}$ (km/s)']
         vlabels = dict(vvert=r'$V_\mathrm{vert}$ (km/s)', dvdz=r'$dV_\mathrm{rot}/dz$ (km/s/arcsec)',
-                       zcyl=r'$z_\mathrm{cyl}$ (arcsec)')
+                       zcyl=r'$z_\mathrm{cyl}$ (arcsec)', z0thick=r'$z_\mathrm{0,thick}$ (arcsec)',
+                       fthick=r'$f_\mathrm{thick}$', vdispthick=r'$\sigma_\mathrm{thick}$ (km/s)')
         vert = self._vertical_params()
         toplot += vert
         labels += [vlabels[k] for k in vert]
@@ -430,10 +434,13 @@ class OutputsMixin(object):
         ax = axes.ravel()
         for i, a in enumerate(toplot):
             err_low, err_up = self.ring_errors(a)
-            ax[i].errorbar(rings['radii'], rings[a], yerr=[np.asarray(err_low), np.asarray(err_up)], fmt='o',
+            y = np.asarray(rings[a], float)
+            if a == 'vdispthick':                       # (not given: VDISP)
+                y = np.where(y >= 0, y, np.asarray(rings['vdisp'], float))
+            ax[i].errorbar(rings['radii'], y, yerr=[np.asarray(err_low), np.asarray(err_up)], fmt='o',
                            **{'c': '#B22222', 'ecolor': '#B22222', **kwargs})
             ax[i].set_ylabel(labels[i])
-            lo, hi = np.nanmin(rings[a] - err_low), np.nanmax(rings[a] + err_up)
+            lo, hi = np.nanmin(y - err_low), np.nanmax(y + err_up)
             if hi > lo:
                 pad = 0.1 * (hi - lo)
                 ax[i].set_ylim(lo - pad, hi + pad)

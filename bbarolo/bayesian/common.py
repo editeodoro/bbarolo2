@@ -252,7 +252,8 @@ SIGMA_QUANTILES = (0.15865, 0.50, 0.84135)
 
 # the units of the smoothness tolerances (LIKEOPTS smooth): those of the ring parameters, DENS in dex
 SMOOTH_UNITS = dict(vrot="km/s", vdisp="km/s", vrad="km/s", vsys="km/s", vvert="km/s", dvdz="km/s/arcsec",
-                    inc="deg", phi="deg", xpos="pix", ypos="pix", z0="arcsec", zcyl="arcsec", dens="dex")
+                    inc="deg", phi="deg", xpos="pix", ypos="pix", z0="arcsec", zcyl="arcsec", dens="dex",
+                    z0thick="arcsec", fthick="", vdispthick="km/s")
 
 
 def smoothness_bends(radii, values, beam, from_zero=False, log=False):

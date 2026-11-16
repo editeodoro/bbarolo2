@@ -310,7 +310,7 @@ class LikelihoodMixin(object):
             if d is None:
                 return default
             return float(d.ppf(0.)) if np.isfinite(d.ppf(0.)) else float(d.ppf(1e-6))
-        z0free = any(k.startswith('z0') for k in self.freepar_idx)
+        z0free = any(k == 'z0' or k.startswith('z0_p') for k in self.freepar_idx)
         if z0free and 'z0' not in self.freepar_idx:            # z0 as a function of radius
             blo, bhi = [0, 0], [xs, ys]
         else:
@@ -319,7 +319,7 @@ class LikelihoodMixin(object):
                 rings.radii[-1] = upper('radmax', float(rings.radii[-1]))
                 if 'radmax' in self.freepar_idx and rings.nr > 1:
                     rings.radsep = float(np.float32(rings.radii[-1] - rings.radii[-2]))
-            rings.z0[-1] = upper('z0', float(np.max(rings.z0)))
+            rings.z0[-1] = self._z0_reach(upper)
             xp, yp = float(rings.xpos[-1]), float(rings.ypos[-1])
             corners = []
             for x in (lower('xpos', xp), upper('xpos', xp)):
@@ -373,7 +373,7 @@ class LikelihoodMixin(object):
         if 'radmax' in self.freepar_idx and len(radii) > 1 and self._radmax_mode == 'ring':
             radsep = rout - float(radii[-2])
         rout += radsep / 2.
-        z0max = upper('z0', float(np.max(r['z0'])))
+        z0max = self._z0_reach(upper)
         inc = np.asarray(r['inc'], float)
         incmin = min(float(inc.min()), lower('inc', float(inc.min())))
         incmin = min(max(incmin, 0.), 89.)
@@ -399,6 +399,22 @@ class LikelihoodMixin(object):
             return np.ones(xx.shape, bool)
         margin = 3. * z0max + 0.5 * abs(h.Bmaj()) * 3600. + shift + 0.5 * pix
         return distance_transform_edt(~disk) * pix <= margin
+
+    def _z0_reach(self, upper=None):
+        """ The largest scale height (arcsec) of the model allowed by the priors: of Z0 (the upper end of its prior if
+        free, its largest value otherwise) and, with a thick layer, of Z0THICK. upper(key, default): the upper end of
+        the prior of key if free, default otherwise (default: from prior_distr). """
+        if upper is None:
+            def upper(key, default):
+                d = self.prior_distr.get(key) if key in self.freepar_idx else None
+                if d is None:
+                    return default
+                return float(d.ppf(1.)) if np.isfinite(d.ppf(1.)) else float(d.ppf(1 - 1e-6))
+        r = self._inri.r
+        z = upper('z0', float(np.max(r['z0'])))
+        if self._thick():
+            z = max(z, upper('z0thick', float(np.max(r['z0thick']))))
+        return z
 
     def _model_box(self, rings):
         """ Box [blo,bhi) of the model for the given rings, within the likelihood region. """
@@ -506,15 +522,22 @@ class LikelihoodMixin(object):
 
     # Ring parameters that cannot be negative (ZCYL: a lag that begins below the plane would be a lag in the plane
     # too, the same as a lower VROT)
-    _POSITIVE = ('vrot', 'vdisp', 'inc', 'xpos', 'ypos', 'z0', 'dens', 'zcyl')
+    _POSITIVE = ('vrot', 'vdisp', 'inc', 'xpos', 'ypos', 'z0', 'dens', 'zcyl', 'z0thick', 'fthick', 'vdispthick')
 
     def _negative(self, rings, theta):
-        """ True if RADMAX, or a value in the rings of a free VROT, VDISP, INC, XPOS, YPOS, Z0, DENS or ZCYL
-        (per ring, single or function of radius), is negative: the likelihood is then zero. The
-        parameters of a function of radius may be negative (e.g. the slope of VDISP). """
+        """ True if RADMAX, or a value in the rings of a free VROT, VDISP, INC, XPOS, YPOS, Z0, DENS, ZCYL, Z0THICK,
+        FTHICK or VDISPTHICK (per ring, single or function of radius), is negative, if a free FTHICK is above 1, or
+        if, with Z0 or Z0THICK free, the thick layer is thinner than the thin one in some ring (the layers would
+        swap: the posterior would have two modes): the likelihood is then zero. The parameters of a function of
+        radius may be negative (e.g. the slope of VDISP). """
         if 'radmax' in self.freepar_idx and theta[self.freepar_idx['radmax'][0]] < 0:
             return True
-        return any(np.any(rings.r[k] < 0) for k in self._free_positive)
+        if any(np.any(rings.r[k] < 0) for k in self._free_positive):
+            return True
+        if self._free('fthick') and np.any(rings.r['fthick'] > 1):
+            return True
+        return bool((self._free('z0') or self._free('z0thick')) and self._thick()
+                    and np.any(rings.r['z0thick'] < rings.r['z0']))
 
     def _log_likelihood(self, theta, **kwargs):
         """ Log-likelihood of the parameters theta.
@@ -639,7 +662,7 @@ class LikelihoodMixin(object):
         likelihood mask in the whole map, in the half of SIDE) outside the disk of the initial rings, at their
         geometry (that of the last ring): farther than half a beam from the projection of the disk within the outer
         edge of the rings and within 3 Z0 of the plane (Z0: the largest initial value, or the upper end of its prior
-        if Z0 is free, as the region of the likelihood). The model cannot reproduce it, and the region of the
+        if Z0 is free, as the region of the likelihood; with a thick layer, the larger of Z0 and Z0THICK). The model cannot reproduce it, and the region of the
         likelihood is that of the lowest INC allowed by the prior: with a wide prior of INC, it biases INC low (NGC
         2403, rings to 720" with 8% of the flux beyond them: the INC of the map 30-45 instead of 51 deg, and 0 with
         fracerr).
@@ -653,10 +676,7 @@ class LikelihoodMixin(object):
         pix = 0.5 * (abs(h.Cdelt(0)) + abs(h.Cdelt(1))) * 3600.
         r = self._inri.r
         edge = outer_edge(self._inri.object, self._galfit.model.ringmode)
-        z0 = float(np.max(r['z0']))
-        d = self.prior_distr.get('z0') if 'z0' in self.freepar_idx else None
-        if d is not None:
-            z0 = max(z0, float(d.ppf(1.)) if np.isfinite(d.ppf(1.)) else float(d.ppf(1 - 1e-6)))
+        z0 = self._z0_reach()
         ny, nx = self.data_mom0.shape
         yy, xx = np.mgrid[:ny, :nx]
         dx, dy = (xx - float(r['xpos'][-1])) * pix, (yy - float(r['ypos'][-1])) * pix

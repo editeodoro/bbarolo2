@@ -4,10 +4,12 @@ import numpy as np
 
 from .common import isIterable
 
-PARAMS = ('radii', 'xpos', 'ypos', 'vsys', 'vrot', 'vdisp', 'vrad', 'vvert', 'dvdz', 'zcyl', 'dens', 'z0', 'inc', 'phi')
+PARAMS = ('radii', 'xpos', 'ypos', 'vsys', 'vrot', 'vdisp', 'vrad', 'vvert', 'dvdz', 'zcyl', 'dens', 'z0', 'inc', 'phi',
+          'z0thick', 'fthick', 'vdispthick')
 
 RING_PARAMS = dict(radii='RADII', xpos='XPOS', ypos='YPOS', vsys='VSYS', vrot='VROT', vdisp='VDISP', vrad='VRAD',
-                   vvert='VVERT', dvdz='DVDZ', zcyl='ZCYL', dens='DENS', z0='Z0', inc='INC', phi='PA')
+                   vvert='VVERT', dvdz='DVDZ', zcyl='ZCYL', dens='DENS', z0='Z0', inc='INC', phi='PA',
+                   z0thick='Z0THICK', fthick='FTHICK', vdispthick='VDISPTHICK')
 
 
 class _RingDict(object):
@@ -20,6 +22,7 @@ class _RingDict(object):
         self.object = None
         self.edge, self.edgewidth = None, 0.        # the outer edge of the disk (RADMAX: 'edge', 'taper')
         self.radsep = 0.                            # the width of a single ring (RADSEP; 0: R/2 to 3R/2)
+        self.twolayer = None                        # a thick layer for any FTHICK (Rings.twolayer)
 
     @classmethod
     def from_rings(cls, rings):
@@ -27,6 +30,7 @@ class _RingDict(object):
         for k in PARAMS:
             rd.modify_parameter(k, getattr(rings, k))
         rd.radsep = float(rings.radsep) if rings.nr == 1 else 0.
+        rd.twolayer = getattr(rings, 'twolayer', None)
         rd.make_object()
         return rd
 
@@ -34,6 +38,7 @@ class _RingDict(object):
         rd = _RingDict(self.nr)
         rd.r = {k: np.array(v) for k, v in self.r.items()}
         rd.edge, rd.edgewidth, rd.radsep = self.edge, self.edgewidth, self.radsep
+        rd.twolayer = self.twolayer
         rd.make_object()
         return rd
 
@@ -62,5 +67,6 @@ class _RingDict(object):
         # (one ring: RADSEP as given, as 3DFIT; it was dropped, so the ring was always R/2 to 3R/2 wide)
         r.radsep = float(np.float32(self.r['radii'][-1] - self.r['radii'][-2])) if self.nr > 1 else self.radsep
         r.edge, r.edgewidth = self.edge, self.edgewidth
+        r.twolayer = self.twolayer
         self.object = r
         return r

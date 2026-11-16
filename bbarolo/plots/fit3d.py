@@ -49,7 +49,7 @@ _IMPORTS = ("import os\n"
 RING_KEYS = ("rad", "vrot", "disp", "inc", "pa", "z0", "dens", "xpos", "ypos", "vsys", "vrad")
 PAR_KEYS = ("vrot", "disp", "dens", "z0", "inc", "pa", "xpos", "ypos", "vsys", "vrad")
 # the vertical motions, in the ring files of METHOD GLOBAL and BAYESIAN that fitted them (galfit.VERTICAL_COLUMNS)
-VERTICAL_KEYS = ("vvert", "dvdz", "zcyl")
+VERTICAL_KEYS = ("vvert", "dvdz", "zcyl", "z0thick", "fthick", "vdispthick")
 
 # the labels of the rows of the maps plot (MAPTYPE MOMENT, GAUSSIAN)
 MAPNAMES = (("MOMENT 0TH", "MOMENT 1ST", "MOMENT 2ND"), ("GAUSS INTENSITY", "GAUSS VELOCITY", "GAUSS DISPERSION"))
@@ -61,7 +61,8 @@ def read_rings(fname, errcols=None):
     disp (km/s), inc, pa (deg), z0 (arcsec), dens, xpos, ypos (pixels), vsys, vrad (km/s), the columns 0-10 of the
     file. errcols: {name: column of its lower error} adds err_<name>, the lower (negative) and upper errors. The
     vertical motions of METHOD GLOBAL and BAYESIAN, vvert (km/s), dvdz (km/s/arcsec) and zcyl (arcsec), with their
-    errors, are read when the file has them, from the names of the columns in its header."""
+    errors, are read when the file has them, from the names of the columns in its header; so are those of the thick
+    layer, z0thick (arcsec), fthick and vdispthick (km/s)."""
     keys = ("rad", "vrot", "disp", "inc", "pa", "z0", "dens", "xpos", "ypos", "vsys", "vrad")
     t = np.genfromtxt(fname, ndmin=2)
     rings = {k: t[:, i] for i, k in enumerate(keys)}
@@ -69,7 +70,8 @@ def read_rings(fname, errcols=None):
         rings["err_" + k] = np.array([t[:, c], t[:, c + 1]])
     with open(fname) as f:
         head = f.readline().lstrip("#").split()
-    for k, col in (("vvert", "VVERT(km/s)"), ("dvdz", "DVDZ(km/s/arcs)"), ("zcyl", "ZCYL(arcs)")):
+    for k, col in (("vvert", "VVERT(km/s)"), ("dvdz", "DVDZ(km/s/arcs)"), ("zcyl", "ZCYL(arcs)"),
+                   ("z0thick", "Z0THICK(arcs)"), ("fthick", "FTHICK"), ("vdispthick", "VDISPTHICK(km/s)")):
         if col in head:
             rings[k] = t[:, head.index(col)]
             e = "E_" + k.upper()
@@ -113,8 +115,8 @@ def ring_errors(rings, key):
 def plot_parameters(rings, rings2=None, sdens=None, sdens_obs=None, sdens_label=None, faceon=False, radmax=None,
                     bunit="JY/BEAM * KM/S"):
     """The parameters of the rings against radius (<prefix>_parameters.pdf): VROT, VDISP, the surface density, INC,
-    XPOS, VRAD, PA, YPOS and VSYS, with their errors, and in one more row the vertical motions of METHOD GLOBAL and
-    BAYESIAN when the rings have them (keys vvert, dvdz, zcyl): Z0, DVDZ and ZCYL (the lag of a thick disk), VVERT.
+    XPOS, VRAD, PA, YPOS and VSYS, with their errors, and in more rows those of METHOD GLOBAL and BAYESIAN when the
+    rings have them: Z0 with the thick layer (keys z0thick, fthick, vdispthick) and the lag (dvdz, zcyl), VVERT.
 
     rings: the rings of the first stage (as read_rings, with the errors err_<name>); rings2: those of the second
     stage (TWOSTAGE), drawn on top of the first, or None. sdens: the surface density profile (radii in arcsec,
@@ -136,16 +138,19 @@ def plot_parameters(rings, rings2=None, sdens=None, sdens_obs=None, sdens_label=
         max_rad = 1.1 * np.nanmax(r2["rad"])
         max_vrot, max_vdisp = np.maximum(max_vrot, np.nanmax(r2["vrot"])), np.maximum(max_vdisp, np.nanmax(r2["disp"]))
 
-    # the vertical motions (one more row, or two): Z0 with the lag (DVDZ, ZCYL), then VVERT
-    vert = (["z0", "dvdz", "zcyl"] if "dvdz" in rings or "zcyl" in rings else []) + \
-        (["vvert"] if "vvert" in rings else [])
+    # the vertical structure and motions (more rows): Z0 with the thick layer (Z0THICK, FTHICK, VDISPTHICK) and the
+    # lag (DVDZ, ZCYL), then VVERT
+    lag, thick = "dvdz" in rings or "zcyl" in rings, "fthick" in rings
+    vert = (["z0"] if lag or thick else []) + (["z0thick", "fthick", "vdispthick"] if thick else []) + \
+        (["dvdz", "zcyl"] if lag else []) + (["vvert"] if "vvert" in rings else [])
     with mpl.rc_context(style):
-        # Defining figure and axes
-        fig = plt.figure(FigureClass=StyledFigure, style=style, figsize=(11, 11), dpi=150)
+        # Defining figure and axes (11 inches high with up to 5 rows; taller with more, the panels as high)
         nrows, ncols = 3, 3
-        xlen, ylen = 0.27, 0.13
-        x_sep, y_sep = 0.07, 0.015
-        bottom_corner = [0.1, 0.7]
+        hfig = 11. + 1.6 * max(nrows + (len(vert) + ncols - 1) // ncols - 5, 0)
+        fig = plt.figure(FigureClass=StyledFigure, style=style, figsize=(11, hfig), dpi=150)
+        xlen, ylen = 0.27, 0.13 * 11. / hfig
+        x_sep, y_sep = 0.07, 0.015 * 11. / hfig
+        bottom_corner = [0.1, 1. - 0.3 * 11. / hfig]
         npanels = nrows * ncols + len(vert)
         for i in range(nrows + (len(vert) + ncols - 1) // ncols):
             bottom_corner[0], yl = 0.1, ylen
@@ -227,7 +232,9 @@ def plot_parameters(rings, rings2=None, sdens=None, sdens_obs=None, sdens_label=
 
         # The vertical motions: the scale height and the lag of a thick disk, the vertical velocity
         vlabels = dict(z0=r"z$_0$ (arcsec)", dvdz=r"dV$_\mathrm{rot}$/dz (km/s/arcsec)",
-                       zcyl=r"z$_\mathrm{cyl}$ (arcsec)", vvert=r"V$_\mathrm{vert}$ (km/s)")
+                       zcyl=r"z$_\mathrm{cyl}$ (arcsec)", vvert=r"V$_\mathrm{vert}$ (km/s)",
+                       z0thick=r"z$_\mathrm{0,thick}$ (arcsec)", fthick=r"f$_\mathrm{thick}$",
+                       vdispthick=r"$\sigma_\mathrm{thick}$ (km/s)")
         for a, k in zip(ax[9:], vert):
             a.set_ylabel(vlabels[k], fontsize=lsize)
             a.errorbar(rad, rings[k], yerr=ring_errors(rings, k), fmt="o", color=color)

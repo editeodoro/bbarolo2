@@ -450,6 +450,20 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   models to rounding, about twice as slow; `ring_maps` (the deconvolved density profile) and the model box (3 ×
   the larger scale height) include it. A thick disk such as that of NGC 891 needs it: with one exponential layer
   the fit used a lag of 6.7 km/s/arcsec to slow the gas of its HI halo.
+- **3DFIT with METHOD GLOBAL or BAYESIAN fits the thick layer (Z0THICK, FTHICK, VDISPTHICK in FREE).** Default
+  priors: FTHICK 0–1, VDISPTHICK as VDISP, and with a thick layer Z0 0 to half a beam and Z0THICK from the top of
+  the range of Z0 to 3 beams above it: the two ranges do not overlap, so the layers cannot swap (with priors
+  given that overlap, a NOTE, and zero likelihood where Z0THICK < Z0); FTHICK above 1 has zero likelihood. With
+  FTHICK free the model keeps two layers also at FTHICK 0 (`Rings.twolayer`), so the likelihood is continuous
+  there. Errors when the layer cannot be identified (Z0THICK or VDISPTHICK free without a thick layer, a thick
+  layer without Z0THICK). The outputs have the three with their errors after the other vertical columns
+  (`Z0THICK(arcs)`, `FTHICK`, `VDISPTHICK(km/s)` in `<prefix>_rings_final1.txt`, read back by RINGFILE and the
+  plotting scripts; columns of `Result.rings`; rows of `<prefix>_parameters.pdf`, taller with more than 5 rows,
+  and of `plot_profiles()`). The region of the likelihood and the flux check reach 3 times the upper end of the
+  prior of Z0THICK. On a mock at INC 87° (thin layer Z0 4" without lag, thick layer with 30% of the gas at
+  Z0THICK 25", VDISPTHICK 20 km/s, DVDZ 1.5 km/s/arcsec; S/N 30) GLOBAL gives Z0THICK 25.7 ± 2.4", FTHICK 0.293 ±
+  0.019, VDISPTHICK 17.2 ± 2.9 km/s, DVDZ 1.49 ± 0.18 km/s/arcsec. The error columns of the ring files are wide
+  enough for the longer names.
 - **3DFIT with METHOD GLOBAL or BAYESIAN fits the lag of a thick disk (DVDZ, ZCYL in FREE) and shows it.** FREE
   accepted DVDZ and ZCYL (and VVERT) and the model used them, but none of the outputs did. Now the vertical motions
   that are free or not zero are written after the error columns of `<prefix>_rings_final1.txt`, each with its lower

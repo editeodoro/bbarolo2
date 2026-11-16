@@ -1438,6 +1438,110 @@ def test_bayesian_lag_identifiable(tmp_path):
     assert f._vertical_params() == ["vvert"] and len(f.plot_parameters().axes) == 10
 
 
+def _thick_cube(tmp_path, snr=30., seed=3):
+    """A nearly edge-on disk (INC 87, PA 40, centre 22,22, beam 20", 5 rings of one beam, VROT 150 km/s flat) with a
+    thin layer (Z0 4", VDISP 8 km/s, no lag) and a thick lagging layer (Z0THICK 25", FTHICK 0.3, VDISPTHICK 20 km/s,
+    DVDZ 1.5 km/s/arcsec from the plane); returns the file and the radii."""
+    from astropy.io import fits
+    from bbarolo import GalMod
+    n, beam, pix, dv = 45, 20., 6., 10.
+    tmpl = emptyfits([n, n, 48], [-pix / 3600., pix / 3600., dv], beam=beam / 3600., bunit="JY/BEAM", obj="THICK")
+    rs = np.arange(1, 6) * 20.
+    gm = GalMod(tmpl, radii=rs, xpos=22, ypos=22, vsys=0., vrot=150., vdisp=8., z0=4., z0thick=25., fthick=0.3,
+                vdispthick=20., dvdz=1.5, zcyl=0., inc=87., pa=40., dens=np.exp(-rs / 60.), norm="NONE", mask="NONE",
+                galmodtype="ANALYTIC", threads=1, verbose=False)
+    clean = gm.run().model
+    noisy = gm.diskmodel.addnoise(clean.data, float(clean.data.max()) / snr, seed=seed)
+    fn = str(tmp_path / "thick.fits")
+    fits.PrimaryHDU(data=noisy, header=tmpl.header).writeto(fn, overwrite=True)
+    return fn, rs
+
+
+def test_bayesian_thick_layer_global(tmp_path):
+    """3DFIT with METHOD GLOBAL fits a thick lagging layer, Z0THICK, FTHICK and VDISPTHICK in FREE with the lag: on a
+    nearly edge-on mock with a thin layer (no lag) and a thick one (30% of the gas, Z0THICK 25", VDISPTHICK 20 km/s,
+    DVDZ 1.5 km/s/arcsec), VROT, VDISP, Z0THICK, FTHICK, VDISPTHICK and DVDZ are recovered within 3 sigma. The
+    outputs have them with their errors: Result.rings, the ring file (read back by the plots and by RINGFILE), the
+    plot of the parameters (Z0, Z0THICK, FTHICK, VDISPTHICK, DVDZ, ZCYL). Default priors: Z0 0 to half a beam,
+    Z0THICK from there to 3 beams above it, FTHICK 0-1."""
+    import astropy.units as u
+    from bbarolo import FitMod3D
+    from bbarolo.galfit import ringfile_values
+    from bbarolo.params import GalfitPar
+    from bbarolo.bbutils import getDataColumn
+    from bbarolo.plots.fit3d import read_rings
+    fn, rs = _thick_cube(tmp_path)
+    out = tmp_path / "out"
+    r = FitMod3D(fn, radii=rs, xpos=22, ypos=22, vsys=0, vrot=120, vdisp=10, z0=4, inc=87, pa=40, mask="SEARCH",
+                 free="VROT VDISP_SINGLE Z0THICK_SINGLE FTHICK_SINGLE VDISPTHICK_SINGLE DVDZ_SINGLE", method="GLOBAL",
+                 threads=4, plots=0, verbose=0, outfolder=str(out)).run()
+    f = r.fitter
+    assert f.priors["z0thick"] == dict(name="uniform", loc=4., scale=60.)       # (Z0 fixed at 4": from 4")
+    assert f.priors["fthick"] == dict(name="uniform", loc=0., scale=1.)
+    assert f._inri.object.twolayer and f._work.object.twolayer
+    t = r.rings
+    assert t["z0thick"].unit == u.arcsec and t["vdispthick"].unit == u.km / u.s and t["fthick"].unit == u.one
+    for name, truth in (("vrot", 150.), ("vdisp", 8.), ("z0thick", 25.), ("fthick", 0.3), ("vdispthick", 20.),
+                        ("dvdz", 1.5)):
+        v, lo, hi = (np.asarray(t[c], float) for c in (name, f"e_{name}1", f"e_{name}2"))
+        err = np.where(v > truth, -lo, hi)
+        assert np.all(err > 0) and np.all(np.abs(v - truth) <= 3. * err), (name, v, lo, hi)
+    fig = r.plot_parameters()
+    assert len(fig.axes) == 15 and [a.get_ylabel() for a in fig.axes[9:]] == \
+        ["z$_0$ (arcsec)", r"z$_\mathrm{0,thick}$ (arcsec)", r"f$_\mathrm{thick}$", r"$\sigma_\mathrm{thick}$ (km/s)",
+         r"dV$_\mathrm{rot}$/dz (km/s/arcsec)", r"z$_\mathrm{cyl}$ (arcsec)"]
+    r.write()
+    rf = str(out / "THICK_rings_final1.txt")
+    head = open(rf).readline().lstrip("#").split()
+    assert head[-9:] == ["Z0THICK(arcs)", "E_Z0THICK1", "E_Z0THICK2", "FTHICK", "E_FTHICK1", "E_FTHICK2",
+                         "VDISPTHICK(km/s)", "E_VDISPTHICK1", "E_VDISPTHICK2"]
+    rr = read_rings(rf)
+    assert np.allclose(rr["fthick"], t["fthick"], atol=1e-4) and np.allclose(rr["z0thick"], t["z0thick"], atol=1e-3)
+    par = GalfitPar()
+    par.ringfile = rf
+    ringfile_values(par)
+    assert np.allclose(getDataColumn(par.Z0THICK), t["z0thick"], atol=1e-3)
+    assert np.allclose(getDataColumn(par.VDISPTHICK), t["vdispthick"], atol=1e-3)
+
+
+def test_bayesian_thick_layer_setup(tmp_path, capsys):
+    """The thick layer in the fit: an error when it cannot be identified (Z0THICK or VDISPTHICK free without a thick
+    layer, FTHICK without Z0THICK); the rings keep two layers for any FTHICK, so the likelihood is continuous at
+    FTHICK 0 (a single layer with the lag there would jump); the default priors of Z0 and Z0THICK do not overlap,
+    and with priors that do (a NOTE), the likelihood is zero where the thick layer is the thinner; FTHICK above 1
+    has zero likelihood; the region of the likelihood reaches 3 times the upper end of the prior of Z0THICK;
+    VDISPTHICK not given follows VDISP."""
+    from bbarolo.bayesian import Bayesian3DFIT
+    from bbarolo.bbutils import BBaroloError
+    fn, rs = _thick_cube(tmp_path, snr=50.)
+    prm = dict(radii=rs, xpos=22, ypos=22, vsys=0, vrot=150, vdisp=8, inc=87, pa=40, mask="SEARCH", dvdz=1.5,
+               outfolder=str(tmp_path / "out"), verbose=False)
+    for kw, free, msg in ((dict(z0=4), ["z0thick_single"], "Z0THICK is free, but FTHICK is 0 and not free"),
+                          (dict(z0=4), ["vdispthick_single"], "VDISPTHICK is free, but FTHICK is 0 and not free"),
+                          (dict(z0=4), ["fthick_single"], "needs its scale height"),
+                          (dict(z0=4, fthick=0.3), ["vrot_single"], "needs its scale height")):
+        with pytest.raises(BBaroloError, match=msg):
+            Bayesian3DFIT(fn, **prm, **kw)._setup(free)
+    f = Bayesian3DFIT(fn, **prm, z0=4, z0thick=25)
+    f._setup(["fthick_single", "z0_single"])
+    assert f.priors["z0"] == dict(name="uniform", loc=0., scale=10.)
+    assert f.priors["z0thick"] == dict(name="uniform", loc=10., scale=60.)
+    assert f._inri.object.twolayer and f._z0_reach() == 25.
+    l0, l1 = f._log_likelihood(np.array([0., 4.])), f._log_likelihood(np.array([1e-6, 4.]))
+    assert np.isfinite(l0) and abs(l0 - l1) < 1e-3 * abs(l0)
+    assert f._log_likelihood(np.array([1.2, 4.])) == -np.inf
+    capsys.readouterr()
+    g = Bayesian3DFIT(fn, **prm, z0=4, priors="Z0THICK=(uniform,0,40) Z0=(uniform,0,20)")
+    g._setup(["fthick_single", "z0_single", "z0thick_single"], verbose=True)
+    assert "NOTE: the priors of Z0" in capsys.readouterr().out
+    assert np.isfinite(g._log_likelihood(np.array([0.3, 4., 25.])))
+    assert g._log_likelihood(np.array([0.3, 10., 5.])) == -np.inf
+    h = Bayesian3DFIT(fn, **prm, z0=4, z0thick=25, fthick=0.3)
+    h._setup(["vdisp_single"])
+    rings = h._update_rings(h._fit0.copy(), np.array([13.]))
+    assert np.all(rings.object.vdispthick == -1.) and np.all(rings.object.vdisp == 13.)
+
+
 def test_fit_method(tmp_path, capsys):
     """METHOD of the fits: CLASSIC (3DFIT), GLOBAL (WINDFIT, SLITFIT) by default, checked, one per run; the old tasks
     BAYESIAN3DFIT, BAYESIANWIND and BAYESIANSLITFIT are errors that name the new form; a keyword of another method

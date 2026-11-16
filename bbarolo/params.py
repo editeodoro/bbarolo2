@@ -1138,7 +1138,7 @@ def _numstr(v):
 # ring parameters that can be fitted, the other free parameters, and the parameters with a
 # function of radius (Bayesian3DFIT.funcs: VROT arctan, VDISP linear, DENS exponential)
 BAYES_RING_PARS = ("vrot", "vdisp", "dens", "z0", "inc", "phi", "xpos", "ypos", "vsys", "vrad", "vvert", "dvdz",
-                   "zcyl")
+                   "zcyl", "z0thick", "fthick", "vdispthick")
 BAYES_OTHER_PARS = ("sigma", "fracerr", "radmax")
 BAYES_FUNC_PARS = ("vrot", "vdisp", "dens")
 _BAYES_ALIASES = {"pa": "phi", "disp": "vdisp"}
