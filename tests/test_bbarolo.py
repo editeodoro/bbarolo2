@@ -1336,6 +1336,78 @@ def test_galmod_lag_never_reverses():
         assert near1 > near2 > 5.
 
 
+def _thick_rings(**kw):
+    p = dict(radii=np.arange(1, 6) * 20., xpos=31.5, ypos=31.5, vsys=0., vrot=120., vdisp=8., z0=4., inc=86.,
+             phi=40., dens=[1., 2., 1.5, 1., .5], z0thick=25., fthick=0.3, vdispthick=20., dvdz=1.5, zcyl=5.)
+    p.update(kw)
+    return Rings().setRings(**p, radsep=20.)
+
+
+def test_galmod_thick_layer(synthetic_cube):
+    """A thick layer (Z0THICK, FTHICK, VDISPTHICK): the model is the sum of the thin layer, with DENS (1 - FTHICK),
+    Z0, VDISP and no lag, and of the thick layer, with DENS FTHICK, Z0THICK, VDISPTHICK and the lag (ANALYTIC: to
+    rounding; MC: the same total flux). FTHICK 0 in all the rings is the single-layer model with its lag, unless
+    twolayer (a fit of FTHICK) keeps two layers: then the lag is that of an empty layer. ring_maps carry the
+    fractions (sum_r dens_r maps_r is the total intensity map, also with FTHICK varying with radius) and the box
+    holds 3 Z0THICK."""
+    from bbarolo.galmod import DiskModel
+    from bbarolo.bbutils import BBaroloError
+    m = DiskModel(synthetic_cube, galmodtype="ANALYTIC")
+    full = ((0, 0), (64, 64))
+    r = _thick_rings()
+    two = m.array(r, *full)
+    thin = m.array(_thick_rings(dens=r.dens * 0.7, fthick=0., dvdz=0.), *full)
+    thk = m.array(_thick_rings(dens=r.dens * 0.3, fthick=0., z0=25., vdisp=20.), *full)
+    assert two.max() > 0 and np.abs(two - thin - thk).max() < 1e-9 * two.max()
+    assert np.abs(two.sum() / (thin.sum() + thk.sum()) - 1) < 1e-9
+    mc = DiskModel(synthetic_cube, galmodtype="MC").array(r, *full)
+    assert abs(mc.sum() / two.sum() - 1) < 0.02
+    # FTHICK 0: one layer, with the lag; with twolayer, the thin layer only (no lag)
+    one = _thick_rings(fthick=0., z0=15., zcyl=0.)
+    lag = m.array(one, *full)
+    nolag = m.array(_thick_rings(fthick=0., z0=15., zcyl=0., dvdz=0.), *full)
+    assert np.abs(lag - nolag).max() > 0.05 * lag.max()
+    one.twolayer = True
+    assert np.abs(m.array(one, *full) - nolag).max() < 1e-9 * lag.max()
+    # VDISPTHICK not given (-1): VDISP
+    a = m.array(_thick_rings(vdispthick=-1.), *full)
+    b = m.array(_thick_rings(vdispthick=8.), *full)
+    assert np.abs(a - b).max() < 1e-9 * a.max()
+    # ring maps with FTHICK varying with radius
+    r = _thick_rings(fthick=np.linspace(0.1, 0.6, 5))
+    mod = m.array(r, *full).sum(axis=0)
+    assert np.abs(np.tensordot(r.dens, m.ring_maps(r), axes=1) - mod).max() < 1e-6 * mod.max()
+    # the box: 3 Z0THICK above the last radius + half a ring
+    blo, bhi = m.box(_thick_rings(z0thick=60.))
+    assert bhi[0] - blo[0] > blo[0] and m.box(_thick_rings(fthick=0., z0thick=60.)) != (blo, bhi)
+    for kw, msg in ((dict(fthick=1.5), "FTHICK"), (dict(z0thick=-1.), "Z0THICK")):
+        with pytest.raises((ValueError, BBaroloError), match=msg):
+            m.array(_thick_rings(**kw), *full)
+
+
+def test_galmod_thick_layer_keywords(tmp_path):
+    """Z0THICK, FTHICK and VDISPTHICK are GALMOD ring parameters (one value, a list or file()); GalMod makes the
+    model of DiskModel with them, and the parameter file reads them."""
+    from bbarolo import GalMod
+    from bbarolo.rings import readRings
+    tmpl = emptyfits([64, 64, 40], [-10. / 3600., 10. / 3600., 10.], beam=30. / 3600., bunit="JY/BEAM", obj="T")
+    kw = dict(radii=np.arange(1, 6) * 20., xpos=31.5, ypos=31.5, vsys=0., vrot=120., vdisp=8., z0=4., inc=86.,
+              pa=40., dens=1., dvdz=1.5, zcyl=5., norm="NONE", mask="NONE", galmodtype="ANALYTIC", threads=1,
+              verbose=False)
+    a = np.asarray(GalMod(tmpl, **kw, z0thick=25., fthick=[0.1, 0.2, 0.3, 0.3, 0.3], vdispthick=20.).run()
+                   .model.data, float)
+    b = np.asarray(GalMod(tmpl, **kw).run().model.data, float)
+    assert np.abs(a - b).max() > 0.05 * b.max() and abs(a.sum() / b.sum() - 1) < 0.01
+    par = tmp_path / "t.par"
+    tmpl.writeto(str(tmp_path / "t.fits"))
+    par.write_text(f"FITSFILE {tmp_path / 't.fits'}\nGALMOD true\nRADII 20 40 60\nXPOS 31.5\nYPOS 31.5\nVSYS 0\n"
+                   "VROT 100\nVDISP 9\nINC 80\nPA 40\nZ0 4\nZ0THICK 30\nFTHICK 0.1 0.2 0.3\n")
+    p = Param()
+    p.readParamFile(str(par))
+    r = readRings(p.gm if hasattr(p, "gm") else p.gf, Cube(str(tmp_path / "t.fits"), par=p).Head())
+    assert list(r.z0thick) == [30.] * 3 and list(r.fthick) == [.1, .2, .3] and list(r.vdispthick) == [-1.] * 3
+
+
 def test_bayesian_lag_identifiable(tmp_path):
     """DVDZ and ZCYL free must change the model: DVDZ needs a thick disk (Z0 > 0 or Z0 free), ZCYL a lag (DVDZ free or
     not zero); otherwise an error that names the parameters. ZCYL cannot be negative (a lag below the plane is a lower

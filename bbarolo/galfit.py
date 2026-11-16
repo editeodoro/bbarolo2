@@ -387,6 +387,8 @@ def initial_rings(c, par, galmod=False, write=True, buildmask=False, task="3DFIT
     if par.VVERT == "-1": par.VVERT = "0.0"
     if par.DVDZ == "-1": par.DVDZ = "0.0"
     if par.ZCYL == "-1": par.ZCYL = "0.0"
+    if par.Z0THICK == "-1": par.Z0THICK = "0.0"
+    if par.FTHICK == "-1": par.FTHICK = "0.0"
 
     inR, fromfile = readRings(par, c.Head(), return_fromfile=True)
     if inR.nr == 0:
@@ -519,8 +521,10 @@ class Galfit:
                 phi = np.degrees(np.unwrap(np.radians(np.asarray(inR.phi, float))))
                 nr = Rings()
                 nr.radsep = beamarcs
+                nr.twolayer = inR.twolayer
                 cols = [at(v) for v in (inR.xpos, inR.ypos, inR.vsys, inR.vrot, inR.vdisp, inR.vrad, inR.vvert,
-                                        inR.dvdz, inR.zcyl, inR.dens, inR.z0, inR.inc, phi)]
+                                        inR.dvdz, inR.zcyl, inR.dens, inR.z0, inR.inc, phi, inR.z0thick,
+                                        inR.fthick, inR.vdispthick)]
                 for i in range(new_nr):
                     nr.addRing(new_r[i], *(float(col[i]) for col in cols))
                 inR = nr
@@ -762,7 +766,8 @@ class Galfit:
         h = self.cin.Head()
         beam = abs(h.Bmaj()) * 3600. if h.Bmaj() else 0.
         ir = dring.id
-        hm = dring.radii[-1] * abs(math.cos(math.radians(self.inr.inc[ir]))) + 3 * self.inr.z0[ir] + beam / 2.
+        hm = (dring.radii[-1] * abs(math.cos(math.radians(self.inr.inc[ir]))) + 3 * float(self.inr.layer_height()[ir])
+              + beam / 2.)
         return 1, hm / self.pixScale
 
     def _strip_box(self, dring, blo, bhi, hmax):
@@ -986,7 +991,9 @@ class Galfit:
         d = Rings()
         d.setRings(radii=drads, xpos=vr.xpos[ir], ypos=vr.ypos[ir], vsys=vr.vsys[ir], vrot=vr.vrot[ir],
                    vdisp=vr.vdisp[ir], vrad=vr.vrad[ir], vvert=vr.vvert[ir], dvdz=vr.dvdz[ir],
-                   zcyl=vr.zcyl[ir], dens=vr.dens[ir], z0=vr.z0[ir], inc=vr.inc[ir], phi=vr.phi[ir])
+                   zcyl=vr.zcyl[ir], dens=vr.dens[ir], z0=vr.z0[ir], inc=vr.inc[ir], phi=vr.phi[ir],
+                   z0thick=vr.z0thick[ir], fthick=vr.fthick[ir], vdispthick=vr.vdispthick[ir])
+        d.twolayer = vr.thick()
         d.radsep = drads[1] - drads[0]
         d.id = ir
         return d
@@ -1015,7 +1022,8 @@ class Galfit:
         good = np.flatnonzero(st == self.CS_OK)
         bad = st[idx] == self.CS_FAILED
         if bad.any() and good.size:
-            for k in ("xpos", "ypos", "vsys", "vrot", "vdisp", "vrad", "vvert", "dvdz", "zcyl", "z0", "inc", "phi"):
+            for k in ("xpos", "ypos", "vsys", "vrot", "vdisp", "vrad", "vvert", "dvdz", "zcyl", "z0", "inc", "phi",
+                      "z0thick", "fthick", "vdispthick"):
                 getattr(seg, k)[bad] = np.interp(seg.radii[bad], r.radii[good], getattr(r, k)[good])
         elo, ehi = self._ring_edges()
         sub = self.model.setup.radsep * 60.                  # (width of the sub-rings of the model, arcsec)

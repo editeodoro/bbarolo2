@@ -9,7 +9,7 @@ import numpy as np
 from .bbutils import BBaroloError, getDataColumn, getCenterCoordinates
 
 RING_KEYS = ("radii", "xpos", "ypos", "vsys", "vrot", "vdisp", "vrad", "vvert",
-             "dvdz", "zcyl", "dens", "z0", "inc", "phi")
+             "dvdz", "zcyl", "dens", "z0", "inc", "phi", "z0thick", "fthick", "vdispthick")
 
 
 class Rings:
@@ -18,15 +18,24 @@ class Rings:
     edge (arcsec, default None): the outer edge of the disk of the model, within the rings: the
     density of the model beyond it is zero (edgewidth = 0: a sharp edge) or falls as
     1/2 erfc((R - edge) / (sqrt(2) edgewidth)) (edgewidth > 0, arcsec: a Gaussian edge). See
-    galmod.edge_weights. Used by Bayesian3DFIT for RADMAX."""
+    galmod.edge_weights. Used by Bayesian3DFIT for RADMAX.
+
+    The thick layer: a fraction fthick (0-1) of the column density of each ring lies in a second layer of scale
+    height z0thick (arcsec) and velocity dispersion vdispthick (km/s; negative: vdisp), with the same LTYPE; the
+    lag (dvdz, zcyl) is then that of the thick layer only (the thin layer rotates at vrot at all heights). Without
+    a thick layer (fthick 0 in all the rings) the lag is that of the single layer. twolayer (default None: a thick
+    layer if fthick > 0 in some ring) sets it: True keeps the two layers also where fthick is 0 (a fit of fthick,
+    whose model must not change discontinuously at 0). See galmod.GalmodSetup.subrings."""
 
     def __init__(self, nr=0):
         self.radsep = 0.            # (as in C++; -1 shrank SHIFTED disks by 0.5)
         self.id = 0
         self.edge, self.edgewidth = None, 0.
         self.empty = None           # inner part of the model empty (True/False), or None: GalmodSetup.empty
+        self.twolayer = None        # a thick layer (True/False), or None: if fthick > 0 in some ring
         for k in RING_KEYS:
             setattr(self, k, np.zeros(nr))
+        self.vdispthick = np.full(nr, -1.)
 
     @property
     def nr(self):
@@ -36,12 +45,15 @@ class Rings:
         r = Rings()
         r.radsep, r.id = self.radsep, self.id
         r.edge, r.edgewidth, r.empty = self.edge, self.edgewidth, getattr(self, "empty", None)
+        r.twolayer = getattr(self, "twolayer", None)
         for k in RING_KEYS:
             setattr(r, k, np.array(getattr(self, k), dtype=float, copy=True))
         return r
 
-    def addRing(self, radii, xpos, ypos, vsys, vrot, vdisp, vrad, vvert, dvdz, zcyl, dens, z0, inc, phi):
-        vals = (radii, xpos, ypos, vsys, vrot, vdisp, vrad, vvert, dvdz, zcyl, dens, z0, inc, phi)
+    def addRing(self, radii, xpos, ypos, vsys, vrot, vdisp, vrad, vvert, dvdz, zcyl, dens, z0, inc, phi,
+                z0thick=0., fthick=0., vdispthick=-1.):
+        vals = (radii, xpos, ypos, vsys, vrot, vdisp, vrad, vvert, dvdz, zcyl, dens, z0, inc, phi, z0thick, fthick,
+                vdispthick)
         for k, v in zip(RING_KEYS, vals):
             setattr(self, k, np.append(getattr(self, k), float(v)))
 
@@ -50,7 +62,7 @@ class Rings:
         radii = np.atleast_1d(np.asarray(kw["radii"], dtype=float))
         n = len(radii)
         dflt = dict(xpos=0, ypos=0, vsys=0, vrot=0, vdisp=0, vrad=0, vvert=0, dvdz=0, zcyl=0,
-                    dens=1, z0=0, inc=0, phi=0)
+                    dens=1, z0=0, inc=0, phi=0, z0thick=0, fthick=0, vdispthick=-1)
         self.radii = radii.copy()
         for k in RING_KEYS[1:]:
             v = kw.get(k, dflt[k])
@@ -66,6 +78,7 @@ class Rings:
         r = Rings()
         r.radsep, r.id = self.radsep, self.id
         r.edge, r.edgewidth, r.empty = self.edge, self.edgewidth, getattr(self, "empty", None)
+        r.twolayer = getattr(self, "twolayer", None)
         for k in RING_KEYS:
             setattr(r, k, np.atleast_1d(np.asarray(getattr(self, k))[idx]).astype(float))
         return r
@@ -83,6 +96,10 @@ class Rings:
              f"    Z0     = {self.z0[n]:8.2f}  arcs          Dens   = {self.dens[n]:7.2f} 1E20 1/cm2\n"
              f"    VVERT  = {self.vvert[n]:8.2f}  km/s          ZCYL   = {self.zcyl[n]:7.2f} arcs\n"
              f"    DVDZ   = {self.dvdz[n]:8.2f}  km/s/arcs\n")
+        if self.thick():
+            vdt = self.vdispthick[n] if self.vdispthick[n] >= 0 else self.vdisp[n]
+            s += (f"    Z0THICK= {self.z0thick[n]:8.2f}  arcs          FTHICK = {self.fthick[n]:7.3f}\n"
+                  f"    VDISPTHICK = {vdt:6.2f}  km/s\n")
         if stream is None:
             print(s, end="")
         else:
@@ -97,6 +114,19 @@ class Rings:
 
     def as_dict(self):
         return {k: getattr(self, k).copy() for k in RING_KEYS}
+
+    def thick(self):
+        """True if the model has a thick layer: twolayer, or if that is None, fthick > 0 in some ring."""
+        tl = getattr(self, "twolayer", None)
+        return bool(tl) if tl is not None else bool(np.any(np.asarray(self.fthick, float) > 0))
+
+    def layer_height(self):
+        """The scale height (arcsec) of the thicker layer of each ring: z0, or z0thick where it is larger and the
+        thick layer holds some gas (the model extends to about 3 times this above the plane)."""
+        z0 = np.asarray(self.z0, float)
+        if not self.thick():
+            return z0
+        return np.where(np.asarray(self.fthick, float) > 0, np.maximum(z0, np.asarray(self.z0thick, float)), z0)
 
 
 def ringTokens(s):
@@ -154,12 +184,14 @@ def firstValue(s):
 _RING_FILE_NAMES = {"RAD(ARCS)": "RADII", "VROT(KM/S)": "VROT", "DISP(KM/S)": "VDISP", "INC(DEG)": "INC",
                     "P.A.(DEG)": "PHI", "Z0(ARCS)": "Z0", "DENS(UN)": "DENS", "SIG(E20)": "DENS",
                     "XPOS(PIX)": "XPOS", "YPOS(PIX)": "YPOS", "VSYS(KM/S)": "VSYS", "VRAD(KM/S)": "VRAD",
-                    "VVERT(KM/S)": "VVERT", "DVDZ(KM/S/ARCS)": "DVDZ", "ZCYL(ARCS)": "ZCYL"}
+                    "VVERT(KM/S)": "VVERT", "DVDZ(KM/S/ARCS)": "DVDZ", "ZCYL(ARCS)": "ZCYL",
+                    "Z0THICK(ARCS)": "Z0THICK", "FTHICK": "FTHICK", "VDISPTHICK(KM/S)": "VDISPTHICK"}
 
 
 def ring_file_columns(filename):
     """The columns (1-based) of the ring parameters in a BBarolo ring file, from its header: a dict
-    {parameter: column} (RADII, VROT, VDISP, INC, PHI, Z0, DENS, XPOS, YPOS, VSYS, VRAD; VVERT, DVDZ, ZCYL)
+    {parameter: column} (RADII, VROT, VDISP, INC, PHI, Z0, DENS, XPOS, YPOS, VSYS, VRAD; VVERT, DVDZ, ZCYL;
+    Z0THICK, FTHICK, VDISPTHICK)
     and the list of
     the names of the columns; (None, None) if the file has no header of a ring file."""
     try:
@@ -203,7 +235,8 @@ def readRings(par, h, return_fromfile=False):
     for key, pkey in (("radii", "RADII"), ("xpos", "XPOS"), ("ypos", "YPOS"), ("vsys", "VSYS"),
                       ("vrot", "VROT"), ("vrad", "VRAD"), ("vvert", "VVERT"), ("dvdz", "DVDZ"),
                       ("zcyl", "ZCYL"), ("vdisp", "VDISP"), ("z0", "Z0"), ("dens", "DENS"),
-                      ("inc", "INC"), ("phi", "PHI")):
+                      ("inc", "INC"), ("phi", "PHI"), ("z0thick", "Z0THICK"), ("fthick", "FTHICK"),
+                      ("vdispthick", "VDISPTHICK")):
         val = str(getattr(par, pkey))
         if "file(" in val.lower():
             check_ring_column(pkey, val)
@@ -211,7 +244,8 @@ def readRings(par, h, return_fromfile=False):
     fromfile = any(v is not None for v in fr.values())
     for key, pkey in (("xpos", "XPOS"), ("ypos", "YPOS"), ("vsys", "VSYS"), ("vrot", "VROT"), ("vrad", "VRAD"),
                       ("vvert", "VVERT"), ("dvdz", "DVDZ"), ("zcyl", "ZCYL"), ("vdisp", "VDISP"), ("z0", "Z0"),
-                      ("dens", "DENS"), ("inc", "INC"), ("phi", "PHI")):
+                      ("dens", "DENS"), ("inc", "INC"), ("phi", "PHI"), ("z0thick", "Z0THICK"), ("fthick", "FTHICK"),
+                      ("vdispthick", "VDISPTHICK")):
         if fr[key] is None:
             fr[key] = ringList(getattr(par, pkey))      # one value per ring
     radii_b = fr["radii"] is not None
@@ -237,7 +271,8 @@ def readRings(par, h, return_fromfile=False):
     defaults = dict(vsys=pval(par.VSYS, 0), vrot=pval(par.VROT, 0), vrad=pval(par.VRAD, 0),
                     vvert=pval(par.VVERT, 0), dvdz=pval(par.DVDZ, 0), zcyl=pval(par.ZCYL, 0),
                     vdisp=pval(par.VDISP, 0), z0=pval(par.Z0, 0), dens=pval(par.DENS, 1),
-                    inc=pval(par.INC, 0), phi=pval(par.PHI, 0))
+                    inc=pval(par.INC, 0), phi=pval(par.PHI, 0), z0thick=pval(par.Z0THICK, 0),
+                    fthick=pval(par.FTHICK, 0), vdispthick=pval(par.VDISPTHICK, -1))
     xpos = ypos = 0.
     if str(par.XPOS) != "-1" and str(par.YPOS) != "-1":
         if fr["xpos"] is None and fr["ypos"] is None:

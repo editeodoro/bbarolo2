@@ -152,6 +152,9 @@ class GalmodPar:
     DENS: str = "-1"
     DVDZ: str = "-1"
     ZCYL: str = "-1"
+    Z0THICK: str = "-1"
+    FTHICK: str = "-1"
+    VDISPTHICK: str = "-1"
     CDENS: int = 10
     CMODE: int = 1
     ISEED: int = -1
@@ -1535,7 +1538,7 @@ def bayes_likeopts(opts):
 
 # Ring parameters: a list of numbers gives one value per ring
 _RING_KEYS = ("RADII", "VROT", "VRAD", "Z0", "VVERT", "DVDZ", "ZCYL", "VDISP", "XPOS", "YPOS", "VSYS", "INC",
-              "PA", "DENS")
+              "PA", "DENS", "Z0THICK", "FTHICK", "VDISPTHICK")
 
 
 def _fmt(v):
@@ -1703,6 +1706,9 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
             R("[VVERT]", "   Vertical velocity (km/s)", gm.VVERT)
             R("[DVDZ]", "   Vertical gradient of rotation velocity (km/s/arcs)", gm.DVDZ)
             R("[ZCYL]", "   Height where the gradient begins (arcs)", gm.ZCYL)
+            R("[Z0THICK]", "   Scale height of the thick layer (arcs)", gm.Z0THICK)
+            R("[FTHICK]", "   Fraction of the gas in the thick layer", gm.FTHICK)
+            R("[VDISPTHICK]", "   Velocity dispersion of the thick layer (km/s)", gm.VDISPTHICK)
         if isClassic:
             R("[FREE]", mc("   Parameters to be minimized"), gf.FREE)
         if isBayes:

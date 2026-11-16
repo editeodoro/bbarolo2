@@ -753,6 +753,10 @@ class GalmodSetup:
         """Port of Galmod::ringIO: interpolate the input rings onto sub-rings 0.75 pix wide. The model starts
         at the first radius, or at the centre (with the values of the first ring) if the inner part is not
         empty: rings.empty, or EMPTY if that is None.
+        With a thick layer (rings.thick()) the sub-rings are twice as many: the thin layer, with the column
+        density dens (1 - fthick), scale height z0 and no lag (dvdz 0), then the thick layer, with dens fthick,
+        z0thick, vdispthick (vdisp if negative) and the lag; fthick, z0thick and vdispthick are interpolated as the
+        other values. The kernels take each sub-ring on its own, so the model is the sum of the two layers.
         Returns (sr array (14,nsub), nv array)."""
         nr = rings.nr
         radsep = self.radsep
@@ -768,6 +772,12 @@ class GalmodSetup:
             raise ValueError("GALMOD ERROR: Negative column-density or flux are not allowed.")
         if np.any(np.asarray(rings.z0) < 0):
             raise ValueError("GALMOD ERROR: Negative scale height not allowed.")
+        thick = rings.thick() if hasattr(rings, "thick") else False
+        if thick:
+            if np.any(np.asarray(rings.z0thick) < 0):
+                raise ValueError("GALMOD ERROR: Negative scale height of the thick layer (Z0THICK) not allowed.")
+            if np.any((np.asarray(rings.fthick) < 0) | (np.asarray(rings.fthick) > 1)):
+                raise ValueError("GALMOD ERROR: The fraction of gas in the thick layer (FTHICK) must be 0 to 1.")
         # values in internal units: radius(arcmin) handled separately
         V = np.vstack([np.asarray(rings.vrot) * 1000., np.asarray(rings.vrad) * 1000.,
                        np.asarray(rings.vvert) * 1000., np.asarray(rings.vdisp) * 1000.,
@@ -776,6 +786,11 @@ class GalmodSetup:
                        np.radians(np.asarray(rings.inc, float)), np.radians(np.asarray(rings.phi, float)),
                        np.asarray(rings.xpos, float), np.asarray(rings.ypos, float),
                        np.asarray(rings.vsys) * 1000.]).astype(float)
+        if thick:                       # (rows 14-16 of the sub-rings: fthick, z0thick, vdispthick)
+            vdt = np.asarray(rings.vdispthick, float)
+            vdt = np.where(vdt >= 0, vdt, np.asarray(rings.vdisp, float))
+            V = np.vstack([V, np.asarray(rings.fthick, float), np.asarray(rings.z0thick, float) / 60.,
+                           vdt * 1000.])
         # sub-ring radii, emulating the float accumulation of the C++ code
         f32 = np.float32
         rads = []
@@ -792,7 +807,7 @@ class GalmodSetup:
                 rads.append(r); segs.append((i, float(r) - float(f32(rad[i - 1]))))
                 r = f32(float(r) + radsep)
         nsub = len(rads)
-        sr = np.empty((14, nsub))
+        sr = np.empty((V.shape[0] + 1, nsub))
         sr[0] = np.asarray(rads, float)
         if nsub:
             idx = np.array([s[0] for s in segs])
@@ -800,13 +815,21 @@ class GalmodSetup:
             const = np.array([s[1] is None for s in segs])
             i1 = np.maximum(idx, 1)
             dur = rad[i1] - rad[i1 - 1] if nr > 1 else np.ones(nsub)
-            slope = (V[:, i1] - V[:, i1 - 1]) / dur if nr > 1 else np.zeros((13, nsub))
+            slope = (V[:, i1] - V[:, i1 - 1]) / dur if nr > 1 else np.zeros((V.shape[0], nsub))
             vals = V[:, i1 - 1] + slope * dr
             vals[:, const] = V[:, [0]]
             sr[1:] = vals
         edge = getattr(rings, "edge", None)
         if edge is not None and nsub:
             sr[5] *= edge_weights(sr[0] * 60., radsep * 60., float(edge), float(getattr(rings, "edgewidth", 0.)))
+        if thick:
+            f = sr[14]
+            thin, thk = sr[:14].copy(), sr[:14].copy()
+            thin[5] *= 1. - f
+            thin[7] = 0.                                     # (the lag is that of the thick layer)
+            thk[5] *= f
+            thk[6], thk[4] = sr[15], sr[16]
+            sr = np.concatenate([thin, thk], axis=1)
         nvtmp = self.nvpar if self.nvpar >= 1 else self.nsubs
         nv = np.where(sr[4] == 0, 1, nvtmp).astype(np.int64)
         return np.ascontiguousarray(sr), nv
@@ -1047,7 +1070,8 @@ def model_rings(rings, mode="CENTRED", subring=0.):
     if mode == "SHIFTED":
         if r.nr == 1:
             r.addRing(r.radii[0] + r.radsep / 2., r.xpos[0], r.ypos[0], r.vsys[0], r.vrot[0], r.vdisp[0],
-                      r.vrad[0], r.vvert[0], r.dvdz[0], r.zcyl[0], r.dens[0], r.z0[0], r.inc[0], r.phi[0])
+                      r.vrad[0], r.vvert[0], r.dvdz[0], r.zcyl[0], r.dens[0], r.z0[0], r.inc[0], r.phi[0],
+                      r.z0thick[0], r.fthick[0], r.vdispthick[0])
         else:
             r.radii[-1] += r.radsep / 2.
         r.radii[0] = max(r.radii[0] - r.radsep / 2., 0.)
@@ -1171,14 +1195,14 @@ class DiskModel:
     # ------------------------------------------------------------------
     def box(self, rings, final=False):
         """Box [blo, bhi) of the cube (pixels) containing the model of the rings: within the
-        last radius plus half the ring separation RADSEP, plus 3 scale heights, around the
-        centre of the last ring. final=True: also within the outer edge of the disk with the
-        ring convention, if larger."""
+        last radius plus half the ring separation RADSEP, plus 3 scale heights (of the thicker layer,
+        Rings.layer_height), around the centre of the last ring. final=True: also within the outer edge
+        of the disk with the ring convention, if larger."""
         h = self.cin.Head()
         ext = rings.radii[-1] + rings.radsep / 2.
         if final:
             ext = max(ext, outer_edge(rings, self.ringmode))
-        ext = ext + 3 * rings.z0[-1]
+        ext = ext + 3 * float(rings.layer_height()[-1])
         xdis = int(math.ceil(ext / (abs(h.Cdelt(0)) * self.arcconv)))
         ydis = int(math.ceil(ext / (abs(h.Cdelt(1)) * self.arcconv)))
         xpos = int(math.ceil(rings.xpos[-1]))
@@ -1235,7 +1259,8 @@ class DiskModel:
         are interpolated linearly between the radii, with the ring convention): arrays
         (nsub, 2) of ring indices (-1: none) and weights. Cached by radii and convention."""
         key = (tuple(np.asarray(rings.radii, float)), float(rings.radsep), ringmode, getattr(rings, "edge", None),
-               float(getattr(rings, "edgewidth", 0.)))
+               float(getattr(rings, "edgewidth", 0.)), rings.thick(),
+               tuple(np.asarray(rings.fthick, float)) if rings.thick() else ())
         cache = self.__dict__.setdefault("_wcache", {})
         if key in cache:
             return cache[key]

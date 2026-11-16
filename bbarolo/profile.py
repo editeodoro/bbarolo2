@@ -46,7 +46,9 @@ def profile_system(model, rings, box, data_map, rms_map, ok_map, beam_arcsec=Non
         edge = min(edge, float(r.edge))
     rext = edge + w / 2.
     ext = Rings().setRings(radii=[rext], xpos=r.xpos[-1], ypos=r.ypos[-1], vsys=r.vsys[-1], vrot=r.vrot[-1],
-                           vdisp=r.vdisp[-1], z0=r.z0[-1], inc=r.inc[-1], phi=r.phi[-1], dens=1., radsep=w)
+                           vdisp=r.vdisp[-1], z0=r.z0[-1], inc=r.inc[-1], phi=r.phi[-1], dens=1., radsep=w,
+                           z0thick=r.z0thick[-1], fthick=r.fthick[-1], vdispthick=r.vdispthick[-1])
+    ext.twolayer = r.thick()
     K = np.concatenate([K, model.ring_maps(ext, Lb, Hb, ringmode="CENTRED")])
     y, s = data_map, rms_map
     ok = ok_map & (s > 0) & np.isfinite(y)

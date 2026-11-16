@@ -27,6 +27,9 @@ or by {ref}`NRADII <par-galmod-nradii>` and {ref}`RADSEP <par-galmod-radsep>`, o
 - $\Sigma$, the face-on surface density, {ref}`DENS <par-galmod-dens>` (units below);
 - $z_0$ (arcsec), the scale height, {ref}`Z0 <par-galmod-z0>`; $\partial V/\partial z$ (km/s/arcsec)
   and $z_{\rm cyl}$ (arcsec), {ref}`DVDZ <par-galmod-dvdz>` and {ref}`ZCYL <par-galmod-zcyl>`;
+- optionally a thick layer ({ref}`below <galmod-vertical>`): its scale height $z_{0,\rm t}$ (arcsec), its share
+  $f_{\rm t}$ of $\Sigma$ and its velocity dispersion $\sigma_{\rm t}$ (km/s), {ref}`Z0THICK <par-galmod-z0thick>`,
+  {ref}`FTHICK <par-galmod-fthick>` and {ref}`VDISPTHICK <par-galmod-vdispthick>`;
 - $i$ and $\phi$ (degrees), {ref}`INC <par-galmod-inc>` and {ref}`PA <par-galmod-pa>`;
 - $x_0$, $y_0$ (pixels, counted from 0), the centre, {ref}`XPOS <par-galmod-xpos>` and
   {ref}`YPOS <par-galmod-ypos>`.
@@ -131,8 +134,13 @@ $$
 $$
 V_\phi(z) = \begin{cases}
   V_{\rm rot} - \dfrac{\partial V}{\partial z}\,(|z| - z_{\rm cyl}) & |z| > z_{\rm cyl},\\[4pt]
-V_{\rm rot} & |z| \le z_{\rm cyl}. \end{cases}
+V_{\rm rot} & |z| \le z_{\rm cyl}, \end{cases}
 $$
+
+but the lag never reverses the rotation: where the line above would give $V_\phi$ of the opposite sign of
+$V_{\rm rot}$ (above $|z| = z_{\rm cyl} + V_{\rm rot}/(\partial V/\partial z)$), $V_\phi = 0$ (BBarolo 1.8 made the
+gas counter-rotate there). With a thick layer the lag is that of the thick layer only: the thin layer has
+$V_\phi = V_{\rm rot}$ at all heights.
 
 The gas rotates from the receding major axis towards the far side; $V_{\rm rad} > 0$ is an outflow
 in the plane (receding on the far side); $V_{\rm vert}$ is a motion perpendicular to the plane, the same
@@ -156,6 +164,22 @@ The gas of each sub-ring is spread in height with the density profile $\rho(z)$ 
 The MC models draw random heights $z = z_0\, Q(p)$ with $p$ uniform in $[0, 1)$ (the Gaussian layer:
 $z = z_0\, g$, with $g$ a standard normal deviate); the ANALYTIC models use evenly spaced heights, each
 weighted with the fraction of the layer around it (below). $z_0 = 0$ gives a disk with no thickness.
+
+**The thick layer.** With {ref}`FTHICK <par-galmod-fthick>` $f_{\rm t} > 0$ in some ring, the gas of each ring is
+in two layers with the same profile (LTYPE): the thin one, with the surface density $(1 - f_{\rm t})\,\Sigma$,
+the scale height $z_0$, the dispersion $\sigma_{\rm gas}$ and no lag, and the thick one, with $f_{\rm t}\,\Sigma$,
+$z_{0,\rm t}$ ({ref}`Z0THICK <par-galmod-z0thick>`), $\sigma_{\rm t}$ ({ref}`VDISPTHICK <par-galmod-vdispthick>`;
+$\sigma_{\rm gas}$ if not given) and the lag ($\partial V/\partial z$, $z_{\rm cyl}$). The density is then
+
+$$
+\rho(z) = (1 - f_{\rm t})\,\frac{\Sigma}{z_0}\,\ell\!\left(\frac{z}{z_0}\right)
+         + f_{\rm t}\,\frac{\Sigma}{z_{0,\rm t}}\,\ell\!\left(\frac{z}{z_{0,\rm t}}\right),
+$$
+
+with $\ell$ the normalised profile of the table. $f_{\rm t}$, $z_{0,\rm t}$ and $\sigma_{\rm t}$ are interpolated
+in radius as the other values. Each sub-ring is made twice, once per layer, with these values: the model is
+the sum of the models of the two layers. Without a thick layer (FTHICK 0, the default) the lag is that of the
+only layer.
 
 (galmod-mc)=
 ## The Monte Carlo model (`GALMODTYPE MC`)

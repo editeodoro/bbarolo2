@@ -924,6 +924,32 @@ closer to the plane the gas rotates at `VROT`. One value, one value per ring or 
 in a thick disk (`Z0` free or > 0; otherwise an error); it is strongly correlated with `DVDZ` and `VROT`, and
 not constrained where `DVDZ` is consistent with zero. The models of 3DFIT and SPACEPAR use the value given,
 fixed."""),
+    'Z0THICK': dict(
+        group='Rings',
+        default='0 (no thick layer)',
+        doc="""\
+The scale height (arcsec) of the thick layer of the disk, with the same `LTYPE` as the thin one. A fraction
+`FTHICK` of the column density of each ring lies in it, the rest in the thin layer of scale height `Z0`; the
+thick layer has its own velocity dispersion `VDISPTHICK`, and the lag (`DVDZ`, `ZCYL`) is that of the thick
+layer only: the thin layer rotates at `VROT` at all heights. Without a thick layer (`FTHICK` 0) the lag is
+that of the only layer, as before. One value, one value per ring or `file(name,column)` (see `VROT`); 0 if
+not given, and not negative. The models of GALMOD, 3DFIT and SPACEPAR use the value given."""),
+    'FTHICK': dict(
+        group='Rings',
+        default='0 (no thick layer)',
+        doc="""\
+The fraction (0 to 1) of the column density `DENS` of each ring in the thick layer of scale height `Z0THICK`;
+the thin layer has the rest, 1 − FTHICK. A model has a thick layer when FTHICK is above 0 in some ring.
+One value, one value per ring or `file(name,column)` (see `VROT`); 0 if not given. The models of GALMOD,
+3DFIT and SPACEPAR use the value given."""),
+    'VDISPTHICK': dict(
+        group='Rings',
+        default='VDISP',
+        doc="""\
+The velocity dispersion (km/s) of the gas of the thick layer (see `Z0THICK` and `FTHICK`); the thin layer has
+`VDISP`. One value, one value per ring or `file(name,column)` (see `VROT`); if not given, the thick layer has
+the dispersion `VDISP` of the thin one, also when that is fitted. The models of GALMOD, 3DFIT and SPACEPAR use
+the value given."""),
     'VDISP': dict(
         group={'GALWIND': 'Wind', 'WINDFIT': 'Wind', '*': 'Rings'},
         default='8 km/s, or estimated with GUESSTYPE FIT (GALMOD, GALWIND: required)',

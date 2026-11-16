@@ -527,7 +527,7 @@ def RingRegion(r, h):
         radsep = r.radii[1] - r.radii[0] if r.nr > 1 else r.radii[0] / 2.
     R1 = max((r.radii[0] - radsep / 2.) / pscale, 0.)
     R2 = (r.radii[-1] + radsep / 2.) / pscale
-    phi, inc, z0 = r.phi[-1], r.inc[-1], 3 * r.z0[-1] / pscale
+    phi, inc, z0 = r.phi[-1], r.inc[-1], 3 * float(r.layer_height()[-1]) / pscale
     x0, y0 = r.xpos[-1] - 1, r.ypos[-1] - 1
     M = RotMatrices(inc, 0., -phi - 90)
     rot = M[2].T @ M[0].T     # C++ MatrixProduct reads the matrices column-major

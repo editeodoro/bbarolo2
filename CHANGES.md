@@ -439,6 +439,17 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **A thick layer of gas (Z0THICK, FTHICK, VDISPTHICK), in GALMOD and every model** (3DFIT, SPACEPAR). A fraction
+  FTHICK (0–1) of the column density of each ring lies in a second layer of scale height Z0THICK (arcsec), with the
+  same LTYPE, and its own velocity dispersion VDISPTHICK (km/s; VDISP if not given); the thin layer has the rest,
+  scale height Z0 and VDISP. With a thick layer the lag (DVDZ, ZCYL) is that of the thick layer only: the thin
+  layer rotates at VROT at all heights. Without one (FTHICK 0, the default) the lag is that of the only layer, and
+  the models do not change. Single values, one per ring or `file()`, as Z0; written in parameter files and read
+  from ring files with those columns. The model engine adds the sub-rings of the thick layer to those of the thin
+  one (`GalmodSetup.subrings`; the kernels are unchanged): the ANALYTIC model is the sum of the two single-layer
+  models to rounding, about twice as slow; `ring_maps` (the deconvolved density profile) and the model box (3 ×
+  the larger scale height) include it. A thick disk such as that of NGC 891 needs it: with one exponential layer
+  the fit used a lag of 6.7 km/s/arcsec to slow the gas of its HI halo.
 - **3DFIT with METHOD GLOBAL or BAYESIAN fits the lag of a thick disk (DVDZ, ZCYL in FREE) and shows it.** FREE
   accepted DVDZ and ZCYL (and VVERT) and the model used them, but none of the outputs did. Now the vertical motions
   that are free or not zero are written after the error columns of `<prefix>_rings_final1.txt`, each with its lower
