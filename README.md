@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="https://editeodoro.github.io/Bbarolo/files/bbarolo.jpg" alt="BBarolo logo"/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/editeodoro/bbarolo2/main/docs/figures/3DBAROLO_logo_dark.png">
+    <img src="https://raw.githubusercontent.com/editeodoro/bbarolo2/main/docs/figures/3DBAROLO_logo_light.png" alt="3D-Barolo logo" width="600">
+  </picture>
 </p>
 
 [![Documentation Status](https://img.shields.io/readthedocs/bbarolo)](https://bbarolo.readthedocs.io)

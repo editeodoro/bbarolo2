@@ -5,6 +5,14 @@ html_theme.sidebar_secondary.remove: true
 # 3D-Barolo
 
 :::{div} bb-hero
+```{image} figures/3DBAROLO_logo_light.png
+:alt: 3D-Barolo, 3D-Based Analysis of Rotating Objects via Line Observations
+:class: bb-logo only-light
+```
+```{image} figures/3DBAROLO_logo_dark.png
+:alt: 3D-Barolo, 3D-Based Analysis of Rotating Objects via Line Observations
+:class: bb-logo only-dark
+```
 <p class="bb-tagline">A 3D fitting tool for the kinematics of galaxies</p>
 
 **3D-Barolo** (3D-Based Analysis of Rotating Objects via Line Observations), or **BBarolo**, fits
