@@ -33,8 +33,9 @@ dispersion $\sigma$ (all in km/s), a face-on surface density $\Sigma$ ({ref}`DEN
 scale height $z_0$ (arcsec), an inclination $i$ and a position angle $\phi$ (degrees; $\phi$ is the angle
 of the receding half of the major axis, from North towards East). The free parameters are chosen with
 {ref}`FREE <par-3dfit-free>`; the others stay at their initial values. {ref}`VVERT <par-3dfit-vvert>`,
-{ref}`DVDZ <par-3dfit-dvdz>` and {ref}`ZCYL <par-3dfit-zcyl>` are used by the models but not fitted (METHOD
-GLOBAL and BAYESIAN fit them, see {doc}`likelihood`).
+{ref}`DVDZ <par-3dfit-dvdz>`, {ref}`ZCYL <par-3dfit-zcyl>` and the thick layer ({ref}`Z0THICK <par-3dfit-z0thick>`,
+{ref}`FTHICK <par-3dfit-fthick>`, {ref}`VDISPTHICK <par-3dfit-vdispthick>`) are used by the models but not
+fitted (METHOD GLOBAL and BAYESIAN fit them, see {doc}`likelihood`).
 
 A pixel $(x, y)$ of the sky (in pixels) has, in the plane of a ring with this geometry, the coordinates
 

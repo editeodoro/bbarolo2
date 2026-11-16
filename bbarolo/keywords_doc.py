@@ -740,7 +740,8 @@ Builds a model datacube of a rotating disk from a set of rings, on the grid of `
 beam and spectral axis), with the algorithm of GIPSY's GALMOD. `true` runs the task.
 
 The rings need `RADII` (or `NRADII` and `RADSEP`), `XPOS`, `YPOS`, `VSYS`, `VROT`, `VDISP`, `INC`, `PA`
-and `Z0`, unless they are read from `RINGFILE`; `DENS`, `VRAD`, `VVERT`, `DVDZ` and `ZCYL` are optional.
+and `Z0`, unless they are read from `RINGFILE`; `DENS`, `VRAD`, `VVERT`, `DVDZ`, `ZCYL` and the thick layer
+(`Z0THICK`, `FTHICK`, `VDISPTHICK`) are optional.
 The model is normalised as set by `NORM` (`AZIM` and `LOCAL` use the data in the mask `MASK`) and
 written to `<prefix>_mod_<norm>.fits`, with the rings (`<prefix>_rings_model.txt`), the moment maps and
 position-velocity slices of the model and of the data, and `<prefix>_densprof.txt`. A `VSYS` outside the
@@ -902,10 +903,11 @@ also use the value given, fixed."""),
         group='Rings',
         default='0',
         doc="""\
-The vertical gradient of the rotation velocity (km/s per arcsec): at heights |z| above `ZCYL` the gas
-rotates at `VROT` − DVDZ·(|z| − `ZCYL`), so a positive value gives a thick disk that lags behind the
-plane (it needs `Z0` > 0). One value, one value per ring or `file(name,column)` (see `VROT`); 0 if not
-given.
+The vertical gradient of the rotation velocity (km/s per arcsec): at heights |z| above `ZCYL` the gas rotates
+at `VROT` − DVDZ·(|z| − `ZCYL`), so a positive value gives a thick disk that lags behind the plane (it needs
+`Z0` > 0); the rotation stops at zero, never reversed (BBarolo 1.8 reversed it above `ZCYL` + `VROT`/DVDZ).
+With a thick layer (`Z0THICK`, `FTHICK`) the lag is that of the thick layer only. One value, one value per
+ring or `file(name,column)` (see `VROT`); 0 if not given.
 
 3DFIT with `METHOD` GLOBAL or BAYESIAN fits it when `FREE` includes it (e.g. `FREE VROT VDISP Z0_SINGLE
 DVDZ_SINGLE`), with `Z0` free or > 0 (otherwise an error: the lag would have no effect), and writes it with
@@ -933,7 +935,14 @@ The scale height (arcsec) of the thick layer of the disk, with the same `LTYPE` 
 thick layer has its own velocity dispersion `VDISPTHICK`, and the lag (`DVDZ`, `ZCYL`) is that of the thick
 layer only: the thin layer rotates at `VROT` at all heights. Without a thick layer (`FTHICK` 0) the lag is
 that of the only layer, as before. One value, one value per ring or `file(name,column)` (see `VROT`); 0 if
-not given, and not negative. The models of GALMOD, 3DFIT and SPACEPAR use the value given."""),
+not given, and not negative. The models of GALMOD, 3DFIT and SPACEPAR use the value given.
+
+3DFIT with `METHOD` GLOBAL or BAYESIAN fits Z0THICK, `FTHICK` and `VDISPTHICK` when `FREE` includes them (e.g.
+`FREE VROT VDISP_SINGLE Z0THICK_SINGLE FTHICK_SINGLE VDISPTHICK_SINGLE DVDZ_SINGLE`), and writes them with
+their errors in the ring file, `Result.rings` and the plot of the parameters. Z0THICK must exceed `Z0`: the
+default priors do not overlap (see `PRIORS`), and where priors given overlap the likelihood is zero for
+Z0THICK < `Z0`. Z0THICK or `VDISPTHICK` free without a thick layer, or a thick layer without Z0THICK, are
+errors."""),
     'FTHICK': dict(
         group='Rings',
         default='0 (no thick layer)',
@@ -941,7 +950,8 @@ not given, and not negative. The models of GALMOD, 3DFIT and SPACEPAR use the va
 The fraction (0 to 1) of the column density `DENS` of each ring in the thick layer of scale height `Z0THICK`;
 the thin layer has the rest, 1 − FTHICK. A model has a thick layer when FTHICK is above 0 in some ring.
 One value, one value per ring or `file(name,column)` (see `VROT`); 0 if not given. The models of GALMOD,
-3DFIT and SPACEPAR use the value given."""),
+3DFIT and SPACEPAR use the value given. 3DFIT with `METHOD` GLOBAL or BAYESIAN fits it when `FREE` includes
+it (see `Z0THICK`); the model then has two layers for any FTHICK, 0 included."""),
     'VDISPTHICK': dict(
         group='Rings',
         default='VDISP',
@@ -949,7 +959,7 @@ One value, one value per ring or `file(name,column)` (see `VROT`); 0 if not give
 The velocity dispersion (km/s) of the gas of the thick layer (see `Z0THICK` and `FTHICK`); the thin layer has
 `VDISP`. One value, one value per ring or `file(name,column)` (see `VROT`); if not given, the thick layer has
 the dispersion `VDISP` of the thin one, also when that is fitted. The models of GALMOD, 3DFIT and SPACEPAR use
-the value given."""),
+the value given. 3DFIT with `METHOD` GLOBAL or BAYESIAN fits it when `FREE` includes it (see `Z0THICK`)."""),
     'VDISP': dict(
         group={'GALWIND': 'Wind', 'WINDFIT': 'Wind', '*': 'Rings'},
         default='8 km/s, or estimated with GUESSTYPE FIT (GALMOD, GALWIND: required)',
@@ -1187,11 +1197,11 @@ SPACEPAR does not use it.
         default='none',
         doc="""\
 A ring file written by BBarolo, e.g. `<prefix>_rings_final1.txt`, `<prefix>_rings_final2.txt`,
-`<prefix>_rings_initial.txt` or `<prefix>_rings_model.txt` (also those of BBarolo 1.8), from which the
-ring parameters that are not given are read: the radii, `VROT`, `VDISP`, `INC`, `PA`, `Z0`, `DENS`,
-`XPOS`, `YPOS`, `VSYS` and `VRAD`, and `VVERT`, `DVDZ` and `ZCYL` from the files of 3DFIT with `METHOD`
-GLOBAL or BAYESIAN that have them. The parameters given take precedence; the radii are read unless
-`RADII`, or both `NRADII` and `RADSEP`, are given.
+`<prefix>_rings_initial.txt` or `<prefix>_rings_model.txt` (also those of BBarolo 1.8), from which the ring
+parameters that are not given are read: the radii, `VROT`, `VDISP`, `INC`, `PA`, `Z0`, `DENS`, `XPOS`, `YPOS`,
+`VSYS` and `VRAD`, and `VVERT`, `DVDZ`, `ZCYL`, `Z0THICK`, `FTHICK` and `VDISPTHICK` from the files of 3DFIT
+with `METHOD` GLOBAL or BAYESIAN that have them. The parameters given take precedence; the radii are read
+unless `RADII`, or both `NRADII` and `RADSEP`, are given.
 
 The columns are found by their names in the header of the file; a file without a header must have the
 columns of BBarolo 1.8 (the radii in arcsec in column 2, VROT in column 3, ...). With RINGFILE, GALMOD
@@ -1300,14 +1310,14 @@ fit of the velocity field.
 with `SIDE` `A` or `R` the centre and VSYS stay fixed.
 
 3DFIT with `METHOD` GLOBAL or BAYESIAN: a ring parameter (`VROT`, `VDISP`, `DENS`, `Z0`, `INC`, `PA`, `XPOS`,
-`YPOS`, `VSYS`, `VRAD`, `VVERT`, `DVDZ`, `ZCYL`) has one value per ring; `NAME_SINGLE` has one value
-for all the rings; `NAME_FUNC` is a function of radius with two parameters: `VROT_FUNC` an arctangent,
-2/π·p1·arctan(R/p2), `VDISP_FUNC` a line, p1 + p2·R, `DENS_FUNC` an exponential, p1·exp(−R/p2).
-`SIGMA` (the noise per voxel), `FRACERR` (a model error proportional to the model) and `RADMAX` (the
-outer edge of the disk, see `LIKEOPTS`) are single values. Each parameter appears once, and its prior is
-set by `PRIORS`; e.g. `FREE VROT VDISP_SINGLE INC_SINGLE PA_SINGLE`. The default frees the rotation
-velocity and the dispersion of each ring, one centre, systemic velocity, inclination, position angle and
-scale height for all the rings, the outer edge of the disk and the fractional model error:
+`YPOS`, `VSYS`, `VRAD`, `VVERT`, `DVDZ`, `ZCYL`, `Z0THICK`, `FTHICK`, `VDISPTHICK`) has one value per ring;
+`NAME_SINGLE` has one value for all the rings; `NAME_FUNC` is a function of radius with two parameters:
+`VROT_FUNC` an arctangent, 2/π·p1·arctan(R/p2), `VDISP_FUNC` a line, p1 + p2·R, `DENS_FUNC` an exponential,
+p1·exp(−R/p2). `SIGMA` (the noise per voxel), `FRACERR` (a model error proportional to the model) and `RADMAX`
+(the outer edge of the disk, see `LIKEOPTS`) are single values. Each parameter appears once, and its prior is
+set by `PRIORS`; e.g. `FREE VROT VDISP_SINGLE INC_SINGLE PA_SINGLE`. The default frees the rotation velocity
+and the dispersion of each ring, one centre, systemic velocity, inclination, position angle and scale height
+for all the rings, the outer edge of the disk and the fractional model error:
 `VROT VDISP XPOS_SINGLE YPOS_SINGLE VSYS_SINGLE INC_SINGLE PA_SINGLE Z0_SINGLE RADMAX FRACERR`.
 
 WINDFIT (required): `VWIND`, `VDISP` and `VROT` have one value per shell, NAME_SINGLE one for all
@@ -1630,6 +1640,9 @@ largest + w:
   radius with `RINGMODE NODES`), beyond which the edge has no effect; with `radmax=ring` (the last ring
   moves) beyond the middle of the last two radii;
 - `DVDZ` 0 to twice the largest initial VROT per beam FWHM (km/s/arcsec), `ZCYL` 0 to one beam FWHM;
+- with a thick layer (`FTHICK` free or > 0): `FTHICK` 0–1, `VDISPTHICK` as `VDISP`, `Z0` 0 to half a beam
+  FWHM and `Z0THICK` from the top of the range of `Z0` (the upper end of its prior if free, its largest value
+  otherwise) to 3 beam FWHM above it, so that the layers cannot swap;
 - `VRAD` 0–50 km/s, `VVERT` 0–30 km/s, `DENS` 0.1–200.1 (a flux per unit
   area: the flux units of the cube × km/s per arcsec², see `DENS`; give a prior suited to the units of the
   cube);

@@ -49,8 +49,8 @@ The fit runs in four steps:
 ### The free parameters
 
 FREE lists the free parameters (in Python `run(freepar=...)`). A ring parameter (VROT, VDISP, DENS, Z0,
-INC, PA, XPOS, YPOS, VSYS, VRAD, VVERT, DVDZ, ZCYL) enters $\boldsymbol\theta$ in one of three forms; three
-more parameters are single values:
+INC, PA, XPOS, YPOS, VSYS, VRAD, VVERT, DVDZ, ZCYL, Z0THICK, FTHICK, VDISPTHICK) enters $\boldsymbol\theta$ in
+one of three forms; three more parameters are single values:
 
 | In FREE | Dimensions | Value in ring $j$ |
 |---|---|---|
@@ -94,7 +94,25 @@ constrained. The lag is measured best in a disk seen nearly edge-on with Z0 of a
 different heights falls in different pixels. DVDZ, ZCYL and VROT are strongly correlated (correlation coefficients
 of about 0.9 on a mock at INC 87° with Z0 one beam and ZCYL half of it): a lag that begins higher is mimicked by a
 smaller lag from the plane and a higher VROT, and GLOBAL can stop along that valley short of the maximum
-(within the errors); `SAMPLEROPTS nstart=3`, or BAYESIAN, explores it.
+(within the errors); `SAMPLEROPTS nstart=3`, or BAYESIAN, explores it. The lag never reverses the rotation: it
+stops at zero where the line would cross it (see the {ref}`GALMOD model <galmod-vertical>`).
+
+**A thick layer.** {ref}`Z0THICK <par-3dfit-z0thick>`, {ref}`FTHICK <par-3dfit-fthick>` and
+{ref}`VDISPTHICK <par-3dfit-vdispthick>` add a second, thick layer to the disk: a fraction FTHICK of the gas of
+each ring, with scale height Z0THICK and velocity dispersion VDISPTHICK (VDISP if not given, also when VDISP is
+free); the thin layer has the rest, Z0 and VDISP. With a thick layer the lag (DVDZ, ZCYL) is that of the thick
+layer only, as in the models of the extra-planar gas of edge-on galaxies: a thin disk that rotates at VROT and a
+thick, lagging one. All three can be free, as any ring parameter (e.g. `FREE VROT VDISP_SINGLE Z0THICK_SINGLE
+FTHICK_SINGLE VDISPTHICK_SINGLE DVDZ_SINGLE`). There is a thick layer when FTHICK is free or above 0 in some ring;
+the model then keeps both layers for any FTHICK, 0 included, so that the likelihood is continuous at FTHICK = 0
+(a model of one lagging layer there would jump). Z0THICK or VDISPTHICK free without a thick layer, or a thick
+layer without Z0THICK (> 0 or free), stop the fit with an error. The two layers must not swap: the default priors
+of Z0 and Z0THICK do not overlap (Z0 0 to half a beam, Z0THICK from the top of the range of Z0 to 3 beams above
+it), and with priors that do (a NOTE is printed) the likelihood is zero where Z0THICK < Z0. FTHICK above 1 has
+zero likelihood. On a mock at INC 87° (thin layer Z0 4" with no lag; thick layer with 30% of the gas, Z0THICK
+25", VDISPTHICK 20 km/s, DVDZ 1.5 km/s/arcsec; beam 20", peak S/N 30) GLOBAL gives Z0THICK 25.7 ± 2.4", FTHICK
+0.293 ± 0.019, VDISPTHICK 17.2 ± 2.9 km/s and DVDZ 1.49 ± 0.18 km/s/arcsec. The model of a thick layer takes
+about twice as long.
 
 ### Priors
 
@@ -120,6 +138,9 @@ the initial values of all the rings, from the smallest − $w$ to the largest + 
 | Z0 | 0 to one beam FWHM |
 | DVDZ | 0 to twice the largest initial VROT per beam FWHM (km/s/arcsec): a lag that can stop the rotation within half a beam of the plane |
 | ZCYL | 0 to one beam FWHM |
+| FTHICK | 0 to 1 |
+| VDISPTHICK | as VDISP |
+| Z0, Z0THICK (with a thick layer) | Z0 0 to half a beam FWHM; Z0THICK from the top of the range of Z0 (the upper end of its prior if free, its largest value otherwise) to 3 beam FWHM above it |
 
 The others (VRAD, VVERT, DENS and the parameters of the functions of radius) are fixed ranges, listed under
 PRIORS. VROT uses the largest initial value, so that the prior of every ring holds the flat part
@@ -624,10 +645,10 @@ parameters: a parameter free in each ring has its own percentiles in each ring; 
 errors in all the rings; for a `_FUNC` one, the percentiles of $g(R_j)$ over the posterior samples, relative
 to the best-fit value; DENS not free, the errors of the deconvolved profile. The vertical motions follow, each
 with its two error columns: VVERT(km/s) when VVERT is free or not zero, DVDZ(km/s/arcs) and ZCYL(arcs) when DVDZ
-or ZCYL is free or DVDZ is not zero (3DFIT CLASSIC, as C++, has none of these columns). The column INDISK marks
-the rings within RADMAX. In Python, `Result.rings` has the same columns (`vvert`, `dvdz`, `zcyl`, with
-`e_dvdz1`, `e_dvdz2`, ...), and {ref}`RINGFILE <par-3dfit-ringfile>` reads VVERT, DVDZ and ZCYL back from such a
-file.
+or ZCYL is free or DVDZ is not zero, and Z0THICK(arcs), FTHICK and VDISPTHICK(km/s) with a thick layer (3DFIT
+CLASSIC, as C++, has none of these columns). The column INDISK marks the rings within RADMAX. In Python,
+`Result.rings` has the same columns (`vvert`, `dvdz`, `zcyl`, `z0thick`, `fthick`, `vdispthick`, with
+`e_dvdz1`, `e_dvdz2`, ...), and {ref}`RINGFILE <par-3dfit-ringfile>` reads them back from such a file.
 
 ### Files
 
@@ -637,7 +658,8 @@ The task writes in {ref}`OUTFOLDER <par-all-outfolder>`, with the prefix
 - `<prefix>_rings_final1.txt`: the best-fit rings with their errors;
 - `<prefix>_mod_none.fits`, the best model, with its moment maps, position–velocity slices and the plots of
   3DFIT (with the posterior errors) as for 3DFIT: `<prefix>_parameters.pdf` shows the rings against radius,
-  with one more row for the vertical motions in the ring file (Z0, DVDZ and ZCYL; VVERT);
+  with more rows for the vertical structure and motions in the ring file (Z0, Z0THICK, FTHICK, VDISPTHICK,
+  DVDZ, ZCYL; VVERT);
 - `<prefix>_densprof.txt`: the observed profile, the face-on average of the total intensity map of the
   voxels of the likelihood along the best-fit rings (an output only);
 - `<prefix>_densprof_deconvolved.txt` (DENS not free): the deconvolved profile with its lower and upper
@@ -652,7 +674,8 @@ With `PLOTS -1` only the rings and the samples are written, no model. With
 nothing (`Result.write()` writes the files), as does the engine's `run()`, `sample()` and `optimize()`, whose
 `write(outfolder=None, plots=None)` writes these files as the task does. `write_bestmodel`
 writes only the best model with its outputs and the rings; `corner_plot` and `plot_profiles` (VROT, VDISP,
-DENS, INC, PA, Z0, XPOS, YPOS and VSYS against radius, with their errors, and VVERT, DVDZ, ZCYL as in the ring file;
+DENS, INC, PA, Z0, XPOS, YPOS and VSYS against radius, with their errors, and VVERT, DVDZ, ZCYL and the thick
+layer as in the ring file;
 not written by `write`) return the figures; `print_stats`,
 `ring_errors` and `chi2_reduced` give the statistics; `save_results` writes the samples, and `load_results`
 reads them back into an object made with the same cube (`Bayesian3DFIT(cube)`, since the cube is
