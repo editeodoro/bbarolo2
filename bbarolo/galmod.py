@@ -63,6 +63,17 @@ def _velgrid(v, axtyp, velsys, freq0, crval3, cdelt3, crpix3):
 
 
 @nb.njit(inline="always", cache=True)
+def _lagged(vrot, dvdz, dz):
+    """The rotation velocity at the height dz above ZCYL with the vertical gradient dvdz: vrot - dvdz dz, but never
+    of the opposite sense of vrot (VROT = 0 counts as positive): the rotation stops at the height where the linear
+    lag would reverse it. (C++ reverses it: counter-rotating gas above that height.)"""
+    v = vrot - dvdz * dz
+    if vrot >= 0.0:
+        return max(v, 0.0)
+    return min(v, 0.0)
+
+
+@nb.njit(inline="always", cache=True)
 def _fdev(ltype, st):
     if ltype == 1:
         return rng_normal(st)
@@ -133,7 +144,7 @@ def _galmod_mc(out, sr, ring_lo, ring_hi, seed, radsep, nv, cdens, cmode, pixare
             py = g1 - blo1
             az_ = abs(z)
             if az_ > zcyl:
-                vs = vsys0 + ((vrot - dvdz * (az_ - zcyl)) * caz + vrad * saz) * sinc
+                vs = vsys0 + (_lagged(vrot, dvdz, az_ - zcyl) * caz + vrad * saz) * sinc
             else:
                 vs = vsys0 + (vrot * caz + vrad * saz) * sinc
             vs += vvert * cinc
@@ -423,7 +434,7 @@ def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, 
                                 continue
                             az_ = abs(zq[kz] * z0)
                             if az_ > zcyl:
-                                v = vsys0 + ((vrot - dvdz * (az_ - zcyl)) * caz + vrad * saz) * sinc + vvert * cinc
+                                v = vsys0 + (_lagged(vrot, dvdz, az_ - zcyl) * caz + vrad * saz) * sinc + vvert * cinc
                             else:
                                 v = vplane
                             kc = _lround(_velgrid(v, axtyp, velsys, lfreq0[nl], crval3, cdelt3, crpix3))

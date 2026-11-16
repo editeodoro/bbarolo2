@@ -721,6 +721,12 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **The lag of a thick disk never reverses the rotation** (GALMOD and every model, MC and ANALYTIC). Above ZCYL the
+  rotation is VROT − DVDZ (|z| − ZCYL), as in C++, but it stops at zero: C++ (and the port until now) made the gas
+  counter-rotate above the height ZCYL + VROT/DVDZ. A fit of NGC 891 with one exponential layer found DVDZ 6.7
+  km/s/arcsec, and the model reversed the rotation above 44" from the plane, where the data show the HI halo still
+  rotating. Models whose lag never reaches that height are unchanged; with a negative VROT the rotation stops at
+  zero from below.
 - **The default priors of DVDZ and ZCYL (3DFIT with METHOD GLOBAL or BAYESIAN) follow the cube.** They were the
   fixed 0–2 km/s/arcsec and 0–5 arcsec of the original module, which missed the lags of distant galaxies (15
   km/s/kpc is 3.6 km/s/arcsec at 50 Mpc). Now DVDZ is 0 to twice the largest initial VROT per beam FWHM (a lag that

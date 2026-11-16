@@ -1308,6 +1308,34 @@ def test_bayesian_lag_global(tmp_path):
     assert par.VVERT == "-1"
 
 
+def test_galmod_lag_never_reverses():
+    """The lag slows the rotation down to zero and no further: above the height where the linear law
+    VROT - DVDZ (|z| - ZCYL) would reverse it, the gas does not rotate (it counter-rotated, as in C++). An edge-on
+    disk (VROT 100 km/s, DVDZ 4 km/s/arcsec from the plane, not smoothed): the rotation stops at 25"; at 30-60" from
+    the plane the velocity field is VSYS, in the ANALYTIC and MC models; below 25" the lag is linear as before."""
+    from bbarolo import GalMod
+    n, pix, dv = 41, 6., 5.
+    tmpl = emptyfits([n, n, 64], [-pix / 3600., pix / 3600., dv], beam=20. / 3600., bunit="JY/BEAM", obj="LAG")
+    h = tmpl.header
+    v = h["CRVAL3"] + (np.arange(h["NAXIS3"]) + 1 - h["CRPIX3"]) * h["CDELT3"]
+    for gtype in ("ANALYTIC", "MC"):
+        gm = GalMod(tmpl, radii=np.arange(1, 6) * 20., xpos=20, ypos=20, vsys=0., vrot=100., vdisp=5., z0=20.,
+                    dvdz=4., zcyl=0., inc=90., pa=90., dens=1., norm="NONE", mask="NONE", sm=False, galmodtype=gtype,
+                    threads=1, verbose=False)
+        m = np.asarray(gm.run().model.data, float)
+        tot = m.sum(axis=0)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            mom1 = np.einsum("kij,k->ij", m, v) / tot
+        ok = tot > 1e-3 * tot.max()
+        far = np.zeros(ok.shape, bool)
+        far[:20 - 5] = far[20 + 6:] = True                        # rows 30-60" from the plane
+        assert ok[far].sum() > 20 and np.nanmax(np.abs(mom1[far & ok])) < (0.5 if gtype == "ANALYTIC" else 3.)
+        # near the plane (rows at 6 and 12"): rotation, slower higher up
+        near1 = np.abs(mom1[[19, 21]][:, 8:13]).mean()
+        near2 = np.abs(mom1[[18, 22]][:, 8:13]).mean()
+        assert near1 > near2 > 5.
+
+
 def test_bayesian_lag_identifiable(tmp_path):
     """DVDZ and ZCYL free must change the model: DVDZ needs a thick disk (Z0 > 0 or Z0 free), ZCYL a lag (DVDZ free or
     not zero); otherwise an error that names the parameters. ZCYL cannot be negative (a lag below the plane is a lower
