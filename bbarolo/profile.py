@@ -9,8 +9,9 @@ on the geometry. For a given geometry the densities that reproduce an observed m
 non-negative weighted least-squares problem, with:
 
   * an exterior annulus, from the outer edge of the disk (the edge of the rings, or RADMAX when it
-    is the edge of the disk) to two beams beyond, with its own density: it takes the emission beyond
-    the disk, which the last ring would otherwise absorb (its density is not used);
+    is the edge of the disk, or the larger of RADMAXA and RADMAXR when both halves have an edge) to two
+    beams beyond, with its own density: it takes the emission beyond the disk, which the last ring would
+    otherwise absorb (its density is not used);
   * a smoothness prior: rings narrower than the beam are nearly degenerate once convolved, and
     noise or non-axisymmetric structure make the solution oscillate from ring to ring. The squared
     second differences of the profile (including the exterior annulus) are penalised with a weight
@@ -44,11 +45,16 @@ def profile_system(model, rings, box, data_map, rms_map, ok_map, beam_arcsec=Non
     edge = outer_edge(r, model.ringmode)
     if getattr(r, "edge", None) is not None:          # (RADMAX as the edge of the disk, also inside the last ring)
         edge = min(edge, float(r.edge))
+    st = getattr(model, "setup", None)               # (a DiskModel; the models of 2D maps have no halves)
+    ea, er = st.side_edges(r) if st is not None else (None, None)
+    if ea is not None and er is not None:            # (both halves end within the rings: RADMAXA, RADMAXR)
+        edge = min(edge, max(ea, er))
     rext = edge + w / 2.
     ext = Rings().setRings(radii=[rext], xpos=r.xpos[-1], ypos=r.ypos[-1], vsys=r.vsys[-1], vrot=r.vrot[-1],
                            vdisp=r.vdisp[-1], z0=r.z0[-1], inc=r.inc[-1], phi=r.phi[-1], dens=1., radsep=w,
                            z0thick=r.z0thick[-1], fthick=r.fthick[-1], vdispthick=r.vdispthick[-1])
     ext.twolayer = r.thick()
+    ext.edgeapp = ext.edgerec = -1.                  # (the whole annulus, also beyond RADMAXA or RADMAXR)
     K = np.concatenate([K, model.ring_maps(ext, Lb, Hb, ringmode="CENTRED")])
     y, s = data_map, rms_map
     ok = ok_map & (s > 0) & np.isfinite(y)

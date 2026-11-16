@@ -385,6 +385,10 @@ KEYWORDS = [
     K("Z0THICK", "str", _g(G2, "Z0THICK"), MOD, "Scale height of the thick layer (arcsec; Z0: that of the thin one)"),
     K("FTHICK", "str", _g(G2, "FTHICK"), MOD, "Fraction of the column density in the thick layer (0-1)"),
     K("VDISPTHICK", "str", _g(G2, "VDISPTHICK"), MOD, "Velocity dispersion of the thick layer (km/s; default VDISP)"),
+    K("RADMAXA", "float", _g(G2, "RADMAXA"), MOD, "Outer edge of the approaching half of the disk (arcsec; the "
+      "halves are split by the minor axis; -1: the edge of the rings)"),
+    K("RADMAXR", "float", _g(G2, "RADMAXR"), MOD, "Outer edge of the receding half of the disk (arcsec; -1: the edge "
+      "of the rings)"),
     K("VDISP", "str", _g(G3, "VDISP"), MOD + WIND + SLIT, "Velocity dispersion (km/s)"),
     K("XPOS", "pos", _g(G3, "XPOS"), RING + WIND + SLIT, "X center of the galaxy (pixel, or WCS with a unit)"),
     K("YPOS", "pos", _g(G3, "YPOS"), RING + WIND + SLIT, "Y center of the galaxy (pixel, or WCS with a unit)"),
@@ -425,9 +429,9 @@ KEYWORDS = [
       "Free parameters, case-insensitive. 3DFIT (METHOD CLASSIC) and 2DFIT: any of VROT, VDISP, DENS, Z0, INC, PA, "
       "XPOS, YPOS, VSYS, VRAD, or ALL. 3DFIT with METHOD GLOBAL or BAYESIAN: a name alone has one value per ring, "
       "NAME_SINGLE one "
-      "value for all the rings, NAME_FUNC a function of radius (VROT, VDISP, DENS), plus SIGMA, FRACERR and "
-      "RADMAX (default: VROT VDISP XPOS_SINGLE YPOS_SINGLE VSYS_SINGLE INC_SINGLE PA_SINGLE Z0_SINGLE RADMAX "
-      "FRACERR)"),
+      "value for all the rings, NAME_FUNC a function of radius (VROT, VDISP, DENS), plus SIGMA, FRACERR, "
+      "RADMAX, RADMAXA and RADMAXR (default: VROT VDISP XPOS_SINGLE YPOS_SINGLE VSYS_SINGLE INC_SINGLE PA_SINGLE "
+      "Z0_SINGLE RADMAX FRACERR)"),
     K("GUESSTYPE", "ustr", ["gf.GUESSTYPE"], ("3DFIT", "2DFIT", "SPACEPAR"),
       "Initial estimates of the parameters that are not given: FIT (a beam-convolved disk fitted to the "
       "total map and a 2D tilted-ring fit of the velocity field), ELLIPSE (the C++ algorithm, corrected) or "

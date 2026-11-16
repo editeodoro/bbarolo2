@@ -98,6 +98,13 @@ $$
 
 The sharp edge is continuous in $E$, so the likelihood is too.
 
+**One half shorter.** {ref}`RADMAXA <par-galmod-radmaxa>` and {ref}`RADMAXR <par-galmod-radmaxr>` are the outer
+edges $E_\mathrm a$ and $E_\mathrm r$ of the approaching and receding halves of the disk, split by the minor axis:
+a cloud at azimuth $\theta$ (below) has its density multiplied by the sharp $w_j$ above with $E = E_\mathrm r$ if
+$\cos\theta \ge 0$ (the receding half, the major axis at PA) and $E = E_\mathrm a$ otherwise; both layers end
+there. They describe disks that extend farther on one side (lopsided ones); 3DFIT with METHOD GLOBAL or
+BAYESIAN can fit them.
+
 (galmod-geometry)=
 ## Geometry: from the disk to the sky
 

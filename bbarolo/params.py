@@ -155,6 +155,8 @@ class GalmodPar:
     Z0THICK: str = "-1"
     FTHICK: str = "-1"
     VDISPTHICK: str = "-1"
+    RADMAXA: float = -1.0           # the outer edges of the approaching and receding halves (arcsec; -1: none)
+    RADMAXR: float = -1.0
     CDENS: int = 10
     CMODE: int = 1
     ISEED: int = -1
@@ -1139,7 +1141,7 @@ def _numstr(v):
 # function of radius (Bayesian3DFIT.funcs: VROT arctan, VDISP linear, DENS exponential)
 BAYES_RING_PARS = ("vrot", "vdisp", "dens", "z0", "inc", "phi", "xpos", "ypos", "vsys", "vrad", "vvert", "dvdz",
                    "zcyl", "z0thick", "fthick", "vdispthick")
-BAYES_OTHER_PARS = ("sigma", "fracerr", "radmax")
+BAYES_OTHER_PARS = ("sigma", "fracerr", "radmax", "radmaxa", "radmaxr")
 BAYES_FUNC_PARS = ("vrot", "vdisp", "dens")
 _BAYES_ALIASES = {"pa": "phi", "disp": "vdisp"}
 
@@ -1159,8 +1161,9 @@ def bayes_freepar(free, funcs=BAYES_FUNC_PARS, ring_pars=BAYES_RING_PARS, other_
     'phi_single', 'inc_single', 'radmax']. A ring parameter (VROT, VDISP, DENS, Z0, INC, PA,
     XPOS, YPOS, VSYS, VRAD, VVERT, DVDZ, ZCYL) has one value per ring, NAME_SINGLE one value
     for all the rings, NAME_FUNC a function of radius (funcs: the parameters with a function,
-    by default VROT, VDISP and DENS); SIGMA (noise), FRACERR (fractional model error) and
-    RADMAX (outer radius) are single values. Names are case-insensitive; PHI is the same as
+    by default VROT, VDISP and DENS); SIGMA (noise), FRACERR (fractional model error),
+    RADMAX (outer radius), RADMAXA and RADMAXR (outer edges of the approaching and receding halves)
+    are single values. Names are case-insensitive; PHI is the same as
     PA and DISP as VDISP. Raises ValueError."""
     out, seen = [], set()
     for tok in re.split(r"[\s,;]+", str(free).strip()):
@@ -1711,6 +1714,8 @@ def printParams(Str, p, defaults=False, whichtask="ALL"):
             R("[Z0THICK]", "   Scale height of the thick layer (arcs)", gm.Z0THICK)
             R("[FTHICK]", "   Fraction of the gas in the thick layer", gm.FTHICK)
             R("[VDISPTHICK]", "   Velocity dispersion of the thick layer (km/s)", gm.VDISPTHICK)
+            R("[RADMAXA]", "   Outer edge of the approaching half (arcs)", gm.RADMAXA)
+            R("[RADMAXR]", "   Outer edge of the receding half (arcs)", gm.RADMAXR)
         if isClassic:
             R("[FREE]", mc("   Parameters to be minimized"), gf.FREE)
         if isBayes:

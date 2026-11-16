@@ -21,6 +21,7 @@ class _RingDict(object):
         self.r = {k: None for k in PARAMS}
         self.object = None
         self.edge, self.edgewidth = None, 0.        # the outer edge of the disk (RADMAX: 'edge', 'taper')
+        self.edgeapp, self.edgerec = None, None     # the edges of the two halves (RADMAXA, RADMAXR; Rings)
         self.radsep = 0.                            # the width of a single ring (RADSEP; 0: R/2 to 3R/2)
         self.twolayer = None                        # a thick layer for any FTHICK (Rings.twolayer)
 
@@ -31,6 +32,7 @@ class _RingDict(object):
             rd.modify_parameter(k, getattr(rings, k))
         rd.radsep = float(rings.radsep) if rings.nr == 1 else 0.
         rd.twolayer = getattr(rings, 'twolayer', None)
+        rd.edgeapp, rd.edgerec = getattr(rings, 'edgeapp', None), getattr(rings, 'edgerec', None)
         rd.make_object()
         return rd
 
@@ -38,6 +40,7 @@ class _RingDict(object):
         rd = _RingDict(self.nr)
         rd.r = {k: np.array(v) for k, v in self.r.items()}
         rd.edge, rd.edgewidth, rd.radsep = self.edge, self.edgewidth, self.radsep
+        rd.edgeapp, rd.edgerec = self.edgeapp, self.edgerec
         rd.twolayer = self.twolayer
         rd.make_object()
         return rd
@@ -67,6 +70,7 @@ class _RingDict(object):
         # (one ring: RADSEP as given, as 3DFIT; it was dropped, so the ring was always R/2 to 3R/2 wide)
         r.radsep = float(np.float32(self.r['radii'][-1] - self.r['radii'][-2])) if self.nr > 1 else self.radsep
         r.edge, r.edgewidth = self.edge, self.edgewidth
+        r.edgeapp, r.edgerec = self.edgeapp, self.edgerec
         r.twolayer = self.twolayer
         self.object = r
         return r

@@ -20,6 +20,10 @@ class Rings:
     1/2 erfc((R - edge) / (sqrt(2) edgewidth)) (edgewidth > 0, arcsec: a Gaussian edge). See
     galmod.edge_weights. Used by Bayesian3DFIT for RADMAX.
 
+    edgeapp, edgerec (arcsec, default None: RADMAXA and RADMAXR): the outer edges of the approaching and of the
+    receding half of the disk (split by the minor axis): the density of each half beyond its edge is zero (a sharp
+    edge); negative: no edge. See galmod.GalmodSetup.side_edges.
+
     The thick layer: a fraction fthick (0-1) of the column density of each ring lies in a second layer of scale
     height z0thick (arcsec; negative: z0, the keyword Z0THICK Z0) and velocity dispersion vdispthick (km/s;
     negative: vdisp), with the same LTYPE; the
@@ -32,6 +36,7 @@ class Rings:
         self.radsep = 0.            # (as in C++; -1 shrank SHIFTED disks by 0.5)
         self.id = 0
         self.edge, self.edgewidth = None, 0.
+        self.edgeapp, self.edgerec = None, None     # the edges of the two halves (None: RADMAXA, RADMAXR)
         self.empty = None           # inner part of the model empty (True/False), or None: GalmodSetup.empty
         self.twolayer = None        # a thick layer (True/False), or None: if fthick > 0 in some ring
         for k in RING_KEYS:
@@ -46,6 +51,7 @@ class Rings:
         r = Rings()
         r.radsep, r.id = self.radsep, self.id
         r.edge, r.edgewidth, r.empty = self.edge, self.edgewidth, getattr(self, "empty", None)
+        r.edgeapp, r.edgerec = getattr(self, "edgeapp", None), getattr(self, "edgerec", None)
         r.twolayer = getattr(self, "twolayer", None)
         for k in RING_KEYS:
             setattr(r, k, np.array(getattr(self, k), dtype=float, copy=True))
@@ -79,6 +85,7 @@ class Rings:
         r = Rings()
         r.radsep, r.id = self.radsep, self.id
         r.edge, r.edgewidth, r.empty = self.edge, self.edgewidth, getattr(self, "empty", None)
+        r.edgeapp, r.edgerec = getattr(self, "edgeapp", None), getattr(self, "edgerec", None)
         r.twolayer = getattr(self, "twolayer", None)
         for k in RING_KEYS:
             setattr(r, k, np.atleast_1d(np.asarray(getattr(self, k))[idx]).astype(float))

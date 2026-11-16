@@ -1531,6 +1531,95 @@ def test_bayesian_thick_layer_global(tmp_path):
     assert np.allclose(getDataColumn(par.VDISPTHICK), t["vdispthick"], atol=1e-3)
 
 
+def test_galmod_side_edges(synthetic_cube, tmp_path):
+    """RADMAXA and RADMAXR (rings.edgeapp, edgerec): the outer edges of the approaching and receding halves of the
+    disk, split by the minor axis. The two halves add up to the whole disk (ANALYTIC: to rounding), the approaching
+    one at lower velocities; a half cut at R is that half with the edge of the whole disk (RADMAX) at R; ring_maps
+    carry the cut (sum_r dens_r maps_r is the total intensity map); MC has the same flux; the keywords set the edges
+    of the model (both GALMOD and 3DFIT parameters), and a negative value in the rings means no edge."""
+    from bbarolo import GalMod
+    from bbarolo.galmod import DiskModel
+    m = DiskModel(synthetic_cube, galmodtype="ANALYTIC")
+    full = ((0, 0), (64, 64))
+
+    def rings(**kw):
+        r = _rings()
+        r.z0 = np.full(r.nr, 5.)
+        for k, v in kw.items():
+            setattr(r, k, v)
+        return r
+    whole = m.array(rings(), *full)
+    app = m.array(rings(edgerec=0.), *full)                 # (the receding half empty: the approaching half)
+    rec = m.array(rings(edgeapp=0.), *full)
+    assert whole.max() > 0 and np.abs(app + rec - whole).max() < 1e-9 * whole.max()
+    ch = np.arange(whole.shape[0])
+    vel = [(a.sum(axis=(1, 2)) * ch).sum() / a.sum() for a in (app, rec)]
+    assert vel[0] < 0.5 * (whole.shape[0] - 1) < vel[1]      # (the channels go up in velocity, VSYS in the middle)
+    cut = m.array(rings(edgeapp=85.), *full)
+    assert np.abs(cut - rec - m.array(rings(edgerec=0., edge=85.), *full)).max() < 1e-9 * whole.max()
+    assert 0.55 < cut.sum() / whole.sum() < 0.75
+    r = rings(edgeapp=85., edgerec=120.)
+    mod = m.array(r, *full).sum(axis=0)
+    assert np.abs(np.tensordot(r.dens, m.ring_maps(r), axes=1) - mod).max() < 1e-6 * mod.max()
+    mc = DiskModel(synthetic_cube, galmodtype="MC")
+    assert abs(mc.array(rings(edgeapp=85.), *full).sum() / mc.array(rings(), *full).sum()
+               - cut.sum() / whole.sum()) < 0.02
+    # the keywords
+    p = Param()
+    p.readParamString("RADMAXA 85\n")
+    assert p.gm.RADMAXA == p.gf.RADMAXA == 85. and p.gm.RADMAXR == -1.
+    hdu = emptyfits([64, 64, 40], [-10. / 3600., 10. / 3600., 10.], beam=30. / 3600., bunit="JY/BEAM", obj="SYNTH")
+    fn = str(tmp_path / "side.fits")
+    hdu.writeto(fn)
+    p.verbose = False
+    mk = DiskModel(Cube(fn, par=p), galmodtype="ANALYTIC")
+    assert np.abs(mk.array(rings(), *full) - cut).max() < 1e-9 * whole.max()
+    assert np.abs(mk.array(rings(edgeapp=-1.), *full) - whole).max() < 1e-9 * whole.max()
+    r = _rings()
+    g = GalMod(fn, radii=r.radii, xpos=31.5, ypos=31.5, vsys=0., vrot=150., vdisp=10., z0=5., dens=1., inc=60.,
+               pa=45., radmaxr=85., norm="NONE", galmodtype="ANALYTIC", threads=1, verbose=False)
+    g.run()
+    assert g.diskmodel.setup.side_edges(Rings()) == (None, 85.)
+
+
+def _side_cube(tmp_path, snr=30., seed=4):
+    """A disk at INC 70 (PA 40, centre 22,22, beam 20", rings of one beam out to 120", VROT 150 km/s flat, VDISP
+    10 km/s) whose approaching half ends at 70" (RADMAXA); returns the file and the radii."""
+    from astropy.io import fits
+    from bbarolo import GalMod
+    n, beam, pix, dv = 45, 20., 6., 10.
+    tmpl = emptyfits([n, n, 48], [-pix / 3600., pix / 3600., dv], beam=beam / 3600., bunit="JY/BEAM", obj="SIDE")
+    rs = np.arange(1, 7) * 20.
+    gm = GalMod(tmpl, radii=rs, xpos=22, ypos=22, vsys=0., vrot=150., vdisp=10., z0=0., inc=70., pa=40.,
+                dens=np.exp(-rs / 80.), radmaxa=70., norm="NONE", mask="NONE", galmodtype="ANALYTIC", threads=1,
+                verbose=False)
+    clean = gm.run().model
+    noisy = gm.diskmodel.addnoise(clean.data, float(clean.data.max()) / snr, seed=seed)
+    fn = str(tmp_path / "side.fits")
+    fits.PrimaryHDU(data=noisy, header=tmpl.header).writeto(fn, overwrite=True)
+    return fn, rs
+
+
+def test_bayesian_side_edges_global(tmp_path):
+    """3DFIT with METHOD GLOBAL fits RADMAXA and RADMAXR (FREE): on a mock whose approaching half ends at 70" and whose
+    receding half fills the rings (out to 130"), RADMAXA is recovered within 3 sigma and RADMAXR stays at the edge of
+    the rings. Default priors: half the outer edge of the disk of the rings to that edge."""
+    from bbarolo import FitMod3D
+    fn, rs = _side_cube(tmp_path)
+    r = FitMod3D(fn, radii=rs, xpos=22, ypos=22, vsys=0, vrot=120, vdisp=10, z0=0, inc=70, pa=40, mask="SEARCH",
+                 free="VROT VDISP_SINGLE RADMAXA RADMAXR", method="GLOBAL", flagerrors=True, threads=4, plots=0,
+                 verbose=0, outfolder=str(tmp_path / "out")).run()
+    f = r.fitter
+    for key in ("radmaxa", "radmaxr"):
+        assert f._prior_kwargs(key) == dict(loc=65., scale=65.)
+    res = f.optimum
+    i = f.freepar_idx
+    a, ea = res.x[i["radmaxa"][0]], res.errors[i["radmaxa"][0]]
+    assert ea > 0 and abs(a - 70.) <= 3. * ea, (a, ea)
+    assert res.x[i["radmaxr"][0]] > 120.
+    assert np.all(np.abs(np.asarray(r.rings["vrot"], float) - 150.) < 10.)
+
+
 def test_bayesian_thick_layer_setup(tmp_path, capsys):
     """The thick layer in the fit: an error when it cannot be identified (Z0THICK or VDISPTHICK free without a thick
     layer, FTHICK without Z0THICK); the rings keep two layers for any FTHICK, so the likelihood is continuous at

@@ -58,6 +58,7 @@ one of three forms; three more parameters are single values:
 | `NAME_SINGLE` | 1 | the same value $p$ in all the rings |
 | `NAME_FUNC` | 2 | a function of radius, $g(R_j; p_1, p_2)$ |
 | `SIGMA`, `FRACERR`, `RADMAX` | 1 each | the noise per voxel, the model error, the outer edge (below) |
+| `RADMAXA`, `RADMAXR` | 1 each | the outer edges of the approaching and receding halves (below) |
 
 $N_\mathrm r$ is the number of rings and $R_j$ the radius of ring $j$ (arcsec). The functions of radius are
 
@@ -164,6 +165,7 @@ Three priors are part of the algorithm:
   the rings: with `radmax` `edge` or `taper` (below), the edge of the disk, it stops at the outer edge of the
   last ring (the last radius with {ref}`RINGMODE <par-3dfit-ringmode>` NODES), beyond which the edge
   has no effect; with `radmax=ring`, the last ring itself, it stays beyond the middle of the last two radii.
+- RADMAXA, RADMAXR: uniform from half the outer edge of the disk of the rings to that edge.
   When RADMAX is free as the edge of the disk (`radmax=edge` or `taper`, the default being `edge`) and the
   number of rings is estimated (RADII and NRADII not given), the rings are extended, with the same separation
   and the values of the last ring, out to the estimated radius plus 1 beam, so that the edge can be anywhere up to
@@ -513,6 +515,13 @@ the profiles inside the edge (the ring only sets their slope inside it). Such ri
 `<prefix>_rings_final1.txt` (the column is written only with `edge` or `taper`), the region beyond the edge
 is shaded in the plots of the parameters, `print_stats` names them, and in Python `f.in_disk` and
 `f.disk_edge` give them.
+
+**One half shorter.** {ref}`RADMAXA <par-3dfit-radmaxa>` and {ref}`RADMAXR <par-3dfit-radmaxr>` are the outer
+edges of the approaching and receding halves of the disk, for galaxies that extend farther on one side: each
+half has the sharp edge above at its own radius (see the {ref}`GALMOD model <galmod-rings>`), and the rings
+keep their values out to the edge of the longer half. Free (`FREE ... RADMAXA`), each starts at the value given,
+or at the outer edge of the rings; the deconvolved density profile follows the edges, and its exterior annulus
+starts at the longer of the two when both are below the outer edge of the rings.
 
 ## Sampling (METHOD BAYESIAN)
 

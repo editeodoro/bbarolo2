@@ -336,6 +336,8 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                   Z0THICK from the top of the range of Z0 to 3 beams above it (see _thick_layer_priors);
           RADMAX  the estimated outer radius (_radmax_guess, the last initial radius) - one beam FWHM to
                   + one beam FWHM, within the rings (see _prior_kwargs and _rings_for_radmax);
+          RADMAXA, RADMAXR (the outer edges of the approaching and receding halves) half the outer edge of the
+                  disk of the rings to that edge (see _prior_kwargs);
           VROT_P1 (the amplitude of the arctan curve) 1 km/s to 2 x the largest initial VROT.
         The others do not depend on the rings: VRAD 0-50 km/s, VVERT 0-30 km/s, DENS 0.1-200.1, SIGMA and
         FRACERR log-uniform (see _prior_kwargs), and those of the functions of radius. A prior that was changed (in
@@ -352,6 +354,8 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         vtop = 2. * float(rr['vrot'].max()) if rr['vrot'].max() > 0 else 350.
         guess = float(getattr(self, '_radmax_guess', rr['radii'][-1]))
         rlo = max(guess - beam, 0.)
+        redge = float(rr['radii'][-1]) + (0.5 * float(rr['radii'][-1] - rr['radii'][-2]) if len(rr['radii']) > 1
+                                          else 0.)            # (CENTRED; within the rings in _prior_kwargs)
         new = dict(
             xpos=around(rr['xpos'], 2. * beampix),                           # +- 2 beams
             ypos=around(rr['ypos'], 2. * beampix),
@@ -372,6 +376,8 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             sigma=dict(name='loguniform', a=None, b=None),                    # None: 0.5 and 1000 x noise rms
             fracerr=dict(name='loguniform', a=1e-3, b=1.),                    # fractional model error
             radmax=dict(name='uniform', loc=rlo, scale=guess + beam - rlo),        # guess +- 1 beam
+            radmaxa=dict(name='uniform', loc=0.5 * redge, scale=0.5 * redge),       # outer half of the disk
+            radmaxr=dict(name='uniform', loc=0.5 * redge, scale=0.5 * redge),
             vrot_p1=dict(name='uniform', loc=1., scale=max(vtop, 2.) - 1.),
             vrot_p2=dict(name='uniform', loc=1, scale=1000),
             vdisp_p1=dict(name='uniform', loc=0, scale=10),
@@ -429,7 +435,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         self.freepar_names = []
         self._freepar_inp = freepar
         dup = {key: False for key in self.priors.keys()}
-        okpars = ['sigma', 'radmax', 'fracerr']
+        okpars = ['sigma', 'radmax', 'radmaxa', 'radmaxr', 'fracerr']
         for pname in freepar:
             s = pname.split('_')
             if s[0] not in self._inri.r and s[0] not in okpars:
@@ -607,7 +613,8 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         estimated outer radius ± one beam FWHM, is kept within the rings: an edge (radmax 'edge' or 'taper') ends at
         the outer edge of the disk of the rings (galmod.outer_edge: the last radius with NODES rings,
         half a ring beyond it otherwise), beyond which it has no effect; the last ring (radmax 'ring')
-        stays beyond the middle of the last two radii, so that the radii stay in order. """
+        stays beyond the middle of the last two radii, so that the radii stay in order. The default priors of
+        RADMAXA and RADMAXR go from half the outer edge of the disk of the rings to that edge. """
         from ..galmod import outer_edge
         kw = {k: v for k, v in self.priors[key].items() if k != "name"}
         if key == 'radmax' and self.priors[key] == getattr(self, '_default_pri', {}).get(key) \
@@ -620,6 +627,10 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             else:
                 hi = min(hi, outer_edge(self._inri.object, self._galfit.model.ringmode))
             kw['loc'], kw['scale'] = lo, hi - lo
+        if key in ('radmaxa', 'radmaxr') and self.priors[key] == getattr(self, '_default_pri', {}).get(key) \
+                and self._galfit is not None:
+            hi = outer_edge(self._inri.object, self._galfit.model.ringmode)
+            kw['loc'], kw['scale'] = 0.5 * hi, 0.5 * hi
         if key == 'sigma':
             for k, f in (('a', 0.5), ('b', 1000.), ('scale', 1.)):
                 if k in kw and kw[k] is None:
@@ -807,8 +818,8 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
     def _initial_theta(self):
         """ The vector of the free parameters at the initial rings (with the density profile when DENS is not
         fitted): the value of each ring, or their median for NAME_SINGLE; RADMAX the estimated outer radius, SIGMA
-        the noise (or the value given); NaN (the centre of the prior) for FRACERR and the parameters of the
-        functions of radius. """
+        the noise (or the value given); RADMAXA and RADMAXR the value given, or the top of the prior (the disk
+        of the rings); NaN (the centre of the prior) for FRACERR and the parameters of the functions of radius. """
         th = np.full(self.ndim, np.nan)
         r = self._fit0.r
         for key, idx in self.freepar_idx.items():
@@ -816,6 +827,13 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                 th[idx] = self.like_kwargs.get('sigma') or self.noiserms
             elif key == 'radmax':
                 th[idx] = self._radmax_guess if getattr(self, '_radmax_mode', 'edge') != 'ring' else r['radii'][-1]
+            elif key in ('radmaxa', 'radmaxr'):
+                given = getattr(self._galfit.model.setup, key, -1.) if self._galfit is not None else -1.
+                if given >= 0:
+                    th[idx] = given
+                else:
+                    kw = self._prior_kwargs(key)
+                    th[idx] = kw['loc'] + kw['scale'] if self.priors[key].get('name') == 'uniform' else np.nan
             elif key in r and '_p' not in key:
                 v = np.asarray(r[key], float)
                 if key in ('z0thick', 'fthick') and not np.any(v > 0):
@@ -1004,7 +1022,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         signal outside them is below 0.1%; with dilation (0, 0) about 20%). """
         from ..params import bayes_name
         allowed = {'xpos_single', 'ypos_single', 'inc_single', 'phi_single', 'z0_single', 'dens', 'dens_single',
-                   'dens_func', 'radmax', 'sigma', 'fracerr'}
+                   'dens_func', 'radmax', 'radmaxa', 'radmaxr', 'sigma', 'fracerr'}
         freepar = [bayes_name(p) for p in (freepar.replace(',', ' ').split() if isinstance(freepar, str) else freepar)]
         if not (freepar and set(freepar).issubset(allowed)):
             raise ValueError("ERROR! The function run_geometry only accepts the following free parameters: "
@@ -1032,6 +1050,10 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                 rings.r['radii'][-1] = theta[freepar_idx['radmax']][0]
             else:                                   # the outer edge of the disk (the rings do not move)
                 rings.edge, rings.edgewidth = float(theta[freepar_idx['radmax']][0]), self._radmax_width
+        if 'radmaxa' in freepar_idx:                # the outer edges of the two halves of the disk
+            rings.edgeapp = float(theta[freepar_idx['radmaxa']][0])
+        if 'radmaxr' in freepar_idx:
+            rings.edgerec = float(theta[freepar_idx['radmaxr']][0])
         whatFunctional = np.unique([key.split('_')[0] for key in freepar_idx if '_p' in key])
         for p in whatFunctional:
             keys = [key for key in freepar_idx if key.startswith(p + '_p')]
@@ -1040,7 +1062,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             for key in keys:
                 freepar_idx.pop(key)
         for key in freepar_idx:
-            if key in ('sigma', 'radmax', 'fracerr'):
+            if key in ('sigma', 'radmax', 'radmaxa', 'radmaxr', 'fracerr'):
                 continue
             pvalue = theta[freepar_idx[key]]
             if len(pvalue) == 1:

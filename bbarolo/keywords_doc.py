@@ -741,8 +741,9 @@ Builds a model datacube of a rotating disk from a set of rings, on the grid of `
 beam and spectral axis), with the algorithm of GIPSY's GALMOD. `true` runs the task.
 
 The rings need `RADII` (or `NRADII` and `RADSEP`), `XPOS`, `YPOS`, `VSYS`, `VROT`, `VDISP`, `INC`, `PA`
-and `Z0`, unless they are read from `RINGFILE`; `DENS`, `VRAD`, `VVERT`, `DVDZ`, `ZCYL` and the thick layer
-(`Z0THICK`, `FTHICK`, `VDISPTHICK`) are optional.
+and `Z0`, unless they are read from `RINGFILE`; `DENS`, `VRAD`, `VVERT`, `DVDZ`, `ZCYL`, the thick layer
+(`Z0THICK`, `FTHICK`, `VDISPTHICK`) and the outer edges of the two halves of the disk (`RADMAXA`, `RADMAXR`)
+are optional.
 The model is normalised as set by `NORM` (`AZIM` and `LOCAL` use the data in the mask `MASK`) and
 written to `<prefix>_mod_<norm>.fits`, with the rings (`<prefix>_rings_model.txt`), the moment maps and
 position-velocity slices of the model and of the data, and `<prefix>_densprof.txt`. A `VSYS` outside the
@@ -963,6 +964,26 @@ The velocity dispersion (km/s) of the gas of the thick layer (see `Z0THICK` and 
 `VDISP`. One value, one value per ring or `file(name,column)` (see `VROT`); if not given, the thick layer has
 the dispersion `VDISP` of the thin one, also when that is fitted. The models of GALMOD, 3DFIT and SPACEPAR use
 the value given. 3DFIT with `METHOD` GLOBAL or BAYESIAN fits it when `FREE` includes it (see `Z0THICK`)."""),
+    'RADMAXA': dict(
+        group='Rings',
+        default='-1 (the edge of the rings)',
+        doc="""\
+The outer edge (arcsec) of the approaching half of the disk, for galaxies that extend farther on one
+side: beyond it that half of the model is empty (a sharp edge, continuous in the radius as `RADMAX`),
+while the other half keeps the rings out to their edge (or to `RADMAXR`). The halves are split by the
+minor axis: the approaching half is the one with the major axis opposite to `PA` (`PA` is the position
+angle of the receding half). Both layers (see `Z0THICK`) end there; a negative value is no edge, 0 an
+empty half. The models of GALMOD, 3DFIT and SPACEPAR use the value given; the density profile
+deconvolved by 3DFIT with `METHOD` GLOBAL or BAYESIAN follows the edge. 3DFIT with `METHOD` GLOBAL or
+BAYESIAN fits it when `FREE` includes RADMAXA (one value), from the value given, or the edge of the
+rings; the default prior goes from half the outer edge of the disk of the rings to that edge (see
+`PRIORS`)."""),
+    'RADMAXR': dict(
+        group='Rings',
+        default='-1 (the edge of the rings)',
+        doc="""\
+The outer edge (arcsec) of the receding half of the disk, the half with the major axis at `PA`: as
+`RADMAXA` for the approaching one."""),
     'VDISP': dict(
         group={'GALWIND': 'Wind', 'WINDFIT': 'Wind', '*': 'Rings'},
         default='8 km/s, or estimated with GUESSTYPE FIT (GALMOD, GALWIND: required)',
@@ -1316,8 +1337,9 @@ with `SIDE` `A` or `R` the centre and VSYS stay fixed.
 `YPOS`, `VSYS`, `VRAD`, `VVERT`, `DVDZ`, `ZCYL`, `Z0THICK`, `FTHICK`, `VDISPTHICK`) has one value per ring;
 `NAME_SINGLE` has one value for all the rings; `NAME_FUNC` is a function of radius with two parameters:
 `VROT_FUNC` an arctangent, 2/π·p1·arctan(R/p2), `VDISP_FUNC` a line, p1 + p2·R, `DENS_FUNC` an exponential,
-p1·exp(−R/p2). `SIGMA` (the noise per voxel), `FRACERR` (a model error proportional to the model) and `RADMAX`
-(the outer edge of the disk, see `LIKEOPTS`) are single values. Each parameter appears once, and its prior is
+p1·exp(−R/p2). `SIGMA` (the noise per voxel), `FRACERR` (a model error proportional to the model), `RADMAX`
+(the outer edge of the disk, see `LIKEOPTS`), `RADMAXA` and `RADMAXR` (the outer edges of the approaching and
+receding halves) are single values. Each parameter appears once, and its prior is
 set by `PRIORS`; e.g. `FREE VROT VDISP_SINGLE INC_SINGLE PA_SINGLE`. The default frees the rotation velocity
 and the dispersion of each ring, one centre, systemic velocity, inclination, position angle and scale height
 for all the rings, the outer edge of the disk and the fractional model error:
@@ -1653,6 +1675,7 @@ largest + w:
   `LIKEOPTS radmax=edge` or `taper` (the edge of the disk) up to the outer edge of the last ring (the last
   radius with `RINGMODE NODES`), beyond which the edge has no effect; with `radmax=ring` (the last ring
   moves) beyond the middle of the last two radii;
+- `RADMAXA` and `RADMAXR` half the outer edge of the disk of the rings to that edge;
 - `DVDZ` 0 to twice the largest initial VROT per beam FWHM (km/s/arcsec), `ZCYL` 0 to one beam FWHM;
 - with a thick layer (`FTHICK` free or > 0): `FTHICK` 0–1, `VDISPTHICK` as `VDISP`, `Z0` 0 to half a beam
   FWHM and `Z0THICK` from the top of the range of `Z0` (the upper end of its prior if free, its largest value

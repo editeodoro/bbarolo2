@@ -93,8 +93,9 @@ def _fdev(ltype, st):
 def _galmod_mc(out, sr, ring_lo, ring_hi, seed, radsep, nv, cdens, cmode, pixarea, cdelt0, cdelt1,
                crota2, blo0, blo1, bhi0, bhi1, ltype, sig_instr, axtyp, velsys, lfreq0, crval3,
                cdelt3, crpix3, relint, cd2i):
-    """Monte-Carlo GALMOD kernel. sr: (14, nsub) array of sub-ring values in internal units:
-    radius, vrot, vrad, vvert, vdisp, dens, z0, dvdz, zcyl, inc, phi, xpos, ypos, vsys. lfreq0, relint: the
+    """Monte-Carlo GALMOD kernel. sr: (16, nsub) array of sub-ring values in internal units:
+    radius, vrot, vrad, vvert, vdisp, dens, z0, dvdz, zcyl, inc, phi, xpos, ypos, vsys, and the weights of the
+    density in the receding and approaching halves (GalmodSetup.subrings). lfreq0, relint: the
     reference frequency (the rest frequency at REDSHIFT) and the relative intensity of each line."""
     st = rng_init(seed)
     nz = out.shape[2]
@@ -134,7 +135,8 @@ def _galmod_mc(out, sr, ring_lo, ring_hi, seed, radsep, nv, cdens, cmode, pixare
             y = R * saz * cinc - z * sinc
             g0 = _lround(xpos + (x * spa - y * cpa) / cdelt0)
             g1 = _lround(ypos + (x * cpa + y * spa) / cdelt1)
-            if g0 < blo0 or g0 >= bhi0 or g1 < blo1 or g1 >= bhi1:
+            wside = sr[14, ir] if caz >= 0.0 else sr[15, ir]          # (the edge of the half: RADMAXR/RADMAXA)
+            if wside == 0.0 or g0 < blo0 or g0 >= bhi0 or g1 < blo1 or g1 >= bhi1:
                 # the velocity deviates are drawn all the same, so that the model in a box is the crop of
                 # the model of the whole cube (C++ did not draw them)
                 for iv in range(nvr):
@@ -152,7 +154,7 @@ def _galmod_mc(out, sr, ring_lo, ring_hi, seed, radsep, nv, cdens, cmode, pixare
                 # velocity axis, single line: linear velocity->channel mapping
                 g0 = vs * ia + ib
                 sg = vdisptmp * ia
-                val = relint[0] * fluxsc
+                val = relint[0] * fluxsc * wside
                 for iv in range(nvr):
                     isubs = _lround(g0 + rng_normal(st) * sg)
                     if isubs < 0 or isubs >= nz:
@@ -165,7 +167,7 @@ def _galmod_mc(out, sr, ring_lo, ring_hi, seed, radsep, nv, cdens, cmode, pixare
                         isubs = _lround(_velgrid(v, axtyp, velsys, lfreq0[nl], crval3, cdelt3, crpix3))
                         if isubs < 0 or isubs >= nz:
                             continue
-                        out[py, px, isubs] += relint[nl] * fluxsc * cd2i[isubs]
+                        out[py, px, isubs] += relint[nl] * fluxsc * wside * cd2i[isubs]
     return out
 
 
@@ -381,6 +383,9 @@ def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, 
             for ka in range(naz):
                 if ka > 0:
                     caz, saz = caz * cd - saz * sd, saz * cd + caz * sd
+                wside = sr[14, ir] if caz >= 0.0 else sr[15, ir]      # (the edge of the half: RADMAXR/RADMAXA)
+                if wside == 0.0:
+                    continue
                 x = R * caz
                 yb = R * saz * cinc
                 xs = x * spa
@@ -401,7 +406,7 @@ def _galmod_analytic(out, sr, ring_lo, ring_hi, radsep, cdens, pixarea, cdelt0, 
                 if not inbox:
                     continue
                 for nl in range(nlines):
-                    a = relint[nl] * fluxsc
+                    a = relint[nl] * fluxsc * wside
                     if not zdep:
                         v = vplane
                         kc = _lround(_velgrid(v, axtyp, velsys, lfreq0[nl], crval3, cdelt3, crpix3))
@@ -502,6 +507,9 @@ def _ring_maps_analytic(out, sr, widx, wval, radsep, pixarea, cdelt0, cdelt1, cr
             for ka in range(naz):
                 if ka > 0:
                     caz, saz = caz * cd - saz * sd, saz * cd + caz * sd
+                wside = sr[14, ir] if caz >= 0.0 else sr[15, ir]      # (the edge of the half: RADMAXR/RADMAXA)
+                if wside == 0.0:
+                    continue
                 x = R * caz
                 yb = R * saz * cinc
                 xs = x * spa
@@ -524,7 +532,7 @@ def _ring_maps_analytic(out, sr, widx, wval, radsep, pixarea, cdelt0, cdelt1, cr
                     for m in range(2):
                         r = widx[ir, m]
                         if r >= 0:
-                            out[r, g1 - blo1, g0 - blo0] += fluxsc * ws * wval[ir, m]
+                            out[r, g1 - blo1, g0 - blo0] += fluxsc * ws * wval[ir, m] * wside
     return out
 
 
@@ -699,6 +707,9 @@ class GalmodSetup:
             self.cdens = 1.
         self.iseed = gm.ISEED
         self.empty = gm.EMPTY
+        # the outer edges of the approaching and receding halves of the disk (arcsec; negative: none)
+        self.radmaxa = float(getattr(gm, "RADMAXA", -1.))
+        self.radmaxr = float(getattr(gm, "RADMAXR", -1.))
         self.densIsFlux = gm.DENSFLUX if densflux is None else densflux
         self.nvpar = gm.NV
         self.galmodtype = (galmodtype or getattr(p, "galmodtype", "MC")).upper()
@@ -758,7 +769,10 @@ class GalmodSetup:
         z0thick (z0 if negative), vdispthick (vdisp if negative) and the lag; fthick, z0thick and vdispthick are
         interpolated as the
         other values. The kernels take each sub-ring on its own, so the model is the sum of the two layers.
-        Returns (sr array (14,nsub), nv array)."""
+        Rows 14 and 15 of sr are the weights of the density in the receding (cos(azimuth) >= 0) and in the
+        approaching half of each sub-ring: 1, or the fraction of the sub-ring within the outer edge of that half
+        (rings.edgerec and rings.edgeapp, or RADMAXR and RADMAXA if None; negative: no edge; see side_edges).
+        Returns (sr array (16,nsub), nv array)."""
         nr = rings.nr
         radsep = self.radsep
         rad = np.asarray(rings.radii, float) / 60.
@@ -829,9 +843,26 @@ class GalmodSetup:
             thk[5] *= f
             thk[6], thk[4] = sr[15], sr[16]
             sr = np.concatenate([thin, thk], axis=1)
+        side = np.ones((2, sr.shape[1]))
+        for k, e in enumerate(self.side_edges(rings)[::-1]):            # (receding, approaching)
+            if e is not None and sr.shape[1]:
+                side[k] = edge_weights(sr[0] * 60., radsep * 60., e)
+        sr = np.concatenate([sr[:14], side])
         nvtmp = self.nvpar if self.nvpar >= 1 else self.nsubs
         nv = np.where(sr[4] == 0, 1, nvtmp).astype(np.int64)
         return np.ascontiguousarray(sr), nv
+
+    def side_edges(self, rings):
+        """The outer edges (arcsec) of the approaching and of the receding half of the disk of the rings, as
+        (edgeapp, edgerec): rings.edgeapp and rings.edgerec, or RADMAXA and RADMAXR where these are None; None for
+        a half without an edge (a negative value). The halves are split by the minor axis: the receding half has
+        the azimuths with cos(azimuth) >= 0, where the rotation (VROT > 0) moves the gas away from us."""
+        out = []
+        for attr, default in (("edgeapp", self.radmaxa), ("edgerec", self.radmaxr)):
+            e = getattr(rings, attr, None)
+            e = default if e is None else float(e)
+            out.append(e if e >= 0 else None)
+        return tuple(out)
 
     def build(self, rings, blo=(0, 0), bhi=None, out=None, seed=None, nthreads=1, galmodtype=None, layout="zyx",
               return_unit=False):

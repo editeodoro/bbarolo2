@@ -439,6 +439,13 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **One half of the disk can end before the other: RADMAXA and RADMAXR**, the outer edges (arcsec) of the
+  approaching and receding halves, split by the minor axis, for disks that extend farther on one side (NGC 891). In
+  GALMOD and every model (3DFIT, SPACEPAR): beyond its edge a half is empty (a sharp edge, continuous in the radius as
+  RADMAX), both layers; -1 (the default) is no edge, and the models without them are unchanged. 3DFIT with METHOD
+  GLOBAL or BAYESIAN fits them (`FREE ... RADMAXA RADMAXR`), from the value given or the outer edge of the rings, with
+  the default prior half the outer edge of the rings to that edge; the deconvolved density profile follows them.
+  Python: `GalMod(radmaxa=...)`, `Rings.edgeapp` and `edgerec`.
 - **A thick layer of gas (Z0THICK, FTHICK, VDISPTHICK), in GALMOD and every model** (3DFIT, SPACEPAR). A fraction
   FTHICK (0–1) of the column density of each ring lies in a second layer of scale height Z0THICK (arcsec), with the
   same LTYPE, and its own velocity dispersion VDISPTHICK (km/s; VDISP if not given); the thin layer has the rest,
