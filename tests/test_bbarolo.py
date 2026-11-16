@@ -627,6 +627,26 @@ def test_bayesian_likelihood_checks(tmp_path, capsys):
 
 
 @needs_data
+def test_bayesian_low_loglike_warning_dynesty_only(tmp_path, capsys, monkeypatch):
+    """The warning about log-likelihoods below -1e6 (printed as -inf by dynesty) appears only with dynesty."""
+    import bbarolo.bayesian.fitter as fitter
+    from bbarolo.bayesian import Bayesian3DFIT
+
+    class Stop(Exception):
+        pass
+
+    def stop(*args, **kwargs):
+        raise Stop
+    monkeypatch.setattr(fitter, "sample", stop)              # (stop after the checks, before sampling)
+    f = Bayesian3DFIT(N2403, radii=np.arange(60, 400, 120), xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10,
+                      inc=60, pa=123.7, z0=10, mask="SEARCH", outfolder=str(tmp_path) + "/")
+    for sampler in ("nautilusbb", "nautilus", "dynesty"):
+        with pytest.raises(Stop):
+            f.sample(['vrot'], sampler=sampler, threads=1, log_like=lambda theta, **kw: -1.31e6)
+        assert ("dynesty prints" in capsys.readouterr().out) == (sampler == "dynesty"), sampler
+
+
+@needs_data
 def test_bayesian_likelihood_noise_and_beam(tmp_path):
     """Default likelihood: sigma = measured noise, log-likelihood x 1/(beam area in pixels),
     independent of the box in which the model is computed."""

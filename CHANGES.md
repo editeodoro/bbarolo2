@@ -7,6 +7,9 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **The warning "dynesty prints values below -1e6 as -inf" appeared with every sampler** (and with METHOD GLOBAL)
+  when the log-likelihood at the centre of the priors is below -1e6. It is about dynesty's output only: it now
+  appears only with `SAMPLER DYNESTY`.
 - **The PV plots of a cube with blanks (NaN) had an empty grey scale**: its top was `np.percentile` of the data,
   NaN with any blank. The plot functions (and so the plot scripts) now use `np.nanpercentile`.
 - **METHOD GLOBAL with RADMAX free stopped with "array must not contain infs or NaNs"** (HD142527 with

@@ -664,7 +664,8 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         run_kwargs = {**dflt.get('RUNOPTS', {}), **run_kwargs}
         sampler_kwargs, run_kwargs = sampler_options(method, kwargs.get('dynamic', False), sampler_kwargs,
                                                       run_kwargs)
-        like_kwargs, threads, custom = self._start_fit(freepar, threads, log_like, like_kwargs, kwargs, 'sample')
+        like_kwargs, threads, custom = self._start_fit(freepar, threads, log_like, like_kwargs, kwargs, 'sample',
+                                                        sampler=method)
         verbose = kwargs.get('verbose', True)
         self._method = method
         self.optimum = None
@@ -771,11 +772,12 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             raise TypeError(f"Bayesian3DFIT.{caller}: {', '.join(moved)} are options of like_kwargs, e.g. "
                             "like_kwargs=dict(likemask='none', noisecorr='beam', bbres=True).")
 
-    def _start_fit(self, freepar, threads, log_like, like_kwargs, kwargs, caller):
+    def _start_fit(self, freepar, threads, log_like, like_kwargs, kwargs, caller, sampler=None):
         """ The start of a fit (run, optimize): the free parameters (freepar or FREE), the processes, the options of
         the likelihood (LIKEOPTS and like_kwargs), the setup, the log-likelihood (log_like or _log_likelihood) and,
-        if verbose, the description of the likelihood and the priors. Returns the options of each call of the
-        log-likelihood, the number of processes and whether the residuals are the user's. """
+        if verbose, the description of the likelihood and the priors (sampler: that of sample, None for optimize).
+        Returns the options of each call of the log-likelihood, the number of processes and whether the residuals
+        are the user's. """
         dflt = self._run_defaults()
         if freepar is None:
             freepar = dflt.get('FREE')
@@ -855,7 +857,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                            taper=f"RADMAX: the outer edge of the disk (Gaussian, width {self._radmax_width:.3g} "
                                  "arcsec; the rings do not move)")[self._radmax_mode])
             self.print_priors()
-        self._check_likelihood(like_kwargs, custom, verbose)
+        self._check_likelihood(like_kwargs, custom, verbose and sampler == 'dynesty')
 
         self._log_like_kind = ('geometry' if log_like == self._log_likelihood_geometry else
                                'cube' if log_like is None or log_like == self._log_likelihood else 'custom')
@@ -898,10 +900,10 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         vprint(verbose, banner())
         return self
 
-    def _check_likelihood(self, like_kwargs, custom, verbose=True):
+    def _check_likelihood(self, like_kwargs, custom, dynesty=False):
         """ Warnings before sampling, from the log-likelihood at the centre of the priors: a free
-        'sigma' that the user-defined residuals do not use, and (if verbose) log-likelihoods
-        below -1e6 (which dynesty prints as -inf, with nan errors). """
+        'sigma' that the user-defined residuals do not use, and (dynesty=True: sampling with dynesty, verbose)
+        log-likelihoods below -1e6 (which dynesty prints as -inf, with nan errors). """
         try:
             theta = np.asarray(self._prior_transform(np.full(self.ndim, 0.5)), float)
             logl = self._log_like_func(theta, **like_kwargs)
@@ -915,7 +917,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                     if self._log_like_func(t2, **like_kwargs) == logl:
                         print(f"WARNING: '{key}' is a free parameter, but the user-defined residuals do not depend "
                               f"on it.\n         _calculate_residuals(model, data, mask, **kwargs) receives {what}.\n")
-            if verbose and np.isfinite(logl) and logl < -1e6:
+            if dynesty and np.isfinite(logl) and logl < -1e6:
                 print(f"BBAROLO WARNING: the log-likelihood at the centre of the priors is {logl:.3g}. dynesty "
                       "prints\n                 values below -1e6 as -inf (and the error of logz as nan): they are "
                       "finite.\n                 Such values mean that the residuals are much larger than the "
