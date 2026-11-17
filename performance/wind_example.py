@@ -8,7 +8,7 @@ geometry, as a real one would, and samples the velocity of the wind, the inclina
 mean emissivity, clumpiness, ratio of the cones and radial slope of the prior of the emission (EMSCALE, EMCLUMP,
 EMRATIO, EMSLOPE) are fitted with them.
 
-    python3 examples/wind_example.py [outfolder] [threads]
+    python3 performance/wind_example.py [outfolder] [threads]
 """
 
 import os
@@ -16,7 +16,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
-sys.path.insert(0, os.path.join(HERE, "..", "performance"))
+sys.path.insert(0, HERE)                                # wind_mocks.py, next to this script
 
 from wind_mocks import mock_wind          # noqa: E402
 from bbarolo import BayesianWind          # noqa: E402

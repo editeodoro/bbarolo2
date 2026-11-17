@@ -1,0 +1,36 @@
+# Name of the fitsfile
+FITSFILE    U3_25160_Ha.fits
+
+# PSF (in arcs) and the LSF (in channels)
+BEAM        0.65
+SPECRES     0.90
+
+############## 3DFIT parameters ################
+3DFIT       true
+METHOD      BAYESIAN
+REDSHIFT    0.89615
+RESTWAVE    0.656461
+
+# Input rings
+NRADII      4	
+RADSEP      0.3
+VSYS        4
+XPOS        11.6
+YPOS        12.3
+VROT        130
+VDISP       20
+INC         50
+PA          305
+Z0          0.1
+
+# Mask and other options
+FREE        VROT VDISP INC_SINGLE PA_SINGLE XPOS_SINGLE YPOS_SINGLE VSYS_SINGLE FRACERR
+PRIORS      vdisp=(norm,loc=25,scale=10) vrot=(uniform,loc=0,scale=250)
+MASK        SEARCH
+GROWTHCUT   1.8
+FLAGERRORS	true
+ADRIFT      true
+
+# Uncomment to fit instead with the classic method
+#METHOD     CLASSIC
+#FREE        VROT VDISP

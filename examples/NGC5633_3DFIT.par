@@ -1,0 +1,44 @@
+# Name of the fitsfile
+FITSFILE    NGC5633_V500.fits
+
+# Cube has continuum, so we remove it
+CONTSUB     true
+EXCLWIND    37:68
+CONTORDER   1
+
+# PSF (in arcs) and the LSF (in channels)
+BEAM        1.7
+SPECRES     1.2
+VELDEF      OPTICAL
+
+############## 3DFIT parameters ################
+3DFIT       true
+# Lines to fit (rest wavelength and relative intensity)
+RESTWAVE    6564.61 6549.86 6585.27
+RELINT      1 0.15 0.46
+REDSHIFT    0.00757
+
+# Input rings
+NRADII      17
+RADSEP      1.7
+XPOS        35.0
+YPOS        32.6
+INC         50
+PA          199
+VROT        150
+VDISP       25
+VSYS        -33
+Z0          1
+
+# Defining a mask
+MASK        SEARCH
+THRESHOLD   0.2
+GROWTHTHRESHOLD 0.03
+THRESHVELOCITY  5
+
+# Other options
+FREE        VROT VDISP
+NORM        AZIM
+MINVDISP    15
+FLAGERRORS  true
+MAPTYPE     GAUSSIAN

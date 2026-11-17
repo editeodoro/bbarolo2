@@ -6,7 +6,7 @@ likelihood, the posteriors and the run times.
 
 Run from the BBarolo folder (the one with pyBBarolo/libBBarolo.* and examples/):
 
-    python pyBBarolo_pure/examples/compare_bayesian.py [--threads 2] [--nlive 500]
+    python bbarolo2/performance/compare_bayesian.py [--threads 2] [--nlive 500]
 
 Each version runs in its own process. The original module has the old interface
 (init/set_options/compute), the pure-Python one the interface of the bbarolo tasks.
@@ -33,7 +33,7 @@ import subprocess
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)                       # .../pyBBarolo_pure
+ROOT = os.path.dirname(HERE)                       # .../bbarolo2
 BBDIR = os.path.dirname(ROOT)                      # .../BBarolo
 
 WORKER = r'''

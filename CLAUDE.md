@@ -35,9 +35,11 @@ likelihood. Read the relevant section of it before changing behaviour.
   default sampler (`SAMPLER NAUTILUSBB`; `SAMPLER NAUTILUS` is the PyPI package). No scikit-learn: `mlp.py`
   (numba network) and `gmm.py` (Gaussian mixture) replace it. List every change in its `__init__.py`.
   Its upstream tests are in `tests/nautilusbb/` (~2 minutes).
-- `bin/BBarolo`, `run_bbarolo.py`: launchers that need no install. `examples/`: tutorial and
-  C++ comparison scripts. `performance/`: 3DFIT accuracy suite and Bayesian coverage, with the
-  report in `performance/report/`.
+- `bin/BBarolo`, `run_bbarolo.py`: launchers that need no install. `examples/`: the public example datasets
+  (FITS file + parameter file each, one page each in `docs/examples/`; figures and run times from
+  `docs/scripts/make_example_figures.py --run`) and the scripts `galmod3d.py`, `simulate_galaxies.py`.
+  `performance/`: 3DFIT accuracy suite and Bayesian coverage, with the report in `performance/report/`; the C++
+  comparisons (`compare_galmod.py`, `compare_bayesian.py`), `run_all_tests.sh` and the WINDFIT mock `wind_example.py`.
 - `tests/test_BBB/` is the user's own test folder, not part of the package: edit it only when
   asked (it is not tracked in git).
 
@@ -45,8 +47,8 @@ likelihood. Read the relevant section of it before changing behaviour.
 
 - The C++ original is github.com/editeodoro/Bbarolo (`src/` for C++, `pyBBarolo/` for the old
   wrapper). Treat it as read-only. On the development server a clone sits at `../reference/Bbarolo`.
-- Example cubes and parameter files live in `../examples` (not in this repo, and not in the public
-  Bbarolo repo either). Tests look there, or in `$BBAROLO_EXAMPLES`.
+- The test data (cubes and `test/*.par` of the C++ examples) live in `../examples` (not in this repo). Tests look
+  there, or in `$BBAROLO_EXAMPLES`. The public example datasets are in `examples/` of this repo.
 
 ## Running and testing
 
@@ -61,9 +63,9 @@ python3 performance/compare_examples.py HEAD -j 15   # all example outputs: work
   of the previous commit).
 - `performance/compare_examples.py` must report "identical" for changes meant to keep results;
   otherwise it shows what changed (FITS data difference, header keywords, text lines).
-- `bash examples/run_all_tests.sh` runs every example task; run it from the folder that contains
-  `examples/` (the parent of this repo).
-- Comparisons with C++ (`examples/compare_galmod.py`, `compare_bayesian.py`,
+- `bash performance/run_all_tests.sh` runs every example task of `../examples/test/`; run it from the folder that
+  contains `examples/` (the parent of this repo).
+- Comparisons with C++ (`performance/compare_galmod.py`, `compare_bayesian.py`,
   `performance/run_suite.py --cpp`) need a compiled C++ `BBarolo` and use `RINGMODE=SHIFTED`.
 
 ## Rules from the user
@@ -79,7 +81,7 @@ python3 performance/compare_examples.py HEAD -j 15   # all example outputs: work
 ## Conventions
 
 - The package and the pip distribution are both `bbarolo`; the old name `pyBBarolo` is gone (no
-  compatibility alias). Only `examples/compare_bayesian.py` imports `pyBBarolo`: the original
+  compatibility alias). Only `performance/compare_bayesian.py` imports `pyBBarolo`: the original
   C++-based module, for comparisons.
 - Plain Python, lines up to 120 characters, few type hints. Docstrings in plain English that
   state behaviour and units. British spelling in documentation and keywords (CENTRED, normalised).

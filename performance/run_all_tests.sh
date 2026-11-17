@@ -1,7 +1,7 @@
 #!/bin/bash
 # Pure-Python equivalent of examples/test/testall.sh.
 # Run it from the BBarolo main directory (the one containing examples/):
-#     cd /path/to/BBarolo && bash pyBBarolo_pure/examples/run_all_tests.sh
+#     cd /path/to/BBarolo && bash bbarolo2/performance/run_all_tests.sh
 # Outputs go to ./output_py/<test>/ and logs to ./output_py/<test>.log
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BB="$HERE/bin/BBarolo"

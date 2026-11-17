@@ -1,0 +1,32 @@
+# Name of the fitsfile & output directory
+FITSFILE         2masxj1022_SALT.fits
+OUTFOLDER        output/2masxj1022_slit
+
+############## SLITFIT parameters ################
+SLITFIT         true
+METHOD          GLOBAL
+
+# The slit and the resolution
+SLITWIDTH       1
+BEAM            1.5
+SPECRES         1.7
+
+# Lines to fit
+REDSHIFT        0.09108
+RESTWAVE        6564.61 6549.86 6585.27
+RELINT          1 0.17 0.45
+
+# Subtract continuum and sky residuals 
+CONTSUB         true
+SKYRESID        true
+
+# Input rings
+RADII           range(2.5,19,2)
+INC             71
+XPOS            110
+
+# Other options
+NORM            AZIM
+FREE            VROT VDISP VSYS
+PRIORS          vrot=(uniform,loc=100,scale=350) vdisp=(uniform,loc=10,scale=150) vsys=(uniform,loc=-10,scale=20)
+LIKEOPTS        smooth=(vrot=50,vdisp=1)

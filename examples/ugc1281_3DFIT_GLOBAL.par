@@ -1,0 +1,22 @@
+# Name of the fitsfile and output folder
+FITSFILE        ugc1281.fits
+
+# LSF (in channels)
+SPECRES         0.425
+
+############### 3DFIT parameters ################
+3DFIT           true
+METHOD          GLOBAL
+
+# Input rings (leaving the code estimating most of them)
+NRADII          8
+RADSEP          30
+INC             85
+
+# Other options
+FREE            vrot vdisp inc_single phi_single z0_single xpos_single ypos_single vsys_single radmax fracerr
+MASK            SEARCH
+FLAGERRORS	true
+
+# Since it is a edge-on, adding some smoothness to vrot and vdisp
+LIKEOPTS        smooth=(vrot=2.3,vdisp=1)

@@ -56,11 +56,13 @@ first fit, every task with its parameters and how it works, examples, and the di
 ## Example
 
 These examples use the HI datacube of NGC 2403 of the documentation
-([ngc2403.fits](https://github.com/editeodoro/Bbarolo/raw/docs/docs/source/tasks/examples/ngc2403.fits), 5 MB).
-From the command line, with a parameter file as for the C++ BBarolo:
+([examples/ngc2403.fits](examples/ngc2403.fits), 5 MB). The folder [examples/](examples) has other datasets, each
+with a parameter file, described on the [example pages](https://bbarolo.readthedocs.io/en/latest/examples/index.html)
+of the documentation. From the command line, with a parameter file as for the C++ BBarolo:
 
 ```shell
-BBarolo -p param.par
+cd examples
+BBarolo -p ngc2403_3DFIT.par
 ```
 
 In Python, a 3D fit of the rotation curve and the velocity dispersion:

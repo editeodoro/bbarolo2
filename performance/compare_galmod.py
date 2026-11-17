@@ -19,9 +19,9 @@ density profile, radial motions) the script:
 The Python models use the rings of the C++ code (RINGMODE=SHIFTED; see --ringmode).
 It prints a table, saves results.csv and a summary figure in the output folder.
 
-Usage (from anywhere; paths default to the BBarolo folder that contains pyBBarolo_pure):
+Usage (from anywhere; paths default to the BBarolo folder that contains bbarolo2):
 
-    python pyBBarolo_pure/examples/compare_galmod.py -n 10
+    python bbarolo2/performance/compare_galmod.py -n 10
     python compare_galmod.py -n 20 --threads 4 --cpp /path/to/BBarolo \\
                              --template /path/to/cube.fits --outdir galmod_test
     python compare_galmod.py -n 5 --template synthetic      # a synthetic empty cube
@@ -39,7 +39,7 @@ import subprocess
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)                     # .../pyBBarolo_pure
+ROOT = os.path.dirname(HERE)                     # .../bbarolo2
 BBDIR = os.path.dirname(ROOT)                    # .../BBarolo
 sys.path.insert(0, ROOT)                         # always use the pure-Python bbarolo
 

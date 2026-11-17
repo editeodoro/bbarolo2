@@ -1,0 +1,22 @@
+# Name of the fitsfile
+FITSFILE    ngc2403.fits
+
+############## 3DFIT parameters ################
+3DFIT       true
+
+# Input rings
+NRADII      42
+RADSEP      30
+VSYS        132.8
+XPOS        77
+YPOS        77
+VROT        100
+VRAD        0
+VDISP       8
+INC         60
+PA          123.7
+Z0          10
+
+# Other options
+FREE        VROT VDISP PA INC
+FLAGERRORS  true
