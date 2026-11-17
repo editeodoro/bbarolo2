@@ -484,6 +484,15 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   {...}` replaces them all; the entries can be changed until `run()`, and are checked when set. Only the engines had
   `priors` (an AttributeError on the tasks); theirs stays a plain dict of all their priors, the defaults included.
 
+- **WINDFIT `LIKEOPTS emission=moka`: the statistic of MoKA-3D** (Marconcini et al. 2023), as a baseline for
+  comparisons: κ, the squared flux (in units of the noise) of the data above `snrcut` that the clouds of the cone,
+  spread uniformly in radius, polar angle and azimuth (`ncloud`, default 1e7), do not reach, over the channels
+  between the 1st and 99th percentile velocities of the integrated data; the models whose integrated spectrum
+  (a uniform emissivity times exp(−r/`rscale`), default 2 arcsec) has those velocities more than `vtol` (default
+  5%) away from the observed ones are rejected (ranked below every accepted model, with a slope back for the
+  minimisers). log L = −κ/2 times the correlation factor of the noise; no hyperparameters of the emission, no
+  SIGMA, no DISKRINGS. The other bases are unchanged.
+
 - **The PV plot along the major axis (`_pv_<norm>.pdf`) draws the rings beyond the outer edge of their half of the
   disk as empty points**: beyond RADMAXA on the approaching side (negative offsets) and RADMAXR on the receding one,
   the values given or fitted by METHOD GLOBAL and BAYESIAN, and beyond RADMAX when it is the edge of the disk

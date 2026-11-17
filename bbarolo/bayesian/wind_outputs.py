@@ -101,7 +101,7 @@ def write_outputs(f, outfolder=None, plots=None, verbose=True):
                 out.write(row + "\n")
     files.append(fn)
     # the cells
-    if f.like_kwargs["emission"] not in ("spaxel", "voxel"):
+    if f.like_kwargs["emission"] not in ("spaxel", "voxel", "moka"):
         cells = f._wm.cells
         fn = pre + "_wind_cells.txt"
         vol = f.best_details["pts"]["vol"]

@@ -20,7 +20,8 @@ sight, but only once the geometry and the kinematics are known, and those are wh
   opening angle from the data. The current code (github.com/cosimomarconcini/moka_3d) fits only the 1st and 99th
   percentile velocities of the unweighted model in shells on the sky (or a CRPS of 19 percentiles), and weights
   the clouds by the observed flux only after the fit. WINDFIT's `emission=voxel` keeps the weighting with a
-  likelihood of the detections instead (see below).
+  likelihood of the detections instead, and `emission=moka` computes the statistic of the paper, as a
+  baseline (see below).
 
 ## The emission as linear amplitudes
 
@@ -98,6 +99,43 @@ the flux of the cone) expects detections in the faint wings of the cone: in prof
 mock it peaked at VDISP 0 and at cones 10° too narrow at 3σ (5° at 2σ, 15° at 4σ). The log-normal flux above the
 threshold peaked at the true opening angle, VWIND, VDISP and INC of the clumpy mocks (EMCLUMP near 0) and of the
 log-normal field (EMCLUMP about 0.7).
+
+## The statistic of MoKA-3D (`emission=moka`)
+
+`emission=moka` computes the κ of Marconcini et al. (2023, sections 2.3–2.6) on the model of WINDFIT, for comparisons
+with MoKA-3D. It is not a likelihood of the data: use it as a baseline, not for errors.
+
+- The clouds are spread uniformly in radius, polar angle and azimuth over the cone, as in MoKA-3D (so they crowd
+  towards the apex and the axis). The quadrature points of the cone are such a grid, so each point stands for
+  `ncloud`/N clouds (N points, `ncloud` default 1e7) and the expected number of clouds of a voxel is λ = `ncloud`·m/N,
+  with m the deposit of the points, each of weight 1, convolved with the beam and the line (`SPECRES`, `VDISP`).
+- The data S are the cube above `snrcut` (default 3) times the noise, 0 elsewhere, as the S/N > 3 cubes of MoKA-3D.
+  The weighted model, the data wherever a cloud falls, is on average S(1 − e^−λ), so
+  κ = Σ (S e^−λ/σ)², over the voxels of the region in the channels between the 1st and 99th percentile velocities
+  (v1, v99) of the integrated data.
+- The integrated spectrum of the unweighted model, clouds of flux r² sin θ e^(−r/`rscale`) (a uniform emissivity times
+  e^(−r/`rscale`), `rscale` default 2 arcsec as the code of MoKA-3D) summed over the voxels of the region, must have
+  its v1 and v99 within `vtol` (default 5%) of the observed ones. A model outside is rejected: instead of being
+  discarded it gets κ + κmax (1 + Σ e²), with κmax the κ of a model that reaches no voxel and e the excess of each
+  percentile in units of the tolerance, so that it ranks below every accepted model and the minimisers of METHOD
+  GLOBAL, starting outside, find their way in.
+- The log-likelihood is −κ/2 times the correlation factor of the noise. There are no hyperparameters of the emission,
+  `SIGMA` is not a parameter and `DISKRINGS` is not available.
+
+The differences from MoKA-3D: the expected numbers of clouds instead of random clouds (smooth in the parameters); the
+beam and the line spread of the cube in the model instead of data deconvolved by the line spread function; the voxels
+above the threshold instead of Gaussian fits of the line; and |v − v_obs| ≤ `vtol`·|v_obs| for the cut. With a
+constant VWIND the velocities do not depend on the radius, so `rscale` matters only where the cone leaves the region.
+
+What κ does not see decides the fit. A voxel where the model has clouds and the data have no emission costs nothing,
+so wider cones always fit at least as well: fix `OPENANG` (MoKA-3D fixes the opening angle and the position angle from
+the moment maps), and blank everything that is not the wind, which κ would make the cone reach. The cut on the
+percentiles then sets the velocity: the threshold removes the faint wings of the data but not of the model, and a
+patchy cone has a narrower integrated spectrum than the uniform model, so the cut prefers slower winds. On mocks of
+40 clumps the true wind was outside the 5% band even without noise (v1, v99 −194, +176 km/s against −210, +185 for
+the uniform cone of the truth). On data made of the uniform cone itself (S/N 1000) the true wind passes the cut with
+κ below 10⁻⁶ κmax, faster and slower winds are rejected, and L-BFGS-B started from a rejected wind 50% too fast comes
+back to within 2% of the truth.
 
 ## The region, the noise and the sampling
 

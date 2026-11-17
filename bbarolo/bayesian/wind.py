@@ -40,11 +40,25 @@ Options of the likelihood (LIKEOPTS, run(like_kwargs=...)):
              the data in the voxels the cone reaches, and the cone is fitted by the likelihood of the detections, the
              voxels above snrcut times the noise: each is detected with the probability of a log-normal flux of mean
              the uniform cone (EMSCALE, EMSLOPE, EMRATIO) and fractional scatter EMCLUMP plus the noise; a cone that
-             predicts emission where the data have none is penalised. No DISKRINGS, SIGMA not free)
+             predicts emission where the data have none is penalised. No DISKRINGS, SIGMA not free), 'moka' (the
+             statistic of MoKA-3D, Marconcini et al. 2023: the data above snrcut times the noise are copied into
+             the voxels that ncloud clouds, spread uniformly in radius, polar angle and azimuth over the cone, reach;
+             kappa sums the squared flux, in units of the noise, of the voxels they miss, over the channels between
+             the 1st and 99th percentile velocities of the integrated data; a model whose integrated spectrum, of
+             clouds of uniform emissivity times exp(-r/rscale), has those velocities more than vtol away from the
+             observed ones is rejected. log L = -kappa/2 times the correlation factor of the noise; a rejected model
+             ranks below every accepted one, with a slope back to them for the minimisers. Not a likelihood: a
+             baseline for comparisons with MoKA-3D. No hyperparameters, no DISKRINGS, SIGMA not free)
   cellsize   the size of the cells (arcsec, default the beam FWHM)
   marginal   true (default): the likelihood marginalised over the emission; false: its maximum (profile); not
-             used by 'voxel'
-  snrcut     emission 'voxel': the threshold of a detection, in units of the noise (default 3, as MoKA-3D)
+             used by 'voxel' and 'moka'
+  snrcut     emission 'voxel': the threshold of a detection, in units of the noise (default 3, as MoKA-3D);
+             emission 'moka': the data below it are set to 0 (the S/N > 3 cubes of MoKA-3D)
+  ncloud     emission 'moka': the number of clouds in the cone (default 1e7, as MoKA-3D)
+  rscale     emission 'moka': the scale radius of the exponential emissivity of the unweighted model (arcsec,
+             default 2, as the code of MoKA-3D)
+  vtol       emission 'moka': the largest fractional difference of the 1st and 99th percentile velocities of the
+             integrated spectra, model and data (default 0.05, as MoKA-3D)
   prior      the prior of the emissivities: 'gauss' (default: Gaussian, exact marginal likelihood) or 'exp'
              (exponential, non-negative emissivities: an approximate marginal likelihood, see emission.py)
   noisecorr  the correlation of the noise, as 3DFIT with METHOD GLOBAL or BAYESIAN: 'measured' (default), 'beam' or a number of voxels
@@ -89,7 +103,8 @@ WIND_SCALAR_PARS = ("xpos", "ypos", "vsys", "inc", "pa", "openang", "openin", "c
 WIND_OTHER_PARS = ("sigma", "emscale", "emclump", "emratio", "emslope")
 WIND_FUNC_PARS = WIND_SHELL_PARS
 _WIND_ALIASES = {"phi": "pa", "disp": "vdisp"}
-EMISSION_BASES = ("cells", "shells", "cone", "spaxel", "voxel")
+EMISSION_BASES = ("cells", "shells", "cone", "spaxel", "voxel", "moka")
+NO_AMPLITUDES = ("spaxel", "voxel", "moka")              # (the bases without emissivities of the cells)
 
 # the default functions of radius (arcsec) of VWIND_FUNC, VDISP_FUNC and VROT_FUNC (BayesianWind.funcs)
 DEFAULT_WIND_FUNCS = dict(vwind=lambda R, p1, p2: 2. / np.pi * p1 * np.arctan(R / p2),   # accelerating to p1
@@ -98,11 +113,20 @@ DEFAULT_WIND_FUNCS = dict(vwind=lambda R, p1, p2: 2. / np.pi * p1 * np.arctan(R 
 
 WIND_LIKE_OPTIONS = dict(emission="cells", cellsize=None, marginal=True, prior="gauss", noisecorr="measured",
                          sigma=None, datafrac=0., grow=1., emscale=None, emclump=None, emratio=None, emslope=None,
-                         prune=1e-3, cones="both", snrcut=3.)
+                         prune=1e-3, cones="both", snrcut=3., ncloud=1e7, rscale=2., vtol=0.05)
 # the cones of the model (option cones): +1 the cone along +z, receding for INC < 90; -1 the other, approaching
 CONES = {"both": (1, -1), "receding": (1,), "approaching": (-1,)}
 # the hyperparameters of the prior of the emission, free unless fixed (LIKEOPTS emscale, emclump, emratio, emslope)
 HYPER = dict(gauss=("emscale", "emclump", "emratio", "emslope"), exp=("emscale", "emratio", "emslope"))
+
+
+def _percentile_velocities(spec, vchan, q=(0.01, 0.99)):
+    """The velocities (km/s) at the fractions q of the cumulative flux of the spectrum spec (negative values as 0),
+    interpolated linearly between the channel velocities vchan (as MoKA-3D)."""
+    s = np.clip(np.asarray(spec, dtype=np.float64), 0., None)
+    order = np.argsort(vchan)
+    c = np.maximum.accumulate(np.cumsum(s[order]) / s.sum())
+    return np.interp(q, c, np.asarray(vchan, dtype=np.float64)[order])
 
 
 def wind_like_option(name, value):
@@ -152,7 +176,7 @@ def wind_like_option(name, value):
         x = float(value)
     except (TypeError, ValueError):
         raise ValueError(f"{key}: expected a number, not {value!r}") from None
-    pos = ("cellsize", "sigma", "noisecorr", "emscale", "emclump", "emratio", "snrcut")
+    pos = ("cellsize", "sigma", "noisecorr", "emscale", "emclump", "emratio", "snrcut", "ncloud", "rscale", "vtol")
     if not np.isfinite(x) or x < 0 or (x == 0 and key in pos):
         raise ValueError(f"{key}: expected a number {'>' if key in pos else '>='} 0, not {value!r}")
     return key, x
@@ -589,6 +613,24 @@ class BayesianWind(_FitTask):
         if lk["emission"] == "voxel":
             # (the detections of the detection likelihood: the voxels of the region above snrcut times the noise)
             self._det = (self._dsafe > float(lk.get("snrcut") or 3.) * self._wsigma)[self._ok]
+        if lk["emission"] == "moka":
+            self._setup_moka()
+
+    def _setup_moka(self):
+        """emission 'moka': the data of kappa (the voxels of the region above snrcut times the noise, 0 elsewhere),
+        the velocities of the channels (km/s, in the frame of VSYS), the 1st and 99th percentile velocities of the
+        integrated data, the channels of kappa between them and the largest kappa (no voxel reached)."""
+        lk = self.like_kwargs
+        S = np.where(self._ok & (self._dsafe > float(lk.get("snrcut") or 3.) * self._wsigma), self._dsafe, 0.)
+        if not np.any(S > 0):
+            raise BBaroloError(f"WINDFIT: emission=moka: no voxel of the region above snrcut = "
+                               f"{float(lk.get('snrcut') or 3.):g} times the noise ({self._wsigma:.4g})")
+        e = self._wm.setup._vedges_lines[0] / 1000.
+        self._vchan = 0.5 * (e[1:] + e[:-1])
+        self._mk_v = _percentile_velocities(S.sum(axis=(1, 2)), self._vchan)
+        self._mk_ch = (self._vchan >= min(self._mk_v)) & (self._vchan <= max(self._mk_v))
+        self._mk_S = S
+        self._mk_kmax = float(np.sum((S[self._mk_ch] / self._wsigma) ** 2))
 
     def _sigma_fixed(self):
         s = self.like_kwargs.get("sigma")
@@ -612,8 +654,9 @@ class BayesianWind(_FitTask):
         fn = str(getattr(self._par.gw, "DISKRINGS", "") or "").strip()
         if not fn:
             return
-        if self.like_kwargs["emission"] == "voxel":
-            raise BBaroloError("WINDFIT: DISKRINGS (a fixed disk) is not available with LIKEOPTS emission=voxel")
+        if self.like_kwargs["emission"] in ("voxel", "moka"):
+            raise BBaroloError(f"WINDFIT: DISKRINGS (a fixed disk) is not available with LIKEOPTS "
+                               f"emission={self.like_kwargs['emission']}")
         from ..rings import ring_file_columns, Rings
         from ..galmod import DiskModel
         cols, _ = ring_file_columns(fn)
@@ -724,6 +767,8 @@ class BayesianWind(_FitTask):
         basis = self.like_kwargs["emission"]
         if basis == "voxel":
             out = self._loglike_detection(p, hyp)
+        elif basis == "moka":
+            out = self._loglike_moka(p, hyp)
         elif basis == "spaxel":
             out = self._loglike_smooth(p, hyp)
         else:
@@ -737,7 +782,7 @@ class BayesianWind(_FitTask):
             else:
                 logl, x = log_profile(G, b, self._c0)
             out = (logl, dict(x=x, p=p, B=B, pts=pts, G=G, b=b, mu=mu, hyp=hyp))
-        logl = out[0] + (self._lognorm if basis != "voxel" else 0.)      # (voxel: a likelihood of the detections)
+        logl = out[0] + (self._lognorm if basis not in ("voxel", "moka") else 0.)  # (not of the flux of the voxels)
         return (logl, out[1]) if details else logl
 
     def _slope(self, hyp):
@@ -814,6 +859,43 @@ class BayesianWind(_FitTask):
             s = math.exp(res.x if res.fun < vals[i] else grid[i])
         thr = 1e-3 * float(np.max(M)) if np.max(M) > 0 else 0.
         return loglike(s), dict(x=None, p=p, covered=M > thr, emscale=s, hyp=hyp)
+
+    def _loglike_moka(self, p, hyp):
+        """'moka' (the statistic of MoKA-3D, Marconcini et al. 2023, sect. 2.3-2.6): -kappa/2 times the correlation
+        factor of the noise. The quadrature points of the cone, uniform in r, theta and phi, are the clouds: the
+        expected number of clouds of a voxel (beam and line included) is lambda = ncloud m / npoints, with m the
+        deposit of the points, each of weight 1; the weighted model is the data where a cloud is, on average
+        S (1 - exp(-lambda)), so kappa = sum over the channels between the observed v1 and v99 of
+        (S exp(-lambda) / sigma)^2. The integrated spectrum of the unweighted model (clouds of flux r^2 sin(theta)
+        exp(-r/rscale): a uniform emissivity times exp(-r/rscale)) over the voxels of the region must have its 1st and
+        99th percentile velocities within vtol |v| of the observed ones; otherwise kappa is increased by kappa_max
+        (1 + the squared excesses in units of the tolerance), kappa_max that of a model reaching no voxel: the model
+        ranks below every accepted one, and the minimisers find their way back."""
+        lk = self.like_kwargs
+        wm = self._wm
+        pts = wm.points(p)
+        w = pts["w"]
+        npt = int(np.count_nonzero(w > 0))
+        if npt == 0:
+            return -np.inf, dict(x=None, p=p, hyp=hyp)
+        shape = self.data.shape
+        Bc = wm.boxes(p, lim=self._lim, pts=pts, weight=np.where(w > 0, 1. / np.maximum(w, 1e-300), 0.))
+        lam = Bc.model(np.ones(Bc.n), shape) * (float(lk.get("ncloud") or 1e7) / npt)
+        miss = self._mk_S[self._mk_ch] * np.exp(-lam[self._mk_ch])
+        kappa = float(np.sum((miss / self._wsigma) ** 2))
+        Bf = wm.boxes(p, lim=self._lim, pts=pts, weight=np.exp(-pts["r"] / float(lk.get("rscale") or 2.)))
+        spec = np.where(self._ok, Bf.model(np.ones(Bf.n), shape), 0.).sum(axis=(1, 2))
+        tol = float(lk.get("vtol") or 0.05)
+        vobs = np.asarray(self._mk_v)
+        if spec.sum() > 0:
+            vmod = _percentile_velocities(spec, self._vchan)
+            excess = np.maximum(np.abs(vmod - vobs) / np.maximum(tol * np.abs(vobs), 1.) - 1., 0.)
+        else:
+            vmod, excess = np.full(2, np.nan), np.full(2, 1e3)
+        accepted = not np.any(excess > 0)
+        keff = kappa if accepted else kappa + self._mk_kmax * (1. + float(np.sum(excess ** 2)))
+        return -0.5 * self.likefactor * keff, dict(x=None, p=p, hyp=hyp, lam=lam, kappa=kappa, accepted=accepted,
+                                                   v1v99=vmod)
 
     def _loglike_smooth(self, p, hyp):
         """'spaxel': a uniform cone normalised in each spaxel, marginalised."""
@@ -1007,6 +1089,12 @@ class BayesianWind(_FitTask):
         if voxel and "sigma" in names:
             raise ValueError("WINDFIT: SIGMA is not a parameter with LIKEOPTS emission=voxel (the detections use "
                              "the noise measured or given in LIKEOPTS sigma=)")
+        if lk["emission"] == "moka":
+            bad = [n.upper() for n in names if n in WIND_OTHER_PARS]
+            if bad:
+                raise ValueError(f"WINDFIT: {', '.join(bad)} not a parameter with LIKEOPTS emission=moka (kappa has "
+                                 "no prior of the emission and uses the noise measured or given in LIKEOPTS sigma=)")
+            return names
         if not voxel and not lk.get("marginal", True):
             return names
         added = []
@@ -1051,6 +1139,8 @@ class BayesianWind(_FitTask):
         basis = self.like_kwargs["emission"]
         if basis == "voxel":
             return np.where(det["covered"], self._dsafe, 0.)
+        if basis == "moka":                 # (the weighted model of MoKA-3D: the data where the clouds are)
+            return self._dsafe * (1. - np.exp(-det["lam"])) if "lam" in det else np.zeros(shape)
         if basis == "spaxel":
             ny, nx = shape[1:]
             return det["smooth"] * det["x"].reshape(ny, nx)[None]
@@ -1091,9 +1181,12 @@ class BayesianWind(_FitTask):
         st.write("\n")
 
     def _likelihood_name(self):
-        """The likelihood of the fit, for the outputs: 'detection' (emission voxel), 'marginal' or 'profile'."""
+        """The likelihood of the fit, for the outputs: 'detection' (emission voxel), 'kappa' (emission moka),
+        'marginal' or 'profile'."""
         if self.like_kwargs["emission"] == "voxel":
             return "detection"
+        if self.like_kwargs["emission"] == "moka":
+            return "kappa"
         return "marginal" if self.like_kwargs.get("marginal", True) else "profile"
 
     def corner_plot(self, labels=None, truths=None, quantiles=SIGMA_QUANTILES, **kwargs):
@@ -1110,7 +1203,7 @@ class BayesianWind(_FitTask):
         a dict with radii (bin centres), and for each cone (1: +z, receding; -1: approaching) the flux (emissivity
         times volume: the units of the cube times pixels and channels) best, low and high (None for METHOD GLOBAL
         without errors, FLAGERRORS false)."""
-        if self.like_kwargs["emission"] in ("spaxel", "voxel"):
+        if self.like_kwargs["emission"] in NO_AMPLITUDES:
             return None
         if not has_errors(self):
             best = self._shell_flux(self.best_details)

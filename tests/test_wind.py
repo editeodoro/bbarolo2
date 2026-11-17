@@ -590,6 +590,56 @@ def test_bayesian_wind_voxel(tmp_path):
         assert "emission voxel, detection likelihood" in fh.readline()
 
 
+def test_bayesian_wind_moka(tmp_path):
+    """LIKEOPTS emission=moka (the statistic of MoKA-3D): the options are parsed and checked, no hyperparameter of the
+    emission is added and SIGMA, EMSCALE and DISKRINGS are errors. On data made of the uniform cone itself (S/N 1000)
+    the true wind passes the cut on the 1st and 99th percentile velocities and leaves little flux uncovered, a faster
+    and a slower wind are rejected and rank below every accepted model, the minimiser comes back from a rejected start
+    to the true velocity, the model is the data where the clouds are, and the outputs are written."""
+    from bbarolo import BayesianWind
+    from bbarolo.bayesian.wind import wind_likeopts
+    assert wind_likeopts("emission=moka ncloud=1e6 rscale=5 vtol=0.1 snrcut=2") == \
+        dict(emission="moka", ncloud=1e6, rscale=5., vtol=0.1, snrcut=2.)
+    for bad in ("ncloud=0", "vtol=-0.1", "rscale=0"):
+        with pytest.raises(ValueError):
+            wind_likeopts(bad)
+    c, hdu = _cube(nx=32, nz=30, pix=10., chan=15., beam=30.)
+    p = WindPars(radii=[70., 140.], vwind=200., vdisp=20., **GEO)
+    m = WindModel(c, WindCells([0., 140.], 1, 1, thmax=30.)).quadrature(vmax=200., sigmin=20.).cube(p)
+    hdu.data = (m / m.max() * 1000. + np.random.default_rng(1).normal(0., 1., m.shape)).astype(np.float32)
+    kw = dict(GEO, openang=55., vwind=180., vdisp=20., nlayers=2, outfolder=str(tmp_path) + "/")
+    f = BayesianWind(hdu, **kw)
+    f.like_kwargs = dict(f.like_kwargs, emission="moka")
+    for bad in (["openang", "sigma"], ["openang", "emscale"]):
+        with pytest.raises(ValueError):
+            f._with_hyper(bad, verbose=False)
+    assert f._with_hyper(["vwind_single", "openang"], verbose=False) == ["vwind_single", "openang"]
+    g = BayesianWind(hdu, diskrings=str(tmp_path / "rings.txt"), **kw)
+    g.like_kwargs = dict(g.like_kwargs, emission="moka")
+    with pytest.raises(BBaroloError):
+        g._setup(["vwind_single", "openang"], verbose=False)
+    f._setup(["vwind_single", "openang"], verbose=False)
+    res = {}
+    for vw, oa in ((200., 60.), (200., 50.), (200., 70.), (300., 60.), (140., 60.)):
+        res[vw, oa] = f.log_likelihood([vw, oa], details=True)
+    logl, det = res[200., 60.]
+    assert det["accepted"] and det["kappa"] < 1e-5 * f._mk_kmax
+    assert np.all(np.abs(det["v1v99"] - f._mk_v) <= 0.05 * np.abs(f._mk_v))
+    assert logl == pytest.approx(-0.5 * f.likefactor * det["kappa"])
+    assert res[200., 50.][1]["kappa"] > det["kappa"]                 # (a narrower cone misses flux)
+    accepted = [v[0] for v in res.values() if v[1]["accepted"]]
+    for key in ((300., 60.), (140., 60.)):
+        assert not res[key][1]["accepted"] and res[key][0] < min(accepted) and np.isfinite(res[key][0]), key
+    f.optimize(["vwind_single", "openang"], x0=[300., 60.], threads=1, like_kwargs=dict(emission="moka"), verbose=False)
+    assert f.best_details["accepted"] and abs(f.params[0] - 200.) < 15.
+    assert f.model.shape == hdu.data.shape
+    assert np.allclose(f.model, f._dsafe * (1. - np.exp(-f.best_details["lam"])))
+    f.write(plots=0, verbose=False)
+    pre = f._cube_obj.pars().outPrefix
+    with open(str(tmp_path) + "/" + pre + "_wind_params.txt") as fh:
+        assert "emission moka, kappa likelihood" in fh.readline()
+
+
 def test_wind_single_cell_sampled_at_the_beam():
     """A cell that spans a whole cone (the bases cone, spaxel and voxel, a shell of the basis shells, GALWIND WTYPE 2)
     gets the quadrature points the beam needs, not at most 16 per dimension: a uniform cone many beams long is the

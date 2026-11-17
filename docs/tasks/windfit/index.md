@@ -105,10 +105,11 @@ initial value, ...); `PRIORS` changes them, e.g. `PRIORS OPENANG=(uniform,20,100
 
 | option | meaning |
 |---|---|
-| `emission` | the description of the emission: `cells` (default), `shells` (one emissivity per shell and cone), `cone` (one per cone, a power law in radius), `spaxel` (a uniform cone normalised in each spaxel, as NORM LOCAL), `voxel` (MoKA-3D: the flux of the model is the data wherever the cone reaches, and the cone is fitted by the likelihood of the detections, the voxels above `snrcut` times the noise; see {doc}`algorithm`) |
+| `emission` | the description of the emission: `cells` (default), `shells` (one emissivity per shell and cone), `cone` (one per cone, a power law in radius), `spaxel` (a uniform cone normalised in each spaxel, as NORM LOCAL), `voxel` (MoKA-3D: the flux of the model is the data wherever the cone reaches, and the cone is fitted by the likelihood of the detections, the voxels above `snrcut` times the noise; see {doc}`algorithm`), `moka` (the statistic of MoKA-3D, as a baseline: κ, the flux of the data the clouds of the cone do not reach, with the models whose 1st or 99th percentile velocity is more than `vtol` away from the data's rejected; see {doc}`algorithm`) |
 | `cellsize` | the size of the cells (arcsec; default the beam FWHM) |
-| `snrcut` | `emission=voxel`: the threshold of a detection, in units of the noise (default 3, as MoKA-3D) |
-| `marginal` | `true` (default): the likelihood marginalised over the emission; `false`: its maximum (the profile likelihood); not used by `voxel` |
+| `snrcut` | `emission=voxel`: the threshold of a detection, in units of the noise (default 3, as MoKA-3D); `emission=moka`: the data below it are set to 0 (default 3) |
+| `ncloud`, `rscale`, `vtol` | `emission=moka`: the number of clouds in the cone (default 1e7), the scale radius of the exponential emissivity of the unweighted model (arcsec, default 2) and the largest fractional difference of the 1st and 99th percentile velocities of model and data (default 0.05), as MoKA-3D |
+| `marginal` | `true` (default): the likelihood marginalised over the emission; `false`: its maximum (the profile likelihood); not used by `voxel` and `moka` |
 | `prior` | `gauss` (default: Gaussian emissivities, exact marginal likelihood) or `exp` (non-negative exponential emissivities, approximate) |
 | `emscale`, `emclump`, `emratio`, `emslope` | fixed values of EMSCALE, EMCLUMP, EMRATIO and EMSLOPE (default: fitted) |
 | `cones` | `both` (default), `approaching` or `receding`: only one cone in the model, for a wind whose other side is not seen (half the cells, no EMRATIO). With both cones, an empty one is found by EMRATIO |
@@ -128,7 +129,7 @@ In the output folder, with the prefix of the cube:
 
 - `_wind_params.txt`: the free parameters, the median and the 1σ interval of their posterior, and the priors;
 - `_wind_shells.txt`: the shells of the best fit with their errors, and the flux of each cone in radial bins;
-- `_wind_cells.txt`: the cells of the emission and their emissivities at the best fit;
+- `_wind_cells.txt`: the cells of the emission and their emissivities at the best fit (not with `emission` `spaxel`, `voxel` or `moka`);
 - `_mod_wind.fits`: the best model (as the `_mod_<norm>.fits` of 3DFIT), and `_mask.fits`;
 - `maps/`: the total intensity, velocity and dispersion maps of the data, in the mask, and of the model
   (`_0mom.fits`, ..., `_mod_0mom_wind.fits`, ...), as 3DFIT;
