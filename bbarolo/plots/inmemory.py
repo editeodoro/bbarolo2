@@ -8,7 +8,7 @@ methods of Bayesian3DFIT.
 import numpy as np
 
 from . import fit3d
-from .scripts import plot_settings
+from .scripts import plot_settings, side_edges
 
 # The columns of a ring table (galfit.ring_table) for the keys of fit3d.read_rings
 _TABLE_COLUMNS = dict(rad="radii", disp="vdisp")
@@ -173,8 +173,10 @@ class Fit3DPlots:
 
     def pvs(self, model=None):
         data, _, _ = self._maps(with_model=False)
+        edges = self.settings["edges"] if self.bayes is None else side_edges(self.gf, self.bayes.disk_edge)
         return fit3d.plot_pvs(self.cube(), self.model(model), self.final_rings(), data[0], data[1], self.mask(),
-                              vrange=self.settings["vrange"], **self.cube_kwargs())
+                              vrange=self.settings["vrange"], radmaxa=edges[0], radmaxr=edges[1],
+                              **self.cube_kwargs())
 
     def pvslices(self, model=None):
         data, _, _ = self._maps(with_model=False)

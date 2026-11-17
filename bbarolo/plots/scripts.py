@@ -86,16 +86,18 @@ def _lround(x):
 
 
 def plot_settings(gf):
-    """The settings of the plots of the fit gf (a Galfit after the fit, also that of METHOD GLOBAL or BAYESIAN), as a dict:
-    gname, outfolder, outprefix, twostage, plotmask; box: (xmin, xmax, ymin, ymax, zmin, zmax) the region of the
-    cube shown (pixels and channels, inclusive: around the largest source of the SEARCH mask, the mask of
+    """The settings of the plots of the fit gf (a Galfit after the fit, also that of METHOD GLOBAL or BAYESIAN), as a
+    dict: gname, outfolder, outprefix, twostage, plotmask; box: (xmin, xmax, ymin, ymax, zmin, zmax) the region of
+    the cube shown (pixels and channels, inclusive: around the largest source of the SEARCH mask, the mask of
     SMOOTH&SEARCH, or the rings and their velocities); cont: the lowest contour; pixscale (arcsec), cdelt3,
     crval3 (km/s, channel width and velocity of channel 0), beam (pixels, pixels, degrees), vrange (km/s, the
     velocities of the outer edges of the channels of the box); bunit (of the maps) and head_bunit (of the cube),
     mapnames; errcols1, errcols2: the columns of the errors in the ring files of the two stages; dens: the
-    density panel ('plain', 'deconvolved' (3DFIT) or 'model' (3DFIT, METHOD GLOBAL or BAYESIAN)) and model_dens (the profile of the
-    model, METHOD GLOBAL and BAYESIAN); radmax: the edge of the disk (3DFIT, METHOD GLOBAL or BAYESIAN) or None; cubefile, cubehdu: the cube read
-    by the scripts; and disp, pa_av, pa_min, reverse, arcconv (for plot_pvs_old.py)."""
+    density panel ('plain', 'deconvolved' (3DFIT) or 'model' (3DFIT, METHOD GLOBAL or BAYESIAN)) and model_dens
+    (the profile of the model, METHOD GLOBAL and BAYESIAN); radmax: the edge of the disk (3DFIT, METHOD GLOBAL or
+    BAYESIAN) or None; edges: the outer edges of the approaching and receding halves of the disk (side_edges);
+    cubefile, cubehdu: the cube read by the scripts; and disp, pa_av, pa_min, reverse, arcconv (for
+    plot_pvs_old.py)."""
     c = gf.cin
     h = c.Head()
     p = c.pars()
@@ -185,9 +187,19 @@ def plot_settings(gf):
                 float(np.float32(AlltoVel(c.getZphys(zmax + 0.5), h)))),
         bunit=bunit, head_bunit=h.Bunit(), mapnames=fit3d.MAPNAMES[p.ma.maptype == "GAUSSIAN"],
         errcols1=errcols1, errcols2=errcols2, dens=dens, model_dens=model_dens,
-        radmax=None if edge is None else float(edge), adrift=bool(par.flagADRIFT), cubefile=cubefile,
+        radmax=None if edge is None else float(edge), edges=side_edges(gf, edge), adrift=bool(par.flagADRIFT),
+        cubefile=cubefile,
         cubehdu=cubehdu, disp=disp, pa_av=pa_av, pa_min=pa_av + 90 if pa_av + 90 < 360 else pa_av - 90,
         reverse=bool(45 <= pa_av < 225), arcconv=arcconv)
+
+
+def side_edges(gf, edge=None):
+    """The outer edges (arcsec) of the approaching and of the receding half of the disk of the fit gf, as (radmaxa,
+    radmaxr): RADMAXA and RADMAXR (fitted by METHOD GLOBAL and BAYESIAN when free), or the edge of the whole disk,
+    edge (RADMAX of METHOD GLOBAL and BAYESIAN, or None), where it is smaller; None for a half without an edge."""
+    setup = getattr(getattr(gf, "model", None), "setup", None)
+    halves = setup.side_edges(gf.outr) if setup is not None else (None, None)
+    return tuple(e if edge is None else float(edge) if e is None else min(float(e), float(edge)) for e in halves)
 
 
 # ===================================================================================================== scripts
@@ -278,6 +290,13 @@ def _pvs_script(s, slices):
     name, func, out = (("plot_pvslices", fit3d.plot_pvslices, "_pvslices") if slices else
                        ("plot_pvs", fit3d.plot_pvs, "_pv"))
     maps = "mom0" if slices else "mom0, mom1"
+    edges = ""
+    if not slices:
+        ea, er = s["edges"]
+        settings += [("radmaxa", None if ea is None else Code(repr(ea)),
+                      "outer edge of the approaching half of the disk (arcsec): empty points beyond"),
+                     ("radmaxr", None if er is None else Code(repr(er)), "outer edge of the receding half (arcsec)")]
+        edges = ",\n" + " " * (len(name) + 11) + "radmaxa=radmaxa, radmaxr=radmaxr"
     body = (_READ_RINGS +
             "data = read_cube(cubefile, cubehdu)\n"
             "mask = read_cube(outfolder + outprefix + '_mask.fits')\n"
@@ -287,7 +306,7 @@ def _pvs_script(s, slices):
             "for f in files_mod:\n"
             "    model = read_cube(outfolder + f)\n"
             f"    fig = {name}(data, model, rings, {maps}, mask, box=box, cont=cont, pixscale=pixscale,\n"
-            f"    {' ' * (len(name) + 7)}vrange=vrange, gname=gname, plotmask=plotmask)\n"
+            f"    {' ' * (len(name) + 7)}vrange=vrange, gname=gname, plotmask=plotmask{edges})\n"
             "    ntype = f[f.rfind('_'):].replace('.fits', '')\n"
             f"    fig.savefig(outfolder + outprefix + '{out}' + ntype + '.pdf', bbox_inches='tight')\n"
             "    plt.close(fig)\n")

@@ -5391,3 +5391,63 @@ def test_plot_pvs_blanked_cube():
     vmax = fig.axes[0].images[0].norm.vmax
     assert np.isfinite(vmax) and vmax == np.nanpercentile(data, 99.8)
     plt.close(fig)
+
+
+def _pvs_disk(rad, **kw):
+    """plot_pvs of a synthetic disk 40 x 40 pixels (1 arcsec), centred at (20, 20), on the major axis at PA 90."""
+    import matplotlib
+    matplotlib.use("Agg")
+    from bbarolo.plots import fit3d
+    nz, ny, nx = 20, 40, 40
+    z, y, x = np.mgrid[:nz, :ny, :nx]
+    data = np.exp(-((x - 20.) ** 2 + (y - 20.) ** 2) / 50. - (z - 10. - 0.2 * (x - 20.)) ** 2 / 8.)
+    rings = {k: np.full(len(rad), v) for k, v in dict(vrot=50., inc=60., pa=90., xpos=20., ypos=20., vsys=0.).items()}
+    rings["rad"] = np.asarray(rad, float)
+    mom0 = np.nansum(data, axis=0)
+    mom1 = np.nansum(data * (z - 10.), axis=0) / np.where(mom0 > 0, mom0, 1.)
+    return fit3d.plot_pvs(data, 0.9 * data, rings, mom0, mom1, box=(0, nx - 1, 0, ny - 1, 0, nz - 1), cont=0.05,
+                          pixscale=1., vrange=(-50., 50.), **kw)
+
+
+def test_plot_pvs_rings_beyond_slice():
+    """The rotation curve on the PV slice along the major axis has the rings at their radii also beyond the ends
+    of the slice (the edges of the box), where the slice goes on straight: np.interp put them all at its last
+    point (the two outer rings of NGC 891 a few arcsec apart)."""
+    import matplotlib.pyplot as plt
+    fig = _pvs_disk([5., 10., 15., 25., 30.])
+    pts = [ln for ln in fig.axes[0].lines if ln.get_marker() == "o"]
+    off = np.concatenate([ln.get_xdata() for ln in pts])
+    assert off == pytest.approx([5, 10, 15, 25, 30, -5, -10, -15, -25, -30], abs=1e-6)
+    assert fig.axes[0].get_xlim()[1] > 30
+    plt.close(fig)
+
+
+def test_plot_pvs_side_edges(tmp_path):
+    """The rings beyond the outer edges of the halves of the disk, RADMAXA (approaching: negative offsets) and
+    RADMAXR (receding), are empty points on the PV slice along the major axis, in plot_pvs, Result.plot_pvs and
+    the script plot_pvs.py."""
+    import matplotlib.pyplot as plt
+
+    def points(fig):
+        lines = [ln for ln in fig.axes[0].lines if ln.get_marker() == "o"]
+        full = [ln for ln in lines if ln.get_markerfacecolor() != "none"]
+        empty = [ln for ln in lines if ln.get_markerfacecolor() == "none"]
+        return (np.sort(np.concatenate([ln.get_xdata() for ln in full])),
+                np.sort(np.concatenate([ln.get_xdata() for ln in empty])))
+    fig = _pvs_disk([5., 10., 15.], radmaxa=7., radmaxr=12.)
+    full, empty = points(fig)
+    assert full == pytest.approx([-5, 5, 10]) and empty == pytest.approx([-15, -10, 15])
+    plt.close(fig)
+    fig = _pvs_disk([5., 10., 15.])
+    assert points(fig)[1].size == 0
+    plt.close(fig)
+    res = _fit3d_mock(tmp_path, radmaxa=80)
+    fig = res.plot_pvs()
+    full, empty = points(fig)
+    assert empty.size == 2 and np.all(empty < -90) and full.size == 6
+    plt.close(fig)
+    out = tmp_path / "out"
+    res.write(outfolder=str(out), plots=True)
+    txt = (out / "plotscripts" / "plot_pvs.py").read_text()
+    assert "radmaxa = 80.0" in txt and "radmaxr = None" in txt and "radmaxa=radmaxa, radmaxr=radmaxr" in txt
+    assert "radmaxa" not in (out / "plotscripts" / "plot_pvslices.py").read_text()

@@ -7,6 +7,11 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **The rotation curve on the PV plot along the major axis put the rings beyond the box at its edge (C++).** The
+  points of the rings outside the region of the cube shown (beyond the largest source of the SEARCH mask plus two
+  beams) were placed by `np.interp` along the slice, which stops at the edge: all such rings were drawn at its last
+  point (NGC 891 with a ring at 620": at 592", 12" from the ring at 580"). They are now at their radius, on the
+  straight line of the end of the slice, and the offset axis is widened if needed.
 - **3DFIT GLOBAL/BAYESIAN: the warning about the flux beyond the outermost ring was wrong for thick disks seen
   nearly edge-on.** It measured the flux beyond the outer edge plus half a beam in deprojected radius, as for a thin
   disk: at INC 87 that is all the emission farther than about R cos(INC) from the major axis, so NGC 891 with rings
@@ -438,6 +443,12 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   an error; they are unreadable values, as in C++.
 
 ### Added
+
+- **The PV plot along the major axis (`_pv_<norm>.pdf`) draws the rings beyond the outer edge of their half of the
+  disk as empty points**: beyond RADMAXA on the approaching side (negative offsets) and RADMAXR on the receding one,
+  the values given or fitted by METHOD GLOBAL and BAYESIAN, and beyond RADMAX when it is the edge of the disk
+  (METHOD GLOBAL and BAYESIAN). The model has no gas there. `plot_pvs(..., radmaxa=, radmaxr=)`; the script
+  `plot_pvs.py` has them among its settings.
 
 - **One half of the disk can end before the other: RADMAXA and RADMAXR**, the outer edges (arcsec) of the
   approaching and receding halves, split by the minor axis, for disks that extend farther on one side (NGC 891). In

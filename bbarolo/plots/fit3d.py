@@ -380,15 +380,18 @@ def plot_chanmaps(data, model, rings, mask=None, *, box, cont, pixscale, cdelt3,
     return fig
 
 
-def plot_pvs(data, model, rings, mom0, mom1, mask=None, *, box, cont, pixscale, vrange, gname="", plotmask=False):
+def plot_pvs(data, model, rings, mom0, mom1, mask=None, *, box, cont, pixscale, vrange, gname="", plotmask=False,
+             radmaxa=None, radmaxr=None):
     """Position-velocity slices of the data (grey scale, blue contours) and of a model (red contours) along the
     major axis (top; the gold points are the rotation curve of the rings, projected) and the minor axis (bottom, on
-    the offset range of the major axis), following the position angles of the rings, beside the total intensity and velocity maps of the data with the
-    paths of the slices (<prefix>_pv_<norm>.pdf).
+    the offset range of the major axis), following the position angles of the rings, beside the total intensity
+    and velocity maps of the data with the paths of the slices (<prefix>_pv_<norm>.pdf).
 
     data, model, mask, rings, box, cont, pixscale, gname, plotmask: as for plot_chanmaps; mom0, mom1: the total
     intensity and velocity maps of the data (ny, nx); vrange: the velocities (km/s) of the outer edges of the
-    channels zmin and zmax of the box. Returns the Figure."""
+    channels zmin and zmax of the box; radmaxa, radmaxr: the outer edges (arcsec) of the approaching (negative
+    offsets) and receding (positive offsets) halves of the disk, or None: the rings beyond, where the model has
+    no gas, are empty points. Returns the Figure."""
     style = {"xtick.direction": "in", "xtick.top": True, "ytick.direction": "in", "ytick.right": True,
              "contour.negative_linestyle": "solid", "font.family": "sans-serif", "font.serif": "Helvetica",
              "font.size": 18, "text.usetex": False, "mathtext.fontset": "cm", "mathtext.default": "regular"}
@@ -493,14 +496,32 @@ def plot_pvs(data, model, rings, mom0, mom1, mask=None, *, box, cont, pixscale, 
         ax_m.plot(x[m] + pad_x[0], y[m] + pad_y[0], "-", lw=1.5, c="#B22222")
         ax_m.plot(x[~m] + pad_x[0], y[~m] + pad_y[0], "-", lw=1.5, c="#B22222", alpha=0.3)
 
-        # Rotation curve
+        # Rotation curve: the rings at their distance from the centre along the slice, r (signed as the offset);
+        # beyond the ends of the slice (the edges of the box) on the straight line of its last two points
         r = np.sqrt((x - xcen_m) ** 2 + (y - ycen_m) ** 2)
         r[s < 0] *= -1
-        x_rad = np.interp(radii / cdeltsp, r, x)
-        y_rad = np.interp(radii / cdeltsp, r, y)
-        s_rad = np.interp(radii / cdeltsp, r, s)
-        axes[0].plot(s_rad * cdeltsp, vlos, "o", c="gold", ms=10, alpha=0.8, mec="cornsilk")
-        ax_m.scatter(x_rad + pad_x[0], y_rad + pad_y[0], c="gold", s=10, alpha=0.8)
+        q = radii / cdeltsp
+
+        def along(f):
+            out = np.interp(q, r, f)
+            if r.size > 1:
+                hi, lo = q > r[-1], q < r[0]
+                out[hi] = f[-1] + (q[hi] - r[-1]) * (f[-1] - f[-2]) / (r[-1] - r[-2])
+                out[lo] = f[0] + (q[lo] - r[0]) * (f[1] - f[0]) / (r[1] - r[0])
+            return out
+        x_rad, y_rad, s_rad = along(x), along(y), along(s)
+        # the rings beyond the outer edge of their half of the disk: empty points
+        beyond = np.concatenate([rad > e if e is not None else np.zeros(rad.size, bool) for e in (radmaxr, radmaxa)])
+        axes[0].plot(s_rad[~beyond] * cdeltsp, vlos[~beyond], "o", c="gold", ms=10, alpha=0.8, mec="cornsilk")
+        axes[0].plot(s_rad[beyond] * cdeltsp, vlos[beyond], "o", mfc="none", mec="gold", mew=2, ms=10, alpha=0.9)
+        xlim = max(axes[0].get_xlim()[1], 1.1 * cdeltsp * np.max(np.abs(s_rad), initial=0))
+        axes[0].set_xlim(-xlim, xlim)
+        lims = ax_m.get_xlim(), ax_m.get_ylim()
+        ax_m.scatter(x_rad[~beyond] + pad_x[0], y_rad[~beyond] + pad_y[0], c="gold", s=10, alpha=0.8)
+        ax_m.scatter(x_rad[beyond] + pad_x[0], y_rad[beyond] + pad_y[0], facecolors="none", edgecolors="gold", s=10,
+                     alpha=0.8)
+        ax_m.set_xlim(lims[0])                  # (rings beyond the box: not on the map)
+        ax_m.set_ylim(lims[1])
 
         # Minor axis
         s, x, y, _ = plot_pv(axes[1], rad * np.cos(np.radians(inc)), xcen_m, ycen_m, pa + 90)
