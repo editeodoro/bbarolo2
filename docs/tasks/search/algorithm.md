@@ -310,7 +310,7 @@ voxels in each channel converted to Jy) and, with PLOTS, plots of the detections
   `DetectMap.fits.gz`). With SNMAP, the noise and S/N maps are `<prefix>_mom0th_RMS.fits` and
   `<prefix>_mom0th_SN.fits`: in 1.8 they had the names of those of TOTALMAP, which overwrote them.
 
-The full list is in {doc}`../../reference/changes`.
+The full list is in [CHANGES.md](https://github.com/editeodoro/bbarolo2/blob/main/CHANGES.md).
 
 ## References
 

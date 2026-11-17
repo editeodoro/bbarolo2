@@ -81,7 +81,7 @@ $\sigma$ (see {doc}`../search/algorithm`).
   cube even when it was blank.
 - The statistics are computed in double precision (1.8: in the precision of the data, usually single).
 
-The full list is in {doc}`../../reference/changes`.
+The full list is in [CHANGES.md](https://github.com/editeodoro/bbarolo2/blob/main/CHANGES.md).
 
 ## References
 

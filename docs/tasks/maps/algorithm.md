@@ -278,7 +278,7 @@ Python, the `Maps` class makes the total, velocity and dispersion maps when no m
 - **RMSMAP** of spectra with fewer than 5 channels is their noise (1.8: $10^{10}$).
 
 The moment, rms and S/N maps are otherwise equal to those of 1.8 to float precision. The full list is in
-{doc}`../../reference/changes`.
+[CHANGES.md](https://github.com/editeodoro/bbarolo2/blob/main/CHANGES.md).
 
 ## References
 

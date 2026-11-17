@@ -609,7 +609,7 @@ These are properties of the algorithm, shared by BBarolo 1.8.
 - **Checks**: a VSYS outside the velocity range of the cube, unknown names in FREE and MINVDISP ≥ MAXVDISP
   are errors; rejected rings say why.
 
-The full list is in {doc}`../../reference/changes`.
+The full list is in [CHANGES.md](https://github.com/editeodoro/bbarolo2/blob/main/CHANGES.md).
 
 ## References
 

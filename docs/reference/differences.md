@@ -141,7 +141,7 @@ gone, and so is what it gave.
 - **Several emission lines** (RESTWAVE or RESTFREQ with RELINT): each line has its own reference frequency
   (see the bugs below).
 
-The complete list, with the numbers measured for each change, is in {doc}`changes`.
+The complete list, with the numbers measured for each change, is in [CHANGES.md](https://github.com/editeodoro/bbarolo2/blob/main/CHANGES.md).
 
 ## Removed and renamed keywords and options
 
@@ -274,9 +274,9 @@ The old module `BayesianBBarolo_test` and the C++ function `Galfit::getModel_BBB
 ## C++ bugs fixed
 
 The bugs below are in the C++ code (and in pyBBarolo where stated); they are fixed in BBarolo 2, so the
-results of the affected tasks differ from those of 1.8. The entries of {doc}`changes` marked **(C++)** are
+results of the affected tasks differ from those of 1.8. The entries of [CHANGES.md](https://github.com/editeodoro/bbarolo2/blob/main/CHANGES.md) marked **(C++)** are
 the bugs of 1.8; the others were introduced by the port and fixed before this release. The table is a
-summary: {doc}`changes` has the details and the size of each change.
+summary: [CHANGES.md](https://github.com/editeodoro/bbarolo2/blob/main/CHANGES.md) has the details and the size of each change.
 
 | Task | Bug in 1.8 |
 |---|---|

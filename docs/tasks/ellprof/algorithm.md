@@ -292,7 +292,7 @@ writes the files.
   and `<prefix>_densmap.fits`; the name `<prefix>_densprof.txt` is now the density profile of 3DFIT).
 - **The deconvolved profile**, `<prefix>_ellprof_deconvolved.txt`, is new.
 
-The full list is in {doc}`../../reference/changes`.
+The full list is in [CHANGES.md](https://github.com/editeodoro/bbarolo2/blob/main/CHANGES.md).
 
 ## References
 

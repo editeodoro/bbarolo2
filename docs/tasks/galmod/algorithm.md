@@ -497,7 +497,7 @@ described on this page: see {doc}`../galmod3d/index`.
 - **Outputs** are named `<prefix>_<what>` (e.g. `<prefix>_mod_azim.fits`, `<prefix>_rings_model.txt`;
   1.8: `<prefix>mod_azim.fits`, `rings_model.txt`).
 
-The full list is in {doc}`../../reference/changes`.
+The full list is in [CHANGES.md](https://github.com/editeodoro/bbarolo2/blob/main/CHANGES.md).
 
 ## References
 

@@ -288,7 +288,7 @@ no vertical layer (`LTYPE`, `Z0`: the vertical structure is in $\rho$), no colum
 (`DENSFLUX`), no normalisation to the data other than the total flux (no `NORM AZIM` or `LOCAL`), and
 that its MC models use numpy's generator, not that of GALMOD (`ISEED`, `CDENS`, `NV` are not used).
 
-The full list of changes is in {doc}`../../reference/changes`.
+The full list of changes is in [CHANGES.md](https://github.com/editeodoro/bbarolo2/blob/main/CHANGES.md).
 
 ## References
 

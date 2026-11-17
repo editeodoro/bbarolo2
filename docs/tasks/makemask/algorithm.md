@@ -125,7 +125,7 @@ for `THRESHOLD`. A mask built once is used by all the following tasks of the run
   channel without negative values is left out of the mask.
 - The mask is written as `<prefix>_mask.fits` (1.8: `mask.fits`).
 
-The full list is in {doc}`../../reference/changes`.
+The full list is in [CHANGES.md](https://github.com/editeodoro/bbarolo2/blob/main/CHANGES.md).
 
 ## References
 

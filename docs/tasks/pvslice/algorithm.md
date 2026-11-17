@@ -142,7 +142,7 @@ two points, where PA_PV is not used (0 by default).
 - **Output name**: `<prefix>_pv_<PA>.fits` (1.8: `<prefix>pv_<PA>.fits`).
 
 Flux along the slices of NGC 2403 agrees with 1.8 within 0.4%. The full list is in
-{doc}`../../reference/changes`.
+[CHANGES.md](https://github.com/editeodoro/bbarolo2/blob/main/CHANGES.md).
 
 ## References
 
