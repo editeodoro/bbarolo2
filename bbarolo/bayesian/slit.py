@@ -44,7 +44,7 @@ import math
 import copy
 import numpy as np
 
-from ..tasks import Task, build_param, _checked
+from ..tasks import _FitTask, build_param, _checked
 from ..bbutils import BBaroloError
 from .common import (vprint, banner, get_distribution, fast_ppf, show_bar, smoothness_penalty, smoothness_summary,
                      smoothness_text, smoothness_result, SIGMA_QUANTILES,
@@ -170,7 +170,7 @@ def _ring_values(s):
         raise BBaroloError(f"SLITFIT: cannot read the ring parameter {s!r}") from None
 
 
-class BayesianSlitFit(Task):
+class BayesianSlitFit(_FitTask):
     """Fit the kinematics of a disk to a long-slit spectrum in a Bayesian framework (see the module documentation).
 
     BayesianSlitFit(slit, **params): the slit (FITS file, HDU or (data, header)) and any BBarolo parameter: SLITWIDTH,

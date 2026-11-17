@@ -7,6 +7,13 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **PRIORS of 3DFIT refused the parameters of a function of radius given in Python** (`Z0_P1: unknown parameter`):
+  only those of VROT, VDISP and DENS were accepted, also in Bayesian3DFIT with `funcs['z0']` set. PRIORS now takes
+  the parameters of every function given (`funcs`), and names the parameter that has none (`Z0_P1: Z0 has no
+  function of radius`). A free parameter of a function without a prior (one's own functions have no default priors)
+  stopped with "Something is wrong in the prior for parameter 'z0_p1'": it is now "no prior for Z0_P1: give it in
+  PRIORS".
+
 - **FitMod3D, SlitFit and WindFit refused FREE as a list of names and PRIORS, SAMPLEROPTS, RUNOPTS and LIKEOPTS as
   dicts** ("a list of values is not accepted", "unsupported value"), which the engines (Bayesian3DFIT, BayesianWind,
   BayesianSlitFit) accept. The tasks, `update()`, `run()`, `Param.set` and `to_parfile` now convert them into the
@@ -461,6 +468,16 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   an error; they are unreadable values, as in C++.
 
 ### Added
+
+- **`funcs` in FitMod3D, WindFit and SlitFit: functions of radius of one's own** (`NAME_FUNC` in FREE). Only the
+  engines (Bayesian3DFIT, BayesianWind, BayesianSlitFit) had `funcs`, and the tasks make a new engine at every
+  `run()`, so `FitMod3D(...).funcs['z0'] = ...` was an AttributeError and a function other than the defaults could
+  not be fitted with a task. The tasks and the engines take `funcs={NAME: f(R, p1, p2, ...)}` (R in arcsec; the
+  number of parameters from the signature of f), and the tasks have the attribute `funcs`, a dict that can be changed
+  until `run()`. A function replaces the default one (VROT, VDISP, DENS in 3DFIT; VWIND, VDISP, VROT in WINDFIT; VROT,
+  VDISP, VRAD, DENS in SLITFIT) or, in 3DFIT, adds one for any ring parameter (e.g. `Z0_FUNC`, a flare). The names
+  and the functions are checked (a ring parameter of the task, a Python function of R and at least one parameter);
+  `from_parfile(..., funcs=)`; `to_parfile()` notes the functions in a comment.
 
 - **The PV plot along the major axis (`_pv_<norm>.pdf`) draws the rings beyond the outer edge of their half of the
   disk as empty points**: beyond RADMAXA on the approaching side (negative offsets) and RADMAXR on the receding one,

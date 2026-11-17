@@ -99,7 +99,7 @@ The engine {class}`~bbarolo.BayesianSlitFit` (for custom likelihoods and interac
 `FREE` (default `VROT VDISP VSYS XPOS`):
 
 - `VROT`, `VDISP`, `VRAD`: one value per ring, `NAME_SINGLE` one value for all the rings, `NAME_FUNC` a function of
-  radius (VROT an arctangent, VDISP and VRAD lines). VRAD is only weakly constrained: along the major axis the radial
+  radius (VROT an arctangent, VDISP and VRAD lines; in Python, `funcs` of SlitFit replaces them). VRAD is only weakly constrained: along the major axis the radial
   motions are perpendicular to the line of sight, and they show only through the width of the slit, the seeing and
   a misalignment;
 - `VSYS` (relative to REDSHIFT) and `XPOS` (the centre along the slit, pixels): single values;

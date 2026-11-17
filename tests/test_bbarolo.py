@@ -5142,6 +5142,66 @@ def test_bayesian_python_values_and_saved_functions(tmp_path):
         f.load_results(str(tmp_path / "fake.npy"))
 
 
+def test_task_functions_of_radius(tmp_path):
+    """FitMod3D takes the functions of radius of NAME_FUNC (funcs=, or the attribute funcs until run()): it had no
+    funcs (only its engine Bayesian3DFIT, which run() makes anew), so a function of one's own (e.g. Z0_FUNC) could not
+    be fitted with the task. PRIORS takes the parameters of those functions (Z0_P1 was an unknown parameter), in the
+    task and in Bayesian3DFIT; a missing prior of their parameters is a clear error (it was 'Something is wrong in the
+    prior'); funcs is checked (a ring parameter, a Python function of R and its parameters)."""
+    from astropy.io import fits
+    from bbarolo import FitMod3D, Bayesian3DFIT
+    from bbarolo.bbutils import BBaroloError
+    from bbarolo.params import bayes_priors
+
+    def flare(R, p1, p2):
+        return p1 * np.exp(R / p2)
+
+    assert bayes_priors("Z0_P1=(uniform,0,10)", func_pars=("vrot", "z0")) == {
+        'z0_p1': dict(name='uniform', loc=0., scale=10.)}
+    with pytest.raises(ValueError, match="Z0_P1: Z0 has no function of radius"):
+        bayes_priors("Z0_P1=(uniform,0,10)")
+    fn = _mock_cube(tmp_path)
+    hdu = fits.open(fn)[0]
+    rings = dict(nradii=4, radsep=40, xpos=31.5, ypos=31.5, vsys=0, vrot=150, vdisp=10, z0=5, inc=60, pa=45,
+                 mask="SEARCH", linear=0, verbose=False, threads=1)
+    st = dict(free="VROT_SINGLE Z0_FUNC", priors="Z0_P1=(uniform,0,20) Z0_P2=(uniform,20,1000)")
+    # the attribute, set after the task is made (as one would write it)
+    f = FitMod3D(hdu, method="global", **rings, **st)
+    with pytest.raises(BBaroloError, match="Z0_FUNC: Z0 has no function of radius"):      # (checkPars)
+        f.run()
+    f.funcs['z0'] = flare
+    r = f.run()
+    ff = r.fitter
+    assert ff.funcs['z0'] is flare and ff.freepar_names == ['vrot', 'z0_p1', 'z0_p2']
+    p1, p2 = ff.params[ff.freepar_idx['z0_p1']][0], ff.params[ff.freepar_idx['z0_p2']][0]
+    assert 0 <= p1 <= 20 and 20 <= p2 <= 1020
+    assert np.allclose(r.rings['z0'], flare(np.asarray(r.rings['radii']), p1, p2))
+    assert "// funcs: Z0: Python functions of radius" in f.to_parfile()
+    # funcs=; a missing prior
+    FitMod3D(hdu, funcs={'z0': flare}, free="VROT Z0_FUNC")
+    with pytest.raises(BBaroloError, match="no prior for Z0_P2"):
+        FitMod3D(hdu, method="global", funcs={'z0': flare}, **rings, free="VROT_SINGLE Z0_FUNC",
+                 priors="Z0_P1=(uniform,0,20)").run()
+    # the checks of funcs (PA is PHI in 3DFIT)
+    assert set(FitMod3D(hdu, funcs={'PA': flare}).funcs) == {'phi'}
+    for bad, msg in (({'foo': flare}, "foo cannot be a function of radius"), ({'z0': np.exp}, "Python function"),
+                     ({'z0': lambda R: R}, "Python function")):
+        with pytest.raises(BBaroloError, match=msg):
+            FitMod3D(hdu, funcs=bad)
+    f = FitMod3D(hdu, method="global", **rings, **st)
+    f.funcs['z0'] = np.exp
+    with pytest.raises(BBaroloError, match="Python function"):
+        f.run()
+    # the engine and parameter files: funcs= before FREE and PRIORS
+    b = Bayesian3DFIT(fn, funcs={'z0': flare}, **rings, **st)
+    assert b.priors['z0_p2'] == dict(name='uniform', loc=20., scale=1000.) and b.funcs['z0'] is flare
+    par = tmp_path / "z0.par"
+    par.write_text(f"FITSFILE {fn}\n3DFIT true\nMETHOD GLOBAL\nFREE VROT_SINGLE Z0_FUNC\n"
+                   "PRIORS Z0_P1=(uniform,0,20) Z0_P2=(uniform,20,1000)\n")
+    for cls in (FitMod3D, Bayesian3DFIT):
+        assert cls.from_parfile(str(par), funcs={'z0': flare}).funcs['z0'] is flare
+
+
 def test_small_fixes_of_the_review(tmp_path):
     """SimulatedGalaxyCube.define_galaxy with xpos per ring and one ypos (it tested xpos: the galaxy was centred);
     Galfit (and a Result with it) can be pickled; BBarolo --paramfile=file.par runs the file (the option was taken as a

@@ -189,7 +189,10 @@ CLASSIC, {class}`~bbarolo.Bayesian3DFIT` for GLOBAL and BAYESIAN; it replaces th
 The Result of {class}`~bbarolo.WindFit` has `model` (the model cube, an HDU), `parameters` (a Table with `name`,
 `value`, `err_lo` and `err_hi`), `shells` (a Table), `samples` and `fitter` ({class}`~bbarolo.BayesianWind`). That of
 {class}`~bbarolo.SlitFit` has `rings`, `model` (the HDU of the slit), `samples` and `fitter`
-({class}`~bbarolo.BayesianSlitFit`). `bbarolo.run(parfile)` returns `{"3DFIT": Result}` for every method of 3DFIT,
+({class}`~bbarolo.BayesianSlitFit`). The three fits take `funcs={NAME: f(R, p1, ...)}` (or the attribute `funcs`,
+a dict), the functions of radius of `NAME_FUNC` in FREE: they replace the default ones or, in 3DFIT, add one for any
+ring parameter (e.g. `f.funcs["z0"] = lambda R, p1, p2: p1 * np.exp(R / p2)` and `Z0_FUNC` in FREE, with the priors of
+`Z0_P1` and `Z0_P2` in PRIORS). `bbarolo.run(parfile)` returns `{"3DFIT": Result}` for every method of 3DFIT,
 and `{"WINDFIT": ...}` or `{"SLITFIT": ...}`. See {doc}`../tasks/3dfit/index`, {doc}`../tasks/windfit/index` and
 {doc}`../tasks/slitfit/index`.
 

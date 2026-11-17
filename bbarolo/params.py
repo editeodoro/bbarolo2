@@ -291,6 +291,7 @@ class Param:
     # ------------------------------------------------------------------
     def defaultValues(self):
         self._given = {}           # the parameters given, as strings {KEYWORD: value} (see Keyword.apply)
+        self._funcs = ()           # the parameters with a function of radius given in Python (funcs of FitMod3D, ...)
         self.imageFile = ""
         self.imageList = "NONE"
         self.images = []
@@ -549,7 +550,9 @@ class Param:
         good = self._check_method(out) and good
         classic = gf.flagGALFIT and gf.METHOD == "CLASSIC"
         if gf.flagGALFIT and not classic:             # 3DFIT with METHOD GLOBAL or BAYESIAN
-            good = self._check_likefit("3DFIT", bayes_freepar, bayes_priors, bayes_likeopts, out) and good
+            fn = set(BAYES_FUNC_PARS) | set(getattr(self, "_funcs", ()))
+            good = self._check_likefit("3DFIT", lambda s: bayes_freepar(s, funcs=fn),
+                                       lambda s: bayes_priors(s, func_pars=fn), bayes_likeopts, out) and good
 
         if gf.flagGALFIT or self.flagSpace or gm.flagGALMOD:
             msg = " is not an optional parameter. Please specify it in the input file or set flagSearch=true"
@@ -1249,6 +1252,9 @@ def bayes_priors(priors, ring_pars=BAYES_RING_PARS, other_pars=BAYES_OTHER_PARS,
             key = base
         elif base in func_pars and re.fullmatch(r"p\d+", suffix):
             key = f"{base}_{suffix}"
+        elif base in ring_pars and re.fullmatch(r"p\d+", suffix):
+            raise ValueError(f"{label}: {base.upper()} has no function of radius (only "
+                             f"{', '.join(sorted(f.upper() for f in func_pars))})")
         else:
             raise ValueError(f"{label}: unknown parameter")
         items = [x.strip() for x in m.group(3).split(",")]

@@ -18,7 +18,7 @@ def _task_slit(c, par):
         prm[k] = _FromFile(v)
     prm["OUTFOLDER"] = p.outFolder
     src = getattr(c, "_source_hdu", None)         # (a slit in memory: the Python task class)
-    return BayesianSlitFit(src if src is not None else p.imageFile, **prm)
+    return BayesianSlitFit(src if src is not None else p.imageFile, funcs=getattr(c, "_funcs", None), **prm)
 
 
 def run_task(c, par):

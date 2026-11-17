@@ -144,7 +144,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             if name == "LIKEOPTS":
                 return bayes_likeopts(s)
             if name == "PRIORS":
-                return bayes_priors(s)
+                return bayes_priors(s, func_pars=set(BAYES_FUNC_PARS) | set(getattr(self, 'funcs', {})))
             if name == "SAMPLER":
                 return check_sampler(s, "3DFIT").strip()
             return bayes_options(s)
@@ -578,6 +578,9 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                     and frozen[key][1] != self._prior_definition(key):
                 d = None
             if d is None:
+                if key not in self.priors:          # (the parameters of a function of radius of the user's)
+                    raise BBaroloError(f"3DFIT: no prior for {key.upper()}: give it in PRIORS (e.g. "
+                                       f"{key.upper()}=(uniform,loc=0,scale=10)) or in priors['{key}']")
                 try:
                     d = get_distribution(self.priors[key]['name'], **self._prior_kwargs(key))
                 except Exception:

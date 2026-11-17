@@ -18,7 +18,7 @@ def _task_fitter(c, par):
             continue
         prm[k] = _FromFile(v)
     prm["OUTFOLDER"] = p.outFolder
-    f = Bayesian3DFIT(None, **prm)
+    f = Bayesian3DFIT(None, funcs=getattr(c, "_funcs", None), **prm)      # (funcs: of FitMod3D)
     src = getattr(c, "_source_hdu", None)         # (a cube in memory: the Python task class)
     f._set_cube(src if src is not None else p.imageFile)
     cb = f._load_cube()

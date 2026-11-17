@@ -18,7 +18,7 @@ def _task_wind(c, par):
             continue
         prm[k] = _FromFile(v)
     prm["OUTFOLDER"] = p.outFolder
-    f = BayesianWind(None, **prm)
+    f = BayesianWind(None, funcs=getattr(c, "_funcs", None), **prm)       # (funcs: of WindFit)
     src = getattr(c, "_source_hdu", None)         # (a cube in memory: the Python task class)
     f._set_cube(src if src is not None else p.imageFile)
     cb = f._load_cube()

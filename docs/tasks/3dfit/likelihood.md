@@ -71,8 +71,17 @@ V_\mathrm{disp}(R) = p_1 + p_2 R,
 $$
 
 with $p_1$ in km/s for VROT and VDISP and in the units of {ref}`DENS <par-3dfit-dens>` for DENS,
-$p_2$ in arcsec for VROT and DENS and in km/s/arcsec for VDISP. In Python, `f.funcs[name]` can be any
-function $g(R, p_1, \dots, p_k)$ of any ring parameter; $k$ is read from its signature.
+$p_2$ in arcsec for VROT and DENS and in km/s/arcsec for VDISP. In Python, `funcs` of the task (or of the
+engine) gives any function $g(R, p_1, \dots, p_k)$ of any ring parameter, in place of the defaults or for
+another parameter; $k$ is read from its signature, and the priors of $p_1, \dots, p_k$ (`NAME_P1`, ...) go in
+PRIORS, as they have no defaults:
+
+```python
+f = FitMod3D("ngc891.fits", method="global", free="VROT VDISP_SINGLE Z0_FUNC",
+             priors="Z0_P1=(uniform,0,30) Z0_P2=(uniform,50,2000)", ...)
+f.funcs["z0"] = lambda R, p1, p2: p1 * np.exp(R / p2)      # a flare; or FitMod3D(..., funcs={"z0": ...})
+res = f.run()
+```
 
 The ring parameters that are not free keep their initial values. The initial rings are built by the code of
 3DFIT, and are those of 3DFIT for the same parameters: the values given (or read from RINGFILE), the

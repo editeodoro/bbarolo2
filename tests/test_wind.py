@@ -649,6 +649,30 @@ def test_bayesian_wind_blanks(tmp_path):
     assert abs(f.noiserms / full.noiserms - 1) < 0.05
 
 
+def test_windfit_functions_of_radius(tmp_path):
+    """WindFit takes the functions of radius of NAME_FUNC (funcs=, or the attribute funcs), as FitMod3D: here a
+    constant VWIND with one parameter in place of the default arctangent, given to the engine of run(); funcs is checked
+    (only VWIND, VDISP, VROT can be functions of radius in WINDFIT)."""
+    from wind_mocks import mock_wind
+    from bbarolo import WindFit
+
+    def flat(R, p1):
+        return p1 + 0. * R
+
+    hdu, tr = mock_wind(kind="clumps", seed=2, snr=15, shape=(24, 24, 20), pix=12., chan=25., beam=36.,
+                        truth=dict(xpos=11.5, ypos=11.5, conelen=110., radii=[55., 110.], vwind=200.), nclumps=40,
+                        clump=20.)
+    f = WindFit(hdu, xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, conelen=110, vwind=180, vdisp=20,
+                nlayers=2, free="VWIND_FUNC OPENANG", priors="VWIND_P1=(uniform,100,200)", likeopts="cellsize=40",
+                minimiser="powell", runopts="maxiter=3", verbose=False, threads=2)
+    f.funcs["vwind"] = flat
+    r = f.run()
+    assert r.fitter.funcs["vwind"] is flat and list(r.fitter.freepar_names)[:2] == ["vwind_p1", "openang"]
+    assert np.allclose(r.shells["vwind"], r.shells["vwind"][0]) and 100 <= r.shells["vwind"][0] <= 300
+    with pytest.raises(BBaroloError, match="INC cannot be a function of radius in WINDFIT"):
+        WindFit(hdu, funcs={"INC": flat})
+
+
 def test_windfit_radii_range():
     """WINDFIT reads RADII given as range(Rmin,Rmax,step) or Rmin~Rmax:step (the latter was a ValueError)."""
     from wind_mocks import mock_wind

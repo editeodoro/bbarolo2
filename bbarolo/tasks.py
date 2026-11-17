@@ -1300,7 +1300,8 @@ class Task:
     def from_parfile(cls, parfile, cube=None, **params):
         """A task with the parameters of a parameter file (FITSFILE is the cube unless cube is
         given). Flags of other tasks in the file are ignored (bbarolo.run runs them all).
-        params override the file."""
+        params override the file (and funcs, of the fits, gives their functions of radius)."""
+        funcs = params.pop("funcs", None)
         fpar = read_parfile(parfile)
         ignored = []
         for kname in list(fpar):
@@ -1320,7 +1321,8 @@ class Task:
         if ignored:
             print(f" {cls.__name__}: {', '.join(ignored)} in {shortpath(parfile)} ignored "
                   "(bbarolo.run runs all the tasks of a parameter file).")
-        t = cls(cube, **fpar)          # (all the parameters at once: Bayesian3DFIT sets its rings here)
+        # (all the parameters at once: Bayesian3DFIT sets its rings here; the functions first, for FREE and PRIORS)
+        t = cls(cube, **fpar) if funcs is None else cls(cube, funcs=funcs, **fpar)
         t.update(**params)
         return t
 
@@ -1357,7 +1359,7 @@ class Task:
         """The problem of the value of FREE, checked when it is set for 2DFIT and 3DFIT: for 3DFIT that of METHOD
         CLASSIC if METHOD is CLASSIC, either syntax if METHOD is not given (run(method=...) may change it), none for
         GLOBAL and BAYESIAN (checked when the fit starts, with their free parameters). None if acceptable."""
-        from .params import free_problem, bayes_freepar
+        from .params import free_problem, bayes_freepar, BAYES_FUNC_PARS
         if self.TASK == "2DFIT":
             return free_problem(free, "2DFIT")
         if self.TASK != "3DFIT":
@@ -1369,7 +1371,7 @@ class Task:
         prob = free_problem(free, "3DFIT")
         if prob and meth is None:
             try:
-                bayes_freepar(free)
+                bayes_freepar(free, funcs=set(BAYES_FUNC_PARS) | set(getattr(self, "funcs", {})))
                 return None
             except ValueError:
                 pass
@@ -1433,6 +1435,10 @@ class Task:
             lines.append("// FITSFILE: an in-memory cube (written in the output folder by write())")
         for k, v in self._all_params().items():
             lines.append(f"{k:14s}{_to_str(_kw.lookup(k), v)}")
+        own = _own_funcs(self) if isinstance(self, _FitTask) else []
+        if own:
+            lines.append(f"// funcs: {', '.join(n.upper() for n in own)}: Python functions of radius, not in this file "
+                         "(give them in funcs)")
         s = "\n".join(lines) + "\n"
         if fname:
             with open(fname, "w") as f:
@@ -1520,7 +1526,10 @@ class Task:
         hdu = self._input_hdu()
         prm = self._all_params(outfolder=os.path.abspath(of) + "/",
                                fitsfile=self._cube if hdu is None else "in-memory cube")
-        par = _checked(build_param(prm))
+        funcs = _checked_funcs(type(self).__name__, self.TASK, self.funcs) if isinstance(self, _FitTask) else {}
+        par = build_param(prm)
+        par._funcs = tuple(funcs)                    # (FREE and PRIORS may name them: checked by checkPars)
+        par = _checked(par)
         if self.TASK == "SLITFIT":                   # (a long-slit spectrum, read by the task: not a cube)
             from .cube import Cube
             c = Cube(par=par)
@@ -1528,6 +1537,7 @@ class Task:
         else:
             c = self._read_cube(par)
         c._source_hdu = hdu                          # (the cube in memory, for the engines of the fits)
+        c._funcs = funcs                             # (the functions of radius, for the engines of the fits)
         c.noise_seed = seed
         outs = run_steps(c, par, collect=True, write=False)
         self.result = _result(self.TASK or "MAPS", {n: o for n, (o, _) in outs.items()}, c, par, source=self)
@@ -1563,7 +1573,60 @@ def _doc(cls, text):
     return cls
 
 
-class FitMod3D(Task):
+def _func_spec(task):
+    """The parameters that can be functions of radius (NAME_FUNC in FREE) in the fit task (3DFIT, WINDFIT, SLITFIT),
+    the aliases of their names and the default functions."""
+    if task == "WINDFIT":
+        from .bayesian.wind import WIND_FUNC_PARS, _WIND_ALIASES, DEFAULT_WIND_FUNCS
+        return WIND_FUNC_PARS, _WIND_ALIASES, DEFAULT_WIND_FUNCS
+    if task == "SLITFIT":
+        from .bayesian.slit import SLIT_FUNC_PARS, _SLIT_ALIASES, DEFAULT_SLIT_FUNCS
+        return SLIT_FUNC_PARS, _SLIT_ALIASES, DEFAULT_SLIT_FUNCS
+    from .params import BAYES_RING_PARS, _BAYES_ALIASES
+    from .bayesian.fitter import DEFAULT_FUNCS
+    return BAYES_RING_PARS, _BAYES_ALIASES, DEFAULT_FUNCS
+
+
+def _checked_funcs(who, task, funcs):
+    """funcs ({name: f(R, p1, p2, ...)}) with the names as in FREE (lower case; PA -> phi in 3DFIT). BBaroloError (who:
+    the name of the class) for a parameter that cannot be a function of radius in the task, or a value that is not a
+    Python function of the radius and at least one parameter (their number is read from its signature)."""
+    import inspect
+    from .params import bayes_name
+    names, aliases, _ = _func_spec(task)
+    out = {}
+    for k, f in dict(funcs).items():
+        name = bayes_name(k, aliases)
+        if name not in names:
+            raise BBaroloError(f"{who}: funcs: {k} cannot be a function of radius in {task} (only "
+                               f"{', '.join(n.upper() for n in names)})")
+        if not inspect.isfunction(f) or f.__code__.co_argcount < 2:
+            raise BBaroloError(f"{who}: funcs: {k} must be a Python function f(R, p1, ...) of the radius R (arcsec) "
+                               f"and its parameters, not {f!r}")
+        out[name] = f
+    return out
+
+
+def _own_funcs(task):
+    """The names of the functions of radius of the fit task (or of its engine) that are not the default ones."""
+    dflt = _func_spec(task.TASK)[2]
+    return [k for k, f in task.funcs.items() if f is not dflt.get(k)]
+
+
+class _FitTask(Task):
+    """A fit whose free parameters can be functions of radius (NAME_FUNC in FREE): 3DFIT (METHOD GLOBAL and BAYESIAN),
+    WINDFIT and SLITFIT. funcs, a dict {NAME: f(R, p1, p2, ...)} (R in arcsec; also the attribute funcs, a dict that
+    can be changed until run()), gives functions of radius: they replace the default ones (e.g. VROT, an arctangent)
+    or add others (3DFIT: any ring parameter, e.g. Z0); the priors of their parameters NAME_P1, NAME_P2, ... go in
+    PRIORS (needed for those without a default prior, e.g. Z0_P1)."""
+
+    def __init__(self, cube=None, funcs=None, **params):
+        self.funcs = dict(getattr(self, "funcs", None) or {})      # (an engine: its default functions)
+        self.funcs.update(_checked_funcs(type(self).__name__, self.TASK, funcs or {}))
+        super().__init__(cube, **params)
+
+
+class FitMod3D(_FitTask):
     TASK = "3DFIT"
 
 
@@ -1584,11 +1647,11 @@ class GalWind(Task):
     TASK = "GALWIND"
 
 
-class WindFit(Task):
+class WindFit(_FitTask):
     TASK = "WINDFIT"
 
 
-class SlitFit(Task):
+class SlitFit(_FitTask):
     TASK = "SLITFIT"
 
 
@@ -1651,6 +1714,9 @@ _doc(FitMod3D, """Fit a 3D tilted-ring model to a datacube (3DFIT), with method 
 
     'global' and 'bayesian' take the same parameters (FREE, PRIORS, LIKEOPTS, SAMPLEROPTS, RUNOPTS: see
     bbarolo.help('3DFIT')); their engine is Bayesian3DFIT (res.fitter), for custom likelihoods and more.
+    funcs={NAME: f(R, p1, p2, ...)} (or the attribute funcs, a dict) gives functions of radius for NAME_FUNC in FREE
+    (R in arcsec): they replace the defaults (VROT arctangent, VDISP line, DENS exponential) or add others for any ring
+    parameter; the priors of their parameters (NAME_P1, NAME_P2, ...) go in PRIORS.
 
     Result (of run(), in memory; method: res.method):
       rings          Table of the final rings at full precision, all of them: radii (arcsec),
@@ -1679,11 +1745,16 @@ _doc(FitMod3D, """Fit a 3D tilted-ring model to a datacube (3DFIT), with method 
     ...              free="VROT VDISP", mask="SEARCH")
     >>> res = f.run(threads=4)          # nothing written
     >>> res.write("out/")               # the files of BBarolo -p
-    >>> res = f.run(method="global", free="VROT VDISP INC_SINGLE PA_SINGLE")""")
+    >>> res = f.run(method="global", free="VROT VDISP INC_SINGLE PA_SINGLE")
+    >>> f.funcs['z0'] = lambda R, p1, p2: p1 * np.exp(R / p2)       # a flare
+    >>> res = f.run(method="global", free="VROT VDISP_SINGLE Z0_FUNC",
+    ...             priors="Z0_P1=(uniform,0,30) Z0_P2=(uniform,50,2000)")""")
 _doc(WindFit, """Fit a bi-conical outflow to a datacube (WINDFIT), with method (the parameter METHOD): 'global' (the
     default: the maximum of the likelihood, with the errors of its curvature; MINIMISER) or 'bayesian' (the
     posterior, by nested sampling; SAMPLER). The initial wind as for GALWIND (XPOS, YPOS, VSYS, INC, PA, OPENANG,
     CONELEN, VWIND), and FREE (required), PRIORS, LIKEOPTS, SAMPLEROPTS, RUNOPTS: see bbarolo.help('WINDFIT').
+    funcs={NAME: f(R, p1, ...)} (or the attribute funcs) replaces the functions of radius of VWIND_FUNC, VDISP_FUNC,
+    VROT_FUNC (R in arcsec).
 
     Result: model (HDU of the best model), parameters (Table of the free parameters with their errors), shells
     (Table: VWIND, VDISP, VROT of the shells with errors), samples (Table), fitter (the engine, BayesianWind).""")
@@ -1691,6 +1762,8 @@ _doc(SlitFit, """Fit the kinematics of a disk to a long-slit spectrum (SLITFIT),
     'global' (the default: the maximum of the likelihood, with the errors of its curvature; MINIMISER) or
     'bayesian' (the posterior, by nested sampling; SAMPLER). The first argument is the slit (position x
     wavelength). SLITWIDTH, BEAM (the seeing), INC and SPECRES are required: see bbarolo.help('SLITFIT').
+    funcs={NAME: f(R, p1, ...)} (or the attribute funcs) replaces the functions of radius of VROT_FUNC, VDISP_FUNC,
+    VRAD_FUNC, DENS_FUNC (R in arcsec).
 
     Result: rings (Table of the rings with their errors), model (HDU of the best model of the slit), samples
     (Table), fitter (the engine, BayesianSlitFit).""")

@@ -401,3 +401,24 @@ def test_slit_radii_range(mock_slit):
         f = _fit(fname, radii=rad)
         f._load()
         assert np.allclose(f.initial["radii"], [0.6, 1.6, 2.6, 3.6]), rad
+
+
+def test_slit_task_functions_of_radius(mock_slit):
+    """SlitFit takes the functions of radius of NAME_FUNC (funcs=, or the attribute funcs), as FitMod3D: here a
+    constant VDISP with one parameter in place of the default line, given to the engine of run(); funcs is checked
+    (only VROT, VDISP, VRAD, DENS can be functions of radius in SLITFIT)."""
+    from bbarolo import SlitFit
+
+    def flat(R, p1):
+        return p1 + 0. * R
+
+    fname, R = mock_slit
+    kw = dict(slitwidth=1, beam=1.2, specres=1.2, inc=60, redshift=Z, restwave=list(REST), relint=list(RELINT),
+              contsub=True, norm="LOCAL", free="VROT VDISP_FUNC VSYS XPOS", priors="VDISP_P1=(uniform,0,60)",
+              threads=4, verbose=False)
+    r = SlitFit(fname, funcs={'disp': flat}, **kw).run()
+    assert r.fitter.funcs['vdisp'] is flat and r.fitter.funcs['vrot'] is not flat          # (the default arctan)
+    assert "vdisp_p1" in r.fitter.freepar_names and "vdisp_p2" not in r.fitter.freepar_names
+    assert np.allclose(r.rings["VDISP"], r.rings["VDISP"][0]) and 0 < r.rings["VDISP"][0] < 60
+    with pytest.raises(BBaroloError, match="VSYS cannot be a function of radius in SLITFIT"):
+        SlitFit(fname, funcs={'VSYS': flat})

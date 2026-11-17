@@ -87,7 +87,7 @@ posterior, and the errors within 10% of its widths.
 
 - `VWIND`, `VDISP`, `VROT`: one value per shell (the shells are `RADII`, or `NLAYERS` shells, by default one per
   beam), `NAME_SINGLE` one value for all the shells, `NAME_FUNC` a function of radius (VWIND: an arctangent
-  rising to a terminal velocity; VDISP and VROT: linear);
+  rising to a terminal velocity; VDISP and VROT: linear; in Python, `funcs` of WindFit replaces them);
 - `XPOS`, `YPOS`, `VSYS`, `INC` (0 to 90°: the cone along +z recedes, `PA` sets the side it projects on),
   `PA`, `OPENANG`, `OPENIN`, `CONELEN`;
 - `EMSCALE`, `EMCLUMP`, `EMRATIO`, `EMSLOPE`: the prior of the emissivities, its mean (in the receding

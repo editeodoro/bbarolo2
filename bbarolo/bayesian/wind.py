@@ -75,7 +75,7 @@ import math
 import copy
 import numpy as np
 
-from ..tasks import Task, build_param, _checked
+from ..tasks import _FitTask, build_param, _checked
 from ..bbutils import BBaroloError, getCenterCoordinates, DeltaVel
 from ..windmodel import WindModel, WindCells, WindPars, Boxes
 from .emission import (log_marginal, log_marginal_diag, log_profile, log_marginal_gauss, log_marginal_gauss_diag,
@@ -185,7 +185,7 @@ def wind_priors(priors):
                         func_pars=WIND_FUNC_PARS, aliases=_WIND_ALIASES)
 
 
-class BayesianWind(Task):
+class BayesianWind(_FitTask):
     """Fit a bi-conical wind to a datacube in a Bayesian framework (see the module documentation).
 
     BayesianWind(cube, **params): the cube (FITS file, HDU or (data, header)) and any BBarolo parameter: the initial

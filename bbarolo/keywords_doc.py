@@ -1337,9 +1337,10 @@ with `SIDE` `A` or `R` the centre and VSYS stay fixed.
 `YPOS`, `VSYS`, `VRAD`, `VVERT`, `DVDZ`, `ZCYL`, `Z0THICK`, `FTHICK`, `VDISPTHICK`) has one value per ring;
 `NAME_SINGLE` has one value for all the rings; `NAME_FUNC` is a function of radius with two parameters:
 `VROT_FUNC` an arctangent, 2/π·p1·arctan(R/p2), `VDISP_FUNC` a line, p1 + p2·R, `DENS_FUNC` an exponential,
-p1·exp(−R/p2). `SIGMA` (the noise per voxel), `FRACERR` (a model error proportional to the model), `RADMAX`
-(the outer edge of the disk, see `LIKEOPTS`), `RADMAXA` and `RADMAXR` (the outer edges of the approaching and
-receding halves) are single values. Each parameter appears once, and its prior is
+p1·exp(−R/p2) (in Python, `funcs` of FitMod3D replaces them or gives others, for any ring parameter).
+`SIGMA` (the noise per voxel), `FRACERR` (a model error proportional to the model), `RADMAX` (the outer edge
+of the disk, see `LIKEOPTS`), `RADMAXA` and `RADMAXR` (the outer edges of the approaching and receding halves)
+are single values. Each parameter appears once, and its prior is
 set by `PRIORS`; e.g. `FREE VROT VDISP_SINGLE INC_SINGLE PA_SINGLE`. The default frees the rotation velocity
 and the dispersion of each ring, one centre, systemic velocity, inclination, position angle and scale height
 for all the rings, the outer edge of the disk and the fractional model error:
@@ -1658,7 +1659,8 @@ uniform between `loc` and `loc`+`scale`. A wrong entry is an error before the ru
 
 NAME is a free parameter as in `FREE` (case-insensitive; `NAME_SINGLE` is the same as NAME, and the
 prior of a parameter with one value per ring applies to each ring), or `VROT_P1`, `VROT_P2`,
-`VDISP_P1`, ... for the parameters of a function of radius (`NAME_FUNC` in `FREE`). For `SIGMA`, the
+`VDISP_P1`, ... for the parameters of a function of radius (`NAME_FUNC` in `FREE`; those of the functions
+given in Python, `funcs`, have no default priors and need one). For `SIGMA`, the
 arguments `a`, `b` and `scale` can be `none`: 0.5, 1000 and 1 times the measured noise rms.
 
 The priors that are not given are uniform. Those of the ring parameters follow the initial rings, the
