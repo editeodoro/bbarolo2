@@ -7,8 +7,8 @@ The PNG files go to docs/figures/ and are committed: Read the Docs does not run 
     python3 docs/scripts/make_figures.py --list
     python3 docs/scripts/make_figures.py --out /tmp/figs # elsewhere, e.g. to compare with docs/figures/
 
-The cube ngc2403.fits is looked for in --examples, $BBAROLO_EXAMPLES, or the folder examples/ next to
-the repository (as the tests do). The code of each figure is the code shown on the task pages. The tasks
+The cube ngc2403.fits is looked for in --examples, $BBAROLO_EXAMPLES, the folder examples/ of the
+repository, or the folder examples/ next to it (as the tests do). The code of each figure is the code shown on the task pages. The tasks
 run in memory (run() writes nothing), so only the PNG files are written.
 $BBAROLO_CODE runs another copy of the package (a folder that contains bbarolo/).
 """
@@ -416,107 +416,7 @@ def fig_rend3d():
 # (end of maps and utilities)
 
 
-# ---------------------------------------------------------------- examples: NGC 2403 3DFIT, simulated cubes
-_N2403_FIT = {}
-
-
-def _n2403_refined():
-    """The refined fit of NGC 2403 (page ngc2403-3dfit): INC and PA free, TWOSTAGE, errors, ADRIFT."""
-    if "res" not in _N2403_FIT:
-        from bbarolo import FitMod3D
-        f = FitMod3D(CUBE, nradii=20, radsep=60, xpos=77, ypos=77, vsys=132.8, vrot=120, vdisp=8, inc=60,
-                     pa=123.7, z0=10, free="VROT VDISP INC PA", deltainc=15, mask="SEARCH", norm="LOCAL",
-                     flagerrors=True, adrift=True)
-        _N2403_FIT["res"] = f.run(threads=4)
-    return _N2403_FIT["res"]
-
-
-@figure("ngc2403_first")
-def fig_ngc2403_first():
-    from bbarolo import Maps, PVSlice
-    m = Maps(CUBE, mask="THRESHOLD", threshold=0.002, totalmap=True, velocitymap=True).run(threads=4)
-    pv = PVSlice(CUBE, xpos_pv=77, ypos_pv=77, pa_pv=123.7).run()
-    fig, axs = plt.subplots(1, 3, figsize=(11, 3.7))
-    for ax, hdu, title, cmap in ((axs[0], m.totalmap, "Total intensity (Jy/beam km/s)", "viridis"),
-                                 (axs[1], m.velocitymap, "Velocity (km/s)", "RdBu_r")):
-        d = np.asarray(hdu.data, float)
-        lo, hi = np.nanpercentile(d[np.isfinite(d) & (d != 0)], [1, 99])
-        im = ax.imshow(d, origin="lower", vmin=lo, vmax=hi, cmap=cmap)
-        fig.colorbar(im, ax=ax, shrink=0.8)
-        ax.set_title(title, fontsize=9)
-        ax.set_xlabel("x (pixel)")
-    axs[0].set_ylabel("y (pixel)")
-    h, d = pv.pv.header, np.asarray(pv.pv.data, float)
-    off = 3600 * (h["CDELT1"] * (np.arange(h["NAXIS1"]) + 1 - h["CRPIX1"]) + h["CRVAL1"])
-    vel = (h["CDELT2"] * (np.arange(h["NAXIS2"]) + 1 - h["CRPIX2"]) + h["CRVAL2"]) / 1000.
-    im = axs[2].pcolormesh(off, vel, d * 1000, cmap="Greys", shading="nearest")
-    fig.colorbar(im, ax=axs[2], label="mJy/beam", shrink=0.8)
-    axs[2].set_title("PV slice, PA = 123.7$^\\circ$", fontsize=9)
-    axs[2].set_xlabel("Offset (arcsec)")
-    axs[2].set_ylabel("Velocity (km/s)")
-    fig.tight_layout()
-    save(fig, "ngc2403_first.png")
-
-
-@figure("ngc2403_geometry")
-def fig_ngc2403_geometry():
-    res = _n2403_refined()
-    t1, t2 = res.rings_stage1, res.rings
-    fig, axs = plt.subplots(4, 1, sharex=True, figsize=(6, 8))
-    for ax, k, lab in zip(axs, ("vrot", "vdisp", "inc", "pa"),
-                          ("VROT (km/s)", "VDISP (km/s)", "INC (deg)", "PA (deg)")):
-        ax.plot(t1["radii"], t1[k], "o", ms=4, color="0.55", label="stage 1")
-        ax.plot(t2["radii"], t2[k], "-o", ms=3, color="C3", label="stage 2")
-        ax.set_ylabel(lab)
-    axs[0].legend(fontsize=8)
-    axs[-1].set_xlabel("Radius (arcsec)")
-    fig.tight_layout()
-    save(fig, "ngc2403_geometry.png")
-
-
-@figure("ngc2403_check")
-def fig_ngc2403_check():
-    res = _n2403_refined()
-    save(res.plot_pv(), "ngc2403_pv.png")
-    data, model, resid = (np.asarray(x.data, float) for x in (res.data, res.model, res.residual))
-    h = res.data.header
-    vel = (np.arange(data.shape[0]) + 1 - h["CRPIX3"]) * h["CDELT3"] + h["CRVAL3"]
-    if str(h.get("CUNIT3", "")).lower() in ("m/s", "ms"):
-        vel = vel / 1000.
-    chans = [14, 20, 26, 31, 36, 42]
-    vmax = np.nanmax(data)
-    fig, axs = plt.subplots(3, len(chans), figsize=(2.2 * len(chans), 6.8), sharex=True, sharey=True)
-    for j, c in enumerate(chans):
-        axs[0, j].imshow(data[c], origin="lower", cmap="Greys", vmin=0, vmax=0.6 * vmax)
-        axs[0, j].contour(model[c], levels=vmax * np.array([0.1, 0.3, 0.6]), colors="red", linewidths=0.7)
-        axs[0, j].set_title(f"{vel[c]:.0f} km/s", fontsize=9)
-        im = axs[1, j].imshow(model[c], origin="lower", cmap="Greys", vmin=0, vmax=0.6 * vmax)
-        im2 = axs[2, j].imshow(resid[c], origin="lower", cmap="RdBu_r", vmin=-0.3 * vmax, vmax=0.3 * vmax)
-    for ax in axs.ravel():
-        ax.set_xticks([]), ax.set_yticks([])
-    for i, lab in enumerate(("data + model", "model", "residual")):
-        axs[i, 0].set_ylabel(lab)
-    fig.tight_layout()
-    save(fig, "ngc2403_channels.png")
-
-
-@figure("ngc2403_errors")
-def fig_ngc2403_errors():
-    res = _n2403_refined()
-    t, ad = res.rings, res.asymdrift
-    fig, ax = plt.subplots(figsize=(6, 3.8))
-    r = np.asarray(t["radii"])
-    ax.errorbar(r, t["vrot"], yerr=[-np.asarray(t["e_vrot1"]), np.asarray(t["e_vrot2"])], fmt="o-", ms=3,
-                capsize=2, label="$V_\\mathrm{rot}$ (FLAGERRORS)")
-    ax.plot(ad["radii"], ad["vcirc"], "s-", ms=3, color="C3", label="$V_\\mathrm{c}$ (ADRIFT)")
-    ax.set_xlabel("Radius (arcsec)")
-    ax.set_ylabel("Velocity (km/s)")
-    ax.legend(fontsize=8)
-    ax.grid(alpha=0.3)
-    fig.tight_layout()
-    save(fig, "ngc2403_errors.png")
-
-
+# ---------------------------------------------------------------- examples: simulated cubes
 def _simulate(seed, snr=20., path=None):
     """The simulated galaxy of the page `simulated`: returns (SimulatedGalaxyCube, true ring dict)."""
     from bbarolo import SimulatedGalaxyCube
@@ -580,7 +480,7 @@ def fig_simulated():
 # (end of examples 1)
 
 
-# ---------------------------------------------------------------- examples: Bayesian fit, GalMod3D
+# ---------------------------------------------------------------- examples: GalMod3D
 def _pv_axes(hdu):
     """Offset (arcsec), velocity (km/s, increasing) and data of a PV HDU."""
     h, d = hdu.header, np.asarray(hdu.data, float)
@@ -672,55 +572,6 @@ def fig_galmod3d_warp():
     save(fig, "galmod3d_warp.png")
 
 
-@figure("bayesian")
-def fig_bayesian():
-    """The fit of the page examples/bayesian: about 8 minutes on 4 processes."""
-    from bbarolo import Bayesian3DFIT, FitMod3D
-    rings = dict(radii=[300, 600, 900], xpos=77, ypos=77, vsys=132.8, vrot=100, vdisp=10, inc=55, pa=123.7,
-                 z0=10, mask="SEARCH")
-    f = Bayesian3DFIT(CUBE, **rings)
-    f.priors["vrot"] = dict(name="uniform", loc=50, scale=200)      # km/s
-    f.priors["vdisp"] = dict(name="uniform", loc=0, scale=30)       # km/s
-    f.priors["inc"] = dict(name="uniform", loc=40, scale=25)        # degrees
-    f.priors["phi"] = dict(name="uniform", loc=110, scale=30)       # degrees
-    t0 = time.time()
-    f.sample(freepar="VROT VDISP_SINGLE INC_SINGLE PA_SINGLE SIGMA RADMAX", threads=4, sampler="nautilusbb",
-             sampler_kwargs=dict(nlive=500, seed=1), run_kwargs=dict(dlogz=1, n_eff=3000))
-    print(f"    fit: {time.time() - t0:.0f} s")
-    f.print_stats()
-    if os.environ.get("BAYES_SAVE"):
-        f.save_results(os.environ["BAYES_SAVE"])
-    names = list(f.freepar_names)
-    cols = [names.index(k) for k in ("inc", "phi", "radmax", "vdisp")]
-    fig = f.corner_plot(samples=f.samples_equal[:, cols], labels=["INC", "PA", "RADMAX", "VDISP"])
-    save(fig, "bayesian_corner.png")
-
-    # the rotation curve against 3DFIT: with its own geometry, and with that of the posterior medians
-    fa = FitMod3D(CUBE, **rings, free="VROT VDISP INC PA").run(threads=4)
-    inc, pa = f.outri.r["inc"][0], f.outri.r["phi"][0]
-    fb = FitMod3D(CUBE, **{**rings, "inc": inc, "pa": pa}, free="VROT VDISP").run(threads=4)
-    R = np.asarray(f.outri.r["radii"], float)
-    lo, hi = f.ring_errors("vrot")
-    vr = np.asarray(f.outri.r["vrot"], float)
-    fig, ax = plt.subplots(figsize=(5.4, 4))
-    curves = np.array([s[[names.index(f"vrot{i + 1}") for i in range(len(R))]] for s in f.samples_equal])
-    for c in curves[:: max(1, len(curves) // 150)]:
-        ax.plot(R, c, color="C0", alpha=0.04, lw=1)
-    ax.errorbar(R, vr, [lo, hi], fmt="o", color="C0", capsize=3, label="BAYESIAN: median, 68%")
-    ax.plot(R + 6, fa.rings["vrot"], "s", color="C1", label=f"3DFIT, INC, PA free ({fa.rings['inc'][0]:.1f}$^\\circ$)")
-    ax.plot(R - 6, fb.rings["vrot"], "^", color="C2", label=f"3DFIT, INC = {inc:.1f}$^\\circ$ (Bayesian)")
-    if f.disk_edge is not None:
-        ax.axvline(f.disk_edge, color="grey", ls=":")
-        ax.text(f.disk_edge, 0.04, "edge ", color="grey", fontsize=8, ha="right", transform=ax.get_xaxis_transform())
-    ax.set_xlabel("Radius (arcsec)")
-    ax.set_ylabel("VROT (km/s)")
-    ax.legend(fontsize=8, loc="lower right")
-    save(fig, "bayesian_vrot.png")
-    print("    3DFIT, own geometry:", fa.rings["vrot"], fa.rings["inc"][0], fa.rings["pa"][0])
-    print("    3DFIT, Bayes geometry:", fb.rings["vrot"], fb.rings["vdisp"])
-    print("    Bayes:", vr, lo, hi)
-
-
 # (end of examples 2)
 
 
@@ -767,7 +618,8 @@ def fig_conventions():
 
 
 def find_cube(examples):
-    cands = [examples, os.environ.get("BBAROLO_EXAMPLES"), os.path.join(os.path.dirname(REPO), "examples")]
+    cands = [examples, os.environ.get("BBAROLO_EXAMPLES"), os.path.join(REPO, "examples"),
+             os.path.join(os.path.dirname(REPO), "examples")]
     for d in cands:
         if d and os.path.isfile(os.path.join(d, "ngc2403.fits")):
             return os.path.join(d, "ngc2403.fits")

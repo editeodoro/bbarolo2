@@ -38,13 +38,11 @@ hd142527
 
 ## Tutorials
 
-Complete analyses step by step, on the cube of NGC 2403 or on simulated cubes made by BBarolo itself.
+Models made by BBarolo itself: model cubes from 3D fields, and simulated cubes to test a fit.
 
 ```{toctree}
 :maxdepth: 1
 
-ngc2403-3dfit
-bayesian
 galmod3d
 simulated
 ```
