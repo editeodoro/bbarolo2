@@ -206,6 +206,8 @@ class BayesianWind(_FitTask):
     """
 
     TASK = "WINDFIT"
+    priors = None                       # (its own priors, set by __init__, defaults included: not the PRIORS view of
+                                       # the tasks, tasks._FitTask.priors)
     DEFAULT_METHOD = "GLOBAL"           # the METHOD of run() when it is not given (as the task WINDFIT)
     _KEYWORD_OPTIONS = ("FREE", "SAMPLER", "PRIORS", "SAMPLEROPTS", "RUNOPTS", "LIKEOPTS")
 
@@ -251,7 +253,7 @@ class BayesianWind(_FitTask):
             if kw is not None and kw.name in self._KEYWORD_OPTIONS and v is not None:
                 given[kw.name] = self._keyword_option(kw.name, v)
         super(BayesianWind, self).update(**params)
-        if not hasattr(self, "priors"):
+        if getattr(self, "priors", None) is None:
             return self
         if "PRIORS" in given:
             self.priors.update(given["PRIORS"])

@@ -192,7 +192,9 @@ The Result of {class}`~bbarolo.WindFit` has `model` (the model cube, an HDU), `p
 ({class}`~bbarolo.BayesianSlitFit`). The three fits take `funcs={NAME: f(R, p1, ...)}` (or the attribute `funcs`,
 a dict), the functions of radius of `NAME_FUNC` in FREE: they replace the default ones or, in 3DFIT, add one for any
 ring parameter (e.g. `f.funcs["z0"] = lambda R, p1, p2: p1 * np.exp(R / p2)` and `Z0_FUNC` in FREE, with the priors of
-`Z0_P1` and `Z0_P2` in PRIORS). `bbarolo.run(parfile)` returns `{"3DFIT": Result}` for every method of 3DFIT,
+`Z0_P1` and `Z0_P2` in PRIORS). Their attribute `priors` is PRIORS as a dict: `f.priors["vrot"] =
+dict(name="uniform", loc=0, scale=300)` (or `("uniform", 0, 300)`) sets the prior of VROT. `bbarolo.run(parfile)`
+returns `{"3DFIT": Result}` for every method of 3DFIT,
 and `{"WINDFIT": ...}` or `{"SLITFIT": ...}`. See {doc}`../tasks/3dfit/index`, {doc}`../tasks/windfit/index` and
 {doc}`../tasks/slitfit/index`.
 

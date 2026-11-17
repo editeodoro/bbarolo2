@@ -67,6 +67,8 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
     """
 
     TASK = "3DFIT"                      # its task flag in parameter files (METHOD GLOBAL or BAYESIAN)
+    priors = None                       # (its own priors, set by __init__, defaults included: not the PRIORS view of
+                                       # the tasks, tasks._FitTask.priors)
     DEFAULT_METHOD = "BAYESIAN"         # the METHOD of run() when it is not given
 
     _KEYWORD_OPTIONS = ("FREE", "SAMPLER", "PRIORS", "SAMPLEROPTS", "RUNOPTS", "LIKEOPTS")
@@ -118,7 +120,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             if kw is not None and kw.name in self._KEYWORD_OPTIONS and v is not None:
                 given[kw.name] = self._keyword_option(kw.name, v)
         super(Bayesian3DFIT, self).update(**params)
-        if not hasattr(self, "priors"):              # called by the base constructor
+        if getattr(self, "priors", None) is None:    # called by the base constructor
             return self
         if "PRIORS" in given:
             self.priors.update(given["PRIORS"])

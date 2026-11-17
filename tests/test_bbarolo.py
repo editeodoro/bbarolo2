@@ -5202,6 +5202,48 @@ def test_task_functions_of_radius(tmp_path):
         assert cls.from_parfile(str(par), funcs={'z0': flare}).funcs['z0'] is flare
 
 
+def test_task_priors_attribute(tmp_path):
+    """FitMod3D, WindFit and SlitFit have the attribute priors, a view of PRIORS as a dict {NAME: {'name': distribution,
+    ...}}: f.priors['vrot'] = ... was an AttributeError (only the engines had priors). It shows PRIORS given as a string
+    (names as in FREE: PA -> phi), sets and removes entries (a dict, a tuple or a string as in a parameter file, checked
+    when set), its entries can be changed until run(), and run() gives them to the engine; f.priors = ... replaces
+    PRIORS. The engines keep their own priors (a dict, the defaults included)."""
+    from astropy.io import fits
+    from bbarolo import FitMod3D, WindFit, SlitFit, Bayesian3DFIT
+    from bbarolo.bbutils import BBaroloError
+    fn = _mock_cube(tmp_path)
+    hdu = fits.open(fn)[0]
+    rings = dict(nradii=4, radsep=40, xpos=31.5, ypos=31.5, vsys=0, vrot=150, vdisp=10, z0=0, inc=60, pa=45,
+                 mask="SEARCH", linear=0, verbose=False, threads=1)
+    f = FitMod3D(hdu, method="global", free="VROT_SINGLE", priors="PA=(norm,45,5)", **rings)
+    assert dict(f.priors) == {'phi': dict(name='norm', loc=45., scale=5.)} and 'pa' in f.priors
+    f.priors['vrot'] = dict(name='uniform', loc=100, scale=100)
+    f.priors['VROT']['scale'] = 80                          # (the entry itself: changed until run())
+    f.priors['inc_single'] = ('norm', 60, 5)
+    f.priors['vdisp'] = "(uniform,0,50)"
+    del f.priors['PA']
+    assert list(f.priors) == ['vrot', 'inc', 'vdisp']
+    assert "PRIORS        vrot=(uniform,loc=100.0,scale=80) inc=(norm,loc=60.0,scale=5.0)" in f.to_parfile()
+    r = f.run()
+    assert r.fitter.priors['vrot'] == dict(name='uniform', loc=100, scale=80)
+    assert r.fitter.priors['inc'] == dict(name='norm', loc=60., scale=5.)
+    assert 100 <= r.rings['vrot'][0] <= 180
+    for key, bad, msg in (('foo', ('uniform', 0, 1), "foo: unknown parameter"),
+                          ('vrot', ('nodist', 0, 1), "unknown distribution 'nodist'"), ('vrot', 3, "vrot: give")):
+        with pytest.raises(BBaroloError, match=msg):
+            f.priors[key] = bad
+    f.priors = {'vrot': ('uniform', 0, 300)}
+    assert dict(f.priors) == {'vrot': dict(name='uniform', loc=0., scale=300.)}
+    f.priors = None
+    assert dict(f.priors) == {} and "PRIORS" not in f.parameters
+    w, s = WindFit(hdu), SlitFit(hdu)
+    w.priors['PHI'] = ('uniform', 0, 90)                    # (PA in WINDFIT)
+    s.priors['disp'] = ('uniform', 0, 100)
+    assert list(w.priors) == ['pa'] and list(s.priors) == ['vdisp']
+    b = Bayesian3DFIT(fn, **rings)
+    assert type(b.priors) is dict and 'vrot' in b.priors   # (the engine: all its priors, the defaults included)
+
+
 def test_small_fixes_of_the_review(tmp_path):
     """SimulatedGalaxyCube.define_galaxy with xpos per ring and one ypos (it tested xpos: the galaxy was centred);
     Galfit (and a Result with it) can be pickled; BBarolo --paramfile=file.par runs the file (the option was taken as a

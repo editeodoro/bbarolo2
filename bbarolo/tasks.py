@@ -29,6 +29,7 @@ import time
 import shutil
 import tempfile
 import contextlib
+from collections.abc import MutableMapping
 import numpy as np
 from astropy.io import fits
 
@@ -1607,6 +1608,79 @@ def _checked_funcs(who, task, funcs):
     return out
 
 
+def _task_priors(task, value):
+    """The entries of PRIORS (a string as in a parameter file, or a dict, see params.bayes_value_string) as
+    {name: {'name': distribution, argument: value}}, with the names as in FREE, read by the parser of the fit task. In
+    3DFIT the parameters of a function of radius of any ring parameter are accepted (its function may be given later, in
+    funcs: checked by run()). BBaroloError if they cannot be read."""
+    from .params import bayes_priors, bayes_value_string, BAYES_RING_PARS
+    try:
+        s = bayes_value_string("PRIORS", value)
+        if task.TASK == "WINDFIT":
+            from .bayesian.wind import wind_priors
+            return wind_priors(s)
+        if task.TASK == "SLITFIT":
+            from .bayesian.slit import slit_priors
+            return slit_priors(s)
+        return bayes_priors(s, func_pars=BAYES_RING_PARS)
+    except (TypeError, ValueError) as e:
+        raise BBaroloError(f"{type(task).__name__}: PRIORS: {str(e).replace('PRIORS: ', '')}") from None
+
+
+class _PriorsDict(dict):
+    """PRIORS of a fit task as read by _task_priors (the store of its attribute priors)."""
+
+
+class _Priors(MutableMapping):
+    """The priors given to a fit task (FitMod3D, WindFit, SlitFit): its PRIORS as a dict {NAME: {'name': distribution,
+    argument: value}} (NAME as in FREE, lower case, e.g. 'vrot', 'phi', 'z0_p1'). f.priors['vrot'] = dict(name='uniform',
+    loc=0, scale=300) (or ('uniform', 0, 300), or '(uniform,0,300)' as in a parameter file) sets an entry of PRIORS,
+    del f.priors['vrot'] removes one; the entries are dicts that can be changed until run(). The priors not given are
+    the defaults of the engine (res.fitter.priors after run())."""
+
+    def __init__(self, task):
+        self._task = task
+
+    def _dict(self, create=False):
+        t = self._task
+        v = t._params.get("PRIORS")
+        if isinstance(v, _PriorsDict):
+            return v
+        if v is None and not create:
+            return {}
+        d = _PriorsDict(_task_priors(t, v) if v is not None else {})
+        t._params["PRIORS"] = d
+        return d
+
+    def __getitem__(self, key):
+        return self._dict()[self._name(key)]
+
+    def __setitem__(self, key, value):
+        entry = _task_priors(self._task, f"{key}={value}" if isinstance(value, str) else {key: value})
+        self._dict(create=True).update(entry)
+
+    def __delitem__(self, key):
+        d = self._dict()
+        del d[self._name(key)]
+        if not d:
+            self._task._params.pop("PRIORS", None)
+
+    def __iter__(self):
+        return iter(self._dict())
+
+    def __len__(self):
+        return len(self._dict())
+
+    def __repr__(self):
+        return repr(dict(self._dict()))
+
+    def _name(self, key):
+        """The name of key as in the entries (lower case, aliases: PA -> phi in 3DFIT)."""
+        from .params import bayes_name
+        base, sep, suffix = bayes_name(key, _func_spec(self._task.TASK)[1]).partition("_")
+        return base + (sep + suffix if suffix and suffix != "single" else "")
+
+
 def _own_funcs(task):
     """The names of the functions of radius of the fit task (or of its engine) that are not the default ones."""
     dflt = _func_spec(task.TASK)[2]
@@ -1624,6 +1698,17 @@ class _FitTask(Task):
         self.funcs = dict(getattr(self, "funcs", None) or {})      # (an engine: its default functions)
         self.funcs.update(_checked_funcs(type(self).__name__, self.TASK, funcs or {}))
         super().__init__(cube, **params)
+
+    @property
+    def priors(self):
+        """The priors given (PRIORS) as a dict {NAME: {'name': distribution, argument: value}}: f.priors['vrot'] =
+        dict(name='uniform', loc=0, scale=300) sets one, f.priors = {...} replaces them all (see _Priors). The engines
+        (Bayesian3DFIT, ...) have instead a plain dict of all their priors, the defaults included."""
+        return _Priors(self)
+
+    @priors.setter
+    def priors(self, value):
+        self.update(priors=None if not value else value if isinstance(value, (str, dict)) else dict(value))
 
 
 class FitMod3D(_FitTask):
@@ -1716,7 +1801,8 @@ _doc(FitMod3D, """Fit a 3D tilted-ring model to a datacube (3DFIT), with method 
     bbarolo.help('3DFIT')); their engine is Bayesian3DFIT (res.fitter), for custom likelihoods and more.
     funcs={NAME: f(R, p1, p2, ...)} (or the attribute funcs, a dict) gives functions of radius for NAME_FUNC in FREE
     (R in arcsec): they replace the defaults (VROT arctangent, VDISP line, DENS exponential) or add others for any ring
-    parameter; the priors of their parameters (NAME_P1, NAME_P2, ...) go in PRIORS.
+    parameter; the priors of their parameters (NAME_P1, NAME_P2, ...) go in PRIORS. The attribute priors is PRIORS as
+    a dict: f.priors['vrot'] = dict(name='uniform', loc=0, scale=300) (or ('uniform', 0, 300)) sets one.
 
     Result (of run(), in memory; method: res.method):
       rings          Table of the final rings at full precision, all of them: radii (arcsec),

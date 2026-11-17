@@ -80,6 +80,7 @@ PRIORS, as they have no defaults:
 f = FitMod3D("ngc891.fits", method="global", free="VROT VDISP_SINGLE Z0_FUNC",
              priors="Z0_P1=(uniform,0,30) Z0_P2=(uniform,50,2000)", ...)
 f.funcs["z0"] = lambda R, p1, p2: p1 * np.exp(R / p2)      # a flare; or FitMod3D(..., funcs={"z0": ...})
+f.priors["vrot"] = dict(name="uniform", loc=50, scale=250)  # PRIORS as a dict
 res = f.run()
 ```
 

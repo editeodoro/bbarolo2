@@ -478,6 +478,11 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   VDISP, VRAD, DENS in SLITFIT) or, in 3DFIT, adds one for any ring parameter (e.g. `Z0_FUNC`, a flare). The names
   and the functions are checked (a ring parameter of the task, a Python function of R and at least one parameter);
   `from_parfile(..., funcs=)`; `to_parfile()` notes the functions in a comment.
+- **`priors` in FitMod3D, WindFit and SlitFit**, a view of PRIORS as a dict `{NAME: {'name': distribution,
+  argument: value}}` (names as in FREE, lower case): `f.priors['vrot'] = dict(name='uniform', loc=0, scale=300)` (or
+  `('uniform', 0, 300)`, or `'(uniform,0,300)'`) sets an entry, `del f.priors['vrot']` removes one, `f.priors =
+  {...}` replaces them all; the entries can be changed until `run()`, and are checked when set. Only the engines had
+  `priors` (an AttributeError on the tasks); theirs stays a plain dict of all their priors, the defaults included.
 
 - **The PV plot along the major axis (`_pv_<norm>.pdf`) draws the rings beyond the outer edge of their half of the
   disk as empty points**: beyond RADMAXA on the approaching side (negative offsets) and RADMAXR on the receding one,
