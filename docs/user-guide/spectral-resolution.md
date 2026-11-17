@@ -94,7 +94,3 @@ A change $\delta$ of SPECRES² changes the fitted VDISP² by $-\delta\,\Delta v^
 $\delta\,\Delta v^2/(2\,\mathrm{VDISP})$. For example, 0.849 (a Gaussian of FWHM 2 channels) in place of 0.707
 ($\delta = 0.22$) makes VDISP 12% smaller when VDISP is one channel, and 1% smaller when it is three channels.
 The error matters for dispersions of one or two channels, and is negligible for well-resolved lines.
-
-This page follows the discussion of [issue 53](https://github.com/editeodoro/Bbarolo/issues/53) of BBarolo, where
-the cases 1–8 were first worked out (here cases 5–7 are written so that they are exact for $N = 1$ as well; for
-$N \gg 1$ they are the same).
