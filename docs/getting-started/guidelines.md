@@ -1,0 +1,106 @@
+# Guidelines for a successful fit
+
+A 3D fit is only as good as its setup. These are the steps to follow with a new datacube, especially one of low
+resolution, before trusting a rotation curve. The {doc}`examples <../examples/index>` show them on real data.
+
+## 1. The observational parameters
+
+The model is convolved with the beam and broadened by the spectral resolution, so both must be right: they are what
+corrects the fit for beam smearing.
+
+- **Beam.** BBarolo reads it from the header (BMAJ, BMIN, BPA). If the header has none, as for most optical and
+  near-infrared cubes, give it with {ref}`BEAM <par-all-beam>` (the FWHM of the PSF or of the seeing, in arcsec;
+  one value for a circular beam).
+- **Spectral resolution.** {ref}`SPECRES <par-3dfit-specres>` is the dispersion of the line spread function, in
+  channels. The default, 0.425 channels, is a FWHM of one channel; Hanning-smoothed radio data have about twice
+  that (see {doc}`../examples/ngc891`), and optical and near-infrared spectrographs usually more (see
+  {doc}`../examples/ngc5633` and {doc}`../examples/u3-25160`).
+- **Spectral axis.** For an axis in wavelength or frequency, give the rest wavelength or frequency of the line
+  ({ref}`RESTWAVE <par-galmod-restwave>`, {ref}`RESTFREQ <par-galmod-restfreq>`) and the {ref}`REDSHIFT <par-galmod-redshift>`;
+  {ref}`VELDEF <par-all-veldef>` sets the definition of the velocity. Several lines (Hα and [NII]) are fitted together
+  with {ref}`RELINT <par-galmod-relint>`.
+
+The log of each run prints what BBarolo understood of the header: check the channel width, the beam and the units
+there. Headers without units are in {doc}`../user-guide/troubleshooting`.
+
+## 2. The mask
+
+The mask tells the fit which voxels are emission. It should be as large as possible, to include the faint emission
+of the outer disk, but not so large that it is mostly noise. {ref}`MASK <par-3dfit-mask>` `SEARCH` (the default) uses
+the detections of the source finder; `SMOOTH&SEARCH` follows faint extended emission better. Try the types with
+{doc}`MAKEMASK <../tasks/makemask/index>`, which builds only the mask, and compare each with the channel maps of the
+data; when one looks right, give 3DFIT the same parameters. Look also for emission that is not part of the galaxy:
+companions, or the HI of the Milky Way in the foreground ({doc}`../examples/ngc2403`).
+
+## 3. The initial values
+
+The parameter space is degenerate, and the fit depends on where it starts, above all on the **inclination**: with
+METHOD CLASSIC each ring can move only by {ref}`DELTAINC <par-3dfit-deltainc>` (15° by default) from the initial
+inclination, and on simulated disks the fitted inclination stays close to its start
+({doc}`../tasks/3dfit/algorithm`). The rotation velocity scales as $1/\sin i$.
+
+BBarolo estimates every parameter that is not given ({ref}`GUESSTYPE <par-3dfit-guesstype>`), and the log marks them
+with `(e)` in the table of the initial parameters (with METHOD CLASSIC they are also in `_rings_initial.txt`, and
+`res.rings_initial` in Python). The estimates are simple and can fail: always look at them before trusting the fit.
+Better, give your own:
+
+- **Centre and inclination** (XPOS, YPOS, INC) from the total intensity map ({doc}`MAPS <../tasks/maps/index>`), or,
+  better, from images at higher resolution (optical or near-infrared).
+- **Position angle** (PA) from the velocity field: by eye, or with a 2D fit ({doc}`2DFIT <../tasks/2dfit/index>`).
+- **Systemic velocity** (VSYS) from the midpoint of the global profile. The estimate of BBarolo is usually good, but
+  check it.
+- **Rotation velocity and dispersion**: any sensible value with METHOD CLASSIC. With METHOD GLOBAL and BAYESIAN they
+  also set the default priors (VROT between 0 and twice the initial value), so give a value that is not too low,
+  or set {ref}`PRIORS <par-3dfit-priors>`.
+
+At low inclination (below 30–40°) the inclination is hard to measure from the kinematics: fix it, at a value from
+other data ({doc}`../examples/pgc53639`). Close to edge-on, it trades off with the thickness of the disk
+({doc}`../examples/ngc891`).
+
+## 4. The rings
+
+Rings about one beam wide are independent; narrower rings sample the rotation curve more finely, but neighbouring
+rings are correlated. The rings must cover the emission (with METHOD GLOBAL and BAYESIAN, BBarolo warns when
+more than 5% of the flux of the total intensity map lies outside the disk of the rings). Give them with {ref}`NRADII <par-3dfit-nradii>` and {ref}`RADSEP <par-3dfit-radsep>`,
+or with {ref}`RADII <par-3dfit-radii>` (a list, or `range(Rmin,Rmax,step)`). The innermost ring, within a beam of the
+centre, is the least reliable.
+
+## 5. What to fit
+
+Start with few free parameters ({ref}`FREE <par-3dfit-free>`) and add more only if the data need them.
+
+- **Low resolution** (a few beams across the disk): fix the geometry and fit only VROT and VDISP.
+- **Well resolved disks**: INC and PA can be free; with METHOD CLASSIC, {ref}`TWOSTAGE <par-3dfit-twostage>`
+  (the default) regularises them as functions of radius and fits the velocities again. A warp shows as a PA or an
+  INC that change smoothly with radius ({doc}`../examples/pgc53639`).
+- **Parameters shared by the disk** (one inclination, one centre, one dispersion) and functions of radius are
+  possible with METHOD GLOBAL and BAYESIAN (`NAME_SINGLE`, `NAME_FUNC`), as are the thickness, the outer edge and a
+  lagging thick layer.
+
+## 6. The method
+
+{ref}`METHOD <par-3dfit-method>` `CLASSIC` (the default) fits the rings one at a time in seconds: start with it.
+`GLOBAL` fits all the parameters together by maximum likelihood, in seconds to minutes: use it for edge-on disks,
+whose rings overlap along the line of sight ({doc}`../examples/ugc1281`), for shared parameters, and to test a setup
+before sampling. `BAYESIAN` samples the posterior, in minutes to hours: use it when the uncertainties and the
+correlations of the parameters matter, as for data of low resolution or low signal-to-noise ratio
+({doc}`../examples/u3-25160`). See {doc}`../tasks/3dfit/index`.
+
+## 7. Check the outputs
+
+Look at the model, not only at the rotation curve: the position–velocity diagrams along the major and the minor
+axes, the channel maps and the residual maps of the PDF plots. The model should follow the data in all of them; a
+systematic pattern of the residuals (one side always brighter, a twist of the velocity field) points to a wrong
+centre, position angle, inclination, or to motions that the model does not have. If the model is not good, change
+the initial values or the options, and fit again.
+
+Read the errors for what they are. The errors of METHOD CLASSIC ({ref}`FLAGERRORS <par-3dfit-flagerrors>`) measure
+how fast the residuals of a ring grow when one parameter moves, the others fixed; those of GLOBAL and BAYESIAN include
+the correlations, but none includes the systematic errors of the model. A velocity dispersion smaller than the
+spectral resolution and the channel width is hard to measure, whatever its error says.
+
+## 8. Test the setup on a simulated cube
+
+To know what a fit can recover at the resolution and signal-to-noise ratio of your data, build a model galaxy on the
+grid of your cube, with known parameters and the same noise, and fit it with the same setup:
+{doc}`../examples/simulated`.
