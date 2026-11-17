@@ -55,10 +55,8 @@ first fit, every task with its parameters and how it works, examples, and the di
 
 ## Example
 
-These examples use the HI datacube of NGC 2403 of the documentation
-([examples/ngc2403.fits](examples/ngc2403.fits), 5 MB). The folder [examples/](examples) has other datasets, each
-with a parameter file, described on the [example pages](https://bbarolo.readthedocs.io/en/latest/examples/index.html)
-of the documentation. From the command line, with a parameter file as for the C++ BBarolo:
+A 3D fit of the HI datacube of NGC 2403 ([examples/ngc2403.fits](examples/ngc2403.fits), 5 MB). From the command
+line, with a parameter file as for the C++ BBarolo:
 
 ```shell
 cd examples
@@ -77,22 +75,11 @@ res = f.run()                     # in memory: res.rings (the fitted rings), res
 res.write("output/")              # the files and plots of the command line
 ```
 
-and a Bayesian fit (`method="bayesian"`; the engine `Bayesian3DFIT` is used here for the priors), with the posterior of the rotation velocity, the dispersion and the geometry:
-
-```python
-from bbarolo import Bayesian3DFIT
-
-f = Bayesian3DFIT("ngc2403.fits", radii=[300, 600, 900], xpos=77, ypos=77, vsys=132.8,
-                  vrot=100, vdisp=10, inc=55, pa=123.7, z0=10, mask="SEARCH")
-f.priors["vrot"] = dict(name="uniform", loc=50, scale=200)      # km/s
-f.priors["vdisp"] = dict(name="uniform", loc=0, scale=30)       # km/s
-f.priors["inc"] = dict(name="uniform", loc=40, scale=25)        # degrees
-f.priors["phi"] = dict(name="uniform", loc=110, scale=30)       # degrees (phi is PA)
-f.sample(freepar="VROT VDISP_SINGLE INC_SINGLE PA_SINGLE SIGMA RADMAX", threads=4,
-         sampler_kwargs=dict(nlive=500, seed=1), run_kwargs=dict(n_eff=3000))
-f.print_stats()                   # the median and the 68% interval of each parameter
-f.corner_plot()                   # needs the package corner
-```
+More examples, from radio cubes of nearby galaxies to ALMA data at high redshift, a protoplanetary disk and a
+long-slit spectrum, with global and Bayesian fits, are on the
+[example pages](https://bbarolo.readthedocs.io/en/latest/examples/index.html) of the documentation. Their data
+and parameter files are in [examples/](examples), with the notebook [examples/examples.ipynb](examples/examples.ipynb),
+which runs them all in Python and shows their plots.
 
 ## Attribution
 

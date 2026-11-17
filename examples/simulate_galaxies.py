@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 Simulate an emission-line datacube of a disk galaxy with SimulatedGalaxyCube (bbarolo):
-the new version of examples/pyBB_simulate_galaxies.py. The model is built in memory
+the new version of examples/pyBB_simulate_galaxies.py of BBarolo 1.8. The model is built in memory
 (no BBarolo executable, no temporary files) and written in a 'models' folder.
 
-    python pyBBarolo_pure/examples/simulate_galaxies.py
+    python bbarolo2/examples/simulate_galaxies.py
 """
 import os
 import sys

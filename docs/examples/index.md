@@ -7,7 +7,8 @@ protoplanetary disk and a long-slit spectrum. The cubes and the parameter files 
 [`examples/`](https://github.com/editeodoro/bbarolo2/tree/main/examples) of the repository
 (see {doc}`../getting-started/example-data`). Each page shows the parameter file and the same run in Python,
 explains the choices of the setup, and shows the outputs: the rings, the moment maps, the position–velocity
-diagrams and the channel maps of the data and of the model.
+diagrams and the channel maps of the data and of the model. The notebook
+[`examples.ipynb`](https://github.com/editeodoro/bbarolo2/blob/main/examples/examples.ipynb), in the same folder, runs all the examples in Python, in memory, and shows their plots.
 
 | Example | Data | Task | Time |
 |---|---|---|---|

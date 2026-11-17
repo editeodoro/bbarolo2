@@ -25,4 +25,5 @@ this cube and other datasets, each with a parameter file, described in {doc}`../
 
 The parameter files are next to the data, with the names of the examples (e.g. `ngc2403_3DFIT.par`); run them from
 the folder that contains the FITS file, e.g. `BBarolo -p ngc2403_3DFIT.par`. With a copy of the repository
-(`git clone https://github.com/editeodoro/bbarolo2`), they are all in `bbarolo2/examples/`.
+(`git clone https://github.com/editeodoro/bbarolo2`), they are all in `bbarolo2/examples/`, with the notebook
+[`examples.ipynb`](https://github.com/editeodoro/bbarolo2/blob/main/examples/examples.ipynb), which runs every example in Python and shows its plots.

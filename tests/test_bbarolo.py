@@ -1,7 +1,7 @@
 """
 Tests for the pure-Python BBarolo (package bbarolo).
 
-    cd pyBBarolo_pure && python -m pytest -q tests
+    cd bbarolo2 && python -m pytest -q tests
 
 Tests that need the example datacubes (ngc2403.fits) look for them in
 $BBAROLO_EXAMPLES or in ../examples (i.e. the BBarolo distribution folder) and are
