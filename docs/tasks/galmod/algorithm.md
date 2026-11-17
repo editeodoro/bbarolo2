@@ -276,7 +276,7 @@ on a stratified grid and each deposits its line profile integrated over the chan
   $d$ the distance (arcsec) from the centre to the farthest corner of the box of the model, beyond which
   no cloud can fall in it: the only limit of the Lorentzian layer, whose flux beyond it is not deposited,
   as the MC clouds outside the field. At most 1024 samples ($\Delta z$ grows if needed). The heights do
-  not depend on the box, so a model in a box is the crop of the full model. (BBarolo 2.0.0 used
+  not depend on the box, so a model in a box is the crop of the full model. (earlier versions of BBarolo 2 used
   equal-weight samples at the quantiles of the layer, several pixels apart in its tails at any number of
   samples.)
 

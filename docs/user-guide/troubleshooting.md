@@ -1,6 +1,6 @@
 # Troubleshooting and FAQ
 
-The messages below are copied from real runs of BBarolo 2.0.0 with the example cube of NGC 2403. Errors stop
+The messages below are copied from real runs of BBarolo 2.0 with the example cube of NGC 2403. Errors stop
 the run (the command line prints the message and exits with status 1; Python raises an exception). Warnings
 do not.
 

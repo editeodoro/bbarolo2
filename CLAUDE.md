@@ -1,7 +1,7 @@
 # bbarolo2: BBarolo in pure Python
 
 Port of 3D-Barolo (C++ 1.8.1dev) and its ctypes wrapper pyBBarolo 1.8.0 to pure Python:
-package `bbarolo`, version 2.0.0 (`bbarolo/_version.py`). Numerical kernels are numba, compiled
+package `bbarolo`, version 2.0 (`bbarolo/_version.py`). Numerical kernels are numba, compiled
 at run time; everything else is numpy, scipy, astropy and matplotlib. Nothing to compile.
 
 `README.md` is a short public overview, to be expanded. The detailed documentation of the Cowork

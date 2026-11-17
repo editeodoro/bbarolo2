@@ -224,7 +224,7 @@ radii. At least $2N$ pixels are needed. The data map $D$, the maps $K_j$ and the
 
 In both cases only the pixels within the outer edge of the exterior annulus are fitted: an ellipse with the
 centre, PA and INC of the last ring, its minor axis widened by twice Z0 projected. The emission beyond, which
-the model does not describe, pulled the solution (BBarolo 2.0.0: NGC 2403 with one ring 60" wide was 11 times
+the model does not describe, pulled the solution (earlier versions of BBarolo 2: NGC 2403 with one ring 60" wide was 11 times
 too low). With {ref}`SIDE <par-ellprof-side>` A or R only the pixels on that side of the minor axis (through
 the median centre, at the median position angle of the rings, unwrapped across 0/360°) are used.
 
@@ -241,7 +241,7 @@ uncertainty of the centre, INC and PA.
 The densities are converted to face-on surface densities in the units of the observed profile
 ($u$/arcsec², as SDENS_FO), and to HI mass surface densities for maps in Jy, as above. For a cube the factor
 is the mean surface brightness of a face-on uniform disk of unit density: the channel sum of its model divided by
-the area of its sub-rings (BBarolo 2.0.0 divided by a disk that included its empty centre: 2% low). On a
+the area of its sub-rings (earlier versions of BBarolo 2 divided by a disk that included its empty centre: 2% low). On a
 simulated disk a
 few beams across, the deconvolved profile is within 2% of the true one in the centre, where the observed one
 is 30% too low. Without a beam in the header, or with too few pixels, there is no deconvolved profile (a
