@@ -1343,9 +1343,10 @@ class Task:
                 self._params.pop(k, None)
             else:
                 from .params import ring_value_problem, _RING_KEYS, free_problem
-                if isinstance(v, str) and not isinstance(v, _FromFile):
-                    prob = ring_value_problem(k, v) if k in _RING_KEYS else (
-                        self._free_problem(v, new) if k == "FREE" else None)
+                sv = value_to_string(kw, v) if k == "FREE" and not isinstance(v, str) else v  # (a list of names)
+                if isinstance(sv, str) and not isinstance(sv, _FromFile):
+                    prob = ring_value_problem(k, sv) if k in _RING_KEYS else (
+                        self._free_problem(sv, new) if k == "FREE" else None)
                     if prob:
                         raise BBaroloError(f"{type(self).__name__}: {prob}")
                 self._params[k] = v

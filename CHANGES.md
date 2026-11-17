@@ -7,6 +7,14 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **FitMod3D, SlitFit and WindFit refused FREE as a list of names and PRIORS, SAMPLEROPTS, RUNOPTS and LIKEOPTS as
+  dicts** ("a list of values is not accepted", "unsupported value"), which the engines (Bayesian3DFIT, BayesianWind,
+  BayesianSlitFit) accept. The tasks, `update()`, `run()`, `Param.set` and `to_parfile` now convert them into the
+  strings of a parameter file, as the engines do.
+- **The colour scale of the residual maps (`_maps_<norm>.pdf`) cut residuals of one sign (C++).** It went from −v
+  to +v, with v the upper 99.5% percentile of the residuals: with residuals mostly negative (the dispersion of the
+  data below that of the model, ALESS 073.1) v was small or negative and the residual map was all at the bottom of
+  the scale. v is now the larger of the absolute values of the two percentiles.
 - **METHOD GLOBAL with RADMAX free and the rings estimated stopped with "array must not contain infs or NaNs"**
   (ALESS73 with L-BFGS-B). The estimated rings are extended to one beam beyond the estimated radius, and RADMAX goes
   down to one beam inside it, so the exterior annulus of the deconvolved density profile (RADMAX plus one beam) can

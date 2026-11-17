@@ -27,7 +27,11 @@ HDU with data is used), or a tuple `(data, header)`. `beam=(bmaj, bmin, bpa)`, i
 
 The other arguments are the parameters: the keywords of the parameter files, case-insensitive (`vrot` or
 `VROT`), or their aliases. A ring parameter is one value for all the rings, or one value per ring (a list
-or a numpy array). A wrong value is an error, with a message that names the parameter. The class sets the
+or a numpy array). Every parameter can be given as the string of a parameter file; besides,
+{ref}`FREE <par-3dfit-free>` can be a list of names (`["vrot", "inc_single"]`), and
+{ref}`PRIORS <par-3dfit-priors>` a dict of distributions, each a tuple with the arguments by position or a dict
+with them by name (`{"vrot": ("uniform", 0, 300), "vdisp": {"name": "norm", "loc": 20, "scale": 5}}`), as are
+the options {ref}`LIKEOPTS <par-3dfit-likeopts>`, SAMPLEROPTS and RUNOPTS (`likeopts={"smooth": {"vrot": 2}}`). A wrong value is an error, with a message that names the parameter. The class sets the
 flag of its task; the flag of another task is an error (use its class, or {func}`bbarolo.run` for several
 tasks), except `contsub=True`, which subtracts the continuum first.
 

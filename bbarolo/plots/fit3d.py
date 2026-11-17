@@ -721,8 +721,8 @@ def plot_kinmaps(maps, models, rings, *, box, pixscale, bunit="",
                 axis.tick_params(labelbottom=False, labelleft=False, right=True, top=True)
                 axis.set_xlim(ext[0], ext[1])
                 axis.set_ylim(ext[2], ext[3])
-                if j == 2:
-                    vmax = np.nanmax(interval.get_limits(to_plot[j][i]))
+                if j == 2:                  # symmetric about 0, wide enough for both signs
+                    vmax = np.nanmax(np.abs(interval.get_limits(to_plot[j][i])))
                     norm = mpl.colors.Normalize(vmin=-vmax, vmax=vmax)
                 pp = np.pad(to_plot[j][i] * maskmap, (pad_y, pad_x), mode="constant", constant_values=np.nan)
                 axis.imshow(pp, origin="lower", cmap=cmap, norm=norm, aspect="auto", extent=ext,

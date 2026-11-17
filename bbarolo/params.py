@@ -1070,9 +1070,13 @@ def _beamstr(b, none):
 def value_to_string(kw, value):
     """Convert a Python value into the parameter-file string for keyword kw, checking its
     type: booleans become true/false (1/0 for integer keywords), sequences become
-    space-separated lists (only for keywords that accept lists), numbers must be numbers."""
+    space-separated lists (only for keywords that accept lists), numbers must be numbers.
+    FREE may be a list of names, PRIORS and the options of the fits (SAMPLEROPTS, RUNOPTS,
+    LIKEOPTS) dicts, as bayes_value_string converts them."""
     import numpy as np
     name = kw.name
+    if name in _PYTHON_VALUED and not isinstance(value, str):
+        return bayes_value_string(name, value)
     if isinstance(value, (bool, np.bool_)):
         if kw.kind in ("int", "cdens"):
             return "1" if value else "0"
@@ -1326,6 +1330,10 @@ def _check_global(gf, task, out):
         out(f"{task} error: {str(e).replace(task + ': ', '')}")
         return False
     return good
+
+
+# Keywords that take a Python value other than a string (bayes_value_string)
+_PYTHON_VALUED = ("FREE", "PRIORS", "SAMPLEROPTS", "RUNOPTS", "LIKEOPTS")
 
 
 def bayes_value_string(name, value):

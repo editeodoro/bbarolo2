@@ -5312,6 +5312,59 @@ def test_plots_in_memory(tmp_path):
                        z0=0, inc=60, pa=45, verbose=0).run().plot_parameters()
 
 
+def test_task_python_values_of_fit_options():
+    """The tasks (FitMod3D, SlitFit, WindFit, and Param.set) take FREE as a list of names and PRIORS, SAMPLEROPTS,
+    RUNOPTS, LIKEOPTS as dicts, as the engines do (bayes_value_string), with the strings of a parameter file: they
+    were refused ("a list of values is not accepted", "unsupported value"). Wrong values name the parameter."""
+    from bbarolo import FitMod3D, SlitFit, WindFit
+    from bbarolo import keywords as K
+    from bbarolo.bbutils import BBaroloError
+    py = dict(free=["VROT", "vdisp", "INC_SINGLE"],
+              priors={"vrot": ("uniform", 0, 20), "vdisp": {"name": "uniform", "loc": 0, "scale": 10}},
+              likeopts={"smooth": {"vrot": 2.3, "vdisp": 1}}, sampleropts={"nlive": 500}, runopts={"verbose": False})
+    st = dict(free="VROT vdisp INC_SINGLE", priors="vrot=(uniform,0,20) vdisp=(uniform,loc=0,scale=10)",
+              likeopts="smooth=(vrot=2.3,vdisp=1)", sampleropts="nlive=500", runopts="verbose=false")
+    for cls in (FitMod3D, SlitFit, WindFit):
+        a = cls("m.fits", method="bayesian", **py)
+        b = cls("m.fits", method="bayesian").update(**st)
+        for k in st:
+            assert K.lookup(k).value(a.par) == K.lookup(k).value(b.par), (cls.__name__, k)
+        assert a.to_parfile() == b.to_parfile(), cls.__name__
+    assert "PRIORS        vrot=(uniform,0,20) vdisp=(uniform,loc=0,scale=10)" in a.to_parfile()
+    p = Param()
+    p.set("priors", py["priors"])
+    assert p._given["PRIORS"] == st["priors"]
+    f = FitMod3D("m.fits", method="global")
+    with pytest.raises(TypeError, match="PRIORS: vrot"):
+        f.update(priors={"vrot": 3})
+    with pytest.raises(TypeError, match="FREE"):
+        f.update(free=["vrot", 1])
+    with pytest.raises(BBaroloError, match="FREE"):              # a list is checked as its string
+        FitMod3D("m.fits", method="classic").update(free=["VROT", "FOO"])
+
+
+def test_kinmaps_residual_scale():
+    """The colour scale of the residual maps (plot_kinmaps) is symmetric about 0 and covers the residuals of both
+    signs: it was set by the upper percentile only (as in C++), so residuals mostly negative (a model dispersion
+    above that of the data) were all at the bottom of the scale."""
+    import matplotlib.pyplot as plt
+    from bbarolo.plots import fit3d
+    ny = nx = 40
+    yy, xx = np.mgrid[:ny, :nx]
+    rng = np.random.default_rng(1)
+    mom0 = np.exp(-((xx - 20) ** 2 + (yy - 20) ** 2) / 100.)
+    mom1 = 10. * (xx - 20.)
+    mom2 = 30. + rng.normal(0, 3, (ny, nx))
+    models = (mom0, mom1, np.full((ny, nx), 60.))         # dispersion residuals: -30 +- 3
+    rings = {k: np.array(v, float) for k, v in dict(rad=[2, 6, 10], pa=[90] * 3, xpos=[20] * 3, ypos=[20] * 3,
+                                                       inc=[60] * 3, vsys=[0] * 3).items()}
+    fig = fit3d.plot_kinmaps((mom0, mom1, mom2), models, rings, box=(0, nx - 1, 0, ny - 1), pixscale=1.)
+    norms = [ax.get_images()[0].norm for ax in fig.axes if ax.get_images()]
+    plt.close(fig)
+    res2 = norms[8]                                         # third row (dispersion), third column (residuals)
+    assert res2.vmin == -res2.vmax and res2.vmin < -35
+
+
 def test_plot_scripts_standalone(tmp_path):
     """The plotting scripts of 3DFIT contain the source of the functions of bbarolo.plots (the plots of
     Result.plot_parameters etc.), import nothing from bbarolo, and can be run again from any folder."""
