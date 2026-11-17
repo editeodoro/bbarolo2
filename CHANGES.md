@@ -7,6 +7,13 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **METHOD GLOBAL stopped with "the likelihood is not finite at the starting point" when the parameters of a function
+  of radius, at the centres of their priors, gave a zero likelihood** (NGC 891 with `Z0_FUNC` p1·exp(R/p2) and
+  priors p1 0.1–50, p2 100–1000: a thin layer of 26″ to 77″, thicker than Z0THICK = 30 beyond 100″). They now start,
+  in that case only, from a least-squares fit of the function to the initial rings (within the priors); fits that
+  started before start as before. A start that still has a zero likelihood says why (e.g. "the thick layer is
+  thinner than the thin one (Z0THICK < Z0) at R = 100-620 arcsec", a negative parameter, FTHICK above 1).
+
 - **PRIORS of 3DFIT refused the parameters of a function of radius given in Python** (`Z0_P1: unknown parameter`):
   only those of VROT, VDISP and DENS were accepted, also in Bayesian3DFIT with `funcs['z0']` set. PRIORS now takes
   the parameters of every function given (`funcs`), and names the parameter that has none (`Z0_P1: Z0 has no

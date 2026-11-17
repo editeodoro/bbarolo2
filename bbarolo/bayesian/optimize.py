@@ -133,6 +133,32 @@ class _Space:
         return np.array([d.support() for d in self.dists], float)
 
 
+def _start_u(space, th):
+    """ The point th (NaN: the centre of the prior) in the unit cube of the priors, within its bounds. """
+    u = np.where(np.isfinite(th), space.u(np.where(np.isfinite(th), th, 0.)), 0.5)
+    return np.clip(np.where(np.isfinite(u), u, 0.5), space.lo, space.hi)
+
+
+def _fallback_start(fitter, space, obj, th0, u0, verbose):
+    """ The start of an optimisation whose likelihood is not finite at th0 (u0): th0 with the parameters of the functions
+    of radius at the centres of their priors (NaN) from a fit of the functions to the initial rings
+    (fitter._function_start, if it has one), if the likelihood is finite there. BBaroloError otherwise, with the reason
+    of the zero likelihood at u0 (fitter._why_zero) if known. """
+    start = getattr(fitter, '_function_start', None)
+    th1 = start(th0) if start is not None else None
+    if th1 is not None:
+        u1 = _start_u(space, th1)
+        if obj(u1) < _BIG:
+            vprint(verbose, "  (the likelihood is zero with the parameters of the functions of radius at the centres "
+                            "of their priors: they start from a fit of the functions to the initial rings)")
+            return u1
+    why = getattr(fitter, '_why_zero', None)
+    reason = why(space.theta(u0)) if why is not None else None
+    raise BBaroloError("optimize: the likelihood is not finite at the starting point (x0)"
+                       + (f": {reason}" if reason else "") + ". Change the priors (the parameters not given start at "
+                       "their centres) or give x0 to optimize().")
+
+
 def _duration(t):
     return f"{t:.0f} s" if t < 120 else f"{t / 60.:.1f} min"
 
@@ -362,7 +388,8 @@ def _laplace(space, theta, H, nsamples, seed):
 def optimize(fitter, like_kwargs, theta0, minimiser='L-BFGS-B', threads=1, posterior=False, errors=True, nstart=1,
              seed=None, step=1e-3, options=None, nsamples=4000, verbose=True, showbar=True):
     """ Minimise -log L of fitter (its _log_like_func with like_kwargs, its priors and free parameters; see the
-    module documentation) from theta0 (a vector of the free parameters; NaN: the centre of the prior), with minimiser,
+    module documentation) from theta0 (a vector of the free parameters; NaN: the centre of the prior; a zero likelihood
+    there: see _fallback_start), with minimiser,
     the likelihoods computed in threads processes. Returns an OptimizeResult: x (the best fit), logl (its
     log-likelihood), logprior, fun (the objective), u (x in the unit cube of the priors), method, success, message,
     nit, nfev (likelihoods), time (seconds), starts (the best -log L of each start), at_bound (the parameters closer to
@@ -376,14 +403,13 @@ def optimize(fitter, like_kwargs, theta0, minimiser='L-BFGS-B', threads=1, poste
     th0 = np.asarray(theta0, float)
     if th0.shape != (n,):
         raise BBaroloError(f"optimize: x0 has {th0.size} values, the free parameters are {n}.")
-    u0 = np.where(np.isfinite(th0), space.u(np.where(np.isfinite(th0), th0, 0.)), 0.5)
-    u0 = np.clip(np.where(np.isfinite(u0), u0, 0.5), space.lo, space.hi)
+    u0 = _start_u(space, th0)
     rng = np.random.default_rng(seed)
     toc = time.time()
     with evaluator(fitter, like_kwargs, int(threads)) as loglikes:
         obj = _Objective(space, loglikes, posterior, _Progress(verbose, posterior))
         if not obj(u0) < _BIG:
-            raise BBaroloError("optimize: the likelihood is not finite at the starting point (x0).")
+            u0 = _fallback_start(fitter, space, obj, th0, u0, verbose)
         starts = []
         if method in GLOBAL_METHODS:
             import inspect

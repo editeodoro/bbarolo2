@@ -596,7 +596,10 @@ every parameter has a range of one, the bounds are those of the priors, and log-
 FRACERR) are searched in their logarithm. The search starts from the initial rings (`x0=None`, with SIGMA the
 noise and the centre of the prior for FRACERR and the parameters of the functions of radius), from the centres
 of the priors (`x0="centre"`) or from a vector; `nstart` adds starts drawn from the priors (`seed`) and keeps
-the best. The minimisers:
+the best. If the likelihood is zero at the start (e.g. a function of radius that, at the centres of the priors of
+its parameters, makes the thin layer thicker than the thick one), the parameters of the functions of radius
+left at the centres start from a least-squares fit of each function to the initial rings; if it is still zero,
+the error says why. The minimisers:
 
 - `L-BFGS-B` (the default), `TNC`, `SLSQP`, `trust-constr`: quasi-Newton methods, with the gradient by central
   differences of step `step` (default $10^{-3}$ of the range of each prior: the likelihood is rough at much

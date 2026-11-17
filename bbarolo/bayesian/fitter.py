@@ -773,7 +773,9 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                                 (scipy.optimize.minimize, with the bounds of the priors) or
                                 'differential_evolution' (global, then polished with L-BFGS-B)
           x0:                   the starting point: None (default: the initial rings, the noise for SIGMA, the
-                                centre of the prior for FRACERR and the parameters of functions of radius),
+                                centre of the prior for FRACERR and the parameters of functions of radius; if
+                                the likelihood is zero there, those of functions of radius from a fit of the
+                                functions to the initial rings),
                                 'centre' (the centres of the priors) or a vector of the free parameters (NaN: the
                                 centre of the prior)
           posterior (bool):     maximise the posterior instead of the likelihood (default False)
@@ -847,6 +849,36 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                     v = np.where(v >= 0, v, np.asarray(r['vdisp'], float))      # (not given: VDISP)
                 th[idx] = v if idx.size == v.size else np.median(v)
         return th
+
+    def _function_start(self, theta):
+        """ theta with the parameters of each function of radius that are all NaN (the centres of their priors) from a
+        least-squares fit of the function to the initial rings, within the supports of their priors: the start of
+        optimize when the centres of the priors give a zero likelihood (e.g. a thin layer thicker than the thick
+        one). None if no function was fitted. """
+        from scipy.optimize import least_squares
+        th = np.array(theta, float)
+        r = self._fit0.r
+        R = np.asarray(r['radii'], float)
+        done = False
+        for base in sorted({k.split('_')[0] for k in self.freepar_idx if '_p' in k}):
+            keys = [k for k in self.freepar_idx if k.startswith(base + '_p')]
+            idx = [int(self.freepar_idx[k][0]) for k in keys]
+            if not np.all(np.isnan(th[idx])):
+                continue                                # (given)
+            f = self.funcs[base]
+            y = np.broadcast_to(np.asarray(r[base], float), R.shape)
+            dists = [self.prior_distr[k] for k in keys]
+            lo, hi = np.array([d.support() for d in dists], float).T
+            try:
+                with np.errstate(all='ignore'):
+                    sol = least_squares(lambda p: np.broadcast_to(f(R, *p), R.shape) - y,
+                                        [d.ppf(0.5) for d in dists], bounds=(lo, hi), x_scale='jac')
+            except Exception:
+                continue
+            if np.all(np.isfinite(sol.x)):
+                th[idx] = sol.x
+                done = True
+        return th if done else None
 
     @staticmethod
     def _check_moved(kwargs, caller):

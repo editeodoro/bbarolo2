@@ -9,6 +9,16 @@ from .noise import dilate_mask, noise_correlation
 from ..galmod import _half_widths
 
 
+def _at_radii(rings, bad):
+    """ ' at R = a-b arcsec' (or ' in every ring'), the radii of rings where bad (a value or one per ring). """
+    R = np.asarray(rings.r['radii'], float)
+    b = np.broadcast_to(np.asarray(bad, bool), R.shape)
+    if b.all():
+        return " in every ring"
+    lo, hi = R[b].min(), R[b].max()
+    return f" at R = {lo:g} arcsec" if lo == hi else f" at R = {lo:g}-{hi:g} arcsec"
+
+
 @nb.njit(cache=True, nogil=True)
 def _sumsq_residuals(model, data, mask, maskmode, region):
     """sum over voxels of (d - model)^2, skipping the blanks (NaN or 0 data: the blanks of the file are 0 in
@@ -530,15 +540,29 @@ class LikelihoodMixin(object):
         if, with Z0 or Z0THICK free, the thick layer is thinner than the thin one in some ring (the layers would
         swap: the posterior would have two modes): the likelihood is then zero. The parameters of a function of
         radius may be negative (e.g. the slope of VDISP). """
+        return self._zero_reason(rings, theta) is not None
+
+    def _zero_reason(self, rings, theta):
+        """ Why the likelihood is zero at theta, whose rings are rings (the conditions of _negative), or None. """
         if 'radmax' in self.freepar_idx and theta[self.freepar_idx['radmax'][0]] < 0:
-            return True
-        if any(np.any(rings.r[k] < 0) for k in self._free_positive):
-            return True
+            return "RADMAX is negative"
+        for k in self._free_positive:
+            if np.any(rings.r[k] < 0):
+                return f"{k.upper()} is negative" + _at_radii(rings, rings.r[k] < 0)
         if self._free('fthick') and np.any(rings.r['fthick'] > 1):
-            return True
-        z0t = rings.r['z0thick']                    # (negative: tied to Z0, the same height)
-        return bool((self._free('z0') or self._free('z0thick')) and self._thick()
-                    and np.any((z0t >= 0) & (z0t < rings.r['z0'])))
+            return "FTHICK is above 1" + _at_radii(rings, rings.r['fthick'] > 1)
+        if (self._free('z0') or self._free('z0thick')) and self._thick():
+            z0t = rings.r['z0thick']                # (negative: tied to Z0, the same height)
+            thin = (z0t >= 0) & (z0t < rings.r['z0'])
+            if np.any(thin):
+                return "the thick layer is thinner than the thin one (Z0THICK < Z0)" + _at_radii(rings, thin)
+        return None
+
+    def _why_zero(self, theta):
+        """ Why the likelihood is zero at the vector of the free parameters theta (see _negative), or None (the
+        message of an optimisation that cannot start). """
+        theta = np.asarray(theta, float)
+        return self._zero_reason(self._update_rings(self._work, theta), theta)
 
     def _log_likelihood(self, theta, **kwargs):
         """ Log-likelihood of the parameters theta.

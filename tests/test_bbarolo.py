@@ -5202,6 +5202,44 @@ def test_task_functions_of_radius(tmp_path):
         assert cls.from_parfile(str(par), funcs={'z0': flare}).funcs['z0'] is flare
 
 
+def test_optimise_function_start(tmp_path, capsys):
+    """METHOD GLOBAL with a function of radius whose parameters, at the centres of their priors, give a zero likelihood
+    (a thin layer thicker than the thick one, NGC 891 with Z0_FUNC): the parameters start from a fit of the function to
+    the initial rings (it stopped: 'the likelihood is not finite at the starting point'); the start is the same as
+    before when the centres give a model. A start with a zero likelihood says why."""
+    from bbarolo import Bayesian3DFIT
+    from bbarolo.bbutils import BBaroloError
+
+    def flare(R, p1, p2):
+        return p1 * np.exp(R / p2)
+
+    fn = _mock_cube(tmp_path)
+    rings = dict(nradii=4, radsep=40, xpos=31.5, ypos=31.5, vsys=0, vrot=150, vdisp=10, z0=2, inc=60, pa=45,
+                 z0thick=10, fthick=0.3, mask="SEARCH", linear=0, outfolder=str(tmp_path / "out") + "/")
+    pri = dict(z0_p1=dict(name='uniform', loc=0.1, scale=50), z0_p2=dict(name='uniform', loc=100, scale=900))
+    f = Bayesian3DFIT(fn, funcs={'z0': flare}, priors=pri, **rings)
+    run = dict(freepar="VROT_SINGLE Z0_FUNC", threads=1, options=dict(maxiter=1), errors=False)
+    f.optimize(**run)                               # (centres: Z0 = 25 exp(R/550) > Z0THICK = 10)
+    out = capsys.readouterr().out
+    assert "they start from a fit of the functions to the initial rings" in out
+    th = f._function_start(f._initial_theta())
+    p1, p2 = th[f.freepar_idx['z0_p1']][0], th[f.freepar_idx['z0_p2']][0]
+    assert 0.1 <= p1 < 2 and abs(p2 - 1000.) < 1e-6 and np.all(flare(np.asarray(f._fit0.r["radii"]), p1, p2) < 10)
+    x0 = f._initial_theta()
+    x0[f.freepar_idx['z0_p1']], x0[f.freepar_idx['z0_p2']] = 25., 550.
+    with pytest.raises(BBaroloError, match=r"thick layer is thinner than the thin one \(Z0THICK < Z0\) in every ring"):
+        f.optimize(x0=x0, **run)
+    x0[f.freepar_idx['z0_p1']] = 9.
+    with pytest.raises(BBaroloError, match=r"\(Z0THICK < Z0\) at R = 60-140 arcsec"):
+        f.optimize(x0=x0, **run)
+    x0[f.freepar_idx['z0_p1']] = 8.
+    with pytest.raises(BBaroloError, match=r"\(Z0THICK < Z0\) at R = 140 arcsec\. Change the priors"):
+        f.optimize(x0=x0, **run)
+    f.priors.update(z0_p1=dict(name='uniform', loc=0.1, scale=4))          # (a valid centre: no fit)
+    f.optimize(**run)
+    assert "they start from a fit" not in capsys.readouterr().out
+
+
 def test_task_priors_attribute(tmp_path):
     """FitMod3D, WindFit and SlitFit have the attribute priors, a view of PRIORS as a dict {NAME: {'name': distribution,
     ...}}: f.priors['vrot'] = ... was an AttributeError (only the engines had priors). It shows PRIORS given as a string
