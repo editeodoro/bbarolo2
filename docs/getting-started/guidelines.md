@@ -11,10 +11,12 @@ corrects the fit for beam smearing.
 - **Beam.** BBarolo reads it from the header (BMAJ, BMIN, BPA). If the header has none, as for most optical and
   near-infrared cubes, give it with {ref}`BEAM <par-all-beam>` (the FWHM of the PSF or of the seeing, in arcsec;
   one value for a circular beam).
-- **Spectral resolution.** {ref}`SPECRES <par-3dfit-specres>` is the dispersion of the line spread function, in
-  channels. The default, 0.425 channels, is a FWHM of one channel; Hanning-smoothed radio data have about twice
-  that (see {doc}`../examples/ngc891`), and optical and near-infrared spectrographs usually more (see
-  {doc}`../examples/ngc5633` and {doc}`../examples/u3-25160`).
+- **Spectral resolution.** {ref}`SPECRES <par-3dfit-specres>` is the instrumental broadening, in channels: the
+  dispersion of the line spread function, less the integration over the channel that the model already does. The
+  default, 0.425 channels, fits a cube at the native channels of an instrument with a resolution of one channel.
+  A cube averaged over $N$ channels needs 0.425/$N$ (averaging is not in SPECRES), Hanning-smoothed data about 0.8,
+  and optical and near-infrared spectrographs usually more (see {doc}`../examples/ngc5633` and
+  {doc}`../examples/u3-25160`). How to compute it for your data: {doc}`../user-guide/spectral-resolution`.
 - **Spectral axis.** For an axis in wavelength or frequency, give the rest wavelength or frequency of the line
   ({ref}`RESTWAVE <par-galmod-restwave>`, {ref}`RESTFREQ <par-galmod-restfreq>`) and the {ref}`REDSHIFT <par-galmod-redshift>`;
   {ref}`VELDEF <par-all-veldef>` sets the definition of the velocity. Several lines (Hα and [NII]) are fitted together
@@ -54,7 +56,7 @@ Better, give your own:
   or set {ref}`PRIORS <par-3dfit-priors>`.
 
 At low inclination (below 30–40°) the inclination is hard to measure from the kinematics: fix it, at a value from
-other data ({doc}`../examples/pgc53639`). Close to edge-on, it trades off with the thickness of the disk
+other data ({doc}`../examples/pgc53639`), or, with METHOD BAYESIAN, give it a prior ({doc}`../examples/aless73`). Close to edge-on, it trades off with the thickness of the disk
 ({doc}`../examples/ngc891`).
 
 ## 4. The rings

@@ -10,6 +10,7 @@ parameter-files
 python
 outputs
 conventions
+spectral-resolution
 parallel
 troubleshooting
 ```

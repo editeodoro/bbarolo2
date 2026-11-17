@@ -1,8 +1,8 @@
 # Name of the fitsfile and output folder
 FITSFILE        ngc891.fits
 
-# LSF (in channels)
-SPECRES         0.849
+# LSF (in channels): Hanning-smoothed native channels
+SPECRES         0.825
 
 ############### 3DFIT parameters ################
 3DFIT           true

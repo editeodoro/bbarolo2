@@ -205,8 +205,8 @@ the same seed gives the same model. The Monte Carlo noise falls as $N^{-1/2}$.
 
 The spectral axis, the conversion from velocity to channel, several lines and the instrumental
 broadening are those of GALMOD ({ref}`galmod-spectral`), set by the options
-{ref}`SPECRES <par-galmod-specres>` (or {ref}`LINEAR <par-galmod-linear>`; by default
-$\sigma_{\rm instr}$ gives a FWHM of one channel), {ref}`RESTWAVE <par-galmod-restwave>`,
+{ref}`SPECRES <par-galmod-specres>` (or {ref}`LINEAR <par-galmod-linear>`; by default 1/2.355 channels, see
+{doc}`../../user-guide/spectral-resolution`), {ref}`RESTWAVE <par-galmod-restwave>`,
 {ref}`RESTFREQ <par-galmod-restfreq>`, {ref}`RELINT <par-galmod-relint>` and
 {ref}`REDSHIFT <par-galmod-redshift>`, given as keyword arguments (e.g. `specres=0.5`). The other
 options are {ref}`MASK <par-galmod-mask>` (for `flux="measured"`), {ref}`THREADS <par-all-threads>`

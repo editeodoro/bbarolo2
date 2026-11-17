@@ -1,0 +1,16 @@
+# Name of the fitsfile
+FITSFILE    ALESS73_CII.fits
+
+# LSF (in channels): ALMA channels of 3.55 km/s averaged to 14.2 km/s, then Hanning-smoothed
+SPECRES     0.715
+
+############### 3DFIT parameters ################
+3DFIT       true
+METHOD      BAYESIAN
+
+# Input rings
+RADII       0.03~0.5:0.06
+
+# Other parameters
+FREE        vrot vdisp xpos_single ypos_single vsys_single inc_single phi_single fracerr
+PRIORS      vrot=(uniform,0,600) vdisp=(norm,50,30) inc=(norm,25,2)

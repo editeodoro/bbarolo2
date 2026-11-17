@@ -344,8 +344,9 @@ $$
 s = \text{SPECRES, else LINEAR, else } \frac{1}{2\sqrt{2\ln 2}} \approx 0.425 \text{ channels},
 $$
 
-({ref}`SPECRES <par-galmod-specres>`, {ref}`LINEAR <par-galmod-linear>`): by default a profile with a
-FWHM of one channel. $\Delta v_{\rm ch}$ (km/s) is the channel width in velocity, the mean over the
+({ref}`SPECRES <par-galmod-specres>`, {ref}`LINEAR <par-galmod-linear>`): by default a Gaussian with a FWHM
+of one channel, which the integration over the channel widens to 1.21 channels. The value to give for a cube is
+in {doc}`../../user-guide/spectral-resolution`. $\Delta v_{\rm ch}$ (km/s) is the channel width in velocity, the mean over the
 axis for frequency and wavelength axes.
 
 (galmod-units)=

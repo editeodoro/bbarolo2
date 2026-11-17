@@ -84,8 +84,8 @@ The engine {class}`~bbarolo.BayesianSlitFit` (for custom likelihoods and interac
   `CUNIT` in arcsec, arcmin or deg) is required. Either order of the axes works. A wavelength axis in metres is
   read in Angstrom (and `RESTWAVE`, `WAVERANGE`, `MASKWAVE` are then in Angstrom). Blank pixels
   (NaN, or 0) are not data.
-- **The resolution**: `BEAM`, the FWHM of the seeing (one value: a circular Gaussian), and `SPECRES`, the dispersion
-  of the line spread function in channels. Both are required: a slit header carries neither.
+- **The resolution**: `BEAM`, the FWHM of the seeing (one value: a circular Gaussian), and `SPECRES`, the instrumental
+  broadening in channels ({doc}`../../user-guide/spectral-resolution`). Both are required: a slit header carries neither.
 - **The lines**: `RESTWAVE` (or `RESTFREQ`) and `RELINT`, at `REDSHIFT`, as in 3DFIT. The velocities are relative
   to the rest wavelength of the first line at REDSHIFT, with the velocity definition of `VELDEF` (relativistic for a
   wavelength axis by default).

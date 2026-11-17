@@ -38,6 +38,7 @@ EX = {
     "ngc891": ("ngc891_3DFIT_GLOBAL.par", "output/ngc891_1", "ngc891_1", FIT3D + CORNER),
     "u3_25160": ("U3_25160_3DFIT_BAY.par", "output/U3_25160", "U3_25160", FIT3D + CORNER),
     "hd142527": ("HD142527_3DFIT_BAY.par", "output/hd142527", "hd142527", FIT3D + CORNER),
+    "aless73": ("ALESS73_3DFIT_BAY.par", "output/LESS_J033229.4-275619", "LESS_J033229.4-275619", FIT3D + CORNER),
     "2masxj1022": ("2masxj1022_SLITFIT.par", "output/2masxj1022_slit", "2MASXJ1022",
                    [("_slitfit_parameters.pdf", "parameters", 800), ("_slitfit_pv.pdf", "pv", 1300)]),
 }

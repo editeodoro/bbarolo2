@@ -17,6 +17,7 @@ diagrams and the channel maps of the data and of the model.
 | {doc}`ugc1281` | HI, WSRT, edge-on dwarf | 3DFIT GLOBAL, smoothness priors, errors | 38 s |
 | {doc}`ngc891` | HI, WSRT, edge-on spiral with a lagging halo | 3DFIT GLOBAL, thin disk and thick layer with a lag | 19 min |
 | {doc}`u3-25160` | Hα, KMOS, star-forming galaxy at z = 0.9 | 3DFIT BAYESIAN | 1 min 42 s |
+| {doc}`aless73` | [CII], ALMA, starburst galaxy at z = 4.8 | 3DFIT BAYESIAN, prior on the inclination | 8 min 8 s |
 | {doc}`hd142527` | ¹³CO, ALMA, protoplanetary disk | 3DFIT BAYESIAN, geometry and thickness free | 41 min |
 | {doc}`2masxj1022` | Hα + [NII], SALT long slit, massive spiral | SLITFIT GLOBAL | 23 s |
 
@@ -34,6 +35,7 @@ pgc53639
 ugc1281
 ngc891
 u3-25160
+aless73
 hd142527
 2masxj1022
 ```

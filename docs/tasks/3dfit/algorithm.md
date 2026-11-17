@@ -54,7 +54,8 @@ V_\mathrm{los} = V_\mathrm{sys} + \left(V_\mathrm{rot}\cos\theta + V_\mathrm{rad
 $$
 
 and a Gaussian line with dispersion $\sqrt{\sigma^2 + \sigma_\mathrm{instr}^2}$, where $\sigma_\mathrm{instr}$
-is {ref}`SPECRES <par-3dfit-specres>` times the channel width. The gas is spread vertically with the
+is {ref}`SPECRES <par-3dfit-specres>` times the channel width, integrated over each channel (which value to give:
+{doc}`../../user-guide/spectral-resolution`). The gas is spread vertically with the
 profile {ref}`LTYPE <par-3dfit-ltype>` and the scale height $z_0$. How the models are built from these
 quantities (clouds in sub-rings, Monte Carlo or analytic line profiles, flux units) is described in
 {doc}`../galmod/algorithm`.

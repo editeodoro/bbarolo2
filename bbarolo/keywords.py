@@ -522,8 +522,8 @@ KEYWORDS = [
     K("LINEAR", "float", ["linear"], ("3DFIT", "GALMOD", "SPACEPAR") + WIND + SLIT,
       "Spectral resolution of the models (sigma, channels) when SPECRES is not given (as in C++)"),
     K("SPECRES", "float", ["specres"], ("3DFIT", "GALMOD", "SPACEPAR") + WIND + SLIT,
-      "Spectral resolution of the models (sigma, in channels; default: LINEAR if given, else "
-      "1/2.355, i.e. a FWHM of one channel)"),
+      "Spectral resolution of the models (sigma, in channels, besides the integration over the channel; "
+      "default: LINEAR if given, else 1/2.355)"),
     K("FACTOR", "float", ["factor"], ("SMOOTH", "MAKEMASK", "3DFIT", "SPACEPAR", "2DFIT", "ELLPROF",
                                       "REND3D") + MAPSM,
       "New beam factor (times old beam), also used by the SMOOTH mask"),

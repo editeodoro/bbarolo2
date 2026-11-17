@@ -1951,19 +1951,24 @@ as the beam of the data along both axes. It replaces `BMAJ`, `BMIN` and `BPA` of
         group='Model',
         default='not set',
         doc="""\
-The spectral resolution of the models (σ of the instrumental line profile, in channels) when `SPECRES`
-is not given, as in BBarolo 1.8: e.g. 0.85 for Hanning-smoothed data (a FWHM of 2 channels). See
-`SPECRES`. SMOOTH no longer uses LINEAR (it was a resolution in kpc there).
+The spectral resolution of the models (σ of the instrumental line profile, in channels) when
+`SPECRES` is not given, as in BBarolo 1.8: the same quantity as `SPECRES` (see there for its value).
+SMOOTH no longer uses LINEAR (it was a resolution in kpc there).
 """),
     'SPECRES': dict(
         group='Model',
         default='LINEAR, or 1/2.355 channels',
         doc="""\
-The spectral resolution of the instrument: the dispersion σ (in channels) of the instrumental line
-profile, which the models add in quadrature to `VDISP`: the lines of the models have
-σ² = VDISP² + (SPECRES × channel width)². If it is not given, `LINEAR` is used or, without it,
-1/2.355 ≈ 0.42 channels (a FWHM of one channel). For Hanning-smoothed data (a FWHM of 2 channels) use
-0.85; 0 gives no instrumental broadening.
+The instrumental broadening of the models: the dispersion σ (in channels) of a Gaussian added in quadrature
+to `VDISP`, so that the lines of the models have σ² = VDISP² + (SPECRES × channel width)², before they are
+integrated over each channel. The integration over the channel is already in the models, so SPECRES is the
+line spread function of the cube without it: SPECRES² = (σ_LSF / channel width)² − 1/12, with σ_LSF the
+dispersion of an unresolved line in the cube. Averaging channels does not go into SPECRES; smoothing does.
+If it is not given, `LINEAR` is used or, without it, 1/2.355 ≈ 0.425 channels: a Gaussian with a FWHM of one
+channel, for a cube at the native channels of an instrument with a resolution of one channel. A cube averaged
+over N such channels needs 0.425/N, Hanning-smoothed data about 0.8 (0.71 if Hanning-smoothed after averaging
+many channels); 0 gives no instrumental broadening. The page "Spectral resolution" of the user guide explains
+the rule and gives the common cases.
 """),
     'FACTOR': dict(
         group={'SMOOTH': 'New beam', '*': 'Mask'},
