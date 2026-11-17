@@ -1,4 +1,4 @@
-# METHOD GLOBAL and BAYESIAN: how they work
+# Global and Bayesian fits: how they work
 
 3DFIT with METHOD GLOBAL or BAYESIAN fits a 3D tilted-ring model to a datacube, as
 {doc}`METHOD CLASSIC <algorithm>` does, but all the free parameters of all the rings are fitted together with
@@ -523,7 +523,7 @@ keep their values out to the edge of the longer half. Free (`FREE ... RADMAXA`),
 or at the outer edge of the rings; the deconvolved density profile follows the edges, and its exterior annulus
 starts at the longer of the two when both are below the outer edge of the rings.
 
-## Sampling (METHOD BAYESIAN)
+## Sampling: the Bayesian fit
 
 {ref}`SAMPLER <par-3dfit-sampler>` chooses the sampler:
 
@@ -576,7 +576,7 @@ the pixels and is recommended for real galaxies, whose maps have structure that 
 convergence in 20 minutes without it). FRACERR does not suit the map: it weights the faint outer disk. The
 map does not change for PA → PA + 180°, so the prior of PA should cover half a circle.
 
-## Fit by minimisation (METHOD GLOBAL)
+## Minimisation: the global fit
 
 `METHOD GLOBAL`, in Python `optimize(freepar, minimiser, ...)`, minimises $-\ln\mathcal L$, or with `posterior=True` $-\ln\mathcal L - \ln\pi$
 (the maximum of the posterior), with the log-likelihood, the setup and the priors of `run` (and of

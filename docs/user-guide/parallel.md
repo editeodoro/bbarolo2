@@ -87,7 +87,7 @@ export OMP_NUM_THREADS=1        # or OPENBLAS_NUM_THREADS / MKL_NUM_THREADS
 
 before starting BBarolo, and use `THREADS` to choose the parallelism.
 
-## METHOD GLOBAL and BAYESIAN: processes
+## Global and Bayesian fits: processes
 
 {doc}`3DFIT with METHOD BAYESIAN <../tasks/3dfit/index>` samples the posterior with `THREADS` **processes**, not
 threads: the model engine of one likelihood runs on one thread. METHOD GLOBAL, WINDFIT and SLITFIT use the same pool,
