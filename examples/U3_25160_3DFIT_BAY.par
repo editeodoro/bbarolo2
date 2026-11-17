@@ -25,7 +25,7 @@ Z0          0.1
 
 # Mask and other options
 FREE        VROT VDISP INC_SINGLE PA_SINGLE XPOS_SINGLE YPOS_SINGLE VSYS_SINGLE FRACERR
-PRIORS      vdisp=(norm,loc=25,scale=10) vrot=(uniform,loc=0,scale=250)
+PRIORS      vdisp=(uniform,loc=0,scale=100) vrot=(uniform,loc=0,scale=250)
 MASK        SEARCH
 GROWTHCUT   1.8
 FLAGERRORS	true

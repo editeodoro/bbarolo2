@@ -15,7 +15,7 @@ diagrams and the channel maps of the data and of the model.
 | {doc}`ngc5633` | Hα + [NII], CALIFA optical IFU | CONTSUB, 3DFIT CLASSIC with three lines | 25 s |
 | {doc}`pgc53639` | HI, ATCA, warped disk at low inclination | 3DFIT CLASSIC, position angle free | 24 s |
 | {doc}`ugc1281` | HI, WSRT, edge-on dwarf | 3DFIT GLOBAL, smoothness priors, errors | 38 s |
-| {doc}`u3-25160` | Hα, KMOS, star-forming galaxy at z = 0.9 | 3DFIT BAYESIAN | 1 min 45 s |
+| {doc}`u3-25160` | Hα, KMOS, star-forming galaxy at z = 0.9 | 3DFIT BAYESIAN | 1 min 42 s |
 | {doc}`hd142527` | ¹³CO, ALMA, protoplanetary disk | 3DFIT BAYESIAN, geometry and thickness free | 41 min |
 | {doc}`2masxj1022` | Hα + [NII], SALT long slit, massive spiral | SLITFIT GLOBAL | 23 s |
 
