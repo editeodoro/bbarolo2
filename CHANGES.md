@@ -7,6 +7,16 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **METHOD GLOBAL with RADMAX free and the rings estimated stopped with "array must not contain infs or NaNs"**
+  (ALESS73 with L-BFGS-B). The estimated rings are extended to one beam beyond the estimated radius, and RADMAX goes
+  down to one beam inside it, so the exterior annulus of the deconvolved density profile (RADMAX plus one beam) can
+  lie before the last rings. The smoothness prior of the profile took its second differences in the order of the
+  columns, not of the radii: negative distances for RADMAX below the estimated radius, and an infinite weight with the
+  annulus on the ring before the last (the lower bound of RADMAX). The second differences now follow the radii in
+  order. The weight of the prior was also normalised with the second difference across the smallest distance, so an
+  annulus close to a ring switched the prior off on all the other rings (the fix of 14 November, for the annulus on
+  the last ring, had left this): the normalisation now takes distances of at least a quarter of the smallest
+  distance between the rings. Without an edge of the disk inside the rings nothing changes.
 - **The rotation curve on the PV plot along the major axis put the rings beyond the box at its edge (C++).** The
   points of the rings outside the region of the cube shown (beyond the largest source of the SEARCH mask plus two
   beams) were placed by `np.interp` along the slice, which stops at the edge: all such rings were drawn at its last

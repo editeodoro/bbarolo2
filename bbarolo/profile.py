@@ -63,24 +63,38 @@ def profile_system(model, rings, box, data_map, rms_map, ok_map, beam_arcsec=Non
     return K[:, ok].T / s[ok, None], y[ok] / s[ok], ok, np.r_[R, rext]
 
 
+def _second_differences(d1, d2):
+    """The weights of the second difference at a radius d1 from the previous one and d2 from the next."""
+    return np.array([1. / d1, -1. / d1 - 1. / d2, 1. / d2]) * 2. / (d1 + d2)
+
+
 def solve_profile(A, b, radii, smooth=0.1):
-    """Non-negative least-squares solution of A dens = b (all the columns, including the exterior
-    annulus), with the smoothness prior of weight smooth on the profile at the radii. Two radii that
-    coincide (the exterior annulus on the last ring: RADMAX one beam inside it, the lower bound of its
-    prior) are taken 1e-6 of the extent of the radii apart: the limit of the solution, which is
-    continuous there (it was NaN)."""
+    """Non-negative least-squares solution of A dens = b (all the columns: the rings, then the exterior
+    annulus), with the smoothness prior of weight smooth on the profile at the radii, in order of radius.
+
+    With an edge of the disk inside the rings (RADMAX, RADMAXA, RADMAXR) the exterior annulus can lie
+    before the last rings (beyond the edge, without emission): the second differences follow the
+    radii sorted, and two radii that coincide are taken 1e-6 of their extent apart (the limit of
+    the solution, continuous there). The weight of the prior is normalised with the distances between
+    the radii of at least a quarter of the smallest distance between the rings, so that the exterior
+    annulus close to a ring does not switch off the prior elsewhere (without an edge inside the rings
+    the annulus is always farther from the last ring, and nothing changes)."""
     from scipy.optimize import nnls
     n = A.shape[1]
     alpha = float(smooth or 0.)
     if alpha > 0 and n >= 3:
         R = np.asarray(radii, float)
+        o = np.argsort(R, kind="stable")
+        Rs = R[o]
         tiny = 1e-6 * max(float(np.ptp(R)), 1e-300)
+        dmin = max(0.25 * float(np.min(np.diff(np.sort(R[:-1])))), tiny)
         L = np.zeros((n - 2, n))
+        norm = 0.
         for i in range(1, n - 1):                   # second differences (any spacing)
-            d1, d2 = R[i] - R[i - 1], R[i + 1] - R[i]
-            d1, d2 = (tiny if abs(d) < tiny else d for d in (d1, d2))
-            L[i - 1, i - 1:i + 2] = np.array([1. / d1, -1. / d1 - 1. / d2, 1. / d2]) * 2. / (d1 + d2)
-        L *= math.sqrt(alpha * np.sum(A * A) / max(np.sum(L * L), 1e-300))
+            d1, d2 = (max(float(d), tiny) for d in (Rs[i] - Rs[i - 1], Rs[i + 1] - Rs[i]))
+            L[i - 1, o[i - 1:i + 2]] = _second_differences(d1, d2)
+            norm += float(np.sum(_second_differences(max(d1, dmin), max(d2, dmin)) ** 2))
+        L *= math.sqrt(alpha * np.sum(A * A) / max(norm, 1e-300))
         A, b = np.vstack([A, L]), np.r_[b, np.zeros(n - 2)]
     q, r = np.linalg.qr(A)                         # nnls on the small (n x n) system
     return nnls(r, q.T @ b)[0]

@@ -2941,6 +2941,40 @@ def test_bayesian_radmax_lower_bound(tmp_path):
     assert np.all(np.isfinite(L)) and abs(L[0] - L[1]) < 1e-3 and abs(L[0] - L[2]) < 0.05
 
 
+def test_profile_exterior_annulus_inside_rings(tmp_path):
+    """With RADMAX free and the rings estimated, the rings are extended to one beam beyond the estimated radius and
+    RADMAX goes down to one beam inside it: the exterior annulus of the deconvolved density profile (RADMAX plus one
+    beam) falls before the last ring. The second differences of the smoothness prior followed the order of the
+    columns: negative distances, and an infinite weight 2/(d1 + d2) with the annulus on the ring before the last (the
+    lower bound of RADMAX), so METHOD GLOBAL stopped with 'array must not contain infs or NaNs' (ALESS73). Now in
+    order of radius. The annulus on a ring also switched off the prior on all the other rings (normalised by the
+    weight of the second difference across the zero distance): now kept."""
+    from bbarolo.profile import solve_profile
+    rng = np.random.default_rng(1)
+    A, b = rng.random((80, 6)), rng.random(80)
+    R = [1., 2., 3., 4., 5.]
+    s = solve_profile(A, b, R + [4.])
+    assert np.all(np.isfinite(s))
+    assert np.allclose(s, solve_profile(A, b, R + [4. + 1e-9])) and np.allclose(s, solve_profile(A, b, R + [4. - 1e-9]))
+    p = [0, 1, 2, 3, 5, 4]                       # (the annulus between the last two rings: as the columns sorted)
+    assert np.allclose(solve_profile(A, b, R + [4.5]), solve_profile(A[:, p], b, [1., 2., 3., 4., 4.5, 5.])[p])
+    assert np.array_equal(solve_profile(A, b, R + [6.5]), solve_profile(A, b, R + [6.5]))
+    # nearly degenerate rings: the prior keeps the profile smooth, also with the annulus on the last ring
+    rng = np.random.default_rng(2)
+    g = rng.random(80)
+    A = g[:, None] + 0.05 * rng.random((80, 6))
+    b = 3. * g + 0.05 * rng.random(80)
+
+    def rough(e, smooth=0.1):
+        return np.abs(np.diff(solve_profile(A, b, R + [e], smooth)[:4], 2)).max()
+    assert rough(6., 0.) > 0.3 and rough(6.) < 0.03 and rough(5.) < 0.03 and rough(4.) < 0.1
+    # the fit: rings out to 180 arcsec, beam 30 arcsec, RADMAX 110 puts the annulus on the ring at 140
+    f = _bayes_mock(tmp_path, radii=[20, 60, 100, 140, 180])
+    f._setup(['vrot_single', 'radmax'])
+    L = [f._log_likelihood(np.array([150., e])) for e in (110., 110. + 1e-7, 110. - 1e-7)]
+    assert np.all(np.isfinite(L)) and np.ptp(L) < 0.01
+
+
 def test_bayesian_radmax_edge(tmp_path):
     """RADMAX as the outer edge of the disk (like_kwargs radmax='edge', the default, or 'taper'): the
     rings do not move, the model has no emission beyond the edge (also with the deconvolved density
