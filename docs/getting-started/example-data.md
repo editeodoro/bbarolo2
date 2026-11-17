@@ -18,7 +18,7 @@ this cube and other datasets, each with a parameter file, described in {doc}`../
 | [pgc53639.fits](https://github.com/editeodoro/bbarolo2/raw/main/examples/pgc53639.fits) | HI cube of PGC 53639, ATCA (LVHIS) | 3.5 MB | {doc}`../examples/pgc53639` |
 | [ugc1281.fits](https://github.com/editeodoro/bbarolo2/raw/main/examples/ugc1281.fits) | HI cube of UGC 1281, WSRT (WHISP) | 0.7 MB | {doc}`../examples/ugc1281` |
 | [ngc891.fits](https://github.com/editeodoro/bbarolo2/raw/main/examples/ngc891.fits) | HI cube of NGC 891, WSRT (HALOGAS) | 6.0 MB | {doc}`../examples/ngc891` |
-| [U3_25160_Ha.fits](https://github.com/editeodoro/bbarolo2/raw/main/examples/U3_25160_Ha.fits) | Hα cube of a galaxy at z = 0.9, KMOS (KROSS) | 0.2 MB | {doc}`../examples/u3-25160` |
+| [U3_25160_Ha.fits](https://github.com/editeodoro/bbarolo2/raw/main/examples/U3_25160_Ha.fits) | Hα cube of a galaxy at z = 0.9, KMOS (KMOS{sup}`3D`) | 0.2 MB | {doc}`../examples/u3-25160` |
 | [HD142527_13CO.fits](https://github.com/editeodoro/bbarolo2/raw/main/examples/HD142527_13CO.fits) | ¹³CO cube of the disk of HD 142527, ALMA | 5.6 MB | {doc}`../examples/hd142527` |
 | [2masxj1022_SALT.fits](https://github.com/editeodoro/bbarolo2/raw/main/examples/2masxj1022_SALT.fits) | long-slit spectrum of 2MASX J1022 (Hα + [NII]), SALT | 5.8 MB | {doc}`../examples/2masxj1022` |
 
