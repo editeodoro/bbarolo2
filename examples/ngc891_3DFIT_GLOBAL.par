@@ -1,0 +1,35 @@
+# Name of the fitsfile and output folder
+FITSFILE        ngc891.fits
+
+# LSF (in channels)
+SPECRES         0.849
+
+############### 3DFIT parameters ################
+3DFIT           true
+METHOD          GLOBAL
+
+# Input rings
+NRADII          16
+RADSEP          40
+XPOS            2:22:32.99
+YPOS            +42:20:52.1
+INC             88
+PA              203
+VSYS            528
+VROT            180
+VDISP           13
+Z0              3
+RADMAXA         440
+
+# Halo inputs
+Z0THICK         30
+FTHICK          0.3
+VDISPTHICK      32
+DVDZ            0.8
+
+# Other options
+MASK            SEARCH
+LTYPE           3
+FREE            vrot vdisp_single z0_single z0thick_single fthick_single vdispthick_single dvdz_single fracerr radmaxa 
+PRIORS          vrot=(uniform,30,200) dvdz=(uniform,loc=0,scale=2) radmaxa=(uniform,loc=400,scale=100)
+FLAGERRORS      true

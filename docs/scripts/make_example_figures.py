@@ -35,6 +35,7 @@ EX = {
     "ngc5633": ("NGC5633_3DFIT.par", "output/NGC5633", "NGC5633", FIT3D),
     "pgc53639": ("pgc53639_3DFIT.par", "output/PGC53639", "PGC53639", FIT3D),
     "ugc1281": ("ugc1281_3DFIT_GLOBAL.par", "output/UGC1281", "UGC1281", FIT3D + CORNER),
+    "ngc891": ("ngc891_3DFIT_GLOBAL.par", "output/ngc891_1", "ngc891_1", FIT3D + CORNER),
     "u3_25160": ("U3_25160_3DFIT_BAY.par", "output/U3_25160", "U3_25160", FIT3D + CORNER),
     "hd142527": ("HD142527_3DFIT_BAY.par", "output/hd142527", "hd142527", FIT3D + CORNER),
     "2masxj1022": ("2masxj1022_SLITFIT.par", "output/2masxj1022_slit", "2MASXJ1022",
