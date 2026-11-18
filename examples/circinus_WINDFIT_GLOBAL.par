@@ -1,0 +1,32 @@
+# Name of the fitsfile and the mask of the wind (made by circinus_mask.py)
+FITSFILE        circinus_OIII.fits
+MASK            FILE(circinus_OIII_mask.fits)
+
+# [OIII] 5007 in air at the redshift of Circinus; LSF of MUSE: sigma = 0.9 channels
+RESTWAVE        5006.843
+REDSHIFT        0.001448
+SPECRES         0.85
+
+############### WINDFIT parameters ################
+WINDFIT         true
+METHOD          GLOBAL
+
+# The cone of Marconcini et al. (2023): apex on the nucleus, axis at position angle -65 on the sky
+XPOS            14:13:09.90
+YPOS            -65:20:19.77
+VSYS            0
+INC             70
+PA              25
+OPENANG         110
+CONELEN         52
+VWIND           400
+VDISP           0
+
+# Free parameters: one velocity of the wind and the inclination
+FREE            VWIND_SINGLE INC
+PRIORS          INC=(uniform,30,60) VWIND=(uniform,0,1600)
+SAMPLEROPTS     nstart=6 seed=1
+FLAGERRORS      true
+
+# Likelihood: cells of 5.4 arcsec, model error 30% of the data, approaching cone, voxels of the mask
+LIKEOPTS        emission=cells cellsize=5.4 datafrac=0.3 cones=approaching likemask=dilated dilation=0,0

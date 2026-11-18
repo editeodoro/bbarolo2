@@ -5,8 +5,8 @@ they write into PNG files in docs/figures/examples/ (committed: Read the Docs do
     python3 docs/scripts/make_example_figures.py --run ngc2403      # only some (names: --list)
     python3 docs/scripts/make_example_figures.py                    # only the figures, from the outputs of a run
 
-The examples run with the command line of this repository (bin/BBarolo -p <file> THREADS=<--threads>) in the
-folder --work (default: examples_runs/ next to the repository), where the FITS files and the parameter files of
+The examples run with the command line of this repository (bin/BBarolo -p <file> THREADS=<--threads>, and the
+overrides of the example: the variants of Circinus) in the folder --work (default: examples_runs/ next to the repository), where the FITS files and the parameter files of
 examples/ are linked, so their outputs go to <work>/output/. The wall-clock time of each run is written in
 <work>/times.txt (the times on the example pages are those of a server with 16 cores, --threads 16).
 Needs pdftoppm (poppler) to convert the PDF files.
@@ -26,10 +26,14 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 EXAMPLES = os.path.join(REPO, "examples")
 OUT = os.path.join(REPO, "docs", "figures", "examples")
 
-# name: (parameter file, output folder in <work>, prefix of the files, [(PDF pattern, PNG name, width in pixels)])
+# name: (parameter file, output folder in <work>, prefix of the files, [(PDF pattern, PNG name, width in pixels)],
+#        [KEY=value overrides of the command line])
 FIT3D = [("_parameters.pdf", "parameters", 1000), ("_maps_*.pdf", "maps", 650), ("_pv_*.pdf", "pv", 900),
          ("_pvslices_*.pdf", "pvslices", 1300), ("_chanmaps_*.pdf", "chanmaps", 800)]
 CORNER = [("_corner.pdf", "corner", 1100)]
+WIND = [("_maps_wind.pdf", "maps", 650), ("_pv_wind.pdf", "pv", 800), ("_wind_shells.pdf", "shells", 1000),
+        ("_chanmaps_wind.pdf", "chanmaps", 800)]
+CIRC = "cones=approaching likemask=dilated dilation=0,0"          # (the variants of the fit of Circinus)
 EX = {
     "ngc2403": ("ngc2403_3DFIT.par", "output/ngc2403", "ngc2403", FIT3D),
     "ngc5633": ("NGC5633_3DFIT.par", "output/NGC5633", "NGC5633", FIT3D),
@@ -41,15 +45,36 @@ EX = {
     "aless73": ("ALESS73_3DFIT_BAY.par", "output/LESS_J033229.4-275619", "LESS_J033229.4-275619", FIT3D + CORNER),
     "2masxj1022": ("2masxj1022_SLITFIT.par", "output/2masxj1022_slit", "2MASXJ1022",
                    [("_slitfit_parameters.pdf", "parameters", 800), ("_slitfit_pv.pdf", "pv", 1300)]),
+    "circinus": ("circinus_WINDFIT_GLOBAL.par", "output/circinus", "circinus",
+                 [w for w in WIND if w[1] != "shells"] + [("_wind_corner.pdf", "corner", 700)]),
+    "circinus_voxel": ("circinus_WINDFIT_GLOBAL.par", "output/circinus_voxel", "circinus", [],
+                       ["OUTFOLDER=output/circinus_voxel/", "FLAGERRORS=false", f"LIKEOPTS=emission=voxel {CIRC}"]),
+    "circinus_shells": ("circinus_WINDFIT_GLOBAL.par", "output/circinus_shells", "circinus", [],
+                        ["OUTFOLDER=output/circinus_shells/", "FLAGERRORS=false",
+                         f"LIKEOPTS=emission=shells datafrac=0.3 {CIRC}"]),
+    "circinus_moka": ("circinus_WINDFIT_GLOBAL.par", "output/circinus_moka", "circinus", [],
+                      ["OUTFOLDER=output/circinus_moka/", "FLAGERRORS=false", f"LIKEOPTS=emission=moka {CIRC}"]),
+    "circinus_vsys": ("circinus_WINDFIT_GLOBAL.par", "output/circinus_vsys", "circinus", [],
+                      ["OUTFOLDER=output/circinus_vsys/", "FLAGERRORS=false", "FREE=VWIND_SINGLE INC VSYS",
+                       "PRIORS=INC=(uniform,30,60) VWIND=(uniform,0,1600) VSYS=(uniform,-300,600)"]),
+    "circinus_func": ("circinus_WINDFIT_GLOBAL.par", "output/circinus_func", "circinus",
+                      [("_wind_shells.pdf", "shells", 1000)],
+                      ["OUTFOLDER=output/circinus_func/", "FLAGERRORS=false", "FREE=VWIND_FUNC INC",
+                       "PRIORS=INC=(uniform,30,60) VWIND_P1=(uniform,0,1600) VWIND_P2=(uniform,1,50)"]),
 }
+# figures made from the outputs of several examples: name -> (function, the examples it needs)
+COMPOSITE = {"circinus_compare": ("circinus_compare", ["circinus", "circinus_voxel", "circinus_shells",
+                                                       "circinus_moka"]),
+             "circinus_mask": ("circinus_mask", [])}
 
 
 def run(name, work, threads):
     par = EX[name][0]
+    extra = EX[name][4] if len(EX[name]) > 4 else []
     t0 = time.time()
     with open(os.path.join(work, f"{name}.log"), "w") as log:
         ok = subprocess.run([sys.executable, os.path.join(REPO, "bin", "BBarolo"), "-p", par,
-                             f"THREADS={threads}", "SHOWBAR=false"], cwd=work, stdout=log,
+                             f"THREADS={threads}", "SHOWBAR=false"] + extra, cwd=work, stdout=log,
                             stderr=subprocess.STDOUT).returncode == 0
     dt = time.time() - t0
     with open(os.path.join(work, "times.txt"), "a") as f:
@@ -60,7 +85,10 @@ def run(name, work, threads):
 
 
 def figures(name, work):
-    _, folder, prefix, plots = EX[name]
+    if name in COMPOSITE:
+        globals()[COMPOSITE[name][0]](work)
+        return
+    _, folder, prefix, plots = EX[name][:4]
     for pattern, png, width in plots:
         pdfs = sorted(glob.glob(os.path.join(work, folder, prefix + pattern)))
         if not pdfs:
@@ -69,10 +97,157 @@ def figures(name, work):
         dest = os.path.join(OUT, f"{name}_{png}")
         subprocess.run(["pdftoppm", "-png", "-singlefile", "-f", "1", "-scale-to-x", str(width), "-scale-to-y", "-1",
                         pdfs[0], dest], check=True)
-        im = Image.open(dest + ".png").convert("RGB")        # 256 colours: 40% of the size, the same to the eye
-        im.quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).save(dest + ".png",
-                                                                                                 optimize=True)
+        _quantize(dest + ".png")
         print(f"    {os.path.relpath(dest, REPO)}.png")
+
+
+def _quantize(png):
+    im = Image.open(png).convert("RGB")                  # 256 colours: 40% of the size, the same to the eye
+    im.quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).save(png, optimize=True)
+
+
+def _wind_params(path):
+    """The best values of the free parameters in a <prefix>_wind_params.txt: {name: value}."""
+    out = {}
+    with open(path) as f:
+        for line in f:
+            w = line.split()
+            if w and not line.startswith("#") and len(w) > 1:
+                out[w[0]] = float(w[1])
+    return out
+
+
+def circinus_mask(work):
+    """The integrated [OIII] map of Circinus (-900 to +800 km/s) with the mask of the fit and the axis of the cone."""
+    import numpy as np
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import PowerNorm
+    from astropy.io import fits
+    from astropy.wcs import WCS
+    hdu = fits.open(os.path.join(EXAMPLES, "circinus_OIII.fits"))[0]
+    h = hdu.header
+    mask = fits.getdata(os.path.join(EXAMPLES, "circinus_OIII_mask.fits")).astype(bool)
+    lam = h["CRVAL3"] + (np.arange(hdu.data.shape[0]) + 1 - h["CRPIX3"]) * h["CD3_3"]
+    vel = (lam / (5006.843 * 1.001448) - 1) * 299792.458
+    mom0 = np.nansum(hdu.data[(vel >= -900) & (vel <= 800)], axis=0) * abs(h["CD3_3"])
+    pix = abs(h["CD2_2"]) * 3600.
+    x0, y0 = WCS(h).celestial.world_to_pixel_values(213.291251, -65.338826)
+    ny, nx = mom0.shape
+    ext = [-x0 * pix, (nx - 1 - x0) * pix, -y0 * pix, (ny - 1 - y0) * pix]      # (arcsec from the nucleus; x: west)
+    fig, ax = plt.subplots(figsize=(5.4, 6.2))
+    for img, title in ((mom0, "[OIII] 5007, -900 to +800 km/s"),):
+        ax.imshow(np.clip(np.nan_to_num(img), 0, None), origin="lower", cmap="Greys", extent=ext,
+                  norm=PowerNorm(0.4, vmin=0, vmax=np.nanpercentile(img, 99.8)))
+        ax.contour((np.arange(nx) - x0) * pix, (np.arange(ny) - y0) * pix, mask.any(axis=0), [0.5],
+                   colors="#d62728", linewidths=1.2)
+        a = np.radians(-65.)
+        ax.plot([0, 40 * -np.sin(a)], [0, 40 * np.cos(a)], "--", color="#1f4e9c", lw=1)
+        ax.plot(0, 0, "+", color="#ff7f0e", ms=14, mew=2)
+        ax.set_xlim(ext[0], ext[1])
+        ax.set_ylim(ext[2], ext[3])
+        ax.set_xlabel("x offset (arcsec, west to the right)")
+        ax.set_title(title, fontsize=11)
+    ax.set_ylabel("y offset (arcsec, north up)")
+    fig.tight_layout()
+    dest = os.path.join(OUT, "circinus_mask.png")
+    fig.savefig(dest, dpi=90)
+    plt.close(fig)
+    _quantize(dest)
+    print(f"    {os.path.relpath(dest, REPO)}")
+
+
+def circinus_compare(work):
+    """The fits of Circinus with the four descriptions of the emission (cells, voxel, shells, moka): position-velocity
+    slices of the data in the mask (grey, blue contours) and of the models (red) along the axis of the cone and
+    across it at 10 arcsec from the nucleus, 1 beam wide. The models of cells and shells are fluxes (red contours at
+    the levels of the data); those of voxel and moka are not (a cone with the emission of the prior; the data where
+    the clouds are), and the cone is drawn instead: the outline of a uniform cone with the same geometry and wind
+    (GALWIND), at 5% of its peak in each slice."""
+    import numpy as np
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from astropy.io import fits
+    from astropy.wcs import WCS
+    from scipy.ndimage import map_coordinates
+    sys.path.insert(0, REPO)
+    from bbarolo import GalWind
+    hdu = fits.open(os.path.join(EXAMPLES, "circinus_OIII.fits"))[0]
+    h = hdu.header
+    mask = fits.getdata(os.path.join(EXAMPLES, "circinus_OIII_mask.fits")).astype(bool)
+    data = np.where(mask, np.nan_to_num(hdu.data.astype(np.float64)), np.nan)
+    lam = h["CRVAL3"] + (np.arange(data.shape[0]) + 1 - h["CRPIX3"]) * h["CD3_3"]
+    vel = (lam / (5006.843 * 1.001448) - 1) * 299792.458
+    chan = mask.any(axis=(1, 2))
+    pix = abs(h["CD2_2"]) * 3600.
+    x0, y0 = WCS(h).celestial.world_to_pixel_values(213.291251, -65.338826)
+    axis = np.radians(-65.)                                   # (position angle of the axis, east of north)
+    ux, uy = -np.sin(axis), np.cos(axis)                      # (pixel x grows to the west)
+    wx, wy = -uy, ux                                          # (across the axis)
+
+    def slice_(cube, cx, cy, dx, dy, offs):
+        """The slice along the direction (dx, dy) through (cx, cy), averaged over 1 beam across it."""
+        out = np.zeros((int(chan.sum()), offs.size))
+        n = 0
+        for w in np.linspace(-0.45, 0.45, 5) / pix:
+            px, py = cx + offs / pix * dx + w * dy, cy + offs / pix * dy - w * dx
+            for i, k in enumerate(np.flatnonzero(chan)):
+                out[i] += map_coordinates(cube[k], [py, px], order=1, cval=np.nan)
+            n += 1
+        return out / n
+
+    along = np.arange(0., 30.01, 0.2)
+    across = np.arange(-12., 12.01, 0.2)
+    cx10, cy10 = x0 + 10. / pix * ux, y0 + 10. / pix * uy
+    runs = [("circinus", "cells"), ("circinus_voxel", "voxel"), ("circinus_shells", "shells"),
+            ("circinus_moka", "moka")]
+    d_al = slice_(data, x0, y0, ux, uy, along)
+    d_ac = slice_(data, cx10, cy10, wx, wy, across)
+    lev = 3 * 20. * 2. ** np.arange(0, 12)                      # (3 sigma, doubling)
+    fig, axs = plt.subplots(2, 4, figsize=(15, 7.2), sharey=True)
+    for j, (name, label) in enumerate(runs):
+        folder, prefix = EX[name][1], EX[name][2]
+        modf = os.path.join(work, folder, prefix + "_mod_wind.fits")
+        if not os.path.exists(modf):
+            print(f"  circinus_compare: no {modf}")
+            plt.close(fig)
+            return
+        model = np.where(mask, fits.getdata(modf).astype(np.float64), np.nan)
+        par = _wind_params(os.path.join(work, folder, prefix + "_wind_params.txt"))
+        if label in ("voxel", "moka"):                      # (the uniform cone of the fit)
+            g = GalWind(os.path.join(EXAMPLES, "circinus_OIII.fits"), xpos="14:13:09.90", ypos="-65:20:19.77",
+                        vsys=par.get("vsys", 0.), inc=par["inc"], pa=25, openang=110, conelen=52,
+                        vwind=par["vwind"], vdisp=0, restwave=5006.843, redshift=0.001448, specres=0.85, dens=1,
+                        verbose=False)
+            model = np.where(mask, np.asarray(g.run(threads=4).model.data, np.float64), np.nan)
+        for i, (d, m, offs, xl) in enumerate(((d_al, slice_(model, x0, y0, ux, uy, along), along,
+                                               "offset along the axis (arcsec)"),
+                                              (d_ac, slice_(model, cx10, cy10, wx, wy, across), across,
+                                               "offset across the axis, 10 arcsec out (arcsec)"))):
+            ax = axs[i, j]
+            ext = [offs[0], offs[-1], vel[chan][0], vel[chan][-1]]
+            ax.imshow(d, origin="lower", aspect="auto", extent=ext, cmap="Greys", vmin=0, vmax=np.nanpercentile(d, 99.5))
+            ax.contour(offs, vel[chan], np.nan_to_num(d), lev, colors="#1f4e9c", linewidths=0.7)
+            if label in ("voxel", "moka"):
+                mm = np.nan_to_num(m)
+                ax.contour(offs, vel[chan], mm, [0.05 * mm.max()], colors="#d62728", linewidths=1.6)
+            else:
+                ax.contour(offs, vel[chan], np.nan_to_num(m), lev, colors="#d62728", linewidths=0.8)
+            ax.axhline(0, color="k", lw=0.5)
+            ax.set_xlabel(xl)
+            if j == 0:
+                ax.set_ylabel("V$_{LOS}$ - V$_{sys}$ (km/s)")
+            if i == 0:
+                ax.set_title(f"{label}: VWIND {par.get('vwind', np.nan):.0f} km/s, INC {par.get('inc', np.nan):.1f}",
+                             fontsize=11)
+    fig.tight_layout()
+    dest = os.path.join(OUT, "circinus_compare.png")
+    fig.savefig(dest, dpi=90)
+    plt.close(fig)
+    _quantize(dest)
+    print(f"    {os.path.relpath(dest, REPO)}")
 
 
 def main():
@@ -86,10 +261,12 @@ def main():
     a = ap.parse_args()
     if a.list:
         for k, v in EX.items():
-            print(f"{k:12s} examples/{v[0]}")
+            print(f"{k:16s} examples/{v[0]}" + (" " + " ".join(v[4]) if len(v) > 4 else ""))
+        for k, v in COMPOSITE.items():
+            print(f"{k:16s} (figure of {', '.join(v[1])})")
         return
-    names = a.names or list(EX)
-    bad = [n for n in names if n not in EX]
+    names = a.names or list(EX) + list(COMPOSITE)
+    bad = [n for n in names if n not in EX and n not in COMPOSITE]
     if bad:
         sys.exit(f"Unknown examples: {', '.join(bad)} (see --list)")
     if shutil.which("pdftoppm") is None:
@@ -103,7 +280,8 @@ def main():
                 os.remove(dst)
             os.symlink(f, dst)
         for n in names:
-            run(n, a.work, a.threads)
+            if n in EX:
+                run(n, a.work, a.threads)
     for n in names:
         figures(n, a.work)
 

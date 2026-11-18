@@ -39,7 +39,7 @@ likelihood. Read the relevant section of it before changing behaviour.
   (FITS file + parameter file each, one page each in `docs/examples/`; figures and run times from
   `docs/scripts/make_example_figures.py --run`), the notebook `examples.ipynb` (every example in Python, in memory,
   with its plots; saved without outputs: keep its code equal to the Python tabs of the pages) and the scripts
-  `galmod3d.py`, `simulate_galaxies.py`.
+  `galmod3d.py`, `simulate_galaxies.py` and `circinus_mask.py` (the mask of the Circinus example).
   `performance/`: 3DFIT accuracy suite and Bayesian coverage, with the report in `performance/report/`; the C++
   comparisons (`compare_galmod.py`, `compare_bayesian.py`), `run_all_tests.sh` and the WINDFIT mock `wind_example.py`.
 - `tests/test_BBB/` is the user's own test folder, not part of the package: edit it only when

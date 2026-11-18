@@ -3,7 +3,7 @@
 ## Example datasets
 
 Real data of different kinds, each with a parameter file, from radio cubes of nearby galaxies to a
-protoplanetary disk and a long-slit spectrum. The cubes and the parameter files are in the folder
+protoplanetary disk, a long-slit spectrum and the wind of an active nucleus. The cubes and the parameter files are in the folder
 [`examples/`](https://github.com/editeodoro/bbarolo2/tree/main/examples) of the repository
 (see {doc}`../getting-started/example-data`). Each page shows the parameter file and the same run in Python,
 explains the choices of the setup, and shows the outputs: the rings, the moment maps, the position–velocity
@@ -21,6 +21,7 @@ diagrams and the channel maps of the data and of the model. The notebook
 | {doc}`aless73` | [CII], ALMA, starburst galaxy at z = 4.8 | 3DFIT BAYESIAN, prior on the inclination | 8 min 8 s |
 | {doc}`hd142527` | ¹³CO, ALMA, protoplanetary disk | 3DFIT BAYESIAN, geometry and thickness free | 41 min |
 | {doc}`2masxj1022` | Hα + [NII], SALT long slit, massive spiral | SLITFIT GLOBAL | 23 s |
+| {doc}`circinus` | [OIII], MUSE, ionised cone of a Seyfert galaxy | WINDFIT GLOBAL with a mask, MoKA-3D compared | 11 min |
 
 The times are the wall-clock times of `BBarolo -p` on our server (Intel Xeon Platinum 8480+) with 16 cores
 (`THREADS 16`, the default), start-up and output files included. The server was shared with other jobs, so the
@@ -39,6 +40,7 @@ u3-25160
 aless73
 hd142527
 2masxj1022
+circinus
 ```
 
 ## Tutorials
