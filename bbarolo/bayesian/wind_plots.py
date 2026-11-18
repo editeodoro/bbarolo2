@@ -193,10 +193,11 @@ for i in range (3):
   vmin, vmax = interval.get_limits(to_plot[1][i][np.isfinite(to_plot[1][i])]) if np.any(np.isfinite(to_plot[1][i])) \\
                else (0, 1)
   if i==1:
-    # (the velocities: symmetric around VSYS, over the central 95% of the velocities of the data, or of the model)
+    # (the velocities: symmetric around VSYS, over the central 95% of the velocities of the data, at most the range
+    # of the model, 99.5% plus 10%, when the velocity map of the data is mostly noise)
+    vv = 1.1*max(abs(vmin),abs(vmax))
     vd = to_plot[0][1][np.isfinite(to_plot[0][1])]
-    if vd.size == 0: vd = to_plot[1][1][np.isfinite(to_plot[1][1])]
-    vv = np.max(np.abs(PercentileInterval(95).get_limits(vd))) if vd.size else 1.
+    if vd.size: vv = min(vv, np.max(np.abs(PercentileInterval(95).get_limits(vd))))
     vmin, vmax = -vv, vv
   norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
   cbax = fig.add_axes([ax[i][0].get_position().x0,ax[i][0].get_position().y0-0.025,2*0.2-0.003,0.02])
