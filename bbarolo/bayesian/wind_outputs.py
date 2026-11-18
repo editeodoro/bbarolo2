@@ -17,8 +17,8 @@ the cube (<prefix>):
   <prefix>_<sampler>_windresults.npy   the samples, their weights, the free parameters, the priors and the options
                                  (optimize: <prefix>_optimize_windresults.npy, also the best fit and the optimisation)
   plotscripts/                   the plotting scripts (PLOTS >= 0; see wind_plots.py), run with PLOTS > 0:
-                                 <prefix>_chanmaps_wind.pdf, <prefix>_maps_wind.pdf, <prefix>_pv_wind.pdf, and
-                                 <prefix>_wind_corner.pdf, <prefix>_wind_shells.pdf
+                                 <prefix>_chanmaps_wind.pdf, <prefix>_maps_wind.pdf, <prefix>_pv_wind.pdf,
+                                 <prefix>_pvslices_wind.pdf, and <prefix>_wind_corner.pdf, <prefix>_wind_shells.pdf
 """
 
 import os
@@ -189,7 +189,8 @@ def _plots(f, of, prefix, run=True, verbose=True):
     ret = run_scripts(paths)
     if ret != 0:
         vprint(verbose, " WINDFIT: something went wrong with the plots: check the scripts in " + of + "plotscripts/")
-    out += [pre + s for s in ("_chanmaps_wind.pdf", "_maps_wind.pdf", "_pv_wind.pdf") if os.path.isfile(pre + s)]
+    out += [pre + s for s in ("_chanmaps_wind.pdf", "_maps_wind.pdf", "_pv_wind.pdf", "_pvslices_wind.pdf")
+            if os.path.isfile(pre + s)]
     import matplotlib
     matplotlib.use("Agg", force=False)
     import matplotlib.pyplot as plt
@@ -208,7 +209,7 @@ def _plots(f, of, prefix, run=True, verbose=True):
     # the shells
     tab = f.shells_table()
     em = f.emission_errors()
-    fig, ax = plt.subplots(1, 4, figsize=(16, 3.6))
+    fig, ax = plt.subplots(1, 4, figsize=(16, 3.6), layout="constrained")    # (room for the labels of each panel)
     for a, base in zip(ax, ("vwind", "vdisp", "vrot")):
         yerr = [tab[base + "_lo"], tab[base + "_hi"]] if base + "_lo" in tab else None
         a.errorbar(tab["radii"], tab[base], yerr=yerr, fmt="o-", color="firebrick")

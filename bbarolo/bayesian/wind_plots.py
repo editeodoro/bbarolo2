@@ -288,6 +288,115 @@ fig.savefig(outfolder+outprefix+'_pv_wind.pdf', bbox_inches='tight')
 image.close()
 """
 
+_PVSLICES = """
+# POSITION-VELOCITY SLICES through the cones: through the apex at 10 angles, 18 degrees apart from the projected axis
+# (top), across the axis at 5 distances from the apex and parallel to it at 5 offsets (bottom); data (blue scale and
+# contours) and model (red contours), with the total intensity map of the data and the paths of the slices
+from plot_utils import pv_path, pv_sample
+labsize = 12
+v = np.array([1,2,4,8,16,32,64])*cont
+v_neg = [-cont]
+image = fits.open(cubefile)
+cube = image[cubehdu].data
+while cube.ndim > 3: cube = cube[0]
+cube_mod = fits.open(outfolder+outprefix+'_mod_wind.fits')[0].data
+mom0 = fits.open(outfolder+'maps/'+outprefix+'_0mom.fits')[0].data
+x0, y0 = xcen_m, ycen_m
+# the projected axis, towards the end of the last cone, and its length (pixels) within the slices
+ex, ey = axis_x[-1], axis_y[-1]
+L = float(np.hypot(ex-x0, ey-y0))
+u = np.array([ex-x0, ey-y0])/L if L > 0 else np.array([0., 1.])
+nv = np.array([-u[1], u[0]])
+R = halfsize/cdeltsp
+
+def reach(px, py, d):
+  # (the distance from (px, py) to the edge of the region of the plots along the direction d, pixels)
+  t = [((xmax if d[0] > 0 else xmin)-px)/d[0] if d[0] != 0 else np.inf,
+       ((ymax if d[1] > 0 else ymin)-py)/d[1] if d[1] != 0 else np.inf]
+  return max(min(t), 0.)
+ncones = len(rims)
+Lf = min(L, R, reach(x0, y0, u)) if ncones == 1 else min(L, R, reach(x0, y0, u), reach(x0, y0, -u))
+Lf = max(Lf, 3*bmaj)
+tanh = np.tan(np.radians(min(0.5*openang_m, 75.)))
+dist = Lf*(np.array([0.1,0.3,0.5,0.7,0.9]) if ncones == 1 else np.array([-0.7,-0.35,0.,0.35,0.7]))
+xm, ym = (x0+0.5*Lf*u[0], y0+0.5*Lf*u[1]) if ncones == 1 else (x0, y0)
+W = min(0.5*Lf*tanh, 0.9*reach(xm, ym, nv), 0.9*reach(xm, ym, -nv))
+offs = max(W, bmaj)*np.array([-1.,-0.5,0.,0.5,1.])
+dthetas = 18*np.arange(10)
+
+def rot(vec, deg):
+  a = np.radians(deg)
+  return np.array([vec[0]*np.cos(a)-vec[1]*np.sin(a), vec[0]*np.sin(a)+vec[1]*np.cos(a)])
+
+slices = []                                   # (centre, direction, half length (pixels), label, group)
+for th in dthetas:
+  slices.append(((x0, y0), rot(u, th), R, r'$\\theta$ = %d$^\\circ$'%th, 0))
+for d in dist:
+  half = min(R, 1.3*abs(d)*tanh + 2*bmaj) if d != 0 else min(R, 3*bmaj + 0.3*Lf*tanh)
+  slices.append(((x0+d*u[0], y0+d*u[1]), nv, half, "across, %.1f''"%(d*cdeltsp), 1))
+for c in offs:
+  slices.append(((xm+c*nv[0], ym+c*nv[1]), u, R, "along, %+.1f''"%(c*cdeltsp), 2))
+
+fig, axes = defineaxis(4,5,0.3,0.3,xsep=0.01,ysep=0.1,fig_width=10,fig_heigth=10)
+axes = np.ravel(axes)
+pos = axes[4].get_position()
+ax_m1 = fig.add_axes([pos.x1+0.03, pos.y0-0.2, 0.3, 0.3])
+pos = axes[14].get_position()
+ax_m2 = fig.add_axes([pos.x1+0.03, pos.y0-0.27, 0.3, 0.3])
+norm0 = ImageNormalize(mom0[np.isfinite(mom0)], interval=PercentileInterval(99.), stretch=PowerStretch(0.5))
+colors = plt.cm.PuBu_r(np.linspace(0,1,13))
+for ax_m, title in ((ax_m1, 'Slices through the apex'), (ax_m2, 'Slices across and along')):
+  ax_m.set_prop_cycle(color=colors)
+  ax_m.imshow(mom0, origin='lower', cmap='Greys', norm=norm0, interpolation='nearest')
+  ax_m.plot(x0, y0, 'x', color='orange', markersize=7, mew=1.5, zorder=12)
+  ax_m.set_xlim(xmin, xmax)
+  ax_m.set_ylim(ymin, ymax)
+  ax_m.tick_params(labelbottom=False, labelleft=False, top=False, bottom=False, left=False, right=False)
+  ax_m.set_title(title, fontsize=labsize)
+fin = cube[zmin:zmax+1][np.isfinite(cube[zmin:zmax+1])]
+vmax = PercentileInterval(99.9).get_limits(fin)[1] if fin.size else 1.
+norm = ImageNormalize(vmin=0, vmax=max(vmax, 1.01*cont), stretch=PowerStretch(1.0))
+for i, (cen, dvec, half, lab, group) in enumerate(slices):
+  ax = axes[i]
+  if i >= 10:
+    pos = ax.get_position()
+    ax.set_position([pos.x0, pos.y0-0.05, pos.width, pos.height])
+  p1 = (cen[0]-half*dvec[0], cen[1]-half*dvec[1])
+  p2 = (cen[0]+half*dvec[0], cen[1]+half*dvec[1])
+  s, x, y = pv_path(p1=p1, p2=p2, shape=cube.shape[1:], step=0.5)
+  ls = 'solid' if group != 2 else 'dashed'
+  ax_m = ax_m1 if group == 0 else ax_m2
+  ax_m.plot(x, y, ls=ls, label=lab)
+  ax.grid(color='gray', linestyle='--', linewidth=0.3)
+  ax.text(0.03, 1.03, lab, transform=ax.transAxes, fontsize=labsize-1)
+  ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(nbins=5))
+  ax.yaxis.set_major_locator(mpl.ticker.MaxNLocator(nbins=5))
+  ax.tick_params(direction='in', top=True, right=True, labelleft=(i % 5 == 0))
+  if i % 5 == 0: ax.set_ylabel(r'$\\mathrm{\\Delta V_{LOS}}$ (km/s)', fontsize=labsize+1)
+  ax.set_xlabel('Offset (arcsec)', fontsize=labsize)
+  ax.axhline(y=0, color='black', lw=0.8)
+  ax.axvline(x=0, color='black', lw=0.8)
+  ax.set_ylim(zmin_wcs-vsys_m, zmax_wcs-vsys_m)
+  ax.set_xlim(-half*cdeltsp, half*cdeltsp)
+  if len(s) < 2: continue
+  dat = pv_sample(cube, x, y)[zmin:zmax+1]
+  mod = pv_sample(cube_mod, x, y)[zmin:zmax+1]
+  off = s*cdeltsp
+  d_o = abs(off[1]-off[0])
+  ext = [off[0]-0.5*d_o, off[-1]+0.5*d_o, zmin_wcs-vsys_m, zmax_wcs-vsys_m]
+  ax.imshow(dat, origin='lower', cmap='Blues', norm=norm, aspect='auto', interpolation='nearest', extent=ext)
+  if np.nanmax(np.nan_to_num(dat)) >= v[0]: ax.contour(dat, v, origin='lower', linewidths=0.7, colors='#00008B', extent=ext)
+  ax.contour(dat, v_neg, origin='lower', linewidths=0.1, colors='gray', extent=ext)
+  if np.nanmax(np.nan_to_num(mod)) >= v[0]: ax.contour(mod, v, origin='lower', linewidths=1.1, colors='#B22222', extent=ext)
+  ax.set_xlim(-half*cdeltsp, half*cdeltsp)
+leg = dict(ncol=2, loc='upper left', bbox_to_anchor=(0.0, -0.03), frameon=False, fontsize=labsize-2)
+ax_m1.legend(handlelength=2.5, **leg)
+ax_m2.legend(handlelength=2.5, **leg)
+axes[0].text(0, 1.2, gname, transform=axes[0].transAxes, fontsize=18)
+fig.savefig(outfolder+outprefix+'_pvslices_wind.pdf', bbox_inches='tight')
+image.close()
+"""
+
 
 def write_scripts(f, outfolder, prefix, cubefile, cubehdu=0):
     """Write the plotting scripts of the BayesianWind f (after its outputs, in outfolder with prefix; cubefile: the
@@ -315,14 +424,15 @@ def write_scripts(f, outfolder, prefix, cubefile, cubehdu=0):
                 zmax_wcs=float(AlltoVel(c.getZphys(zmax + 0.5), h)), bmaj=float(h.Bmaj() / h.PixScale()),
                 bmin=float(h.Bmin() / h.PixScale()), bpa=float(h.Bpa()), bunit=h.Bunit(), arcconv=3600.,
                 halfsize=float(halfsize), axis_x=[float(a[0]) for a in axis], axis_y=[float(a[1]) for a in axis],
-                rims=rims, cuts=cuts, cut_labels=cut_labels, cdeltsp=float(pixscale))
+                rims=rims, cuts=cuts, cut_labels=cut_labels, cdeltsp=float(pixscale), openang_m=float(b.openang))
     if vals["zmax_wcs"] < vals["zmin_wcs"]:
         vals["zmin_wcs"], vals["zmax_wcs"] = vals["zmax_wcs"], vals["zmin_wcs"]
     header = "".join(f"{k} = {v!r}\n" for k, v in vals.items())
     paths = []
     for name, body, what in (("plot_chanmaps_wind.py", _CHANMAPS, "channel maps of data and model"),
                              ("plot_kinmaps_wind.py", _KINMAPS, "moment maps of data, model and residuals"),
-                             ("plot_pvs_wind.py", _PVS, "position-velocity slices of data and model")):
+                             ("plot_pvs_wind.py", _PVS, "position-velocity slices of data and model"),
+                             ("plot_pvslices_wind.py", _PVSLICES, "position-velocity slices through the cones")):
         path = folder + name
         with open(path, "w") as fh:
             fh.write(f"#### WINDFIT: {what} (BBarolo; edit and run from this folder) ####\n")

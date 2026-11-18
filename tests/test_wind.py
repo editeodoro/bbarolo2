@@ -294,7 +294,7 @@ def test_bayesian_wind_quick(tmp_path):
     names = {os.path.relpath(x, str(tmp_path)) for x in files}
     pre = f._cube_obj.pars().outPrefix
     for n in ("_wind_shells.txt", "_mod_wind.fits", "_mask.fits", "_chanmaps_wind.pdf", "_maps_wind.pdf",
-              "_pv_wind.pdf"):
+              "_pv_wind.pdf", "_pvslices_wind.pdf", "_wind_shells.pdf"):
         assert pre + n in names, n
     for n in ("0mom", "1mom", "2mom", "mod_0mom_wind", "mod_1mom_wind", "mod_2mom_wind"):
         assert f"maps/{pre}_{n}.fits" in names, n
@@ -514,7 +514,7 @@ def test_bayesian_wind_one_cone(tmp_path):
     assert f.ndim == 5
     files = f.write(plots=1, verbose=False)
     pre = f._cube_obj.pars().outPrefix
-    for n in ("_pv_wind.pdf", "_maps_wind.pdf", "_chanmaps_wind.pdf", "_wind_shells.txt"):
+    for n in ("_pv_wind.pdf", "_pvslices_wind.pdf", "_maps_wind.pdf", "_chanmaps_wind.pdf", "_wind_shells.txt"):
         assert os.path.isfile(str(tmp_path) + "/" + pre + n), n
 
 

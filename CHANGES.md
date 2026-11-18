@@ -491,6 +491,11 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   {...}` replaces them all; the entries can be changed until `run()`, and are checked when set. Only the engines had
   `priors` (an AttributeError on the tasks); theirs stays a plain dict of all their priors, the defaults included.
 
+- **WINDFIT `_pvslices_wind.pdf`: position-velocity slices through the cones**, in the style of the
+  `_pvslices_<norm>.pdf` of 3DFIT: 20 slices of the data and the model, through the apex at 10 angles 18° apart from
+  the projected axis, across the axis at 5 distances from the apex and parallel to it at 5 offsets, with their paths
+  on the total intensity map (the script `plotscripts/plot_pvslices_wind.py`).
+
 - **WINDFIT `LIKEOPTS likemask` and `dilation`: the likelihood in a mask**, as 3DFIT with METHOD GLOBAL or
   BAYESIAN. With `likemask=dilated` only the voxels of the mask (`MASK`, e.g. `MASK FILE(wind.fits)`), dilated by
   `dilation` (radius in beams, channels; default 1,3; `0,0` keeps the mask as it is), are voxels of the likelihood:
@@ -828,6 +833,9 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   SPECRES is not given, as in C++.
 
 ### Changed
+
+- **The panels of `_wind_shells.pdf` (WINDFIT) no longer overlap**: the labels of the y axes ran into the panel on
+  their left (a constrained layout).
 
 - **The velocity colour scale of the moment maps of WINDFIT (`_maps_wind.pdf`) follows the data**: symmetric around
   VSYS over the central 95% of the velocities of the data, at most the range of the model as before (99.5%, plus

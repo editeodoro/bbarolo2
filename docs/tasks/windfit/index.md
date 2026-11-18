@@ -141,8 +141,10 @@ In the output folder, with the prefix of the cube:
   and, with `FLAGERRORS`, the errors of the Laplace approximation);
 - `plotscripts/`: the plotting scripts (with `PLOTS` ≥ 0), run with `PLOTS` > 0. They produce
   `_chanmaps_wind.pdf` (channel maps of the data with the contours of the model), `_maps_wind.pdf` (moment
-  maps of the data, the model and the residuals) and `_pv_wind.pdf` (slices along the axis of the cones and
-  across each cone at half its length), in the style of 3DFIT, and the plots `_wind_corner.pdf` and
+  maps of the data, the model and the residuals), `_pv_wind.pdf` (slices along the axis of the cones and
+  across each cone at half its length) and `_pvslices_wind.pdf` (20 slices: through the apex at 10 angles, 18°
+  apart from the projected axis, across the axis at 5 distances from the apex and parallel to it at 5 offsets, with
+  their paths on the total intensity map), in the style of 3DFIT, and the plots `_wind_corner.pdf` and
   `_wind_shells.pdf`.
 
 ```{toctree}
