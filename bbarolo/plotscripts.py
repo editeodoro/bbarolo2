@@ -222,7 +222,7 @@ def writeScripts_Python(gf):
     w("########################################################################\n"
       "#### This script simply calls all other python scripts for plotting ####\n"
       "########################################################################\n"
-      "# Run it from the folder where BBarolo was run. plot_pvs_old.py (the previous style of\n"
+      "# Run it from any folder. plot_pvs_old.py (the previous style of\n"
       "# PV plot, which writes the same file as plot_pvs.py) is not run: run it by hand if needed.\n"
       "import os, sys, subprocess \n\n"
       "scriptdir = '", F(outfolder), "plotscripts/' \n"

@@ -57,8 +57,8 @@ def script(title, funcs, settings, body):
     out = [f"{bar}\n#### {title} ####\n{bar}\n",
            "# Written by BBarolo. The functions below draw the plots (the same as bbarolo.plots); the settings of\n"
            "# the run and the code that reads the files and saves the plots are at the bottom. Edit any of them and\n"
-           "# run the script again from the folder where BBarolo was run (cubefile may be relative to it). It needs\n"
-           "# numpy, matplotlib, astropy, scipy and plot_utils.py (in the same folder), not bbarolo.\n",
+           "# run the script again (from any folder). It needs numpy, matplotlib, astropy, scipy and plot_utils.py (in\n"
+           "# the same folder), not bbarolo.\n",
            fit3d._IMPORTS, "\n\n", source(*funcs), "\n\n# Settings of this run\n"]
     for name, value, comment in settings:
         line = f"{name} = {lit(value)}"

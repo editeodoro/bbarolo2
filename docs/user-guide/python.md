@@ -232,10 +232,3 @@ has `f.print_stats()`, `f.ring_table()` (the rings with their errors, an astropy
 model of the slit and, with NORM LOCAL, the amplitudes of the positions), `f.prep` (the prepared slit: data, noise
 map, continuum, the fits of the lines along the slit), `f.plot_pv()`, `f.plot_parameters()` and `f.corner_plot()`.
 Both have `f.write(outfolder=None, plots=None)`.
-
-Migrating from the earlier interface: `Bayesian3DFIT(...).run(method="dynesty")` is now
-`.sample(sampler="dynesty")` (or `.run(sampler="dynesty")`); `.run(method="optimise",
-sampler_kwargs=dict(method="powell"))` is `.optimize(minimiser="powell")` or `.run(method="global",
-minimiser="powell")`; `BayesianWind(...).run()` now minimises, so use `.sample()` or `method="bayesian"` to sample;
-and the parameter files with `BAYESIAN3DFIT true`, `SAMPLER OPTIMISE` and `SAMPLEROPTS method=powell` are now
-`3DFIT true`, `METHOD GLOBAL` and `MINIMISER powell`.
