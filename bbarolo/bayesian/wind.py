@@ -66,6 +66,11 @@ Options of the likelihood (LIKEOPTS, run(like_kwargs=...)):
   datafrac   a model error proportional to the data: the variance of a voxel is sigma^2 + (datafrac*data)^2
              (default 0), for the structure that the cells cannot follow
   grow       the region of the likelihood: the projected cones of the widest prior grown by grow beams (default 1)
+  likemask   the voxels of the likelihood, as 3DFIT with METHOD GLOBAL or BAYESIAN: 'none' (default: all the voxels of
+             the region) or 'dilated' (only the voxels of the mask, MASK, dilated by dilation; e.g. MASK FILE(m.fits)
+             with likemask=dilated dilation=0,0: exactly the voxels of the file)
+  dilation   likemask 'dilated': the dilation of the mask, (radius in units of the beam FWHM, number of channels),
+             default 1,3
   prune      the values of the columns of the model below prune times their peak are left out of the likelihood (the
              faint wings, where the tails of the line and of the beam multiply; default 1e-3: about 0.3% of the flux
              of a cell, and the likelihood ten times faster; 0 keeps them all)
@@ -77,9 +82,9 @@ Options of the likelihood (LIKEOPTS, run(like_kwargs=...)):
              side is hidden; faster, and without EMRATIO). With both cones, an empty one is found by EMRATIO.
   emslope    a fixed EMSLOPE (e.g. 0: a mean emissivity uniform in radius); default: free
 
-The likelihood uses all the voxels of its region (no mask: the empty voxels are what tell a cone that is too
-large) but the blanks (NaN in the file, 0 in the cube), which are not data: blank what is not the wind (other
-lines, other sources) to leave it out. The fixed disk (DISKRINGS: a rings file of 3DFIT) adds
+The likelihood uses all the voxels of its region (the empty voxels are what tell a cone that is too large) but
+the blanks (NaN in the file, 0 in the cube), which are not data: blank what is not the wind (other lines, other
+sources) to leave it out, or give a mask of the wind (MASK FILE(...)) with likemask=dilated. The fixed disk (DISKRINGS: a rings file of 3DFIT) adds
 one model per ring with its geometry and kinematics, whose densities are non-negative amplitudes solved and
 marginalised with the emission.
 """
@@ -113,7 +118,8 @@ DEFAULT_WIND_FUNCS = dict(vwind=lambda R, p1, p2: 2. / np.pi * p1 * np.arctan(R 
 
 WIND_LIKE_OPTIONS = dict(emission="cells", cellsize=None, marginal=True, prior="gauss", noisecorr="measured",
                          sigma=None, datafrac=0., grow=1., emscale=None, emclump=None, emratio=None, emslope=None,
-                         prune=1e-3, cones="both", snrcut=3., ncloud=1e7, rscale=2., vtol=0.05)
+                         prune=1e-3, cones="both", snrcut=3., ncloud=1e7, rscale=2., vtol=0.05, likemask="none",
+                         dilation=(1., 3))
 # the cones of the model (option cones): +1 the cone along +z, receding for INC < 90; -1 the other, approaching
 CONES = {"both": (1, -1), "receding": (1,), "approaching": (-1,)}
 # the hyperparameters of the prior of the emission, free unless fixed (LIKEOPTS emscale, emclump, emratio, emslope)
@@ -138,6 +144,9 @@ def wind_like_option(name, value):
         return None
     if value is None or (isinstance(value, str) and value.strip().lower() == "none"):
         return key, WIND_LIKE_OPTIONS[key]
+    if key in ("likemask", "dilation"):                # (as 3DFIT with METHOD GLOBAL or BAYESIAN)
+        from ..params import bayes_like_option
+        return bayes_like_option(key, value)
     if key == "emission":
         v = str(value).strip().lower()
         if v not in EMISSION_BASES:
@@ -554,7 +563,8 @@ class BayesianWind(_FitTask):
         self._setup_key = (tuple(self.freepar_names), basis, size)
         if verbose:
             vprint(verbose, f" WINDFIT: {cells.ncell} {basis} ({cells.npoints} quadrature points), region "
-                            f"{int(self._region2d.sum())} pix x {self._lim[5] - self._lim[4]} chan\n"
+                            f"{int(self._region2d.sum())} pix x {self._lim[5] - self._lim[4]} chan"
+                            + (f", voxels in {self._likemask_note}" if self._likemask_note else "") + "\n"
                             f"  log L x      {self._likefactor_note}")
 
     def _shell_range(self, base):
@@ -603,6 +613,21 @@ class BayesianWind(_FitTask):
         nz = self.data.shape[0]
         self._lim = np.array([xs.min(), xs.max() + 1, ys.min(), ys.max() + 1, 0, nz], dtype=np.int64)
         self._ok = self._region2d[None, :, :] & np.isfinite(self.data) & (self.data != 0)     # (0: blanks)
+        self._likemask_note = None
+        if lk.get("likemask") == "dilated":
+            # (only the voxels of the mask, dilated, as 3DFIT with METHOD GLOBAL or BAYESIAN)
+            from .noise import dilate_mask
+            m = np.asarray(self.mask, bool)
+            if not m.any():
+                raise BBaroloError("WINDFIT: LIKEOPTS likemask=dilated, but the mask is empty (MASK "
+                                   f"{self._par.MaskType}): no voxel for the likelihood")
+            nbeam, nchan = lk.get("dilation") or WIND_LIKE_OPTIONS["dilation"]
+            self._ok &= dilate_mask(m, float(nbeam) * self._beam / self._pix, int(nchan))
+            self._likemask_note = (f"the mask ({self._par.MaskType}) dilated by {float(nbeam):g} beam, "
+                                   f"+-{int(nchan)} chan")
+            if not self._ok.any():
+                raise BBaroloError("WINDFIT: LIKEOPTS likemask=dilated: no voxel of the mask (MASK "
+                                   f"{self._par.MaskType}) in the region of the likelihood (the cones of the priors)")
         # the correlation factor of the noise, as 3DFIT with METHOD GLOBAL or BAYESIAN (LikelihoodMixin._set_likefactor needs like_kwargs)
         holder = _LikeFactor(self, lk.get("noisecorr", "measured"))
         LikelihoodMixin._set_likefactor(holder)

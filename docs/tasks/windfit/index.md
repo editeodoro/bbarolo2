@@ -116,6 +116,7 @@ initial value, ...); `PRIORS` changes them, e.g. `PRIORS OPENANG=(uniform,20,100
 | `noisecorr`, `sigma` | the correlation and the value of the noise, as 3DFIT with METHOD GLOBAL or BAYESIAN |
 | `datafrac` | a model error proportional to the data (default 0) |
 | `grow` | the region of the likelihood: the projected cones of the priors grown by `grow` beams (default 1) |
+| `likemask`, `dilation` | the voxels of the likelihood, as {doc}`3DFIT with METHOD GLOBAL or BAYESIAN <../3dfit/likelihood>`: `none` (default: all the voxels of the region) or `dilated` (only the voxels of the mask, `MASK`, dilated by `dilation` = radius in beams, number of channels; default 1,3). `MASK FILE(wind.fits)` with `likemask=dilated dilation=0,0` keeps exactly the voxels of the file: a mask of the wind, instead of blanking the cube |
 | `prune` | values of the model below `prune` times the peak of their cell are left out of the likelihood (default 1e-3) |
 
 A fixed disk can be added with `DISKRINGS` (a rings file of 3DFIT): its geometry and

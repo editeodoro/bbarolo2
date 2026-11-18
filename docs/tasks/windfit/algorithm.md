@@ -141,9 +141,13 @@ back to within 2% of the truth.
 
 The likelihood uses all the voxels of a fixed region: the pixels within `grow` beams of the projected cones of
 the widest priors (the corners of the box of the priors of the centre, INC, PA, OPENANG and CONELEN), all the
-channels. There is no mask, because the empty voxels are what tell a cone that is too large, but the blanks
-(NaN in the file) are not data and are left out: blank what is not the wind (other lines, other sources) to keep
-it out of the fit. The noise rms is measured outside the mask of the emission (`MASK`) and the blanks, and the
+channels. By default there is no mask, because the empty voxels are what tell a cone that is too large, but the
+blanks (NaN in the file) are not data and are left out: blank what is not the wind (other lines, other sources) to
+keep it out of the fit. A mask of the wind does the same without editing the cube: with `LIKEOPTS likemask=dilated`
+only the voxels of the mask (`MASK`, e.g. `MASK FILE(wind.fits)`), dilated by `dilation` (beams, channels; `0,0`
+keeps the file as it is), are data, as in 3DFIT with METHOD GLOBAL or BAYESIAN. The mask should include the empty
+voxels around the wind: a mask of the detections only (`MASK SEARCH`) leaves out the voxels that tell a cone too
+large. The noise rms is measured outside the mask of the emission (`MASK`) and the blanks, and the
 log-likelihood is divided by the correlation volume of the noise, as in {doc}`3DFIT with METHOD GLOBAL or BAYESIAN <../3dfit/likelihood>`. Values of the columns below `prune`
 times the peak of their cell (the faint wings, where the tails of the line and of the beam multiply, about
 0.3% of the flux) are left out of the normal equations, which makes the likelihood about ten times faster.

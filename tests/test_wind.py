@@ -208,7 +208,7 @@ def test_wind_parsers_and_keywords():
     with pytest.raises(ValueError):
         wind_likeopts("emission=pixels")
     with pytest.raises(ValueError):
-        wind_likeopts("likemask=none")
+        wind_likeopts("densprof_smooth=0.1")                     # (an option of 3DFIT only)
     names = {k.name for k in keywords_for("WINDFIT")}
     assert {"OPENIN", "DISKRINGS", "FREE", "PRIORS", "LIKEOPTS", "VWIND", "OPENANG", "CONELEN", "XPOS", "METHOD",
             "SAMPLER", "MINIMISER"} <= names
@@ -697,6 +697,60 @@ def test_bayesian_wind_blanks(tmp_path):
     assert not f._ok[:, :, :7].any()
     assert np.array_equal(f._ok[:, :, 7:], full._ok[:, :, 7:])
     assert abs(f.noiserms / full.noiserms - 1) < 0.05
+
+
+def test_bayesian_wind_likemask(tmp_path):
+    """LIKEOPTS likemask=dilated (as 3DFIT with METHOD GLOBAL or BAYESIAN): the likelihood uses only the voxels of the
+    mask (MASK), dilated by dilation (beams, channels). With MASK FILE(...) and dilation=0,0 the voxels and the
+    log-likelihood are those of the cube blanked outside the file's mask; a dilation grows the mask as in 3DFIT;
+    likemask=none (the default) ignores the mask; an empty mask is an error."""
+    from wind_mocks import mock_wind
+    from bbarolo import BayesianWind
+    from bbarolo.bayesian.wind import wind_likeopts
+    from bbarolo.bayesian.noise import dilate_mask
+    from astropy.io import fits
+    assert wind_likeopts("likemask=dilated dilation=0.5,2") == dict(likemask="dilated", dilation=(0.5, 2))
+    assert wind_likeopts("likemask=none") == dict(likemask="none")
+    for bad in ("likemask=yes", "dilation=1", "dilation=-1,2"):
+        with pytest.raises(ValueError):
+            wind_likeopts(bad)
+    hdu, tr = mock_wind(kind="clumps", seed=2, snr=15, shape=(24, 24, 20), pix=12., chan=25., beam=36.,
+                        truth=dict(xpos=11.5, ypos=11.5, conelen=110., radii=[55., 110.], vwind=200.), nclumps=40,
+                        clump=20.)
+    mask = np.ones(hdu.data.shape, np.uint8)
+    mask[:, :, :7] = 0                                                # (a third of the field out of the mask)
+    mask[:3] = 0                                                      # (and the first channels)
+    mfile = str(tmp_path / "mask.fits")
+    fits.PrimaryHDU(mask, hdu.header).writeto(mfile)
+    data = hdu.data.astype(np.float64).copy()
+    data[mask == 0] = np.nan
+    blank = fits.PrimaryHDU(data.astype(np.float32), hdu.header)
+    kw = dict(xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, conelen=110, vwind=180, vdisp=20, nlayers=2,
+              outfolder=str(tmp_path) + "/")
+    lk = dict(emission="voxel", sigma=1., noisecorr=10.)
+
+    def setup(h, **opts):
+        f = BayesianWind(h, **kw, **opts.pop("par", {}))
+        f.like_kwargs = dict(f.like_kwargs, **lk, **opts)
+        f._setup(f._with_hyper(["openang"], verbose=False), verbose=False)
+        return f
+    full = setup(hdu)
+    fb = setup(blank)
+    fm = setup(hdu, par=dict(mask=f"FILE({mfile})"), likemask="dilated", dilation=(0., 0))
+    assert np.asarray(fm.mask, bool).sum() == mask.sum()
+    assert np.array_equal(fm._ok, fb._ok) and np.array_equal(fm._ok, full._ok & (mask > 0))
+    assert fm.freepar_names == ["openang", "emscale", "emclump", "emratio", "emslope"]
+    theta = [55., full._s0, 1., 1., 0.]
+    assert fm.log_likelihood(theta) == pytest.approx(fb.log_likelihood(theta), rel=1e-12)
+    assert fm.log_likelihood(theta) != pytest.approx(full.log_likelihood(theta), rel=1e-6)
+    fd = setup(hdu, par=dict(mask=f"FILE({mfile})"), likemask="dilated", dilation=(1., 2))
+    grown = dilate_mask(mask > 0, 1. * fd._beam / fd._pix, 2)
+    assert np.array_equal(fd._ok, full._ok & grown) and fd._ok.sum() > fm._ok.sum()
+    fn = setup(hdu, par=dict(mask=f"FILE({mfile})"))                  # (likemask none: the mask is not used)
+    assert np.array_equal(fn._ok, full._ok)
+    fits.PrimaryHDU(np.zeros_like(mask), hdu.header).writeto(str(tmp_path / "empty.fits"))
+    with pytest.raises(BBaroloError):
+        setup(hdu, par=dict(mask=f"FILE({tmp_path / 'empty.fits'})"), likemask="dilated")
 
 
 def test_windfit_functions_of_radius(tmp_path):

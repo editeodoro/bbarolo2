@@ -491,6 +491,12 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   {...}` replaces them all; the entries can be changed until `run()`, and are checked when set. Only the engines had
   `priors` (an AttributeError on the tasks); theirs stays a plain dict of all their priors, the defaults included.
 
+- **WINDFIT `LIKEOPTS likemask` and `dilation`: the likelihood in a mask**, as 3DFIT with METHOD GLOBAL or
+  BAYESIAN. With `likemask=dilated` only the voxels of the mask (`MASK`, e.g. `MASK FILE(wind.fits)`), dilated by
+  `dilation` (radius in beams, channels; default 1,3; `0,0` keeps the mask as it is), are voxels of the likelihood:
+  a mask of the wind leaves out other lines and sources without blanking the cube. The default, `likemask=none`,
+  uses all the voxels of the region, as before.
+
 - **WINDFIT `LIKEOPTS emission=moka`: the statistic of MoKA-3D** (Marconcini et al. 2023), as a baseline for
   comparisons: κ, the squared flux (in units of the noise) of the data above `snrcut` that the clouds of the cone,
   spread uniformly in radius, polar angle and azimuth (`ncloud`, default 1e7), do not reach, over the channels
