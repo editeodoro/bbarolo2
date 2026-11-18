@@ -829,6 +829,12 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **The velocity colour scale of the moment maps of WINDFIT (`_maps_wind.pdf`) follows the data**: symmetric around
+  VSYS over the central 95% of the velocities of the data (of the model if the data have none). It came from the
+  extremes of the model (99.5%, plus 10%), and the edges of a cone, at the full projected velocity of the wind, made
+  the scale several times wider than the velocities of most of the data (±550 km/s for data within ±200 km/s in
+  Circinus).
+
 - **METHOD GLOBAL computes the errors only with `FLAGERRORS true`** (3DFIT, WINDFIT, SLITFIT), as METHOD CLASSIC
   of 3DFIT. The errors of the Laplace approximation need a Hessian of about n² likelihoods (n free parameters),
   often longer than the minimisation; they were computed by default, and `SAMPLEROPTS errors=false` turned them off.
