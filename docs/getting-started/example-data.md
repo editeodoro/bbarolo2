@@ -22,7 +22,7 @@ this cube and other datasets, each with a parameter file, described in {doc}`../
 | [ALESS73_CII.fits](https://github.com/editeodoro/bbarolo2/raw/main/examples/ALESS73_CII.fits) | [CII] cube of ALESS 073.1, a galaxy at z = 4.8, ALMA | 1.7 MB | {doc}`../examples/aless73` |
 | [HD142527_13CO.fits](https://github.com/editeodoro/bbarolo2/raw/main/examples/HD142527_13CO.fits) | ¹³CO cube of the disk of HD 142527, ALMA | 5.6 MB | {doc}`../examples/hd142527` |
 | [2masxj1022_SALT.fits](https://github.com/editeodoro/bbarolo2/raw/main/examples/2masxj1022_SALT.fits) | long-slit spectrum of 2MASX J1022 (Hα + [NII]), SALT | 5.8 MB | {doc}`../examples/2masxj1022` |
-| [circinus_OIII.fits](https://github.com/editeodoro/bbarolo2/raw/main/examples/circinus_OIII.fits) | [OIII] cube of the Circinus galaxy, MUSE (MAGNUM), with the mask of its ionised cone ([circinus_OIII_mask.fits](https://github.com/editeodoro/bbarolo2/raw/main/examples/circinus_OIII_mask.fits)) | 6.8 MB | {doc}`../examples/circinus` |
+| [circinus_OIII.fits](https://github.com/editeodoro/bbarolo2/raw/main/examples/circinus_OIII.fits) | [OIII] cube of the Circinus galaxy, MUSE (ESO archive), with the mask of its ionised cone ([circinus_OIII_mask.fits](https://github.com/editeodoro/bbarolo2/raw/main/examples/circinus_OIII_mask.fits)) | 6.8 MB | {doc}`../examples/circinus` |
 
 The parameter files are next to the data, with the names of the examples (e.g. `ngc2403_3DFIT.par`); run them from
 the folder that contains the FITS file, e.g. `BBarolo -p ngc2403_3DFIT.par`. With a copy of the repository

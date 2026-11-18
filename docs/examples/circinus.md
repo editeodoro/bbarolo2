@@ -12,7 +12,7 @@ among them the statistic of MoKA-3D.
 | | |
 |---|---|
 | Object | Circinus galaxy, Seyfert 2, redshift 0.001448 (cz = 434 km/s), 4.2 Mpc (1 arcsec = 20.4 pc) |
-| Data | [OIII] 5007, MUSE at the VLT, MAGNUM survey (ESO programme 094.B-0321(A)), reduced with the MUSE pipeline v1.6 (Mingozzi et al. 2019); the data of Marconcini et al. (2023) |
+| Data | [OIII] 5007, MUSE at the VLT (ESO programme 094.B-0321(A)): a reduced cube from the public ESO Science Archive. These observations are studied by Mingozzi et al. (2019) and Marconcini et al. (2023) |
 | Cube | 173 × 238 pixels of 0.2 arcsec, 41 channels of 1.25 Å (75 km/s), from −1720 to +1270 km/s around [OIII] 5007: the part of the MUSE cube on the side of the cone |
 | Beam | 0.9 arcsec (the seeing), in the header |
 | Files | [circinus_OIII.fits](https://github.com/editeodoro/bbarolo2/raw/main/examples/circinus_OIII.fits) (6.8 MB), [circinus_OIII_mask.fits](https://github.com/editeodoro/bbarolo2/raw/main/examples/circinus_OIII_mask.fits) (1.7 MB), [circinus_WINDFIT_GLOBAL.par](https://github.com/editeodoro/bbarolo2/raw/main/examples/circinus_WINDFIT_GLOBAL.par), [circinus_mask.py](https://github.com/editeodoro/bbarolo2/raw/main/examples/circinus_mask.py) |
@@ -146,7 +146,8 @@ Marconcini et al. (2023) found a faster wind with an axis closer to the plane of
 β = 84° ± 2°. Their data were not this cube: they fitted the [OIII] of a Gaussian decomposition of the MUSE cube
 (the components of the outflow, with the line spread function removed). The integrated [OIII] of this cube, in the
 mask, has its 1st and 99th percentile velocities at −451 and +235 km/s; a cone with their parameters spreads from
-−556 to +407 km/s on this cube, 40% wider (and the statistic of MoKA-3D rejects it, see below).
+−556 to +407 km/s on this cube, 40% wider (and the statistic of MoKA-3D rejects it, see below). The highest
+velocities of the data are not in the model at any radius: see {ref}`circinus-high-velocities`.
 
 ```{figure} /figures/examples/circinus_maps.png
 :width: 70%
@@ -162,9 +163,9 @@ window, the empty ones too.
 :alt: Position-velocity diagrams of Circinus along and across the cone, data and model
 
 Position–velocity diagrams along the axis of the cone and across it, half way along (`_pv_wind.pdf`): data in grey
-with blue contours, model in red. Two parts of the data are not in the model: the fast gas near the nucleus (from
-−600 to +400 km/s within 3 arcsec), beyond what a cone at 300 km/s gives, and the narrow line at 0 to +200 km/s
-along the axis between 10 and 25 arcsec.
+with blue contours, model in red. The model has the bright part of the lines but not their faint wings, from
+−850 to +500 km/s, at any radius, and it is fainter than the bright line at 0 to +200 km/s along the axis between
+10 and 25 arcsec.
 ```
 
 ```{figure} /figures/examples/circinus_chanmaps.png
@@ -172,7 +173,8 @@ along the axis between 10 and 25 arcsec.
 :alt: Channel maps of Circinus, data and model
 
 Channel maps of the data (blue, the whole field: outside the mask, the [OIII] of the disk) and of the model (red,
-the cone only).
+the cone only). The channels beyond −450 and +300 km/s are empty in the model: a cone at 300 km/s, inclined by 66°,
+has line-of-sight velocities from −294 to +155 km/s, broadened by SPECRES.
 ```
 
 ```{figure} /figures/examples/circinus_corner.png
@@ -182,6 +184,36 @@ the cone only).
 The corner plot (`_wind_corner.pdf`): the draws of the Laplace approximation around the best fit.
 ```
 
+(circinus-high-velocities)=
+## The highest velocities
+
+The lines of the cone have a bright core and faint wings, a few per cent of the flux, out to −850 and +500 km/s, at
+every radius. A cone of one radial velocity V and half opening angle 55°, inclined by INC, has line-of-sight
+velocities between −V cos(INC − 55°) and −V cos(INC + 55°): to reach the wings it needs V of about 550 km/s and an
+axis close to the plane of the sky, which spreads the cores too. Two more fits (with the same file, as in
+{ref}`circinus-other-emission`) show the trade-off:
+
+| Fit | VWIND (km/s) | VDISP (km/s) | INC | log-likelihood |
+|---|---|---|---|---|
+| one VWIND (above) | 300 | 0 | 66.2° | |
+| VWIND fixed at 550 (`VWIND=550 FREE=INC`) | 550 | 0 | 82.4° | −648 |
+| VDISP free (`FREE=VWIND_SINGLE INC VDISP_SINGLE`) | 112 | 98 | 64.1° | +1453 |
+
+With VWIND fixed at 550 km/s the inclination goes to 82°, close to the 84° of Marconcini et al. (2023), and the
+wings beyond 10 arcsec are reproduced, but the cores are not, and the likelihood is much lower. With VDISP free the
+cone becomes slow and turbulent: the cores are better, the wings still missing. The lines are made of (at least) two
+components, a bright one at lower velocity and a faint fast one, and one cone fits the bright one: Marconcini et al.
+(2023) fitted the outflow components of a Gaussian decomposition of the lines, the fast ones.
+
+```{figure} /figures/examples/circinus_spectra.png
+:alt: Spectra of Circinus in rings around the nucleus, data and three models
+
+The integrated spectra in the mask, in rings around the nucleus (logarithmic scale): the data (black), the fit with
+one VWIND (red), with VWIND fixed at 550 km/s (green) and with VDISP free (purple). Within 3 arcsec, the bright
+nucleus is not in any model.
+```
+
+(circinus-other-emission)=
 ## Other descriptions of the emission
 
 WINDFIT has other descriptions of the emission ({ref}`LIKEOPTS <par-windfit-likeopts>` `emission`, see
@@ -222,9 +254,11 @@ They took 4 to 8.5 minutes each. The four agree on a cone inclined by 66° to 85
 :alt: Position-velocity slices of Circinus with the cones of the four descriptions of the emission
 
 Position–velocity slices of the data in the mask (grey, blue contours) along the axis of the cone and across it 10
-arcsec from the nucleus, one beam wide, with the four fits (red). For `cells` and `shells` the contours of the
-model, at the levels of the data; the models of `voxel` and `moka` are not fluxes, and the red line is the outline
-of their cone (a uniform cone with the same geometry and wind, made with GALWIND).
+arcsec from the nucleus, one beam wide, with the model cubes of the four fits (red contours, at the levels of the
+data). The models of `voxel` and `moka` are the data where their cone reaches, as in MoKA-3D, so the dashed line
+shows the cone itself: a uniform cone with the same geometry and wind (made with GALWIND). The model of `voxel`
+keeps the data where the expected emission of its cone is above 1/1000 of its peak: with the emission falling as
+r^−4.35 (EMSLOPE), only within 3 arcsec of the nucleus.
 ```
 
 **VSYS free.** With VSYS free as well (`FREE=VWIND_SINGLE INC VSYS`, PRIORS VSYS between −300 and +300 km/s), the
@@ -255,6 +289,22 @@ The shells of the fit with `VWIND_FUNC` (`_wind_shells.pdf`): the velocity of th
 rotation (fixed at 0) against radius, and the flux of the model in radial bins.
 ```
 
+```{figure} /figures/examples/circinus_func_pv.png
+:width: 70%
+:alt: Position-velocity diagrams of Circinus with the model of a wind accelerating with radius
+
+The position–velocity diagrams of the fit with `VWIND_FUNC`, as for the fit with one velocity above: the wind is
+slow near the nucleus, where the lines of the data are the widest, and faster outwards; the faint wings of the lines
+are missing at every radius, as with one velocity.
+```
+
+```{figure} /figures/examples/circinus_func_maps.png
+:width: 70%
+:alt: Moment maps of Circinus with the model of a wind accelerating with radius
+
+The moment maps of the fit with `VWIND_FUNC`.
+```
+
 ## References
 
 - Marconcini, C., et al. 2023, A&A, 677, A58:
@@ -262,5 +312,5 @@ rotation (fixed at 0) against radius, and the flux of the model in radial bins.
   (the model of the cone of Circinus with MoKA-3D, and its statistic).
 - Mingozzi, M., et al. 2019, A&A, 622, A146:
   [The MAGNUM survey: different gas properties in the outflowing and disk components in nearby active galaxies with MUSE](https://ui.adsabs.harvard.edu/abs/2019A%26A...622A.146M)
-  (the MUSE data of the MAGNUM survey and their reduction; the distance of Circinus).
+  (the MUSE observations of Circinus in the MAGNUM survey; the distance).
 - {doc}`../tasks/windfit/index` and {doc}`../tasks/windfit/algorithm`: the model, the likelihoods and the options.

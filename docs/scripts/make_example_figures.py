@@ -57,15 +57,23 @@ EX = {
     "circinus_vsys": ("circinus_WINDFIT_GLOBAL.par", "output/circinus_vsys", "circinus", [],
                       ["OUTFOLDER=output/circinus_vsys/", "FLAGERRORS=false", "FREE=VWIND_SINGLE INC VSYS",
                        "PRIORS=INC=(uniform,30,60) VWIND=(uniform,0,1600) VSYS=(uniform,-300,600)"]),
+    "circinus_v550": ("circinus_WINDFIT_GLOBAL.par", "output/circinus_v550", "circinus", [],
+                      ["OUTFOLDER=output/circinus_v550/", "FLAGERRORS=false", "VWIND=550", "FREE=INC",
+                       "PRIORS=INC=(uniform,30,60)"]),
+    "circinus_vdisp": ("circinus_WINDFIT_GLOBAL.par", "output/circinus_vdisp", "circinus", [],
+                       ["OUTFOLDER=output/circinus_vdisp/", "FLAGERRORS=false", "FREE=VWIND_SINGLE INC VDISP_SINGLE",
+                        "PRIORS=INC=(uniform,30,60) VWIND=(uniform,0,1600) VDISP=(uniform,0,300)"]),
     "circinus_func": ("circinus_WINDFIT_GLOBAL.par", "output/circinus_func", "circinus",
-                      [("_wind_shells.pdf", "shells", 1000)],
+                      [("_wind_shells.pdf", "shells", 1000), ("_maps_wind.pdf", "maps", 650),
+                       ("_pv_wind.pdf", "pv", 800)],
                       ["OUTFOLDER=output/circinus_func/", "FLAGERRORS=false", "FREE=VWIND_FUNC INC",
                        "PRIORS=INC=(uniform,30,60) VWIND_P1=(uniform,0,1600) VWIND_P2=(uniform,1,50)"]),
 }
 # figures made from the outputs of several examples: name -> (function, the examples it needs)
 COMPOSITE = {"circinus_compare": ("circinus_compare", ["circinus", "circinus_voxel", "circinus_shells",
                                                        "circinus_moka"]),
-             "circinus_mask": ("circinus_mask", [])}
+             "circinus_mask": ("circinus_mask", []),
+             "circinus_spectra": ("circinus_spectra", ["circinus", "circinus_v550", "circinus_vdisp"])}
 
 
 def run(name, work, threads):
@@ -158,13 +166,65 @@ def circinus_mask(work):
     print(f"    {os.path.relpath(dest, REPO)}")
 
 
+def circinus_spectra(work):
+    """The integrated spectra of Circinus in rings around the nucleus (in the mask, log scale): the data and the
+    models of the fit with one VWIND, with VWIND fixed at 550 km/s and with VDISP free."""
+    import numpy as np
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from astropy.io import fits
+    from astropy.wcs import WCS
+    hdu = fits.open(os.path.join(EXAMPLES, "circinus_OIII.fits"))[0]
+    h = hdu.header
+    mask = fits.getdata(os.path.join(EXAMPLES, "circinus_OIII_mask.fits")).astype(bool)
+    lam = h["CRVAL3"] + (np.arange(hdu.data.shape[0]) + 1 - h["CRPIX3"]) * h["CD3_3"]
+    vel = (lam / (5006.843 * 1.001448) - 1) * 299792.458
+    chan = mask.any(axis=(1, 2))
+    x0, y0 = WCS(h).celestial.world_to_pixel_values(213.291251, -65.338826)
+    ny, nx = hdu.data.shape[1:]
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    rad = np.hypot(xx - x0, yy - y0) * abs(h["CD2_2"]) * 3600.
+    cubes = [(np.where(mask, np.nan_to_num(hdu.data.astype(np.float64)), 0.), "data", "k", 1.8)]
+    for name, col in (("circinus", "#d62728"), ("circinus_v550", "#2ca02c"), ("circinus_vdisp", "#9467bd")):
+        folder, prefix = EX[name][1], EX[name][2]
+        modf = os.path.join(work, folder, prefix + "_mod_wind.fits")
+        if not os.path.exists(modf):
+            print(f"  circinus_spectra: no {modf}")
+            return
+        par = _wind_params(os.path.join(work, folder, prefix + "_wind_params.txt"))
+        lab = (f"VWIND {par.get('vwind', 550.):.0f}" + (f", VDISP {par['vdisp']:.0f}" if "vdisp" in par else "")
+               + f", INC {par['inc']:.0f}")
+        cubes.append((np.where(mask, np.nan_to_num(fits.getdata(modf).astype(np.float64)), 0.), lab, col, 1.1))
+    fig, axs = plt.subplots(1, 4, figsize=(16, 4.2), sharex=True)
+    for ax, (r0, r1) in zip(axs, ((0, 3), (6, 10), (15, 20), (20, 26))):
+        sel = (rad >= r0) & (rad < r1)
+        for cube, lab, col, lw in cubes:
+            sp = cube[:, sel].sum(axis=1)
+            ax.step(vel[chan], np.clip(sp[chan], 1e-30, None), where="mid", color=col, lw=lw, label=lab)
+        peak = cubes[0][0][:, sel].sum(axis=1).max()
+        ax.set_yscale("log")
+        ax.set_ylim(3e-3 * peak, 2 * peak)
+        ax.axvline(0, color="0.6", lw=0.5)
+        ax.set_title(f"{r0}-{r1} arcsec from the nucleus", fontsize=11)
+        ax.set_xlabel("V$_{LOS}$ - V$_{sys}$ (km/s)")
+    axs[0].set_ylabel("flux in the mask")
+    axs[1].legend(fontsize=8, loc="upper left")
+    fig.tight_layout()
+    dest = os.path.join(OUT, "circinus_spectra.png")
+    fig.savefig(dest, dpi=80)
+    plt.close(fig)
+    _quantize(dest)
+    print(f"    {os.path.relpath(dest, REPO)}")
+
+
 def circinus_compare(work):
     """The fits of Circinus with the four descriptions of the emission (cells, voxel, shells, moka): position-velocity
     slices of the data in the mask (grey, blue contours) and of the models (red) along the axis of the cone and
-    across it at 10 arcsec from the nucleus, 1 beam wide. The models of cells and shells are fluxes (red contours at
-    the levels of the data); those of voxel and moka are not (a cone with the emission of the prior; the data where
-    the clouds are), and the cone is drawn instead: the outline of a uniform cone with the same geometry and wind
-    (GALWIND), at 5% of its peak in each slice."""
+    across it at 10 arcsec from the nucleus, 1 beam wide. The model cubes of the fits (_mod_wind.fits) in red
+    contours at the levels of the data; those of voxel and moka are the data where their cone reaches (as MoKA-3D),
+    so their cone is drawn too: the outline (dashed) of a uniform cone with the same geometry and wind (GALWIND), at
+    5% of its peak in each slice."""
     import numpy as np
     import matplotlib
     matplotlib.use("Agg")
@@ -216,25 +276,28 @@ def circinus_compare(work):
             return
         model = np.where(mask, fits.getdata(modf).astype(np.float64), np.nan)
         par = _wind_params(os.path.join(work, folder, prefix + "_wind_params.txt"))
+        cone = None
         if label in ("voxel", "moka"):                      # (the uniform cone of the fit)
             g = GalWind(os.path.join(EXAMPLES, "circinus_OIII.fits"), xpos="14:13:09.90", ypos="-65:20:19.77",
                         vsys=par.get("vsys", 0.), inc=par["inc"], pa=25, openang=110, conelen=52,
                         vwind=par["vwind"], vdisp=0, restwave=5006.843, redshift=0.001448, specres=0.85, dens=1,
                         verbose=False)
-            model = np.where(mask, np.asarray(g.run(threads=4).model.data, np.float64), np.nan)
-        for i, (d, m, offs, xl) in enumerate(((d_al, slice_(model, x0, y0, ux, uy, along), along,
-                                               "offset along the axis (arcsec)"),
-                                              (d_ac, slice_(model, cx10, cy10, wx, wy, across), across,
-                                               "offset across the axis, 10 arcsec out (arcsec)"))):
+            cone = np.where(mask, np.asarray(g.run(threads=4).model.data, np.float64), np.nan)
+        for i, (d, m, c, offs, xl) in enumerate(
+                ((d_al, slice_(model, x0, y0, ux, uy, along),
+                  None if cone is None else slice_(cone, x0, y0, ux, uy, along), along, "offset along the axis (arcsec)"),
+                 (d_ac, slice_(model, cx10, cy10, wx, wy, across),
+                  None if cone is None else slice_(cone, cx10, cy10, wx, wy, across), across,
+                  "offset across the axis, 10 arcsec out (arcsec)"))):
             ax = axs[i, j]
             ext = [offs[0], offs[-1], vel[chan][0], vel[chan][-1]]
             ax.imshow(d, origin="lower", aspect="auto", extent=ext, cmap="Greys", vmin=0, vmax=np.nanpercentile(d, 99.5))
             ax.contour(offs, vel[chan], np.nan_to_num(d), lev, colors="#1f4e9c", linewidths=0.7)
-            if label in ("voxel", "moka"):
-                mm = np.nan_to_num(m)
-                ax.contour(offs, vel[chan], mm, [0.05 * mm.max()], colors="#d62728", linewidths=1.6)
-            else:
-                ax.contour(offs, vel[chan], np.nan_to_num(m), lev, colors="#d62728", linewidths=0.8)
+            ax.contour(offs, vel[chan], np.nan_to_num(m), lev, colors="#d62728", linewidths=0.8)
+            if c is not None:
+                cc = np.nan_to_num(c)
+                ax.contour(offs, vel[chan], cc, [0.05 * cc.max()], colors="#d62728", linewidths=1.4,
+                           linestyles="--")
             ax.axhline(0, color="k", lw=0.5)
             ax.set_xlabel(xl)
             if j == 0:
