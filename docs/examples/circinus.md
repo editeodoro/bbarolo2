@@ -1,4 +1,4 @@
-# Circinus: the ionised cone of a Seyfert galaxy
+# Circinus: an ionised nuclear wind
 
 The Circinus galaxy, a spiral at 4.2 Mpc with a Seyfert 2 nucleus, has a cone of ionised gas that
 leaves the nucleus towards the north-west: the gas pushed out by the active nucleus, seen in [OIII] 5007 by
@@ -82,7 +82,7 @@ f = WindFit("circinus_OIII.fits", method="global", mask="FILE(circinus_OIII_mask
             redshift=0.001448, specres=0.85, xpos="14:13:09.90", ypos="-65:20:19.77", vsys=0, inc=70, pa=25,
             openang=110, conelen=52, vwind=400, vdisp=0, free="VWIND_SINGLE INC",
             priors="INC=(uniform,30,60) VWIND=(uniform,0,1600)", sampleropts="nstart=6 seed=1", flagerrors=True,
-            likeopts="emission=cells cellsize=5.4 datafrac=0.3 cones=approaching likemask=dilated dilation=0,0")
+            likeopts="emission=cells cellsize=3.6 datafrac=0.3 cones=approaching likemask=dilated dilation=0,0")
 res = f.run(threads=16)     # in memory
 res.parameters              # a Table: name, value, err_lo, err_hi
 res.shells                  # the shells of the best fit
@@ -93,8 +93,8 @@ res.write()                 # the files of the command line, in output/circinus/
 :::
 ::::
 
-On our server, with 16 cores (16 processes for the gradient of the minimiser), the run takes **11 minutes**: 8.6
-minutes for 3174 likelihoods of 1081 cells on the 536 000 voxels of the mask (six starts), then the errors.
+On our server, with 16 cores (16 processes for the gradient of the minimiser), the run takes **16 minutes**: 12.5
+minutes for 2921 likelihoods of 3192 cells on the 536 000 voxels of the mask (six starts), then the errors.
 
 ## The setup
 
@@ -125,26 +125,30 @@ minutes for 3174 likelihoods of 1081 cells on the 536 000 voxels of the mask (si
   and from five random points of the priors.
 - **The emission.** `emission=cells` (the default) describes the emission as cells of the cone with free
   emissivities, marginalised. Cells of one beam would be 0.9 arcsec: tens of thousands of cells, several seconds
-  per likelihood. `cellsize=5.4` (6 beams) makes 1081 cells. The [OIII] of Circinus has a signal-to-noise ratio of
-  thousands, and no smooth cone follows its filaments to the noise: `datafrac=0.3` adds a model error of 30% of the
-  data to the variance of each voxel.
+  per likelihood. `cellsize=3.6` (4 beams) makes 3192 cells. Coarser cells bias the wind low, because a cell spreads
+  its emission over the velocities of all its directions and cannot make the narrow lines of a fast cone: with cells
+  of 8 and 5.4 arcsec the fit gives 281 and 300 km/s; with cells of 2.7 and 2.0 arcsec (7418 and 17 440 cells, two to
+  eight times slower) 339 and 316 km/s, with the same inclination as 3.6 arcsec. The [OIII] of Circinus has a
+  signal-to-noise ratio of thousands, and no smooth cone follows its filaments to the noise: `datafrac=0.3` adds a
+  model error of 30% of the data to the variance of each voxel.
 - **Errors.** {ref}`FLAGERRORS <par-windfit-flagerrors>` computes the errors of the Laplace approximation.
 
+(circinus-results)=
 ## Results
 
 | Parameter | Best fit |
 |---|---|
-| VWIND | 300 ± 4 km/s |
-| INC | 66.2° ± 0.3° |
-| EMSCALE, EMCLUMP, EMSLOPE | 134, 2.1, 2.9 (the prior of the emission: its mean, scatter and radial slope) |
+| VWIND | 338 ± 4 km/s |
+| INC | 71.6° ± 0.4° |
+| EMSCALE, EMCLUMP, EMSLOPE | 117, 2.1, 3.4 (the prior of the emission: its mean, scatter and radial slope) |
 
 The six starts end at the same point. The errors of the Laplace approximation are those of this likelihood, model
 error included: they are much smaller than the differences between the descriptions of the emission below, which
 are the real uncertainty of the fit.
 
 Marconcini et al. (2023) found a faster wind with an axis closer to the plane of the sky: v₀ = 550 ± 20 km/s,
-β = 84° ± 2°. Their data were not this cube: they fitted the [OIII] of a Gaussian decomposition of the MUSE cube
-(the components of the outflow, with the line spread function removed). The integrated [OIII] of this cube, in the
+β = 84° ± 2°. Their data were not this cube: they fitted a model of the line, the sum of the Gaussian components
+fitted to [OIII] in each spaxel, with the line spread function removed and above a signal-to-noise ratio of 3. The integrated [OIII] of this cube, in the
 mask, has its 1st and 99th percentile velocities at −451 and +235 km/s; a cone with their parameters spreads from
 −556 to +407 km/s on this cube, 40% wider (and the statistic of MoKA-3D rejects it, see below). The highest
 velocities of the data are not in the model at any radius: see {ref}`circinus-high-velocities`.
@@ -168,13 +172,21 @@ with blue contours, model in red. The model has the bright part of the lines but
 10 and 25 arcsec.
 ```
 
+```{figure} /figures/examples/circinus_pvslices.png
+:alt: Position-velocity slices through the cone of Circinus, data and model
+
+Position–velocity slices through the cone (`_pvslices_wind.pdf`): through the nucleus at 10 angles, 18° apart from
+the projected axis of the cone (top), across the axis at 5 distances from the nucleus and parallel to it at 5
+offsets (bottom), with their paths on the total intensity map. Data in blue, model in red contours.
+```
+
 ```{figure} /figures/examples/circinus_chanmaps.png
 :width: 70%
 :alt: Channel maps of Circinus, data and model
 
 Channel maps of the data (blue, the whole field: outside the mask, the [OIII] of the disk) and of the model (red,
-the cone only). The channels beyond −450 and +300 km/s are empty in the model: a cone at 300 km/s, inclined by 66°,
-has line-of-sight velocities from −294 to +155 km/s, broadened by SPECRES.
+the cone only). The channels beyond about −450 and +300 km/s are empty in the model: a cone at 338 km/s, inclined
+by 72°, has line-of-sight velocities from −324 to +201 km/s, broadened by SPECRES.
 ```
 
 ```{figure} /figures/examples/circinus_corner.png
@@ -195,15 +207,22 @@ axis close to the plane of the sky, which spreads the cores too. Two more fits (
 
 | Fit | VWIND (km/s) | VDISP (km/s) | INC | log-likelihood |
 |---|---|---|---|---|
-| one VWIND (above) | 300 | 0 | 66.2° | |
-| VWIND fixed at 550 (`VWIND=550 FREE=INC`) | 550 | 0 | 82.4° | −648 |
-| VDISP free (`FREE=VWIND_SINGLE INC VDISP_SINGLE`) | 112 | 98 | 64.1° | +1453 |
+| one VWIND (above) | 338 | 0 | 71.6° | |
+| VWIND fixed at 550 (`VWIND=550 FREE=INC`) | 550 | 0 | 81.9° | −535 |
+| VDISP free (`FREE=VWIND_SINGLE INC VDISP_SINGLE`) | 148 | 95 | 65.2° | +1129 |
 
 With VWIND fixed at 550 km/s the inclination goes to 82°, close to the 84° of Marconcini et al. (2023), and the
 wings beyond 10 arcsec are reproduced, but the cores are not, and the likelihood is much lower. With VDISP free the
-cone becomes slow and turbulent: the cores are better, the wings still missing. The lines are made of (at least) two
-components, a bright one at lower velocity and a faint fast one, and one cone fits the bright one: Marconcini et al.
-(2023) fitted the outflow components of a Gaussian decomposition of the lines, the fast ones.
+cone becomes slow and turbulent: the cores are better, the wings still missing.
+
+The likelihood of WINDFIT weighs how the flux is distributed in velocity: the bright cores, most of the flux, set
+the wind. The statistic of MoKA-3D used by Marconcini et al. (2023) measures something else. κ is the flux of the
+voxels that the cone does not reach, so it rewards a cone that reaches the emission, whatever it predicts elsewhere,
+and its best cone is the fastest one that the cut on the 1st and 99th percentile velocities of the integrated line
+allows: the velocity of the envelope of the line, its wings. On this cube `emission=moka` gives 384 km/s (below); in
+a test with their recipe (a model of the line without noise, the sum of the Gaussian components fitted in each
+spaxel with the line spread function removed, and VSYS free) it gives 408 km/s at INC 77°. Their 550 km/s needs a
+wider integrated line than this cube has (see {ref}`circinus-results`).
 
 ```{figure} /figures/examples/circinus_spectra.png
 :alt: Spectra of Circinus in rings around the nucleus, data and three models
@@ -231,7 +250,7 @@ BBarolo -p circinus_WINDFIT_GLOBAL.par FLAGERRORS=false OUTFOLDER=output/circinu
 
 | `emission` | VWIND (km/s) | INC | |
 |---|---|---|---|
-| `cells` (above) | 300 | 66.2° | the emissivities of 1081 cells, marginalised |
+| `cells` (above) | 338 | 71.6° | the emissivities of 3192 cells, marginalised |
 | `voxel` | 210 | 66.3° | the detections (S/N > 3) and the voxels without; EMCLUMP at the edge of its prior |
 | `shells` | 233 | 84.6° | one emissivity per shell; three of the six starts end at worse minima |
 | `moka` | 384 | 71.4° | κ of MoKA-3D (no likelihood: no errors); two starts end among rejected models |
@@ -262,8 +281,7 @@ r^−4.35 (EMSLOPE), only within 3 arcsec of the nucleus.
 ```
 
 **VSYS free.** With VSYS free as well (`FREE=VWIND_SINGLE INC VSYS`, PRIORS VSYS between −300 and +300 km/s), the
-fit with cells goes to VSYS = +300 km/s, the edge of the prior, INC 41° and VWIND 558 km/s, with a log-likelihood
-higher by 1119. The inclination and VSYS trade off: a cone closer to the line of sight approaches faster, and a
+fit with cells goes to VSYS = +288 km/s, INC 46° and VWIND 588 km/s, with a log-likelihood higher by 859. The inclination and VSYS trade off: a cone closer to the line of sight approaches faster, and a
 redshifted VSYS brings it back. The data alone do not fix VSYS: here it is the systemic velocity of the galaxy.
 
 ## Going further: the velocity as a function of radius
@@ -276,9 +294,9 @@ BBarolo -p circinus_WINDFIT_GLOBAL.par FLAGERRORS=false OUTFOLDER=output/circinu
         "PRIORS=INC=(uniform,30,60) VWIND_P1=(uniform,0,1600) VWIND_P2=(uniform,1,50)"
 ```
 
-The best fit has p1 = 484 km/s and p2 = 13 arcsec: the wind accelerates from 40 km/s near the nucleus to 300 km/s
-at 20 arcsec and 340 km/s at the edge of the field (about 26 arcsec along the axis; beyond, the profile is the
-function, not the data). The inclination does not change (66.2°), and the log-likelihood is higher by 187 than with
+The best fit has p1 = 418 km/s and p2 = 5.5 arcsec: the wind accelerates from 80 km/s near the nucleus to 300 km/s
+at 12 arcsec and 360 km/s at the edge of the field (about 26 arcsec along the axis; beyond, the profile is the
+function, not the data). The inclination barely changes (70.4°), and the log-likelihood is higher by 96 than with
 one velocity. One velocity per shell (`FREE VWIND`) has too much freedom: the velocities jump by hundreds of km/s
 from a shell to the next.
 

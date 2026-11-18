@@ -32,7 +32,7 @@ FIT3D = [("_parameters.pdf", "parameters", 1000), ("_maps_*.pdf", "maps", 650), 
          ("_pvslices_*.pdf", "pvslices", 1300), ("_chanmaps_*.pdf", "chanmaps", 800)]
 CORNER = [("_corner.pdf", "corner", 1100)]
 WIND = [("_maps_wind.pdf", "maps", 650), ("_pv_wind.pdf", "pv", 800), ("_wind_shells.pdf", "shells", 1000),
-        ("_chanmaps_wind.pdf", "chanmaps", 800)]
+        ("_chanmaps_wind.pdf", "chanmaps", 800), ("_pvslices_wind.pdf", "pvslices", 1300)]
 CIRC = "cones=approaching likemask=dilated dilation=0,0"          # (the variants of the fit of Circinus)
 EX = {
     "ngc2403": ("ngc2403_3DFIT.par", "output/ngc2403", "ngc2403", FIT3D),

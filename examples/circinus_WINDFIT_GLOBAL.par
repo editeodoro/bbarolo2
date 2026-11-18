@@ -28,5 +28,5 @@ PRIORS          INC=(uniform,30,60) VWIND=(uniform,0,1600)
 SAMPLEROPTS     nstart=6 seed=1
 FLAGERRORS      true
 
-# Likelihood: cells of 5.4 arcsec, model error 30% of the data, approaching cone, voxels of the mask
-LIKEOPTS        emission=cells cellsize=5.4 datafrac=0.3 cones=approaching likemask=dilated dilation=0,0
+# Likelihood: cells of 3.6 arcsec, model error 30% of the data, approaching cone, voxels of the mask
+LIKEOPTS        emission=cells cellsize=3.6 datafrac=0.3 cones=approaching likemask=dilated dilation=0,0
