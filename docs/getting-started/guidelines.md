@@ -96,9 +96,9 @@ systematic pattern of the residuals (one side always brighter, a twist of the ve
 centre, position angle, inclination, or to motions that the model does not have. If the model is not good, change
 the initial values or the options, and fit again.
 
-The residual velocity field (the velocity field of the data minus that of the model, in the `_maps` plots) shows
-most of these errors at a glance. The figure shows it for a simulated disk fitted with VROT and VDISP free and one of
-the other parameters wrong.
+For example, the residual velocity field (the velocity field of the data minus that of the model, in the `_maps`
+plots) shows most of these errors at a glance. The figure shows it for a simulated disk fitted with VROT and VDISP
+free and one of the other parameters wrong.
 
 ```{figure} /figures/guidelines_residuals.png
 :alt: Residual velocity fields of a simulated disk fitted with a wrong centre, inclination, position angle or systemic velocity, or with motions that the model does not have
