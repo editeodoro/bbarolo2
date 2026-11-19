@@ -159,9 +159,9 @@ velocities of the data are not in the model at any radius: see {ref}`circinus-hi
 :width: 70%
 :alt: Moment maps of the data, the model and the residuals of the cone of Circinus
 
-The moment maps (`_maps_wind.pdf`) of the data in the mask, of the model and their difference. The model is
-smoother than the filaments of the data. The dispersion of the data is noisy: the mask holds every channel of the
-window, the empty ones too.
+The moment maps (`_maps_wind.pdf`) of the data, of the model and their difference, in the voxels of the mask
+detected in the cube smoothed to twice the beam (above 3σ): the empty channels of the mask stay out of the maps,
+which keep 99% of its flux. The model is smoother than the filaments of the data.
 ```
 
 ```{figure} /figures/examples/circinus_pv.png

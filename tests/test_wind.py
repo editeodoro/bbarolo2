@@ -703,6 +703,44 @@ def test_bayesian_wind_blanks(tmp_path):
     assert abs(f.noiserms / full.noiserms - 1) < 0.05
 
 
+def test_bayesian_wind_map_voxels(tmp_path):
+    """The moment maps of WINDFIT (maps/): with MASK FILE (a region, every channel) the maps of the data use the
+    voxels of the mask detected as MASK SMOOTH (the cube smoothed, above BLANKCUT times its noise), not all the voxels
+    of the mask (the empty channels made the velocity and dispersion maps noisy), and the maps of the model use the
+    same voxels; MASK SMOOTH (made of detections) keeps its mask."""
+    from wind_mocks import mock_wind
+    from bbarolo import BayesianWind
+    from bbarolo.cube import Cube
+    from bbarolo.moments import getAllMoments
+    from bbarolo.bayesian.wind_outputs import _map_mask
+    from astropy.io import fits
+    hdu, tr = mock_wind(kind="clumps", seed=2, snr=15, shape=(24, 24, 20), pix=12., chan=25., beam=36.,
+                        truth=dict(xpos=11.5, ypos=11.5, conelen=110., radii=[55., 110.], vwind=200.), nclumps=40,
+                        clump=20.)
+    mask = np.ones(hdu.data.shape, np.uint8)
+    mask[:, :, :7] = 0                                                # (a region: every channel of two thirds)
+    mfile = str(tmp_path / "mask.fits")
+    fits.PrimaryHDU(mask, hdu.header).writeto(mfile)
+    f = BayesianWind(hdu, xpos=11.5, ypos=11.5, vsys=0, inc=55, pa=30, openang=55, conelen=110, vwind=180, vdisp=20,
+                     nlayers=2, mask=f"FILE({mfile})", outfolder=str(tmp_path) + "/")
+    f.optimize(freepar=["openang"], like_kwargs=dict(emission="voxel", sigma=1., noisecorr=10.), verbose=False)
+    f.write(plots=-1, verbose=False)
+    c = f._cube_obj
+    det = np.asarray(c.smoothDetections()[0], bool)
+    mm = _map_mask(c, np.asarray(c.Mask(), bool))
+    assert np.array_equal(mm, (mask > 0) & det) and 0 < mm.sum() < 0.5 * mask.sum()
+    pre = str(tmp_path) + "/maps/" + c.pars().outPrefix
+    mod = Cube(array=np.asarray(f.model, np.float32), head=c.Head(), par=c.pars())
+    for cube, files in ((c, ["_0mom", "_1mom", "_2mom"]), (mod, ["_mod_0mom_wind", "_mod_1mom_wind", "_mod_2mom_wind"])):
+        ref = getAllMoments(cube, True, mm, "MOMENT")
+        for i, fn in enumerate(files):
+            got = fits.getdata(pre + fn + ".fits")
+            assert np.allclose(got, ref[i].array, equal_nan=True, rtol=1e-5, atol=1e-6 * np.nanmax(np.abs(got))), fn
+    # a mask made of detections is kept as it is
+    c.pars().MaskType = "SMOOTH"
+    assert _map_mask(c, mask > 0) is not None and np.array_equal(_map_mask(c, mask > 0), mask > 0)
+
+
 def test_bayesian_wind_likemask(tmp_path):
     """LIKEOPTS likemask=dilated (as 3DFIT with METHOD GLOBAL or BAYESIAN): the likelihood uses only the voxels of the
     mask (MASK), dilated by dilation (beams, channels). With MASK FILE(...) and dilation=0,0 the voxels and the

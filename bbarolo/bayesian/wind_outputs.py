@@ -10,7 +10,8 @@ the cube (<prefix>):
                                  volume and emissivity at the best fit
   <prefix>_mod_wind.fits         the best model cube (as <prefix>_mod_<norm>.fits of 3DFIT), and <prefix>_mask.fits
   maps/<prefix>_{0,1,2}mom.fits, maps/<prefix>_mod_{0,1,2}mom_wind.fits   the total intensity, velocity and
-                                 dispersion maps of the data (in the mask) and of the model, as 3DFIT
+                                 dispersion maps of the data and of the model, in the same voxels: the mask (and,
+                                 with MASK FILE or NONE, the detections of MASK SMOOTH in it; see _map_mask)
   pvs/<prefix>_pv_{a,b}.fits, pvs/<prefix>_mod_pv_{a,b}_wind.fits, pvs/<prefix>_mask_pv_{a,b}.fits   position-velocity
                                  slices of the data, the model and the mask through the apex, across the axis of the
                                  cones (a: along PA) and along it (b: PA + 90), as 3DFIT
@@ -131,7 +132,7 @@ def write_outputs(f, outfolder=None, plots=None, verbose=True):
     files.append(fn)
     os.makedirs(of + "maps", exist_ok=True)
     os.makedirs(of + "pvs", exist_ok=True)
-    for name, hdu in kinematic_maps(c, mod, mask, "_wind").items():
+    for name, hdu in kinematic_maps(c, mod, _map_mask(c, mask), "_wind", model_mask=True).items():
         fn = of + "maps/" + prefix + "_" + name + ".fits"
         write_hdu(hdu, fn)
         files.append(fn)
@@ -162,6 +163,24 @@ def _output_mask(c):
         with _outputs_mode(c.pars()):
             c.BlankMask()
     return np.asarray(c.Mask(), bool)
+
+
+def _map_mask(c, mask):
+    """The voxels of the moment maps of the data and of the model: the mask (MASK) and, when MASK is not made of
+    detections (FILE, NONE: e.g. a region of the wind, every channel of a window), the detections of MASK SMOOTH
+    (the cube smoothed to FACTOR times the beam, above BLANKCUT times its noise); the empty voxels of such a mask
+    made the velocity and dispersion maps of the data noisy. The mask itself if there are no detections in it."""
+    mt = c.pars().MaskType.upper()
+    if any(k in mt for k in ("SMOOTH", "SEARCH", "THRESHOLD", "NEGATIVE")):
+        return mask
+    v = c.pars().verbose
+    c.pars().verbose = False
+    try:
+        det = np.asarray(c.smoothDetections()[0], bool)
+    finally:
+        c.pars().verbose = v
+    both = mask & det
+    return both if both.any() else mask
 
 
 def _cube_file(f, c, of):

@@ -842,6 +842,15 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **The moment maps of WINDFIT (`maps/`, `_maps_wind.pdf`) use the detections of a mask of a region**: with `MASK
+  FILE(...)` or `NONE` the maps of the data use only the voxels of the mask detected as `MASK SMOOTH` (the cube
+  smoothed to `FACTOR` times the beam, above `BLANKCUT` times its noise), and those of the model the same voxels
+  (they used all its voxels). A mask of the region of a wind (every channel of a window, as in the Circinus example)
+  made the velocity and dispersion maps of the data noisy: the empty channels weighed as much as the line (Circinus:
+  dispersion 155 km/s, 16-84% 104-240, now 111, 91-139, with 99% of the flux). The likelihood still uses the whole
+  mask, and the masks made of detections (SEARCH, the default, SMOOTH) are unchanged. `Cube.smoothDetections()`
+  gives the detections of MASK SMOOTH without setting the mask.
+
 - **BBarolo is on PyPI** (`pip install bbarolo`), released from GitHub by `.github/workflows/release.yml` (see
   `RELEASING.md`). It needs Python 3.10 or later: it declared 3.9, but its requirement scipy 1.15 needs 3.10, so
   `pip install` failed on 3.9.

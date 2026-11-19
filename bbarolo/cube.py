@@ -586,6 +586,25 @@ class Cube:
             return factor, nb[0], nb[1], (bpa if nb[2] is None else nb[2])
         return factor, factor * bmaj, factor * bmin, bpa
 
+    def smoothDetections(self):
+        """The detections of MASK SMOOTH, without setting the mask: the voxels of the cube smoothed to FACTOR times
+        the beam (or NEWBEAM) above BLANKCUT times its noise. Returns (mask, factor, new bmaj, bmin (arcsec), bpa)."""
+        from .smooth import Smooth3D
+        p = self.par
+        h = self.head
+        bmaj = h.Bmaj() * arcsconv(h.Cunit(0))
+        bmin = h.Bmin() * arcsconv(h.Cunit(0))
+        bpa = h.Bpa()
+        factor, nbmaj, nbmin, nbpa = self._maskBeam(bmaj, bmin, bpa)
+        arr = Smooth3D().smooth(self, (bmaj, bmin, bpa), (nbmaj, nbmin, nbpa))
+        st = Stats(p.flagRobustStats)
+        good = ~((arr == 0) | np.isnan(arr))
+        st.calculate(arr, good)
+        st.setThresholdSNR(p.blankCut)
+        with np.errstate(invalid="ignore"):
+            mask = arr > st.getThreshold()
+        return mask, factor, nbmaj, nbmin, nbpa
+
     def BlankMask(self, channel_noise=None, onlyLargest=True):
         """Build the mask (self.mask) according to the MASK parameter."""
         from .smooth import Smooth3D, SpectralSmooth3D
@@ -636,18 +655,7 @@ class Cube:
                     mask[o.z, o.y, o.x] = True
                 self._maskSources = self.sources
             elif "SMOOTH" in MASK:
-                bmaj = h.Bmaj() * arcsconv(h.Cunit(0))
-                bmin = h.Bmin() * arcsconv(h.Cunit(0))
-                bpa = h.Bpa()
-                factor, nbmaj, nbmin, nbpa = self._maskBeam(bmaj, bmin, bpa)
-                sm = Smooth3D()
-                arr = sm.smooth(self, (bmaj, bmin, bpa), (nbmaj, nbmin, nbpa))
-                st = Stats(p.flagRobustStats)
-                good = ~((arr == 0) | np.isnan(arr))
-                st.calculate(arr, good)
-                st.setThresholdSNR(p.blankCut)
-                with np.errstate(invalid="ignore"):
-                    mask = arr > st.getThreshold()
+                mask, factor, nbmaj, nbmin, nbpa = self.smoothDetections()
             elif "THRESHOLD" in MASK:
                 mask = self.array > p.se.threshold
             elif "NEGATIVE" in MASK:

@@ -23,10 +23,11 @@ from .bbutils import mkdirp, randomAdjective, polyfit_lsq
 FLT_MAX = float(np.finfo(np.float32).max)
 
 
-def kinematic_maps(c, mod, mask=None, suffix=""):
+def kinematic_maps(c, mod, mask=None, suffix="", model_mask=False):
     """The maps of the data (within the mask: mask, or that of the cube) and of the model mod, as HDUs:
     {'0mom', '1mom', '2mom', 'mod_0mom<suffix>', ...} (the files of the maps/ folder without the prefix).
-    Moments or Gaussian fits, as MAPTYPE (C++ always used moments)."""
+    Moments or Gaussian fits, as MAPTYPE (C++ always used moments). The maps of the model use all its voxels, or
+    with model_mask those of the data (mask, which must then be given)."""
     p = c.pars()
     mtype = "GAUSSIAN" if p.ma.maptype == "GAUSSIAN" else "MOMENT"
     v = p.verbose
@@ -35,7 +36,7 @@ def kinematic_maps(c, mod, mask=None, suffix=""):
         allmaps = getAllMoments(c, True, mask, mtype)
         out = {s: allmaps[i].to_hdu() for i, s in enumerate(("0mom", "1mom", "2mom"))}
         mod.pars().verbose = False
-        modmaps = getAllMoments(mod, False, None, mtype)
+        modmaps = getAllMoments(mod, True, mask, mtype) if model_mask else getAllMoments(mod, False, None, mtype)
         out.update({s + suffix: modmaps[i].to_hdu() for i, s in enumerate(("mod_0mom", "mod_1mom", "mod_2mom"))})
     finally:
         p.verbose = v

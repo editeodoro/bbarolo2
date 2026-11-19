@@ -134,8 +134,11 @@ In the output folder, with the prefix of the cube:
 - `_mod_wind.fits`: the best model (as the `_mod_<norm>.fits` of 3DFIT; with `emission` `voxel`, the data in the
   voxels the cone reaches, those where a uniform cone with its geometry and wind is above 1/1000 of its peak), and
   `_mask.fits`;
-- `maps/`: the total intensity, velocity and dispersion maps of the data, in the mask, and of the model
-  (`_0mom.fits`, ..., `_mod_0mom_wind.fits`, ...), as 3DFIT;
+- `maps/`: the total intensity, velocity and dispersion maps of the data and of the model, in the same voxels
+  (`_0mom.fits`, ..., `_mod_0mom_wind.fits`, ...): those of the mask; with `MASK FILE(...)` or `NONE` (a region,
+  e.g. every channel of a window, with its empty voxels) only those detected as `MASK SMOOTH` (the cube smoothed to
+  `FACTOR` times the beam, above `BLANKCUT` times its noise), which keeps the velocity and dispersion maps free of
+  the empty channels;
 - `pvs/`: position-velocity slices of the data, the model and the mask through the apex, across the axis of
   the cones (`_pv_a`, along `PA`) and along it (`_pv_b`, `PA` + 90), as 3DFIT;
 - `_<sampler>_windresults.npy`: the samples, their weights and the setup of the fit (METHOD GLOBAL:
