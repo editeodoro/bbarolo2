@@ -728,7 +728,7 @@ def fig_residuals_pv():
              ("(e) PA 10° too large", disk, dict(pa=pa + 10)),
              ("(f) Inflow of 25 km/s", inflow, {})]
     # each case in a column, its major axis above its minor axis: (a, b, c) in rows 1-2, (d, e, f) in rows 3-4
-    fig, grid = plt.subplots(5, 3, figsize=(9.6, 10.8), gridspec_kw=dict(height_ratios=(1, 1, 0.12, 1, 1)))
+    fig, grid = plt.subplots(5, 3, figsize=(9.6, 10.8), gridspec_kw=dict(height_ratios=(1, 1, 0.2, 1, 1)))
     for ax in grid[2]:
         ax.set_visible(False)                              # (more space between the two groups of cases)
     axs = np.delete(grid, 2, axis=0)
@@ -751,25 +751,26 @@ def fig_residuals_pv():
             ax.contour(pvm, levels, colors="#B22222", linewidths=1.0, extent=ext)
             ax.axhline(0, c="k", lw=0.6)
             ax.axvline(0, c="k", lw=0.6)
-            ax.text(0.03, 0.95, name, transform=ax.transAxes, fontsize=8, va="top")
+            ax.text(0.03, 0.95, name, transform=ax.transAxes, fontsize=9.5, va="top")
             if j == 0:
                 ax.plot(np.concatenate((radii, -radii)), np.concatenate((vlos, -vlos)), "o", c="gold", ms=3,
                         mec="0.4", mew=0.4)
-                ax.set_title(title, fontsize=9, loc="left")
+                ax.set_title(title, fontsize=10.5, loc="left")
                 ax.set_xlim(-480, 480)
                 ax.set_ylim(-235, 235)
             else:
                 ax.set_xlim(-300, 300)                     # the minor axis on a smaller scale
+                ax.set_xticks([-200, -100, 0, 100, 200])   # (no labels at the edges: they would touch)
                 ax.set_ylim(-110, 110)
-                ax.set_xlabel("Offset (arcsec)", fontsize=8)
+                ax.set_xlabel("Offset (arcsec)", fontsize=9.5)
                 vm = np.where(pvd > levels[0], pvd, 0)
                 vm = (vm * vel[:, None]).sum(0) / np.maximum(vm.sum(0), 1e-30)
                 print(f"    {title}: minor axis, mean velocity at -120, -30, 30, 120 arcsec:",
                       np.round(vm[[np.argmin(np.abs(s * pix - o)) for o in (-120, -30, 30, 120)]], 1))
-            ax.tick_params(labelsize=8, labelleft=k % 3 == 0)
+            ax.tick_params(labelsize=9, labelleft=k % 3 == 0)
     for ax in axs[:, 0]:
-        ax.set_ylabel("V$_\\mathrm{LOS}$ $-$ VSYS (km/s)", fontsize=8)
-    fig.tight_layout(h_pad=0.6)
+        ax.set_ylabel("V$_\\mathrm{LOS}$ $-$ VSYS (km/s)", fontsize=9.5)
+    fig.tight_layout(h_pad=0.)
     save(fig, "guidelines_pv.png")
 
 # (end of user guide: guidelines)
