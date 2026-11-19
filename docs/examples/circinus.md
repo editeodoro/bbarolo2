@@ -100,8 +100,9 @@ minutes for 2921 likelihoods of 3192 cells on the 536 000 voxels of the mask (si
 
 - **The line.** The cube is in wavelengths in air (`CTYPE3 AWAV`): {ref}`RESTWAVE <par-windfit-restwave>` is
   the wavelength of [OIII] 5007 in air, and {ref}`REDSHIFT <par-windfit-redshift>` the redshift of Circinus, so that
-  VSYS is the velocity from the systemic one. {ref}`SPECRES <par-windfit-specres>` is 0.85 channels: the line spread
-  function of MUSE has σ ≈ 0.9 channels (1.1 Å), and the averaging over a channel (1/12) is already in the model, see
+  VSYS is the velocity from the systemic one (the [OIII] line of the nucleus peaks within 30 km/s of VSYS 0).
+  {ref}`SPECRES <par-windfit-specres>` is 0.85 channels: the line spread function of MUSE has σ ≈ 0.9 channels
+  (1.1 Å), and the averaging over a channel (1/12) is already in the model, see
   {doc}`../user-guide/spectral-resolution`.
 - **The cone of Marconcini et al. (2023).** WINDFIT describes the wind as {doc}`GALWIND <../tasks/galwind/index>`
   does: the axis of the cones is the rotation axis of a disk of inclination INC and position angle PA, and the cone
@@ -113,7 +114,8 @@ minutes for 2921 likelihoods of 3192 cells on the 536 000 voxels of the mask (si
   | γ = 65° (the position angle of the axis on the sky) | PA 25 (the cone along position angle −65°) |
   | θ = 55° (half opening angle) | OPENANG 110 |
   | R₀ = 1.06 kpc | CONELEN 52 arcsec |
-  | v₀ = 550 km/s, v_sys = −70 km/s | VWIND, VSYS |
+  | v₀ = 550 km/s | VWIND |
+  | v_sys = −70 km/s (their velocities are not shifted for the redshift of Circinus, as REDSHIFT does here) | VSYS 0 |
 
   As in their fit, the apex (XPOS, YPOS: the nucleus), PA, OPENANG and CONELEN are fixed, and there is no
   intrinsic velocity dispersion (VDISP 0): the width of the lines comes from the spread of the directions in the
@@ -254,7 +256,7 @@ BBarolo -p circinus_WINDFIT_GLOBAL.par FLAGERRORS=false OUTFOLDER=output/circinu
 | `voxel` | 210 | 66.3° | the detections (S/N > 3) and the voxels without; EMCLUMP at the edge of its prior |
 | `shells` | 233 | 84.6° | one emissivity per shell; three of the six starts end at worse minima |
 | `moka` | 384 | 71.4° | κ of MoKA-3D (no likelihood: no errors); two starts end among rejected models |
-| MoKA-3D, Marconcini et al. (2023) | 550 | 84° | their data (see above), v_sys = −70 km/s |
+| MoKA-3D, Marconcini et al. (2023) | 550 | 84° | their data (see above); their v_sys = −70 km/s is VSYS 0 here |
 
 They took 4 to 8.5 minutes each. The four agree on a cone inclined by 66° to 85°, with a wind of 200 to 400 km/s:
 
