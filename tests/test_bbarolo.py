@@ -5486,23 +5486,26 @@ def test_task_python_values_of_fit_options():
 def test_kinmaps_residual_scale():
     """The colour scale of the residual maps (plot_kinmaps) is symmetric about 0 and covers the residuals of both
     signs: it was set by the upper percentile only (as in C++), so residuals mostly negative (a model dispersion
-    above that of the data) were all at the bottom of the scale."""
+    above that of the data) were all at the bottom of the scale. It covers 95% of the pixels: it covered 99.5%, so
+    a few large residuals (1% of the pixels, 20 times the others) set it and the map was almost uniform."""
     import matplotlib.pyplot as plt
     from bbarolo.plots import fit3d
     ny = nx = 40
     yy, xx = np.mgrid[:ny, :nx]
     rng = np.random.default_rng(1)
     mom0 = np.exp(-((xx - 20) ** 2 + (yy - 20) ** 2) / 100.)
-    mom1 = 10. * (xx - 20.)
+    mom1 = 10. * (xx - 20.) + rng.normal(0, 2, (ny, nx))
+    mom1[rng.random((ny, nx)) < 0.01] = 200.                # velocity residuals: 0 +- 2, 1% of the pixels ~200
     mom2 = 30. + rng.normal(0, 3, (ny, nx))
-    models = (mom0, mom1, np.full((ny, nx), 60.))         # dispersion residuals: -30 +- 3
+    models = (mom0, 10. * (xx - 20.), np.full((ny, nx), 60.))   # dispersion residuals: -30 +- 3
     rings = {k: np.array(v, float) for k, v in dict(rad=[2, 6, 10], pa=[90] * 3, xpos=[20] * 3, ypos=[20] * 3,
                                                        inc=[60] * 3, vsys=[0] * 3).items()}
     fig = fit3d.plot_kinmaps((mom0, mom1, mom2), models, rings, box=(0, nx - 1, 0, ny - 1), pixscale=1.)
     norms = [ax.get_images()[0].norm for ax in fig.axes if ax.get_images()]
     plt.close(fig)
-    res2 = norms[8]                                         # third row (dispersion), third column (residuals)
-    assert res2.vmin == -res2.vmax and res2.vmin < -35
+    res1, res2 = norms[5], norms[8]                         # second, third row (velocity, dispersion), residuals
+    assert res2.vmin == -res2.vmax and res2.vmin < -33
+    assert res1.vmin == -res1.vmax and 3 < res1.vmax < 6
 
 
 def test_plot_scripts_standalone(tmp_path):

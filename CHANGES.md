@@ -842,6 +842,11 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **The colour scale of the residual maps of 3DFIT (`_maps_*.pdf`, also METHOD GLOBAL and BAYESIAN) covers 95% of
+  the pixels shown**, symmetric about 0, as that of WINDFIT; the larger residuals saturate. It covered 99.5% of the
+  pixels, so a few large residuals (noise at the edges of the maps) set it and the maps were almost uniform: NGC 2403
+  velocity ±207 km/s for 68% of the pixels within 8 km/s, now ±27; dispersion ±80, now ±21.
+
 - **The moment maps of WINDFIT (`maps/`, `_maps_wind.pdf`) use the detections of a mask of a region**: with `MASK
   FILE(...)` or `NONE` the maps of the data use only the voxels of the mask detected as `MASK SMOOTH` (the cube
   smoothed to `FACTOR` times the beam, above `BLANKCUT` times its noise), and those of the model the same voxels

@@ -721,9 +721,15 @@ def plot_kinmaps(maps, models, rings, *, box, pixscale, bunit="",
                 axis.tick_params(labelbottom=False, labelleft=False, right=True, top=True)
                 axis.set_xlim(ext[0], ext[1])
                 axis.set_ylim(ext[2], ext[3])
-                if j == 2:                  # symmetric about 0, wide enough for both signs
-                    vmax = np.nanmax(np.abs(interval.get_limits(to_plot[j][i])))
-                    norm = mpl.colors.Normalize(vmin=-vmax, vmax=vmax)
+                if j == 2:
+                    # (the residuals: symmetric about 0, over 95% of the pixels shown, of both signs: the few
+                    # largest residuals, e.g. noise at the edges, saturate instead of washing out the map)
+                    res = to_plot[j][i] * maskmap
+                    res = np.abs(res[np.isfinite(res)])
+                    vres = float(np.percentile(res, 95)) if res.size else 1.
+                    if not vres > 0:
+                        vres = 1.
+                    norm = mpl.colors.Normalize(vmin=-vres, vmax=vres)
                 pp = np.pad(to_plot[j][i] * maskmap, (pad_y, pad_x), mode="constant", constant_values=np.nan)
                 axis.imshow(pp, origin="lower", cmap=cmap, norm=norm, aspect="auto", extent=ext,
                             interpolation="nearest")
