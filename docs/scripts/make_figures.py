@@ -477,6 +477,51 @@ def fig_simulated():
     save(res.plot_pv(), "simulated_pv.png")
 
 
+@figure("simulated_methods")
+def fig_simulated_methods():
+    """The simulated galaxy (seed 1) fitted with rings one beam wide by the three methods of 3DFIT."""
+    from bbarolo import FitMod3D
+    s, _, _ = _simulate(1)
+    radii_b = np.arange(30, 360, 60.)                     # 6 rings one beam wide (arcsec)
+    start = dict(radii=radii_b, xpos=31.5, ypos=31.5, vsys=0, z0=10, vrot=150, vdisp=15, inc=55, pa=35, mask="SEARCH")
+    fits = {"CLASSIC": FitMod3D(s.model, free="VROT VDISP INC PA", deltainc=15, deltapa=20, norm="LOCAL",
+                                flagerrors=True, **start),
+            "GLOBAL": FitMod3D(s.model, method="global", free="VROT VDISP INC_SINGLE PA_SINGLE", flagerrors=True,
+                               **start),
+            "BAYESIAN": FitMod3D(s.model, method="bayesian", free="VROT VDISP INC_SINGLE PA_SINGLE",
+                                 sampleropts="seed=1", **start)}
+    vtrue = lambda r: 200. * 2 / np.pi * np.arctan(r / 60.)          # the rotation curve of the simulation
+    fig, axs = plt.subplots(1, 3, figsize=(11, 3.5))
+    for (name, f), c, mk, dx in zip(fits.items(), ("C0", "C1", "C2"), "osD", (-7, 0, 7)):
+        t0 = time.time()
+        t = f.run(threads=4).rings
+        dt = time.time() - t0
+        kw = dict(fmt=mk, ms=5.5, capsize=2, color=c, zorder=3, label=name)
+        err = lambda k: [-np.asarray(t[f"e_{k}1"]), np.asarray(t[f"e_{k}2"])]
+        axs[0].errorbar(radii_b + dx, t["vrot"], yerr=err("vrot"), **kw)
+        axs[1].errorbar(radii_b + dx, t["vrot"] - vtrue(radii_b), yerr=err("vrot"), **kw)
+        axs[2].errorbar(radii_b + dx, t["vdisp"], yerr=err("vdisp"), **kw)
+        e = {k: (f"{float(t[f'e_{k}1'][0]):.2f}/+{float(t[f'e_{k}2'][0]):.2f}" if f"e_{k}1" in t.colnames else "")
+             for k in ("inc", "pa")}
+        print(f"    {name}: {dt:.0f} s; INC {float(t['inc'][0]):.2f} {e['inc']}, PA {float(t['pa'][0]):.2f} {e['pa']}")
+        print("      vrot", np.round(np.asarray(t["vrot"]), 1), "- true", np.round(t["vrot"] - vtrue(radii_b), 1))
+        print("      e_vrot", np.round(-np.asarray(t["e_vrot1"]), 1), np.round(np.asarray(t["e_vrot2"]), 1))
+        print("      vdisp", np.round(np.asarray(t["vdisp"]), 1),
+              "e", np.round(-np.asarray(t["e_vdisp1"]), 1), np.round(np.asarray(t["e_vdisp2"]), 1))
+    r = np.linspace(0, 360, 361)
+    axs[0].plot(r, vtrue(r), color="k", lw=1, zorder=2, label="true")
+    axs[1].axhline(0, color="k", lw=1, zorder=2)
+    axs[2].axhline(10, color="k", lw=1, zorder=2)
+    for ax, lab in zip(axs, ("VROT (km/s)", "VROT $-$ true VROT (km/s)", "VDISP (km/s)")):
+        ax.set_xlabel("Radius (arcsec)", fontsize=12)
+        ax.set_ylabel(lab, fontsize=12)
+        ax.tick_params(labelsize=11)
+        ax.set_xlim(0, 360)
+    axs[0].legend(fontsize=10, loc="lower right")
+    fig.tight_layout()
+    save(fig, "simulated_methods.png")
+
+
 # (end of examples 1)
 
 

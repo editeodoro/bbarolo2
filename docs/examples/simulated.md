@@ -88,11 +88,59 @@ position–velocity diagrams of data and model are the first check:
 The simulated cube (grey) and the fit (red contours) along the major and the minor axis.
 ```
 
+### CLASSIC, GLOBAL and BAYESIAN
+
+The rings above are those of the simulation, half a beam wide, so neighbouring rings are not independent. Here the
+same cube is fitted with rings one beam wide (60 arcsec) by the three methods of 3DFIT
+({ref}`METHOD <par-3dfit-method>`), from the same wrong first guess. CLASSIC fits INC and PA in
+each ring and, in its second stage, one value of each for the whole disk; GLOBAL and BAYESIAN fit one INC and one
+PA for the disk (`_SINGLE`) together with the rotation velocity and the dispersion of each ring, within their
+default priors (INC 45–65° and PA 20–50°: the first guess ± 10° and ± 15°).
+
+```python
+radii_b = np.arange(30, 360, 60.)                     # 6 rings one beam wide (arcsec)
+start = dict(radii=radii_b, xpos=31.5, ypos=31.5, vsys=0, z0=10, vrot=150, vdisp=15, inc=55, pa=35, mask="SEARCH")
+f_c = FitMod3D(s.model, free="VROT VDISP INC PA", deltainc=15, deltapa=20, norm="LOCAL", flagerrors=True, **start)
+f_g = FitMod3D(s.model, method="global", free="VROT VDISP INC_SINGLE PA_SINGLE", flagerrors=True, **start)
+f_b = FitMod3D(s.model, method="bayesian", free="VROT VDISP INC_SINGLE PA_SINGLE", sampleropts="seed=1", **start)
+res_c, res_g, res_b = f_c.run(threads=4), f_g.run(threads=4), f_b.run(threads=4)
+```
+
+```{figure} /figures/simulated_methods.png
+:alt: Rotation velocity and dispersion of the simulated galaxy fitted with rings one beam wide by METHOD CLASSIC, GLOBAL and BAYESIAN, against the true values
+
+The simulated galaxy fitted with rings one beam wide by the three methods, with their errors, against the true
+values (black). Left: the rotation velocity; middle: its difference from the true rotation velocity at the radius
+of the ring; right: the dispersion. The points of each ring are shifted sideways by 7 arcsec, to be seen.
+```
+
+| | CLASSIC | GLOBAL | BAYESIAN | True |
+|---|---|---|---|---|
+| INC (°) | 60.3 | 60.3 ± 0.4 | 60.4 ± 0.5 | 60 |
+| PA (°) | 39.7 | 39.9 ± 0.2 | 40.0 ± 0.2 | 40 |
+| Time (4 processes) | 2–3 s | 12–13 s | 9–11 min | |
+
+- **Geometry.** From a first guess 5° off, the three methods find INC and PA within 0.4° of the true values.
+  CLASSIC gives no errors for them, as its second stage fixes them.
+- **Rotation velocity.** Beyond the first ring, GLOBAL and BAYESIAN are within 1.6 km/s (1%) of the true
+  velocity, within their errors; CLASSIC is 1 to 4 km/s too low (−3% and −2% in the second and third rings: the
+  bias of CLASSIC, see {doc}`../tasks/3dfit/algorithm`), and its errors are up to twice as large.
+- **The first ring.** It spans the steep rise of the rotation curve, from 0 to 100 km/s between the centre and
+  60 arcsec, which a ring of one velocity cannot follow: the three methods miss the true velocity at 30 arcsec
+  by 7–8 km/s, CLASSIC above and GLOBAL and BAYESIAN below, and the dispersion of the first two rings is off
+  (21–24 km/s in the first; about 4.5 km/s with GLOBAL and BAYESIAN and 14.6 km/s with CLASSIC in the second).
+  Beyond them, the dispersion of GLOBAL and BAYESIAN is within 2.5 km/s of the true 10 km/s; that of CLASSIC
+  drops to 1.7 km/s in the last ring, where the mask cuts the wings of the faint lines (see below).
+- **GLOBAL and BAYESIAN** maximise and sample the same likelihood: the best fit of GLOBAL and the medians of
+  BAYESIAN differ by less than 0.7σ, and the errors of the Laplace approximation are within 15% of the widths of
+  the posterior. GLOBAL takes seconds, BAYESIAN minutes: use GLOBAL to try a setup, and BAYESIAN when the shape
+  of the posterior matters. With `seed=1` the sampling is reproducible: two runs gave the same rings.
+
 ## Fitted and true rotation curve
 
-The figure compares the fit with the input. The grey lines are the fits of 20 other noise realisations of
-the same galaxy (seeds 2 to 21; about 1 s per fit), to see the scatter that the noise alone gives. The error
-bars are those of FLAGERRORS.
+The figure compares the first fit above (CLASSIC, with the rings of the simulation) with the input. The grey
+lines are the fits of 20 other noise realisations of the same galaxy (seeds 2 to 21; about 1 s per fit), to see
+the scatter that the noise alone gives. The error bars are those of FLAGERRORS.
 
 ```{figure} /figures/simulated_rc.png
 :alt: Fitted and true rotation velocity and velocity dispersion of a simulated galaxy
@@ -134,10 +182,3 @@ fits, are in {doc}`../tasks/3dfit/algorithm` (section *Accuracy and known biases
 and a peak S/N of 10 or more), VDISP is hard (20–40% scatter, and a bias that follows the S/N), and the
 inclination stays close to its starting value.
 
-## Ideas
-
-- Change `noise` to see how the errors of VROT and VDISP grow with the S/N, and `inc` to see the loss of
-  accuracy at low inclination.
-- Add a warp or a radial motion: pass arrays to `define_galaxy` (`inc`, `pa`, `vrad`).
-- Simulate with the grid and the beam of your own cube (`SimulatedGalaxyCube("mycube.fits")`) before fitting
-  the real data, to know what the fit can do at your resolution.
