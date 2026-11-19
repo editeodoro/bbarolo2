@@ -211,8 +211,12 @@ for i in range (3):
     axis.tick_params(labelbottom=False,labelleft=False,right=True,top=True,direction='in')
     nrm = norm
     if j==2:
+      # (the residuals: symmetric about 0, over 95% of the pixels, at most half the width of the colour bar of the
+      # data: the few largest residuals, e.g. at a bright nucleus, saturate instead of washing out the map)
       fin = np.isfinite(to_plot[j][i])
-      vv = np.nanmax(np.abs(interval.get_limits(to_plot[j][i][fin]))) if np.any(fin) else 1.
+      vv = float(np.percentile(np.abs(to_plot[j][i][fin]), 95)) if np.any(fin) else 1.
+      if vmax > vmin: vv = min(vv, 0.5*(vmax-vmin))
+      if not vv > 0: vv = 1.
       nrm = mpl.colors.Normalize(vmin=-vv, vmax=vv)
     pp = np.pad(to_plot[j][i]*maskmap,(pad_y, pad_x),mode='constant',constant_values=np.nan)
     axis.imshow(pp,origin='lower',cmap=cmap,norm=nrm,aspect='auto',extent=ext,interpolation='nearest')
@@ -228,6 +232,10 @@ for i in range (3):
   cb2 = ColorbarBase(cbax, orientation='horizontal', cmap=cmap, norm=nrm)
   cb2.set_label(barlab2[i],fontsize=13)
   cb2.ax.locator_params(nbins=3)
+  fmt = mpl.ticker.ScalarFormatter()
+  fmt.set_powerlimits((-3, 4))                       # (large residuals: a multiplier, as the colour bar of the data)
+  cb2.formatter = fmt
+  cb2.update_ticks()
 ax[0][0].text(0, 1.2, gname, transform=ax[0][0].transAxes,fontsize=18)
 fig.savefig(outfolder+outprefix+'_maps_wind.pdf', bbox_inches='tight')
 """

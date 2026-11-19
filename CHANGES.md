@@ -843,7 +843,9 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 ### Changed
 
 - **The residual maps of WINDFIT (`_maps_wind.pdf`) have their own colour bar**, as those of 3DFIT: their scale,
-  symmetric about 0, was not shown.
+  symmetric about 0, was not shown. The scale covers 95% of the pixels, at most half the width of the colour bar
+  of the data; it covered 99.75%, so a few large residuals (Circinus: the nucleus, 10 times the next ones in total
+  intensity) set it and the map was almost uniform.
 
 - **The maps of the paths in `_pvslices_wind.pdf` (WINDFIT) are square**: the region of the plots padded with
   blanks, as the maps of 3DFIT, instead of the region alone, as tall or as wide as it is.
