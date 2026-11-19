@@ -44,12 +44,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - {os: ubuntu-latest, python: "3.10", tests: full}
-          - {os: ubuntu-latest, python: "3.13", tests: full}
-          - {os: macos-latest, python: "3.13", tests: smoke}
-          - {os: windows-latest, python: "3.13", tests: smoke}
-    runs-on: ${{ matrix.os }}
+        python: ["3.11", "3.13"]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -69,7 +65,6 @@ jobs:
           BBarolo -v
           python -c "import bbarolo; print(bbarolo.__version__, bbarolo.__file__)"
       - name: Tests (against the installed wheel)
-        if: matrix.tests == 'full'
         timeout-minutes: 60
         # the checkout without its bbarolo/, so that the tests (and the launchers bin/BBarolo, run_bbarolo.py)
         # import the installed wheel; the tests needing the C++ example data (../examples) are skipped
@@ -77,6 +72,34 @@ jobs:
           rm -rf bbarolo
           BBAROLO_EXAMPLES="$GITHUB_WORKSPACE/examples" python -I -m pytest -q -p no:cacheprovider \
             -k "not nautilus and not sampl" tests/test_bbarolo.py tests/test_wind.py tests/test_bayesianslitfit.py
+
+  # macOS and Windows: install and start only. Publishing does not wait for this job, so that the shortages of
+  # GitHub's macOS runners ("The job was not acquired by Runner") do not block a release.
+  smoke:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Install the wheel
+        shell: bash
+        run: python -m pip install "$(ls dist/*.whl)[bayesian]"
+      - name: Smoke test
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          BBarolo -v
+          python -c "import bbarolo; print(bbarolo.__version__, bbarolo.__file__)"
 
   publish-testpypi:
     if: github.event_name == 'workflow_dispatch'

@@ -7,7 +7,7 @@
 
 [![Documentation Status](https://img.shields.io/readthedocs/bbarolo)](https://bbarolo.readthedocs.io)
 [![License: GPL-3.0](https://img.shields.io/github/license/editeodoro/bbarolo2)](https://github.com/editeodoro/bbarolo2/blob/main/LICENSE.md)
-[![Python: 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org)
+[![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org)
 ![Language: Python](https://img.shields.io/github/languages/top/editeodoro/bbarolo2)
 
 BBarolo 2 is a GPL-licensed pure-Python version of [3D-Barolo](https://github.com/editeodoro/Bbarolo)
@@ -26,7 +26,7 @@ long-slit spectra, with the methods GLOBAL and BAYESIAN.
 
 ## Installation
 
-BBarolo 2 needs Python 3.10 or later. Install it from PyPI with ``pip``:
+BBarolo 2 needs Python 3.11 or later. Install it from PyPI with ``pip``:
 
 ```shell
 pip install bbarolo

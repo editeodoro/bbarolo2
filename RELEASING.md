@@ -1,7 +1,7 @@
 # Releasing BBarolo
 
 Development happens on `main`. A release is a tag `vX.Y.Z` with a GitHub Release; the workflow
-`.github/workflows/release.yml` then builds the sdist and the wheel, tests the wheel (Linux with Python 3.10 and 3.13,
+`.github/workflows/release.yml` then builds the sdist and the wheel, tests the wheel (Linux with Python 3.11 and 3.13,
 import on macOS and Windows) and publishes them on [PyPI](https://pypi.org/p/bbarolo). Read the Docs builds `stable`
 from the latest tag and `latest` from `main`.
 

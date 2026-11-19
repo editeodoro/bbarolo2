@@ -852,8 +852,11 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   gives the detections of MASK SMOOTH without setting the mask.
 
 - **BBarolo is on PyPI** (`pip install bbarolo`), released from GitHub by `.github/workflows/release.yml` (see
-  `RELEASING.md`). It needs Python 3.10 or later: it declared 3.9, but its requirement scipy 1.15 needs 3.10, so
-  `pip install` failed on 3.9.
+  `RELEASING.md`). It needs Python 3.11 or later and scipy 1.16 or later: it declared Python 3.9 and scipy 1.15,
+  but scipy 1.15 needs Python 3.10 (`pip install` failed on 3.9), and the OpenBLAS of scipy 1.15 (0.3.28) crashes
+  (segmentation fault) in BLAS calls with several threads after a process pool was started with fewer BLAS
+  threads: the fits with THREADS > 1 (e.g. WINDFIT METHOD GLOBAL, at the errors of the best fit). scipy 1.16
+  (OpenBLAS 0.3.29) needs Python 3.11.
 
 - **The residual maps of WINDFIT (`_maps_wind.pdf`) have their own colour bar**, as those of 3DFIT: their scale,
   symmetric about 0, was not shown. The scale covers 95% of the pixels, at most half the width of the colour bar

@@ -1,6 +1,6 @@
 # Installation
 
-BBarolo needs Python 3.10 or later. It is written in pure Python: its numerical kernels are compiled
+BBarolo needs Python 3.11 or later. It is written in pure Python: its numerical kernels are compiled
 at run time by [numba](https://numba.pydata.org), so there is nothing to compile at installation.
 
 ## With pip
