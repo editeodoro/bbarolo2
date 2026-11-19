@@ -275,7 +275,10 @@ They took 4 to 8.5 minutes each. The four agree on a cone inclined by 66° to 85
 Position–velocity slices of the data in the mask (grey, blue contours) along the axis of the cone and across it 10
 arcsec from the nucleus, one beam wide, with the model cubes of the four fits (red contours, at the levels of the
 data). The models of `voxel` and `moka` are the data where their cone reaches, as in MoKA-3D, so the dashed line
-shows the cone itself: a uniform cone with the same geometry and wind (made with GALWIND).
+shows the cone itself: a uniform cone with the same geometry and wind (made with GALWIND), at 1/1000 of its peak,
+the reach that the model of `voxel` uses: the model contours stop at the last channel it reaches. With the beam and
+the line spread the reach extends one or two channels (75 km/s each) beyond the velocities of the cone: the wind of
+`voxel` alone spans −206 to +109 km/s on the axis, its outline about −440 to +300 km/s.
 ```
 
 **VSYS free.** With VSYS free as well (`FREE=VWIND_SINGLE INC VSYS`, PRIORS VSYS between −300 and +300 km/s), the

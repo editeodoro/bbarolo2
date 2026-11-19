@@ -224,7 +224,7 @@ def circinus_compare(work):
     across it at 10 arcsec from the nucleus, 1 beam wide. The model cubes of the fits (_mod_wind.fits) in red
     contours at the levels of the data; those of voxel and moka are the data where their cone reaches (as MoKA-3D),
     so their cone is drawn too: the outline (dashed) of a uniform cone with the same geometry and wind (GALWIND), at
-    5% of its peak in each slice."""
+    1/1000 of its peak in the cube, the reach of the cone in the model of voxel."""
     import numpy as np
     import matplotlib
     matplotlib.use("Agg")
@@ -282,7 +282,9 @@ def circinus_compare(work):
                         vsys=par.get("vsys", 0.), inc=par["inc"], pa=25, openang=110, conelen=52,
                         vwind=par["vwind"], vdisp=0, restwave=5006.843, redshift=0.001448, specres=0.85, dens=1,
                         verbose=False)
-            cone = np.where(mask, np.asarray(g.run(threads=4).model.data, np.float64), np.nan)
+            cone = np.asarray(g.run(threads=4).model.data, np.float64)
+            cone_lev = 1e-3 * np.nanmax(cone)               # (the reach of the cone: 1/1000 of its peak in the cube)
+            cone = np.where(mask, cone, np.nan)
         for i, (d, m, c, offs, xl) in enumerate(
                 ((d_al, slice_(model, x0, y0, ux, uy, along),
                   None if cone is None else slice_(cone, x0, y0, ux, uy, along), along, "offset along the axis (arcsec)"),
@@ -293,10 +295,14 @@ def circinus_compare(work):
             ext = [offs[0], offs[-1], vel[chan][0], vel[chan][-1]]
             ax.imshow(d, origin="lower", aspect="auto", extent=ext, cmap="Greys", vmin=0, vmax=np.nanpercentile(d, 99.5))
             ax.contour(offs, vel[chan], np.nan_to_num(d), lev, colors="#1f4e9c", linewidths=0.7)
-            ax.contour(offs, vel[chan], np.nan_to_num(m), lev, colors="#d62728", linewidths=0.8)
-            if c is not None:
-                cc = np.nan_to_num(c)
-                ax.contour(offs, vel[chan], cc, [0.05 * cc.max()], colors="#d62728", linewidths=1.4,
+            if c is None:
+                ax.contour(offs, vel[chan], np.nan_to_num(m), lev, colors="#d62728", linewidths=0.8)
+            else:
+                # (the model is the data where the cone reaches and 0 elsewhere: blanked there, so that its contours
+                # stop at the last channel reached instead of running on to the next channel)
+                ax.contour(offs, vel[chan], np.where(np.nan_to_num(m) != 0, m, np.nan), lev, colors="#d62728",
+                           linewidths=0.8)
+                ax.contour(offs, vel[chan], np.nan_to_num(c), [cone_lev], colors="#d62728", linewidths=1.4,
                            linestyles="--")
             ax.axhline(0, color="k", lw=0.5)
             ax.set_xlabel(xl)
