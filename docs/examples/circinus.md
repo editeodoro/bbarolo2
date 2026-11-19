@@ -275,9 +275,7 @@ They took 4 to 8.5 minutes each. The four agree on a cone inclined by 66° to 85
 Position–velocity slices of the data in the mask (grey, blue contours) along the axis of the cone and across it 10
 arcsec from the nucleus, one beam wide, with the model cubes of the four fits (red contours, at the levels of the
 data). The models of `voxel` and `moka` are the data where their cone reaches, as in MoKA-3D, so the dashed line
-shows the cone itself: a uniform cone with the same geometry and wind (made with GALWIND). The model of `voxel`
-keeps the data where the expected emission of its cone is above 1/1000 of its peak: with the emission falling as
-r^−4.35 (EMSLOPE), only within 3 arcsec of the nucleus.
+shows the cone itself: a uniform cone with the same geometry and wind (made with GALWIND).
 ```
 
 **VSYS free.** With VSYS free as well (`FREE=VWIND_SINGLE INC VSYS`, PRIORS VSYS between −300 and +300 km/s), the

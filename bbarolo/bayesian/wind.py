@@ -882,8 +882,7 @@ class BayesianWind(_FitTask):
             res = minimize_scalar(lambda v: -loglike(math.exp(v)), bounds=(grid[max(i - 1, 0)], grid[min(i + 1, 14)]),
                                   method="bounded", options=dict(xatol=0.02))
             s = math.exp(res.x if res.fun < vals[i] else grid[i])
-        thr = 1e-3 * float(np.max(M)) if np.max(M) > 0 else 0.
-        return loglike(s), dict(x=None, p=p, covered=M > thr, emscale=s, hyp=hyp)
+        return loglike(s), dict(x=None, p=p, pts=pts, emscale=s, hyp=hyp)
 
     def _loglike_moka(self, p, hyp):
         """'moka' (the statistic of MoKA-3D, Marconcini et al. 2023, sect. 2.3-2.6): -kappa/2 times the correlation
@@ -1158,12 +1157,22 @@ class BayesianWind(_FitTask):
         self.emission = det.get("x")
         self.model = self._model_cube(det)
 
+    def _voxel_covered(self, p, pts=None):
+        """The voxels that the cone of the wind p reaches (the model of emission=voxel is the data there, as in MoKA-3D):
+        those where a uniform cone (no radial profile: the geometry and the velocities only, with the beam and the
+        line spread) is above 1e-3 of its peak. A boolean cube of the shape of the data."""
+        wm = self._wm
+        pts = wm.points(p) if pts is None else pts
+        M = wm.boxes(p, pts=pts).model(np.where(pts["vol"] > 0, 1., 0.), self.data.shape)
+        top = float(np.max(M))
+        return M > 1e-3 * top if top > 0 else np.zeros(M.shape, bool)
+
     def _model_cube(self, det):
         """The model cube (nz, ny, nx) of the details of log_likelihood."""
         shape = self.data.shape
         basis = self.like_kwargs["emission"]
         if basis == "voxel":
-            return np.where(det["covered"], self._dsafe, 0.)
+            return np.where(self._voxel_covered(det["p"], det.get("pts")), self._dsafe, 0.)
         if basis == "moka":                 # (the weighted model of MoKA-3D: the data where the clouds are)
             return self._dsafe * (1. - np.exp(-det["lam"])) if "lam" in det else np.zeros(shape)
         if basis == "spaxel":

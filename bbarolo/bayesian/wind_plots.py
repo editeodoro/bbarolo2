@@ -183,6 +183,9 @@ to_plot = [[mom[0],mom[1]-vsys_m,mom[2]],[mod[0],mod[1]-vsys_m,mod[2]],[mom[0]-m
 cmaps = [plt.get_cmap('Spectral_r'),plt.get_cmap('coolwarm'),plt.get_cmap('PuOr_r')]
 barlab = ['Intensity ('+bunit_map+')', r'V$_\\mathrm{LOS}$ - V$_\\mathrm{sys}$ (km/s)',
           r'$\\sigma_\\mathrm{obs}$ (km/s)']
+# (the units of the residual intensity, those of the data, only when short: a long unit runs into the label of the data)
+barlab2 = [r'I$_\\mathrm{res}$'+(' ('+bunit_map+')' if len(bunit_map) <= 15 else ''), r'V$_\\mathrm{res}$ (km/s)',
+           r'$\\sigma_\\mathrm{res}$ (km/s)']
 titles = ['DATA', 'MODEL','RESIDUALS']
 ext = [0,xsize+pad_x[0]+pad_x[1],0,ysize+pad_y[0]+pad_y[1]]
 interval = PercentileInterval(99.5)
@@ -202,7 +205,7 @@ for i in range (3):
   norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
   cbax = fig.add_axes([ax[i][0].get_position().x0,ax[i][0].get_position().y0-0.025,2*0.2-0.003,0.02])
   cb1 = ColorbarBase(cbax, orientation='horizontal', cmap=cmap, norm=norm)
-  cb1.set_label(barlab[i],fontsize=13)
+  cb1.set_label(barlab[i],fontsize=13 if i or len(bunit_map) <= 20 else 10)   # (a long unit: smaller)
   for j in range (3):
     axis = ax[i][j]
     axis.tick_params(labelbottom=False,labelleft=False,right=True,top=True,direction='in')
@@ -220,6 +223,11 @@ for i in range (3):
     axis.set_xlim(ext[0],ext[1])
     axis.set_ylim(ext[2],ext[3])
     if i==0: axis.text(0.5,1.05,titles[j],ha='center',transform=axis.transAxes,fontsize=15)
+  # (the residuals: their own colour bar, symmetric about 0)
+  cbax = fig.add_axes([ax[i][2].get_position().x0+0.003,ax[i][2].get_position().y0-0.025,0.2-0.003,0.02])
+  cb2 = ColorbarBase(cbax, orientation='horizontal', cmap=cmap, norm=nrm)
+  cb2.set_label(barlab2[i],fontsize=13)
+  cb2.ax.locator_params(nbins=3)
 ax[0][0].text(0, 1.2, gname, transform=ax[0][0].transAxes,fontsize=18)
 fig.savefig(outfolder+outprefix+'_maps_wind.pdf', bbox_inches='tight')
 """
@@ -343,14 +351,21 @@ pos = axes[4].get_position()
 ax_m1 = fig.add_axes([pos.x1+0.03, pos.y0-0.2, 0.3, 0.3])
 pos = axes[14].get_position()
 ax_m2 = fig.add_axes([pos.x1+0.03, pos.y0-0.27, 0.3, 0.3])
-norm0 = ImageNormalize(mom0[np.isfinite(mom0)], interval=PercentileInterval(99.), stretch=PowerStretch(0.5))
+fin0 = mom0[ymin:ymax+1, xmin:xmax+1][np.isfinite(mom0[ymin:ymax+1, xmin:xmax+1])]
+norm0 = ImageNormalize(fin0 if fin0.size else np.zeros(1), interval=PercentileInterval(99.), stretch=PowerStretch(0.5))
 colors = plt.cm.PuBu_r(np.linspace(0,1,13))
+# (the region of the plots, padded to a square with blanks, as the maps of 3DFIT)
+mom0_box = mom0[ymin:ymax+1, xmin:xmax+1]
+ext_box = [xmin-0.5, xmax+0.5, ymin-0.5, ymax+0.5]
+half_sq = 0.5*max(xmax-xmin+1, ymax-ymin+1)
+xc_sq, yc_sq = 0.5*(xmin+xmax), 0.5*(ymin+ymax)
 for ax_m, title in ((ax_m1, 'Slices through the apex'), (ax_m2, 'Slices across and along')):
   ax_m.set_prop_cycle(color=colors)
-  ax_m.imshow(mom0, origin='lower', cmap='Greys', norm=norm0, interpolation='nearest')
+  ax_m.imshow(mom0_box, origin='lower', cmap='Greys', norm=norm0, interpolation='nearest', extent=ext_box)
   ax_m.plot(x0, y0, 'x', color='orange', markersize=7, mew=1.5, zorder=12)
-  ax_m.set_xlim(xmin, xmax)
-  ax_m.set_ylim(ymin, ymax)
+  ax_m.set_xlim(xc_sq-half_sq, xc_sq+half_sq)
+  ax_m.set_ylim(yc_sq-half_sq, yc_sq+half_sq)
+  ax_m.set_aspect('equal')
   ax_m.tick_params(labelbottom=False, labelleft=False, top=False, bottom=False, left=False, right=False)
   ax_m.set_title(title, fontsize=labsize)
 fin = cube[zmin:zmax+1][np.isfinite(cube[zmin:zmax+1])]

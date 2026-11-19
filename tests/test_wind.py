@@ -548,7 +548,9 @@ def test_bayesian_wind_voxel(tmp_path):
     detection likelihood: EMSCALE, EMCLUMP, EMRATIO and EMSLOPE are added to the free parameters, SIGMA and DISKRINGS
     are errors; the likelihood prefers the true opening angle and velocity to wider or faster cones (which the old
     voxel weighting, without a penalty for the voxels it predicts and the data find empty, preferred) and to narrower or
-    slower ones; a short sampling runs and the outputs are written, the model being the data where the cone reaches."""
+    slower ones; a short sampling runs and the outputs are written, the model being the data where the cone reaches.
+    That model covers the whole cone whatever the radial profile of the emission: with a steep EMSLOPE it kept only
+    the voxels within 1/1000 of the peak of the emission, near the apex (Circinus: 3.4 of 52 arcsec)."""
     pytest.importorskip("dynesty")
     from wind_mocks import mock_wind
     from bbarolo import BayesianWind
@@ -575,6 +577,9 @@ def test_bayesian_wind_voxel(tmp_path):
         assert ll(vw, oa) < best - 5, (vw, oa)
     for vw, oa in ((200., 40.), (140., 60.)):                     # narrower, slower: the detections left out
         assert ll(vw, oa) < best - 2, (vw, oa)
+    # the model: the data where the cone reaches, the same with a uniform and a steep emission profile
+    sup = [f._model_cube(f.log_likelihood([200., 60., f._s0, 1., 1., sl], details=True)[1]) != 0 for sl in (0., 6.)]
+    assert sup[0].sum() > 0.1 * sup[0].size and np.array_equal(sup[0], sup[1])
     g = BayesianWind(hdu, diskrings=str(tmp_path / "rings.txt"), **kw)
     g.like_kwargs = dict(g.like_kwargs, emission="voxel")
     with pytest.raises(BBaroloError):
@@ -582,8 +587,7 @@ def test_bayesian_wind_voxel(tmp_path):
     f.sample(freepar=["vwind_single", "openang"], sampler="dynesty", sampler_kwargs=dict(nlive=10, seed=1),
           run_kwargs=dict(maxiter=40), like_kwargs=dict(emission="voxel"), verbose=False)
     assert f.ndim == 6 and np.all(np.isfinite(f.params))
-    cov = f.best_details["covered"]
-    assert np.array_equal(f.model, np.where(cov, f._dsafe, 0.))
+    assert np.array_equal(f.model, np.where(f._voxel_covered(f.best), f._dsafe, 0.))
     f.write(plots=0, verbose=False)
     pre = f._cube_obj.pars().outPrefix
     with open(str(tmp_path) + "/" + pre + "_wind_params.txt") as fh:

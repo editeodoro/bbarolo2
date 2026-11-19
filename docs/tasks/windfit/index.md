@@ -131,7 +131,9 @@ In the output folder, with the prefix of the cube:
 - `_wind_params.txt`: the free parameters, the median and the 1σ interval of their posterior, and the priors;
 - `_wind_shells.txt`: the shells of the best fit with their errors, and the flux of each cone in radial bins;
 - `_wind_cells.txt`: the cells of the emission and their emissivities at the best fit (not with `emission` `spaxel`, `voxel` or `moka`);
-- `_mod_wind.fits`: the best model (as the `_mod_<norm>.fits` of 3DFIT), and `_mask.fits`;
+- `_mod_wind.fits`: the best model (as the `_mod_<norm>.fits` of 3DFIT; with `emission` `voxel`, the data in the
+  voxels the cone reaches, those where a uniform cone with its geometry and wind is above 1/1000 of its peak), and
+  `_mask.fits`;
 - `maps/`: the total intensity, velocity and dispersion maps of the data, in the mask, and of the model
   (`_0mom.fits`, ..., `_mod_0mom_wind.fits`, ...), as 3DFIT;
 - `pvs/`: position-velocity slices of the data, the model and the mask through the apex, across the axis of

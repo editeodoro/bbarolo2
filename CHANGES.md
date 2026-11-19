@@ -7,6 +7,14 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **WINDFIT `emission=voxel`: the model cube (`_mod_wind.fits` and the plots) stopped short of the cone.** The model
+  is the data where the cone reaches (as MoKA-3D), and the reach was the voxels where the expected emission of the
+  fitted cone was above 1/1000 of its peak. With the emission falling steeply the peak, at the apex, dwarfs the rest:
+  on Circinus (EMSLOPE 4.35) the model stopped 3.4″ from the nucleus, on a 52″ cone, and held 1% of the detections. The
+  reach is now that of the cone itself, whatever the profile of the emission: the voxels where a uniform cone (the
+  geometry and the velocities, with the beam and the line spread) is above 1/1000 of its peak (Circinus: the whole
+  field, 93% of the detections). The fit (the likelihood) is unchanged.
+
 - **METHOD GLOBAL stopped with "the likelihood is not finite at the starting point" when the parameters of a function
   of radius, at the centres of their priors, gave a zero likelihood** (NGC 891 with `Z0_FUNC` p1·exp(R/p2) and
   priors p1 0.1–50, p2 100–1000: a thin layer of 26″ to 77″, thicker than Z0THICK = 30 beyond 100″). They now start,
@@ -833,6 +841,12 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   SPECRES is not given, as in C++.
 
 ### Changed
+
+- **The residual maps of WINDFIT (`_maps_wind.pdf`) have their own colour bar**, as those of 3DFIT: their scale,
+  symmetric about 0, was not shown.
+
+- **The maps of the paths in `_pvslices_wind.pdf` (WINDFIT) are square**: the region of the plots padded with
+  blanks, as the maps of 3DFIT, instead of the region alone, as tall or as wide as it is.
 
 - **The panels of `_wind_shells.pdf` (WINDFIT) no longer overlap**: the labels of the y axes ran into the panel on
   their left (a constrained layout).
