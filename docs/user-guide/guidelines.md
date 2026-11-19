@@ -123,6 +123,30 @@ resolution, or set XPOS and YPOS free; for (e), give a better inclination (secti
 that they can change with radius. The patterns add up when more than one parameter is wrong, and beam smearing
 blurs them in data of low resolution: with a few beams across the disk, look also at the position–velocity diagrams.
 
+The position–velocity diagrams along the major and the minor axes (the `_pv` plots) show the same errors in another
+way, and tell a wrong PA from radial motions better than the velocity field does.
+
+```{figure} /figures/guidelines_pv.png
+:alt: Position-velocity diagrams along the major and the minor axes of the simulated disk, fitted with a wrong centre, systemic velocity or position angle, or with an inflow that the model does not have
+
+Position–velocity diagrams of the simulated disk of the figure above, along the major axis (left) and the minor
+axis (right) of the model, through its centre, as in the `_pv` plots: the data in grey with blue contours, the model
+in red, the fitted rotation velocities, projected, in gold. The velocities are relative to the VSYS of the model, and
+the diagrams of the minor axis are on a smaller scale. (a) The right model. (b) The centre is one beam off along the
+major axis: on the major axis, the data cross VSYS one beam from the centre of the model; the minor axis now crosses
+the receding half of the disk, and all its data are at higher velocities. (c) The centre is one beam off along the
+minor axis: the major axis hardly changes, and the data of the minor axis are shifted by one beam (the residual
+velocity field shows this error better). (d) VSYS is 10 km/s too high: the data lie 10 km/s below the model in both
+diagrams, and the two halves of the rotation curve are not symmetric about VSYS. (e) The PA is 10° too large: the
+major axis hardly changes, as VROT absorbs the error, but the data of the minor axis are tilted: their velocity
+changes smoothly through the centre and grows outwards. (f) The gas flows inwards at 25 km/s: the major axis is
+unchanged, and the two halves of the minor axis are shifted in opposite directions, by VRAD sin i (22 km/s), with a
+step at the centre.
+```
+
+The step of (f) is sharp because the inflow of the simulated disk is the same at all radii: radial motions that grow
+outwards, as the rotation does, look more like a wrong PA. Set PA and VRAD free in turn to tell them apart.
+
 Read the errors for what they are. The errors of METHOD CLASSIC ({ref}`FLAGERRORS <par-3dfit-flagerrors>`) measure
 how fast the residuals of a ring grow when one parameter moves, the others fixed; those of GLOBAL and BAYESIAN include
 the correlations, but none includes the systematic errors of the model. A velocity dispersion smaller than the
