@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,9 +7,18 @@ name = "bbarolo"
 dynamic = ["version"]
 description = "3D-Barolo (BBarolo): 3D tilted-ring fitting of emission-line datacubes"
 readme = "README.md"
-license = {text = "GPL-3.0-or-later"}
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE.md", "bbarolo/bayesian/nautilus/LICENSE"]
 authors = [{name = "Enrico Di Teodoro", email = "enrico.diteodoro@gmail.com"}]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
+keywords = ["astronomy", "kinematics", "tilted-ring", "datacube", "galaxies", "rotation curve"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
 dependencies = [
     "numpy>=1.22",
     "scipy>=1.15",

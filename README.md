@@ -7,7 +7,7 @@
 
 [![Documentation Status](https://img.shields.io/readthedocs/bbarolo)](https://bbarolo.readthedocs.io)
 [![License: GPL-3.0](https://img.shields.io/github/license/editeodoro/bbarolo2)](https://github.com/editeodoro/bbarolo2/blob/main/LICENSE.md)
-[![Python: 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org)
+[![Python: 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org)
 ![Language: Python](https://img.shields.io/github/languages/top/editeodoro/bbarolo2)
 
 BBarolo 2 is a GPL-licensed pure-Python version of [3D-Barolo](https://github.com/editeodoro/Bbarolo)
@@ -22,14 +22,14 @@ likelihood) and BAYESIAN (`METHOD BAYESIAN`: the posterior of the ring parameter
 [nautilus](https://github.com/johannesulf/nautilus) included in the package). WINDFIT fits bi-conical winds and SLITFIT
 long-slit spectra, with the methods GLOBAL and BAYESIAN.
 
-**Status:** under development.
+**Status:** release candidate of BBarolo 2.0.
 
 ## Installation
 
-BBarolo 2 needs Python 3.9 or later. It is not on PyPI yet: install it from GitHub with ``pip``.
+BBarolo 2 needs Python 3.10 or later. Install it from PyPI with ``pip``:
 
 ```shell
-pip install git+https://github.com/editeodoro/bbarolo2
+pip install bbarolo
 ```
 
 This installs the package `bbarolo` and the command `BBarolo`, with numpy, scipy, astropy, numba and
@@ -37,7 +37,13 @@ matplotlib: everything the tasks need, the Bayesian methods included. The option
 dynesty and nautilus-sampler (`SAMPLER DYNESTY` and `NAUTILUS`), corner (the corner plot) and threadpoolctl.
 
 ```shell
-pip install "bbarolo[bayesian] @ git+https://github.com/editeodoro/bbarolo2"
+pip install "bbarolo[bayesian]"
+```
+
+The development version, from the `main` branch of this repository:
+
+```shell
+pip install git+https://github.com/editeodoro/bbarolo2
 ```
 
 To work on the code, install a copy of the repository in editable mode.
@@ -55,7 +61,7 @@ first fit, every task with its parameters and how it works, examples, and the di
 
 ## Example
 
-A 3D fit of the HI datacube of NGC 2403 ([examples/ngc2403.fits](examples/ngc2403.fits), 5 MB). From the command
+A 3D fit of the HI datacube of NGC 2403 ([examples/ngc2403.fits](https://github.com/editeodoro/bbarolo2/blob/main/examples/ngc2403.fits), 5 MB). From the command
 line, with a parameter file as for the C++ BBarolo:
 
 ```shell
@@ -78,7 +84,7 @@ res.write("output/")              # the files and plots of the command line
 More examples, from radio cubes of nearby galaxies to ALMA data at high redshift, a protoplanetary disk and a
 long-slit spectrum, with global and Bayesian fits, are on the
 [example pages](https://bbarolo.readthedocs.io/en/latest/examples/index.html) of the documentation. Their data
-and parameter files are in [examples/](examples), with the notebook [examples/examples.ipynb](examples/examples.ipynb),
+and parameter files are in [examples/](https://github.com/editeodoro/bbarolo2/tree/main/examples), with the notebook [examples/examples.ipynb](https://github.com/editeodoro/bbarolo2/blob/main/examples/examples.ipynb),
 which runs them all in Python and shows their plots.
 
 ## Attribution
@@ -120,6 +126,6 @@ helpful in your research.
 
 ## License
 
-BBarolo 2 is licensed under the GNU General Public License v3.0 or later (see [LICENSE.md](LICENSE.md)). It
+BBarolo 2 is licensed under the GNU General Public License v3.0 or later (see [LICENSE.md](https://github.com/editeodoro/bbarolo2/blob/main/LICENSE.md)). It
 includes a modified copy of nautilus 1.0.6 (`bbarolo/bayesian/nautilus`), licensed under the MIT License,
 Copyright (c) 2022 Johannes U. Lange.

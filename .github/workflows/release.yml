@@ -1,0 +1,113 @@
+# Builds BBarolo, tests the built wheel and publishes it.
+#
+# - A GitHub Release (tag vX.Y.Z, published from the Releases page) publishes to PyPI.
+# - "Run workflow" on the Actions tab (workflow_dispatch) publishes to TestPyPI, to try a release candidate.
+#
+# Publishing uses PyPI trusted publishing (no tokens): on pypi.org and test.pypi.org the project has
+# a trusted publisher with owner editeodoro, repository bbarolo2, workflow release.yml and environment
+# pypi (respectively testpypi). See RELEASING.md.
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the sdist and the wheel
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build
+          twine check --strict dist/*
+      - name: Check that the tag matches the version
+        if: github.event_name == 'release'
+        run: |
+          version=$(python -c "import re; print(re.search(r\"__version__ = version = '([^']+)'\", open('bbarolo/_version.py').read()).group(1))")
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$version" != "$tag" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match bbarolo/_version.py ($version)"; exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest, python: "3.10", tests: full}
+          - {os: ubuntu-latest, python: "3.13", tests: full}
+          - {os: macos-latest, python: "3.13", tests: smoke}
+          - {os: windows-latest, python: "3.13", tests: smoke}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Install the wheel
+        shell: bash
+        run: python -m pip install "$(ls dist/*.whl)[bayesian,test]"
+      - name: Smoke test
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          BBarolo -v
+          python -c "import bbarolo; print(bbarolo.__version__, bbarolo.__file__)"
+      - name: Tests (against the installed wheel)
+        if: matrix.tests == 'full'
+        timeout-minutes: 60
+        # the checkout without its bbarolo/, so that the tests (and the launchers bin/BBarolo, run_bbarolo.py)
+        # import the installed wheel; the tests needing the C++ example data (../examples) are skipped
+        run: |
+          rm -rf bbarolo
+          BBAROLO_EXAMPLES="$GITHUB_WORKSPACE/examples" python -I -m pytest -q -p no:cacheprovider \
+            -k "not nautilus and not sampl" tests/test_bbarolo.py tests/test_wind.py tests/test_bayesianslitfit.py
+
+  publish-testpypi:
+    if: github.event_name == 'workflow_dispatch'
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/bbarolo
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-pypi:
+    if: github.event_name == 'release'
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/bbarolo
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

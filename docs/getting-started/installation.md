@@ -1,12 +1,12 @@
 # Installation
 
-BBarolo needs Python 3.9 or later. It is written in pure Python: its numerical kernels are compiled
+BBarolo needs Python 3.10 or later. It is written in pure Python: its numerical kernels are compiled
 at run time by [numba](https://numba.pydata.org), so there is nothing to compile at installation.
 
 ## With pip
 
 ```bash
-pip install git+https://github.com/editeodoro/bbarolo2
+pip install bbarolo
 ```
 
 This installs the package `bbarolo` and the command `BBarolo`, with their requirements: numpy,
@@ -19,7 +19,13 @@ scipy, astropy, numba and matplotlib. Optional extras:
 | `test` | pytest | the tests |
 
 ```bash
-pip install "bbarolo[bayesian] @ git+https://github.com/editeodoro/bbarolo2"
+pip install "bbarolo[bayesian]"
+```
+
+The development version, from the `main` branch of the repository:
+
+```bash
+pip install git+https://github.com/editeodoro/bbarolo2
 ```
 
 3DFIT with METHOD BAYESIAN, and WINDFIT and SLITFIT, run without the extras: their default sampler (`SAMPLER NAUTILUSBB`) is part
