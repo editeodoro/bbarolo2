@@ -16,14 +16,14 @@ corrects the fit for beam smearing.
   default, 0.425 channels, fits a cube at the native channels of an instrument with a resolution of one channel.
   A cube averaged over $N$ channels needs 0.425/$N$ (averaging is not in SPECRES), Hanning-smoothed data about 0.8,
   and optical and near-infrared spectrographs usually more (see {doc}`../examples/ngc5633` and
-  {doc}`../examples/u3-25160`). How to compute it for your data: {doc}`../user-guide/spectral-resolution`.
+  {doc}`../examples/u3-25160`). How to compute it for your data: {doc}`spectral-resolution`.
 - **Spectral axis.** For an axis in wavelength or frequency, give the rest wavelength or frequency of the line
   ({ref}`RESTWAVE <par-galmod-restwave>`, {ref}`RESTFREQ <par-galmod-restfreq>`) and the {ref}`REDSHIFT <par-galmod-redshift>`;
   {ref}`VELDEF <par-all-veldef>` sets the definition of the velocity. Several lines (Hα and [NII]) are fitted together
   with {ref}`RELINT <par-galmod-relint>`.
 
 The log of each run prints what BBarolo understood of the header: check the channel width, the beam and the units
-there. Headers without units are in {doc}`../user-guide/troubleshooting`.
+there. Headers without units are in {doc}`troubleshooting`.
 
 ## 2. The mask
 

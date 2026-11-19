@@ -44,3 +44,5 @@ BBarolo -t                                    # a template parameter file for 3D
 ```
 
 The parameters of each task are described in {doc}`../tasks/index`.
+
+Next, before you fit your own data: the {doc}`guidelines for a successful fit <../user-guide/guidelines>`.

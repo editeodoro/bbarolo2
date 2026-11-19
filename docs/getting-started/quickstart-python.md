@@ -33,3 +33,5 @@ bbarolo.help("free")                            # one parameter
 
 {doc}`../user-guide/python` describes the interface, and {doc}`../api/index` lists the classes of all
 the tasks.
+
+Next, before you fit your own data: the {doc}`guidelines for a successful fit <../user-guide/guidelines>`.

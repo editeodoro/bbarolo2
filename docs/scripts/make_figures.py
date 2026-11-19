@@ -617,7 +617,7 @@ def fig_conventions():
 # (end of user guide)
 
 
-# ---------------------------------------------------------------- getting started: guidelines
+# ---------------------------------------------------------------- user guide: guidelines
 def _residual_mock(pa, vrad=0.):
     """A simulated disk for the residual figure: PA (one value or one per ring) and VRAD (km/s)."""
     from bbarolo import SimulatedGalaxyCube
@@ -703,7 +703,7 @@ def fig_residuals():
     cb.set_label("Data $-$ model velocity (km/s)", fontsize=9)
     save(fig, "guidelines_residuals.png")
 
-# (end of getting started)
+# (end of user guide: guidelines)
 
 
 def find_cube(examples):
