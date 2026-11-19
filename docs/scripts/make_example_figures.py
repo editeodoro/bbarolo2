@@ -68,6 +68,12 @@ EX = {
                        ("_pv_wind.pdf", "pv", 800)],
                       ["OUTFOLDER=output/circinus_func/", "FLAGERRORS=false", "FREE=VWIND_FUNC INC",
                        "PRIORS=INC=(uniform,30,60) VWIND_P1=(uniform,0,1600) VWIND_P2=(uniform,1,50)"]),
+    # (the Bayesian fit, priors narrowed around the global fit: run with --threads 64, 53 minutes)
+    "circinus_bayes": ("circinus_WINDFIT_GLOBAL.par", "output/circinus_bayes", "circinus",
+                       [("_wind_corner.pdf", "corner", 700)],
+                       ["OUTFOLDER=output/circinus_bayes/", "METHOD=BAYESIAN", "SAMPLEROPTS=seed=1",
+                        "PRIORS=INC=(uniform,60,25) VWIND=(uniform,200,300) EMSCALE=(loguniform,30,500) "
+                        "EMCLUMP=(loguniform,0.5,10) EMSLOPE=(uniform,1,5)"]),
 }
 # figures made from the outputs of several examples: name -> (function, the examples it needs)
 COMPOSITE = {"circinus_compare": ("circinus_compare", ["circinus", "circinus_voxel", "circinus_shells",

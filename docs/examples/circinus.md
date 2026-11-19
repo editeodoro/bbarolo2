@@ -198,6 +198,45 @@ by 72°, has line-of-sight velocities from −324 to +201 km/s, broadened by SPE
 The corner plot (`_wind_corner.pdf`): the draws of the Laplace approximation around the best fit.
 ```
 
+(circinus-bayesian)=
+## The Bayesian fit
+
+`METHOD BAYESIAN` samples the posterior of the same likelihood with nested sampling (the default sampler,
+`NAUTILUSBB`) instead of approximating it around the best fit. The priors are narrowed around the global fit, well
+beyond its errors: INC 60°–85°, VWIND 200–500 km/s, EMSCALE 30–500 and EMCLUMP 0.5–10 (log-uniform), EMSLOPE 1–6.
+The narrower priors cut the likelihoods needed by a fifth (78 000 with the defaults, 62 000 with these, in a test on
+a Gaussian of the same widths):
+
+```bash
+BBarolo -p circinus_WINDFIT_GLOBAL.par METHOD=BAYESIAN THREADS=64 SAMPLEROPTS=seed=1 OUTFOLDER=output/circinus_bayes/ \
+        "PRIORS=INC=(uniform,60,25) VWIND=(uniform,200,300) EMSCALE=(loguniform,30,500) EMCLUMP=(loguniform,0.5,10) EMSLOPE=(uniform,1,5)"
+```
+
+With 64 processes it took 53 minutes for 61 184 likelihoods, about 3 seconds each on our busy server (1.5 seconds
+on a free core), against 16 minutes with 16 processes for the global fit. The posterior (medians and 16th–84th
+percentiles) and the global fit with the errors of the Laplace approximation:
+
+| Parameter | Bayesian fit | Global fit |
+|---|---|---|
+| VWIND | 338.2 −4.1 +4.1 km/s | 338.1 ± 4.1 km/s |
+| INC | 71.6° −0.4 +0.4 | 71.6° ± 0.4 |
+| EMSCALE | 116 −8 +9 | 117 ± 9 |
+| EMCLUMP | 2.10 −0.13 +0.15 | 2.09 ± 0.14 |
+| EMSLOPE | 3.40 −0.10 +0.10 | 3.40 ± 0.10 |
+
+The posterior has a single peak, close to a Gaussian, well inside the priors, and the two fits agree within a fifth
+of the errors, correlations included (EMSCALE and EMSLOPE −0.57, −0.59 in the Laplace approximation; VWIND and INC
+0.18 and 0.23). For this fit the global fit and its Laplace errors give the posterior with a quarter of the
+processes in a third of the time.
+
+```{figure} /figures/examples/circinus_bayes_corner.png
+:width: 60%
+:alt: Corner plot of the posterior of the Bayesian fit of Circinus
+
+The corner plot of the Bayesian fit (`_wind_corner.pdf`): the samples of the posterior, to compare with the
+Laplace approximation above.
+```
+
 (circinus-high-velocities)=
 ## The highest velocities
 
