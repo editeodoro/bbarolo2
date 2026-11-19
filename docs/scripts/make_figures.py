@@ -728,7 +728,10 @@ def fig_residuals_pv():
              ("(e) PA 10° too large", disk, dict(pa=pa + 10)),
              ("(f) Inflow of 25 km/s", inflow, {})]
     # each case in a column, its major axis above its minor axis: (a, b, c) in rows 1-2, (d, e, f) in rows 3-4
-    fig, axs = plt.subplots(4, 3, figsize=(9.6, 10.2))
+    fig, grid = plt.subplots(5, 3, figsize=(9.6, 10.8), gridspec_kw=dict(height_ratios=(1, 1, 0.12, 1, 1)))
+    for ax in grid[2]:
+        ax.set_visible(False)                              # (more space between the two groups of cases)
+    axs = np.delete(grid, 2, axis=0)
     for k, (title, cube, kw) in enumerate(cases):
         g = dict(xpos=x0, ypos=y0, vsys=0., inc=inc, pa=pa)
         g.update(kw)
