@@ -96,6 +96,33 @@ systematic pattern of the residuals (one side always brighter, a twist of the ve
 centre, position angle, inclination, or to motions that the model does not have. If the model is not good, change
 the initial values or the options, and fit again.
 
+The residual velocity field (the velocity field of the data minus that of the model, in the `_maps` plots) shows
+most of these errors at a glance. The figure shows it for a simulated disk fitted with VROT and VDISP free and one of
+the other parameters wrong.
+
+```{figure} /figures/guidelines_residuals.png
+:alt: Residual velocity fields of a simulated disk fitted with a wrong centre, inclination, position angle or systemic velocity, or with motions that the model does not have
+
+Residual velocity fields of 3DFIT on a simulated disk (inclination 60°, PA 40°, a beam of 30 arcsec, the grey dot;
+rotation velocity 200 km/s in the outer disk, noise added), with VROT and VDISP free and the other parameters fixed.
+The cross and the dashed line are the centre and the major axis of the model. (a) The velocity field of the data.
+(b) The right model: only the noise is left. (c, d) The centre is one beam off, along the major or the minor axis:
+the residuals are largest near the centre, where the velocity changes fastest. (e) The inclination is 15° too low:
+the fit raises VROT to match the major axis, and four lobes remain, of opposite signs in neighbouring quadrants; an
+inclination too high gives the same lobes with the opposite signs. (f) The PA is 10° too large: the residuals have
+opposite signs on the two sides of the major axis and grow outwards. (g) VSYS is 10 km/s too high: the same residual
+everywhere. (h) The gas of the data flows inwards at 25 km/s, and the model has no radial motions: the residuals have
+opposite signs on the two sides of the major axis, as in (f), but are largest along the minor axis, down to the
+centre. (i) The data have a warp (the PA grows by 15° beyond 200 arcsec): the inner disk is right, the outer disk
+has the residuals of a wrong PA.
+```
+
+What to do in each case: for (c, d), take the centre from the total intensity map or from an image of higher
+resolution, or set XPOS and YPOS free; for (e), give a better inclination (section 3); for (f), set PA free; for
+(g), set VSYS free or take it from the global profile; for (h), set VRAD free; for (i), set PA (and INC) free, so
+that they can change with radius. The patterns add up when more than one parameter is wrong, and beam smearing
+blurs them in data of low resolution: with a few beams across the disk, look also at the position–velocity diagrams.
+
 Read the errors for what they are. The errors of METHOD CLASSIC ({ref}`FLAGERRORS <par-3dfit-flagerrors>`) measure
 how fast the residuals of a ring grow when one parameter moves, the others fixed; those of GLOBAL and BAYESIAN include
 the correlations, but none includes the systematic errors of the model. A velocity dispersion smaller than the

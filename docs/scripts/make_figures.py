@@ -617,6 +617,95 @@ def fig_conventions():
 # (end of user guide)
 
 
+# ---------------------------------------------------------------- getting started: guidelines
+def _residual_mock(pa, vrad=0.):
+    """A simulated disk for the residual figure: PA (one value or one per ring) and VRAD (km/s)."""
+    from bbarolo import SimulatedGalaxyCube
+    radii = np.arange(15, 420, 30.)                         # ring centres (arcsec): 14 beams across
+    vrot = 200. * 2 / np.pi * np.arctan(radii / 60.)
+    s = SimulatedGalaxyCube(axisDim=[96, 96, 80], cdelts=[-10. / 3600., 10. / 3600., 6.], beam=30. / 3600.,
+                            bunit="JY/BEAM", obj="sim")
+    s.define_galaxy(radii=radii, xpos=47.5, ypos=47.5, vsys=0, vrot=vrot, vdisp=10., inc=60., pa=pa,
+                    dens=np.exp(-radii / 200.), z0=10., vrad=vrad, warpinc=False, warppa=False, flare=False,
+                    radmotion=False)
+    s.run(smooth=True, noise=0, threads=4, galmodtype="ANALYTIC")
+    peak = float(s.model_nonoise.data.max())
+    s.run(smooth=True, noise=peak / 25, seed=1, threads=4, galmodtype="ANALYTIC")
+    return s.model, radii
+
+
+@figure("residuals")
+def fig_residuals():
+    """The residual velocity field (data - model) of 3DFIT on a simulated disk when the model is wrong: a wrong
+    centre, inclination, position angle or systemic velocity (fixed, VROT and VDISP fitted), or motions that the
+    model does not have."""
+    from bbarolo import FitMod3D
+    x0 = y0 = 47.5
+    pa, inc, pix = 40., 60., 10.                            # true PA, INC (deg) and pixel (arcsec)
+    p = np.radians(pa)
+    maj, mnr = np.array([-np.sin(p), np.cos(p)]), np.array([-np.cos(p), -np.sin(p)])   # unit vectors (x, y)
+    disk, radii = _residual_mock(pa)
+    warped, _ = _residual_mock(pa + 15 * np.clip((radii - 200) / 200, 0, 1))   # PA from 40 to 55 deg beyond 200"
+    inflow, _ = _residual_mock(pa, vrad=-25.)                                   # VRAD < 0: towards the centre
+    cases = [("(b) Correct model", disk, {}),
+             ("(c) Centre 1 beam off, major axis", disk, dict(xpos=x0 + 3 * maj[0], ypos=y0 + 3 * maj[1])),
+             ("(d) Centre 1 beam off, minor axis", disk, dict(xpos=x0 + 3 * mnr[0], ypos=y0 + 3 * mnr[1])),
+             ("(e) INC 15° too low", disk, dict(inc=inc - 15)),
+             ("(f) PA 10° too large", disk, dict(pa=pa + 10)),
+             ("(g) VSYS 10 km/s too high", disk, dict(vsys=10.)),
+             ("(h) Inflow of 25 km/s in the data", inflow, {}),
+             ("(i) Warp in the data (PA +15°)", warped, {})]
+    ext = [(-0.5 - x0) * pix, (95.5 - x0) * pix, (-0.5 - y0) * pix, (95.5 - y0) * pix]
+    fig, axs = plt.subplots(3, 3, figsize=(8.6, 8.1), sharex=True, sharey=True)
+    axs = axs.ravel()
+    vres = 20.
+    for k, (title, cube, kw) in enumerate(cases):
+        g = dict(xpos=x0, ypos=y0, vsys=0., inc=inc, pa=pa)
+        g.update(kw)
+        res = FitMod3D(cube, radii=radii, z0=10, vrot=150, vdisp=15, free="VROT VDISP", mask="SEARCH",
+                       verbose=0, **g).run(threads=4)
+        m = res.maps
+        mom1 = np.asarray(m["1mom"].data, float)
+        mod1 = np.asarray(m[next(n for n in m if n.startswith("mod_1mom"))].data, float)
+        if k == 0:
+            ax = axs[0]
+            im = ax.imshow(mom1, origin="lower", cmap="RdBu_r", vmin=-180, vmax=180, extent=ext,
+                           interpolation="nearest")
+            ax.contour(mom1, levels=np.arange(-160, 161, 40), colors="k", linewidths=0.4, extent=ext)
+            ax.set_title("(a) Data: velocity field", fontsize=9)
+            cax = ax.inset_axes([0.56, 0.86, 0.38, 0.04])
+            cb = fig.colorbar(im, cax=cax, orientation="horizontal", ticks=[-150, 0, 150])
+            cb.ax.tick_params(labelsize=7)
+            cb.set_label("V$_\\mathrm{LOS}$ (km/s)", fontsize=7)
+            ax.plot(0, 0, "x", c="k", ms=6)
+            ax.add_patch(plt.Circle((-370, -370), 15, fc="0.4", ec="none"))     # the beam (FWHM 30")
+        ax = axs[k + 1]
+        imr = ax.imshow(mom1 - mod1, origin="lower", cmap="RdBu_r", vmin=-vres, vmax=vres, extent=ext,
+                        interpolation="nearest")
+        xc, yc = (g["xpos"] - x0) * pix, (g["ypos"] - y0) * pix
+        q = np.radians(g["pa"])
+        ax.plot(xc + np.array([-1, 1]) * 450 * -np.sin(q), yc + np.array([-1, 1]) * 450 * np.cos(q), "--", c="k",
+                lw=0.8)
+        ax.plot(xc, yc, "x", c="k", ms=6)
+        ax.set_title(title, fontsize=9)
+        print(f"    {title}: rms of the residuals {np.nanstd(mom1 - mod1):.1f} km/s")
+    for ax in axs:
+        ax.set_xlim(-430, 430)
+        ax.set_ylim(-430, 430)
+        ax.tick_params(labelsize=8)
+    for ax in axs[6:]:
+        ax.set_xlabel("Offset (arcsec)", fontsize=8)
+    for ax in axs[::3]:
+        ax.set_ylabel("Offset (arcsec)", fontsize=8)
+    fig.tight_layout(rect=(0, 0, 0.9, 1))
+    cax = fig.add_axes([0.91, 0.25, 0.018, 0.5])
+    cb = fig.colorbar(imr, cax=cax, extend="both")
+    cb.set_label("Data $-$ model velocity (km/s)", fontsize=9)
+    save(fig, "guidelines_residuals.png")
+
+# (end of getting started)
+
+
 def find_cube(examples):
     cands = [examples, os.environ.get("BBAROLO_EXAMPLES"), os.path.join(REPO, "examples"),
              os.path.join(os.path.dirname(REPO), "examples")]
