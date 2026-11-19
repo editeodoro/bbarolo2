@@ -722,52 +722,51 @@ def fig_residuals_pv():
     noise = float(np.nanstd(np.asarray(disk.data, float)[:5]))                 # (channels without emission)
     levels = 3 * noise * 2. ** np.arange(6)
     cases = [("(a) Correct model", disk, {}),
-             ("(b) Centre 1 beam off, along the major axis", disk, dict(xpos=x0 + 3 * maj[0], ypos=y0 + 3 * maj[1])),
-             ("(c) Centre 1 beam off, along the minor axis", disk, dict(xpos=x0 + 3 * mnr[0], ypos=y0 + 3 * mnr[1])),
+             ("(b) Centre 1 beam off (major axis)", disk, dict(xpos=x0 + 3 * maj[0], ypos=y0 + 3 * maj[1])),
+             ("(c) Centre 1 beam off (minor axis)", disk, dict(xpos=x0 + 3 * mnr[0], ypos=y0 + 3 * mnr[1])),
              ("(d) VSYS 10 km/s too high", disk, dict(vsys=10.)),
              ("(e) PA 10° too large", disk, dict(pa=pa + 10)),
-             ("(f) Inflow of 25 km/s in the data", inflow, {})]
-    fig, axs = plt.subplots(len(cases), 2, figsize=(8.6, 15.0), sharex="col", sharey="col")
-    for row, (title, cube, kw) in enumerate(cases):
+             ("(f) Inflow of 25 km/s", inflow, {})]
+    # each case in a column, its major axis above its minor axis: (a, b, c) in rows 1-2, (d, e, f) in rows 3-4
+    fig, axs = plt.subplots(4, 3, figsize=(9.6, 10.2))
+    for k, (title, cube, kw) in enumerate(cases):
         g = dict(xpos=x0, ypos=y0, vsys=0., inc=inc, pa=pa)
         g.update(kw)
         res = FitMod3D(cube, radii=radii, z0=10, vrot=150, vdisp=15, free="VROT VDISP", mask="SEARCH",
                        verbose=0, **g).run(threads=4)
         data, mod = np.asarray(cube.data, float), np.asarray(res.model.data, float)
         vlos = np.asarray(res.rings["vrot"], float) * np.sin(np.radians(g["inc"]))
-        for col, (theta, name) in enumerate(((g["pa"], "major axis"), (g["pa"] + 90, "minor axis"))):
+        for j, (theta, name) in enumerate(((g["pa"], "major axis"), (g["pa"] + 90, "minor axis"))):
             # the slice through the centre of the model at its PA (or PA + 90), as the _pv plots
             s, x, y = build_path(g["xpos"], g["ypos"], np.full(1, 60.), theta, nx, ny)
             pvd, pvm = extract_pv(data, x, y, order=0), extract_pv(mod, x, y)
             ext = [s[0] * pix, s[-1] * pix, vel[0] - g["vsys"], vel[-1] - g["vsys"]]
-            ax = axs[row, col]
+            ax = axs[2 * (k // 3) + j, k % 3]
             ax.imshow(pvd, origin="lower", cmap="Greys", aspect="auto", extent=ext, interpolation="nearest",
                       vmin=0, vmax=np.nanpercentile(data, 99.8))
             ax.contour(pvd, levels, colors="#00008B", linewidths=0.7, extent=ext)
             ax.contour(pvm, levels, colors="#B22222", linewidths=1.0, extent=ext)
             ax.axhline(0, c="k", lw=0.6)
             ax.axvline(0, c="k", lw=0.6)
-            if col == 0:
-                ax.plot(np.concatenate((radii, -radii)), np.concatenate((vlos, -vlos)), "o", c="gold", ms=3.5,
+            ax.text(0.03, 0.95, name, transform=ax.transAxes, fontsize=8, va="top")
+            if j == 0:
+                ax.plot(np.concatenate((radii, -radii)), np.concatenate((vlos, -vlos)), "o", c="gold", ms=3,
                         mec="0.4", mew=0.4)
-                ax.set_title(f"{title}: {name}", fontsize=9, loc="left")
+                ax.set_title(title, fontsize=9, loc="left")
+                ax.set_xlim(-480, 480)
+                ax.set_ylim(-235, 235)
             else:
-                ax.set_title(name, fontsize=9)
-            ax.tick_params(labelsize=8)
-            if col == 1:
+                ax.set_xlim(-300, 300)                     # the minor axis on a smaller scale
+                ax.set_ylim(-110, 110)
+                ax.set_xlabel("Offset (arcsec)", fontsize=8)
                 vm = np.where(pvd > levels[0], pvd, 0)
                 vm = (vm * vel[:, None]).sum(0) / np.maximum(vm.sum(0), 1e-30)
                 print(f"    {title}: minor axis, mean velocity at -120, -30, 30, 120 arcsec:",
                       np.round(vm[[np.argmin(np.abs(s * pix - o)) for o in (-120, -30, 30, 120)]], 1))
-    for ax in axs[-1]:
-        ax.set_xlabel("Offset (arcsec)", fontsize=9)
+            ax.tick_params(labelsize=8, labelleft=k % 3 == 0)
     for ax in axs[:, 0]:
-        ax.set_ylabel("V$_\\mathrm{LOS}$ $-$ VSYS (km/s)", fontsize=9)
-    axs[0, 0].set_xlim(-480, 480)
-    axs[0, 0].set_ylim(-235, 235)
-    axs[0, 1].set_xlim(-300, 300)                         # the minor axis on a smaller scale
-    axs[0, 1].set_ylim(-110, 110)
-    fig.tight_layout()
+        ax.set_ylabel("V$_\\mathrm{LOS}$ $-$ VSYS (km/s)", fontsize=8)
+    fig.tight_layout(h_pad=0.6)
     save(fig, "guidelines_pv.png")
 
 # (end of user guide: guidelines)
