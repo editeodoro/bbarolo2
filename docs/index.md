@@ -43,6 +43,14 @@ The tasks
 pip install git+https://github.com/editeodoro/bbarolo2       # then: BBarolo -p param.par
 ```
 
+:::{admonition} Help with the code
+:class: important bb-help
+
+If you experience any issue when using BBarolo with your data, or if you are not satisfied with the quality of the
+fit, PLEASE do not hesitate to contact either [Enrico](mailto:enrico.diteodoro@gmail.com) or
+[Filippo](mailto:fraternali@astro.rug.nl) for assistance.
+:::
+
 ## What it does
 
 ::::{grid} 1 2 2 3
