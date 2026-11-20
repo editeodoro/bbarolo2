@@ -6,7 +6,7 @@ SPECRES         0.425
 METHOD          BAYESIAN
 
 # Rings: just setting radii, leaving the code do the rest
-RADII           0.65 1.10 1.55 2.00 2.45 
+RADII           0.65 1.10 1.55 2.00 2.45 2.90
 
 FREE            VROT VDISP PA_SINGLE INC_SINGLE XPOS_SINGLE YPOS_SINGLE VSYS_SINGLE Z0_SINGLE RADMAX FRACERR
 PRIORS          vrot=(uniform,loc=0,scale=20) vdisp=(uniform,loc=0,scale=10) inc=(uniform,loc=10,scale=20) vsys=(uniform,loc=-10,scale=20)
