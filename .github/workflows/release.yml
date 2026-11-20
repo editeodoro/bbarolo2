@@ -67,7 +67,7 @@ jobs:
       - name: Tests (against the installed wheel)
         timeout-minutes: 60
         # the checkout without its bbarolo/, so that the tests (and the launchers bin/BBarolo, run_bbarolo.py)
-        # import the installed wheel; the tests needing the C++ example data (../examples) are skipped
+        # import the installed wheel; the example cubes are those of examples/
         run: |
           rm -rf bbarolo
           BBAROLO_EXAMPLES="$GITHUB_WORKSPACE/examples" python -I -m pytest -q -p no:cacheprovider \

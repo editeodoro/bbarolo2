@@ -49,8 +49,9 @@ likelihood. Read the relevant section of it before changing behaviour.
 
 - The C++ original is github.com/editeodoro/Bbarolo (`src/` for C++, `pyBBarolo/` for the old
   wrapper). Treat it as read-only. On the development server a clone sits at `../reference/Bbarolo`.
-- The test data (cubes and `test/*.par` of the C++ examples) live in `../examples` (not in this repo). Tests look
-  there, or in `$BBAROLO_EXAMPLES`. The public example datasets are in `examples/` of this repo.
+- The public example datasets are in `examples/` of this repo; the tests that need `ngc2403.fits` find it there
+  (or in `$BBAROLO_EXAMPLES`, or `../examples`). `../examples` (not in this repo) holds the parameter files of the
+  C++ examples (`test/*.par`, used by `compare_examples.py` and `run_all_tests.sh`).
 
 ## Running and testing
 

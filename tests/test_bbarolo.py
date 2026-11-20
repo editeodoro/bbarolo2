@@ -3,9 +3,9 @@ Tests for the pure-Python BBarolo (package bbarolo).
 
     cd bbarolo2 && python -m pytest -q tests
 
-Tests that need the example datacubes (ngc2403.fits) look for them in
-$BBAROLO_EXAMPLES or in ../examples (i.e. the BBarolo distribution folder) and are
-skipped if not found. Reference numbers come from the C++ BBarolo 1.8.1dev.
+Tests that need the example datacube ngc2403.fits look for it in $BBAROLO_EXAMPLES, in
+examples/ of this repository or in ../examples (the C++ example data), and are skipped
+if not found. Reference numbers come from the C++ BBarolo 1.8.1dev.
 """
 
 import os
@@ -26,7 +26,9 @@ from bbarolo.galmod import GalmodSetup              # noqa: E402
 from bbarolo.smooth import Smooth3D                 # noqa: E402
 from bbarolo.utils import emptyfits                 # noqa: E402
 
-EXAMPLES = os.environ.get("BBAROLO_EXAMPLES", os.path.join(os.path.dirname(ROOT), "examples"))
+EXAMPLES = os.environ.get("BBAROLO_EXAMPLES") or next(
+    (d for d in (os.path.join(ROOT, "examples"), os.path.join(os.path.dirname(ROOT), "examples"))
+     if os.path.isfile(os.path.join(d, "ngc2403.fits"))), os.path.join(ROOT, "examples"))
 N2403 = os.path.join(EXAMPLES, "ngc2403.fits")
 needs_data = pytest.mark.skipif(not os.path.isfile(N2403), reason="example cube ngc2403.fits not found")
 
