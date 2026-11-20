@@ -79,8 +79,12 @@ res.rings["radii", "vrot", "vdisp", "inc", "pa"]
 res.plot_pv()
 ```
 
-A cube in memory (an HDU) can be given instead of a file name. The fit takes about one second (a few seconds more with the errors). The fit is reproducible: the same cube and parameters give the same rings. The second stage fixed INC to 59.4° and PA to 40.4° (true values: 60° and 40°). The
-position–velocity diagrams of data and model are the first check:
+A cube in memory (an HDU) can be given instead of a file name. The fit takes about one second (a few seconds more
+with the errors). The fit is reproducible: the same cube and parameters give the same rings. The second stage
+fixed INC to 62.3° and PA to 39.7° (true values: 60° and 40°). That is one realisation of the noise, and the
+inclination of a single fit is good to about a degree: the same fit of 20 cubes that differ only in the noise
+(seeds 1 to 20) gives INC 60.9° ± 0.9° (from 59.4° to 62.6°) and PA 40.05° ± 0.26° (mean and standard deviation).
+The position–velocity diagrams of data and model are the first check:
 
 ```{figure} /figures/simulated_pv.png
 :alt: Position-velocity diagrams of the simulated galaxy, data and model
@@ -122,7 +126,8 @@ of the ring; right: the dispersion. The points of each ring are shifted sideways
 | Time (4 processes) | 2–3 s | 12–13 s | 9–11 min | |
 
 - **Geometry.** From a first guess 5° off, the three methods find INC and PA within 0.4° of the true values.
-  CLASSIC gives no errors for them, as its second stage fixes them.
+  CLASSIC gives no errors for them, as its second stage fixes them; over 20 noise realisations (seeds 1 to 20)
+  its INC is 60.6° ± 0.8° and its PA 40.1° ± 0.3°.
 - **Rotation velocity.** Beyond the first ring, GLOBAL and BAYESIAN are within 1.6 km/s (1%) of the true
   velocity, within their errors; CLASSIC is 1 to 4 km/s too low (−3% and −2% in the second and third rings: the
   bias of CLASSIC, see {doc}`../tasks/3dfit/algorithm`), and its errors are up to twice as large.
@@ -131,46 +136,12 @@ of the ring; right: the dispersion. The points of each ring are shifted sideways
   by 7–8 km/s, CLASSIC above and GLOBAL and BAYESIAN below, and the dispersion of the first two rings is off
   (21–24 km/s in the first; about 4.5 km/s with GLOBAL and BAYESIAN and 14.6 km/s with CLASSIC in the second).
   Beyond them, the dispersion of GLOBAL and BAYESIAN is within 2.5 km/s of the true 10 km/s; that of CLASSIC
-  drops to 1.7 km/s in the last ring, where the mask cuts the wings of the faint lines (see below).
+  drops to 1.7 km/s in the last ring, where the disk is faint: at low S/N the mask cuts the wings of the lines,
+  which biases the dispersion low.
 - **GLOBAL and BAYESIAN** maximise and sample the same likelihood: the best fit of GLOBAL and the medians of
   BAYESIAN differ by less than 0.7σ, and the errors of the Laplace approximation are within 15% of the widths of
   the posterior. GLOBAL takes seconds, BAYESIAN minutes: use GLOBAL to try a setup, and BAYESIAN when the shape
   of the posterior matters. With `seed=1` the sampling is reproducible: two runs gave the same rings.
-
-## Fitted and true rotation curve
-
-The figure compares the first fit above (CLASSIC, with the rings of the simulation) with the input. The grey
-lines are the fits of 20 other noise realisations of the same galaxy (seeds 2 to 21; about 1 s per fit), to see
-the scatter that the noise alone gives. The error bars are those of FLAGERRORS.
-
-```{figure} /figures/simulated_rc.png
-:alt: Fitted and true rotation velocity and velocity dispersion of a simulated galaxy
-
-The fitted rotation velocity and dispersion of the simulated galaxy (blue, with the errors) against the true
-values (red). Grey: 20 fits of other noise realisations.
-```
-
-With these 20 fits, the median difference between the fitted and the true VROT is:
-
-| Ring (arcsec) | 15 | 45 | 75 | 105 | 135 | 165 | 195 | 225 | 255 | 285 | 315 | 345 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Median error (%) | 64 | −7.3 | −5.7 | −3.7 | −2.7 | −1.9 | −1.4 | −1.3 | −1.0 | −1.4 | −1.1 | −1.1 |
-| Scatter (%) | 8.1 | 5.1 | 2.3 | 1.0 | 1.1 | 0.8 | 0.6 | 0.5 | 0.4 | 0.8 | 1.3 | 1.5 |
-
-(The scatter is the standard deviation over the 20 fits, in per cent of the true value.) Beyond the second
-ring, VROT is recovered within 6% on average, and within about 2% beyond 165 arcsec, where the bias is
-−1 to −2% and the scatter is 0.4 to 1.5%. The first rings and the dispersion are the weak points:
-
-- The first ring is at 15 arcsec, a quarter of the beam, where the true rotation velocity is only 31 km/s and
-  the beam smears the velocity gradient: the fit is too high (the median is 64% above the true value). The
-  second ring is 7% too low. Rings narrower than the beam are not independent, and the first ones should be
-  read with care.
-- The dispersion is higher than the true 10 km/s in the inner rings (median 19.6, 23.3 and 18.5 km/s in the
-  first three) and lower in the outer ones (6.2 km/s at 315 arcsec, and 1.5 km/s in the last ring, where
-  the density of the disk is low: at low S/N the mask cuts the wings of the lines, which biases the
-  dispersion low). It is the hardest parameter: see the accuracy suite.
-
-The fits are reproducible: running the same cubes again gives the same numbers.
 
 ## The accuracy suite
 

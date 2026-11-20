@@ -445,36 +445,21 @@ def fig_simulated():
     s, radii, vrot = _simulate(1)
     res = _fit_sim(s, radii, flagerrors=True)
     t = res.rings
-    fig, axs = plt.subplots(1, 2, figsize=(9, 3.8))
-    err = lambda k: [-np.asarray(t[f"e_{k}1"]), np.asarray(t[f"e_{k}2"])]
-    runs = []
-    for seed in range(2, 22):
-        s2, _, _ = _simulate(seed)
-        r2 = _fit_sim(s2, radii)
-        runs.append((np.asarray(r2.rings["vrot"]), np.asarray(r2.rings["vdisp"])))
-        for ax, y in zip(axs, runs[-1]):
-            ax.plot(radii, y, color="0.8", lw=0.8, zorder=1)
-    for ax, k, true, lab in zip(axs, ("vrot", "vdisp"), (vrot, np.full(len(radii), 10.)),
-                                ("VROT (km/s)", "VDISP (km/s)")):
-        ax.errorbar(radii, t[k], yerr=err(k), fmt="o", ms=3, capsize=2, color="C0", zorder=3, label="fit, seed 1")
-        ax.plot(radii, true, "-", color="C3", zorder=2, label="true")
-        ax.set_xlabel("Radius (arcsec)")
-        ax.set_ylabel(lab)
-    axs[0].plot([], [], color="0.8", label="20 other noise seeds")
-    axs[0].legend(fontsize=8)
-    fig.tight_layout()
-    save(fig, "simulated_rc.png")
-    v = np.array([r[0] for r in runs]); d = np.array([r[1] for r in runs])
-    print("median vrot error % per ring:", np.round(100 * (np.median(v, 0) / vrot - 1), 1))
-    print("scatter vrot % per ring:", np.round(100 * np.std(v, 0) / vrot, 1))
-    print("median vdisp per ring:", np.round(np.median(d, 0), 1))
     print("peak S/N check rms", s.noiserms)
     sa, _, _ = _simulate(1)
     print("REPRODUCIBLE", np.array_equal(s.model.data, sa.model.data))
-    print("seed1 vrot", np.round(np.asarray(t["vrot"]), 1), "vdisp", np.round(np.asarray(t["vdisp"]), 1),
-          "inc", float(t["inc"][0]), "pa", float(t["pa"][0]))
-    print("errors vrot lo", np.round(-np.asarray(t["e_vrot1"]), 1), "hi", np.round(np.asarray(t["e_vrot2"]), 1))
+    print("seed1 inc", float(t["inc"][0]), "pa", float(t["pa"][0]))
     save(res.plot_pv(), "simulated_pv.png")
+    # the scatter of the INC and PA of CLASSIC from the noise alone: seeds 1-20, with the rings of the simulation and
+    # with rings one beam wide (the CLASSIC fit of simulated_methods)
+    for label, rad in (("rings of 30 arcsec", radii), ("rings one beam wide", np.arange(30, 360, 60.))):
+        inc, pa = [], []
+        for seed in range(1, 21):
+            t = _fit_sim(_simulate(seed)[0], rad, flagerrors=True).rings
+            inc.append(float(t["inc"][0]))
+            pa.append(float(t["pa"][0]))
+        print("CLASSIC, %s, seeds 1-20: INC %.2f +- %.2f (%.2f-%.2f), PA %.2f +- %.2f (%.2f-%.2f)"
+              % (label, np.mean(inc), np.std(inc), min(inc), max(inc), np.mean(pa), np.std(pa), min(pa), max(pa)))
 
 
 @figure("simulated_methods")
