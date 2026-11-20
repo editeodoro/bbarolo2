@@ -49,6 +49,7 @@ pygments_dark_style = "github-dark"
 html_theme = "pydata_sphinx_theme"
 html_title = f"BBarolo {version}"
 html_static_path = ["_static"]
+templates_path = ["_templates"]       # layout.html: the browser-tab icons of _static (docs/scripts/make_favicon.py)
 # The archived documentation of the C++ BBarolo 1.8, served as it is at legacy/1.8/ (do not edit those HTML
 # files). Built once from the branch docs of github.com/editeodoro/Bbarolo (commit in legacy/1.8/BUILD.txt) with,
 # for the build only: ngc2403.fits left out (the pages link to the copy on GitHub), sphinx.ext.mathjax instead

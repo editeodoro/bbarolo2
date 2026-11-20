@@ -1,0 +1,10 @@
+{# The browser-tab icons (docs/scripts/make_favicon.py): the SVG, whose colours follow the browser's light or dark
+   mode, for the browsers that take it; the ICO for the others (sizes="32x32", not "any", or Chrome prefers it to
+   the SVG); the touch icon for iOS. #}
+{% extends "!layout.html" %}
+{%- block extrahead %}
+  {{ super() }}
+  <link rel="icon" href="{{ pathto('_static/favicon.ico', 1) }}" sizes="32x32"/>
+  <link rel="icon" href="{{ pathto('_static/favicon.svg', 1) }}" type="image/svg+xml"/>
+  <link rel="apple-touch-icon" href="{{ pathto('_static/apple-touch-icon.png', 1) }}"/>
+{%- endblock extrahead %}
