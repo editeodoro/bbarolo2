@@ -59,7 +59,6 @@ html_extra_path = ["_legacy", "_redirects"]
 # _redirects: the old pages of the C++ documentation (bbarolo.readthedocs.io before BBarolo 2) redirect to their
 # new places, so that links to them keep working.
 html_css_files = ["custom.css"]
-html_js_files = ["zoom.js"]          # the zoom viewer of the figures with the class bb-zoom (the corner plots)
 html_show_sourcelink = False
 html_theme_options = {
     "logo": {"text": "3D-Barolo"},

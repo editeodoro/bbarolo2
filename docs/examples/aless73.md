@@ -156,11 +156,12 @@ Channel maps of the data (blue) and of the model (red) (`_chanmaps_none.pdf`).
 ```
 
 ```{figure} /figures/examples/aless73_corner.png
-:class: bb-zoom
+:target: ../_static/corner/aless73_corner.pdf
 :alt: Corner plot of the posterior of the fit of ALESS 073.1
 
 The corner plot of the posterior (`_corner.pdf`): the one- and two-dimensional marginal distributions of the 22
 free parameters, with the 16th, 50th and 84th percentiles.
+Click on the figure for the PDF file, whose labels can be read by zooming in.
 ```
 
 ## References

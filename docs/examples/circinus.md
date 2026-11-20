@@ -192,11 +192,12 @@ by 72°, has line-of-sight velocities from −324 to +201 km/s, broadened by SPE
 ```
 
 ```{figure} /figures/examples/circinus_corner.png
-:class: bb-zoom
+:target: ../_static/corner/circinus_corner.pdf
 :width: 60%
 :alt: Corner plot of the Laplace approximation of the fit of Circinus
 
 The corner plot (`_wind_corner.pdf`): the draws of the Laplace approximation around the best fit.
+Click on the figure for the PDF file, whose labels can be read by zooming in.
 ```
 
 (circinus-bayesian)=
@@ -231,12 +232,13 @@ of the errors, correlations included (EMSCALE and EMSLOPE −0.57, −0.59 in th
 processes in a third of the time.
 
 ```{figure} /figures/examples/circinus_bayes_corner.png
-:class: bb-zoom
+:target: ../_static/corner/circinus_bayes_corner.pdf
 :width: 60%
 :alt: Corner plot of the posterior of the Bayesian fit of Circinus
 
 The corner plot of the Bayesian fit (`_wind_corner.pdf`): the samples of the posterior, to compare with the
 Laplace approximation above.
+Click on the figure for the PDF file, whose labels can be read by zooming in.
 ```
 
 (circinus-high-velocities)=
