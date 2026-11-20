@@ -207,6 +207,7 @@ fit is 1 by construction (0.99). The corner plot shows the one- and
 two-dimensional marginal posteriors, with the 15.87th, 50th and 84.13th percentiles (±1σ) as dashed lines:
 
 ```{figure} /figures/bayesian3dfit_corner.png
+:class: bb-zoom
 :width: 80%
 :alt: Corner plot of the posterior of the rotation velocities, the velocity dispersion and the noise of NGC 2403
 

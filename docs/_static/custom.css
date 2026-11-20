@@ -117,3 +117,33 @@ html[data-theme="dark"] .admonition.bb-help > .admonition-title { background-col
 .admonition.bb-help > .admonition-title:after, div.admonition.bb-help > .admonition-title:after {
   color: var(--pst-color-primary);
 }
+
+/* The zoom viewer of the large figures (docs/_static/zoom.js, images with the class bb-zoom): the image on the
+   page shows a magnifier cursor; the overlay is dark in both modes, the image keeps its white background. */
+img.bb-zoom { cursor: zoom-in; }
+img.bb-zoom:focus-visible { outline: 3px solid var(--pst-color-primary); outline-offset: 2px; }
+.bb-zoom-box {
+  display: none; position: fixed; inset: 0; z-index: 2000; overflow: hidden;
+  background: rgba(20, 16, 14, 0.92); touch-action: none; user-select: none; -webkit-user-select: none;
+  cursor: grab;
+}
+.bb-zoom-box.bb-zoom-open { display: block; }
+.bb-zoom-box.bb-zoom-dragging { cursor: grabbing; }
+.bb-zoom-box > img {
+  position: absolute; left: 0; top: 0; max-width: none; transform-origin: 0 0; background: #fff;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+}
+.bb-zoom-close {
+  position: absolute; top: 0.75rem; right: 0.75rem; z-index: 1; width: 2.75rem; height: 2.75rem;
+  border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 1.9rem; line-height: 1;
+  cursor: pointer;
+}
+.bb-zoom-close:hover, .bb-zoom-close:focus-visible { background: #B22222; outline: 2px solid #fff; }
+.bb-zoom-hint {
+  position: absolute; bottom: 0.75rem; left: 50%; transform: translateX(-50%); max-width: calc(100% - 2rem);
+  padding: 0.35rem 0.8rem; border-radius: 1rem; background: rgba(0, 0, 0, 0.6); color: #fff;
+  font-size: 0.85rem; text-align: center; pointer-events: none;
+  animation: bb-zoom-hint 4s ease-in forwards;
+}
+@keyframes bb-zoom-hint { 0%, 75% { opacity: 1; } 100% { opacity: 0; } }
+html.bb-zoom-noscroll, html.bb-zoom-noscroll body { overflow: hidden; }

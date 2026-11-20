@@ -28,9 +28,13 @@ OUT = os.path.join(REPO, "docs", "figures", "examples")
 
 # name: (parameter file, output folder in <work>, prefix of the files, [(PDF pattern, PNG name, width in pixels)],
 #        [KEY=value overrides of the command line])
+# The corner plots grow with the number of free parameters (about 170 points a panel): they are converted at
+# CORNER_DPI (pixels per inch of the PDF), at least the width of their entry, so that their labels can be read
+# in the zoom viewer of the pages (class bb-zoom, docs/_static/zoom.js).
+CORNER_DPI = 60
 FIT3D = [("_parameters.pdf", "parameters", 1000), ("_maps_*.pdf", "maps", 650), ("_pv_*.pdf", "pv", 900),
          ("_pvslices_*.pdf", "pvslices", 1300), ("_chanmaps_*.pdf", "chanmaps", 800)]
-CORNER = [("_corner.pdf", "corner", 1100)]
+CORNER = [("_corner.pdf", "corner", 1400)]
 WIND = [("_maps_wind.pdf", "maps", 650), ("_pv_wind.pdf", "pv", 800), ("_wind_shells.pdf", "shells", 1000),
         ("_chanmaps_wind.pdf", "chanmaps", 800), ("_pvslices_wind.pdf", "pvslices", 1300)]
 CIRC = "cones=approaching likemask=dilated dilation=0,0"          # (the variants of the fit of Circinus)
@@ -46,7 +50,7 @@ EX = {
     "2masxj1022": ("2masxj1022_SLITFIT.par", "output/2masxj1022_slit", "2MASXJ1022",
                    [("_slitfit_parameters.pdf", "parameters", 800), ("_slitfit_pv.pdf", "pv", 1300)]),
     "circinus": ("circinus_WINDFIT_GLOBAL.par", "output/circinus", "circinus",
-                 [w for w in WIND if w[1] != "shells"] + [("_wind_corner.pdf", "corner", 700)]),
+                 [w for w in WIND if w[1] != "shells"] + [("_wind_corner.pdf", "corner", 1400)]),
     "circinus_voxel": ("circinus_WINDFIT_GLOBAL.par", "output/circinus_voxel", "circinus", [],
                        ["OUTFOLDER=output/circinus_voxel/", "FLAGERRORS=false", f"LIKEOPTS=emission=voxel {CIRC}"]),
     "circinus_shells": ("circinus_WINDFIT_GLOBAL.par", "output/circinus_shells", "circinus", [],
@@ -70,7 +74,7 @@ EX = {
                        "PRIORS=INC=(uniform,30,60) VWIND_P1=(uniform,0,1600) VWIND_P2=(uniform,1,50)"]),
     # (the Bayesian fit, priors narrowed around the global fit: run with --threads 64, 53 minutes)
     "circinus_bayes": ("circinus_WINDFIT_GLOBAL.par", "output/circinus_bayes", "circinus",
-                       [("_wind_corner.pdf", "corner", 700)],
+                       [("_wind_corner.pdf", "corner", 1400)],
                        ["OUTFOLDER=output/circinus_bayes/", "METHOD=BAYESIAN", "SAMPLEROPTS=seed=1",
                         "PRIORS=INC=(uniform,60,25) VWIND=(uniform,200,300) EMSCALE=(loguniform,30,500) "
                         "EMCLUMP=(loguniform,0.5,10) EMSLOPE=(uniform,1,5)"]),
@@ -109,10 +113,18 @@ def figures(name, work):
             print(f"  {name}: no {prefix + pattern} in {os.path.join(work, folder)}")
             continue
         dest = os.path.join(OUT, f"{name}_{png}")
+        if png == "corner":
+            width = max(width, round(_pdf_width(pdfs[0]) * CORNER_DPI / 72.))
         subprocess.run(["pdftoppm", "-png", "-singlefile", "-f", "1", "-scale-to-x", str(width), "-scale-to-y", "-1",
                         pdfs[0], dest], check=True)
         _quantize(dest + ".png")
         print(f"    {os.path.relpath(dest, REPO)}.png")
+
+
+def _pdf_width(pdf):
+    """The width of the first page of a PDF file, in points."""
+    info = subprocess.run(["pdfinfo", pdf], capture_output=True, text=True, check=True).stdout
+    return float(next(ln for ln in info.splitlines() if ln.startswith("Page size:")).split()[2])
 
 
 def _quantize(png):
