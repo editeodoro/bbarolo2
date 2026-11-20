@@ -5,7 +5,7 @@
 #
 # Publishing uses PyPI trusted publishing (no tokens): on pypi.org and test.pypi.org the project has
 # a trusted publisher with owner editeodoro, repository bbarolo2, workflow release.yml and environment
-# pypi (respectively testpypi). See RELEASING.md.
+# pypi (respectively testpypi).
 name: Release
 
 on:

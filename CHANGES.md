@@ -3,7 +3,7 @@
 Changes to BBarolo 2 since the version developed in Claude Cowork (November 2026).
 Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduced by the port.
 
-## Unreleased
+## 2.0.0 (2026-11-20)
 
 ### Fixed
 

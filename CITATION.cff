@@ -1,0 +1,45 @@
+cff-version: 1.2.0
+message: "If you use BBarolo in your research, please cite the paper below. If you use the Bayesian fits (METHOD BAYESIAN), please cite nautilus as well (see references)."
+title: "3D-Barolo (BBarolo)"
+abstract: "3D tilted-ring fitting of emission-line datacubes: rotation curves and kinematics of galaxies, with ring-by-ring, global and Bayesian fits, models of disks and bi-conical winds, and fits of long-slit spectra."
+type: software
+authors:
+  - family-names: "Di Teodoro"
+    given-names: "Enrico"
+version: "2.0.0"
+date-released: "2026-11-20"
+license: GPL-3.0-or-later
+repository-code: "https://github.com/editeodoro/bbarolo2"
+url: "https://bbarolo.readthedocs.io"
+keywords:
+  - astronomy
+  - kinematics
+  - tilted-ring
+  - datacube
+  - galaxies
+  - rotation curve
+preferred-citation:
+  type: article
+  authors:
+    - family-names: "Di Teodoro"
+      given-names: "Enrico M."
+    - family-names: "Fraternali"
+      given-names: "Filippo"
+  title: "3D-BAROLO: a new 3D algorithm to derive rotation curves of galaxies"
+  journal: "Monthly Notices of the Royal Astronomical Society"
+  year: 2015
+  volume: 451
+  start: 3021
+  end: 3033
+  doi: "10.1093/mnras/stv1213"
+references:
+  - type: article
+    authors:
+      - family-names: "Lange"
+        given-names: "Johannes U."
+    title: "nautilus: boosting Bayesian importance nested sampling with deep learning"
+    journal: "Monthly Notices of the Royal Astronomical Society"
+    year: 2023
+    volume: 525
+    start: 3181
+    doi: "10.1093/mnras/stad2441"

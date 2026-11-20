@@ -22,7 +22,7 @@ likelihood) and BAYESIAN (`METHOD BAYESIAN`: the posterior of the ring parameter
 [nautilus](https://github.com/johannesulf/nautilus) included in the package). WINDFIT fits bi-conical winds and SLITFIT
 long-slit spectra, with the methods GLOBAL and BAYESIAN.
 
-**Status:** release candidate of BBarolo 2.0.
+**Status:** BBarolo 2.0.0 (November 2026), the first release of the Python BBarolo.
 
 ## Website and full documentation
 

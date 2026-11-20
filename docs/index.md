@@ -102,7 +102,7 @@ with the results as astropy objects.
 
 ## News
 
-- **BBarolo 2.0** (in development): the pure-Python BBarolo, with the global and Bayesian fits
+- **BBarolo 2.0** (November 2026): the pure-Python BBarolo, with the global and Bayesian fits
   (3DFIT METHOD GLOBAL and BAYESIAN, WINDFIT, SLITFIT), models from 3D fields (GalMod3D), new initial estimates and many fixes. See
   {doc}`reference/changes`.
 - **BBarolo 1.8** (June 2026): the last version of the C++ code. Its documentation is
