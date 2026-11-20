@@ -897,6 +897,10 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   pixels, so a few large residuals (noise at the edges of the maps) set it and the maps were almost uniform: NGC 2403
   velocity ±207 km/s for 68% of the pixels within 8 km/s, now ±27; dispersion ±80, now ±21.
 
+- **The corner plots are dark red** (`darkred`, #8B0000; they were `darkblue`): `<prefix>_corner.pdf`,
+  `_wind_corner.pdf`, `_slitfit_corner.pdf` and `corner_plot()` of `Bayesian3DFIT`, `BayesianWind` and
+  `BayesianSlitFit`; `corner_plot(color=...)` still sets another colour.
+
 - **The moment maps of WINDFIT (`maps/`, `_maps_wind.pdf`) use the detections of a mask of a region**: with `MASK
   FILE(...)` or `NONE` the maps of the data use only the voxels of the mask detected as `MASK SMOOTH` (the cube
   smoothed to `FACTOR` times the beam, above `BLANKCUT` times its noise), and those of the model the same voxels

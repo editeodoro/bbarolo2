@@ -1226,7 +1226,7 @@ class BayesianWind(_FitTask):
     def corner_plot(self, labels=None, truths=None, quantiles=SIGMA_QUANTILES, **kwargs):
         """Corner plot of the posterior (needs the package corner)."""
         import corner
-        defaults = dict(max_n_ticks=5, color="darkblue", show_titles=True, plot_datapoints=False)
+        defaults = dict(max_n_ticks=5, color="darkred", show_titles=True, plot_datapoints=False)
         if truths is not None:
             kwargs["truths"] = truths
         return corner.corner(self.samples_equal, labels=labels or self.freepar_names, quantiles=quantiles,

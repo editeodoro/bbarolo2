@@ -348,7 +348,7 @@ class OutputsMixin(object):
             print("Sampler has not been run yet. Please run run() before running this function "
                   "or load samples with load_results().")
             return
-        defaults = dict(max_n_ticks=5, color='darkblue', show_titles=True)
+        defaults = dict(max_n_ticks=5, color='darkred', show_titles=True)
         if self.results is None:
             plot_dynesty = False
         if plot_dynesty:
