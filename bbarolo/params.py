@@ -547,6 +547,10 @@ class Param:
                     out("The growth function is being turned off.")
                     se.flagGrowth = False
 
+        if self.AUTO:
+            # BBarolo -f (AUTO) runs 3DFIT: its checks apply (C++ set the flag after the checks, so the long forms of
+            # SIDE, FTYPE, FREE, MINVDISP/MAXVDISP and REGTYPE were not checked, and GALMOD could run with 3DFIT)
+            gf.flagGALFIT = True
         good = self._check_method(out) and good
         classic = gf.flagGALFIT and gf.METHOD == "CLASSIC"
         if gf.flagGALFIT and not classic:             # 3DFIT with METHOD GLOBAL or BAYESIAN
@@ -654,8 +658,9 @@ class Param:
                 sys.stderr.write("3DFIT ERROR: ADRIFTPOL2 needs to be >0. Defaulting it to 3.\n")
                 gf.ADRIFTPOL2 = 3
 
-        if gf.flagGALFIT or self.flagSpace or self.flagRing or self.flagEllProf:
-            # the long forms of SIDE, for all the tasks that use it (C++ never converted them)
+        if gf.flagGALFIT or self.flagSpace or self.flagRing or self.flagEllProf or gm.flagGALMOD:
+            # the long forms of SIDE, for all the tasks that use it (C++ never converted them; GALMOD uses SIDE in
+            # the AZIM normalisation and the density profile)
             S = gf.SIDE
             if S in ("A", "APP", "APPR", "APPROACHING"): S = "A"
             elif S in ("R", "REC", "RECED", "RECEDING"): S = "R"

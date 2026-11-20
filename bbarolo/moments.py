@@ -241,6 +241,12 @@ def _rms_iterative(S, rob, sncut, level):
     return out
 
 
+
+def moment0_unit(h, fluxconvert):
+    """The unit of the total intensity (zero moment) map of a cube with header h: Jy/beam km/s when the flux is
+    converted to Jy/beam (FLUXCONVERT, from a unit that BBarolo knows), otherwise the unit of the cube times km/s."""
+    return "JY/BEAM * KM/S" if fluxconvert and FluxtoJyBeam(1, h) != 1 else h.Bunit() + " * KM/S"
+
 class MomentMap(Image2D):
     """A moment map (0: intensity, 1: velocity, 2: dispersion, 3: rms/mass)."""
 
@@ -269,10 +275,7 @@ class MomentMap(Image2D):
         self.head.setCrpix(1, h.Crpix(1) - self.blo[1])
         if type == 0:
             self.head.setBtype("intensity")
-            bunit = h.Bunit() + " * KM/S"
-            if c.pars().fluxConvert and FluxtoJyBeam(1, h) != 1:
-                bunit = "JY/BEAM * KM/S"
-            self.head.setBunit(bunit)
+            self.head.setBunit(moment0_unit(h, c.pars().fluxConvert))
         elif type in (1, 2):
             if type == 1:
                 sp = h.SpectralType()

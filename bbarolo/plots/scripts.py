@@ -13,7 +13,8 @@ import numpy as np
 
 from ..stats import findMedian
 from ..header import fits_image_hdu
-from ..bbutils import DeltaVel, AlltoVel, FluxtoJy, Vel2Spec, mkdirp
+from ..bbutils import DeltaVel, AlltoVel, Vel2Spec, mkdirp
+from ..moments import moment0_unit
 from . import fit3d
 
 
@@ -108,9 +109,9 @@ def plot_settings(gf):
 
     cdelt3 = float(np.float32(DeltaVel(h)))
     crval3 = float(np.float32(AlltoVel(c.getZphys(0), h)))
-    bunit = "JY/BEAM * KM/S"
-    if FluxtoJy(1, h) == 1:
-        bunit = h.Bunit() + " * KM/S"
+    # the unit of the total intensity map, of which _densprof.txt is the profile (C++ took it from FluxtoJy, the map
+    # was converted with FluxtoJyBeam and only with FLUXCONVERT: e.g. a cube in K or mJy/beam was labelled Jy/beam)
+    bunit = moment0_unit(h, p.fluxConvert)
 
     xpos = int(findMedian(outr.xpos))
     ypos = int(findMedian(outr.ypos))
@@ -238,8 +239,11 @@ def _parameters_script(s):
                 "sdens, sdens_obs, sdens_label, faceon = (rad_dm, sd_dm, [sd_dmlo, sd_dmhi]), (rad_sd, sd_obs), "
                 "sd_label, True\n")
     else:
-        dens = ("rad_sd, surfdens, sd_err = read_columns(outfolder + outprefix + '_densprof.txt', (0, 3, 4))\n"
-                "sdens, sdens_obs, sdens_label, faceon = (rad_sd, surfdens, sd_err), None, None, False\n")
+        # (the face-on surface density, with its error made face-on as the profile: C++ showed the median of the
+        # ring with its standard deviation)
+        dens = ("rad_sd, sd, sd_err, sd_fo = read_columns(outfolder + outprefix + '_densprof.txt', (0, 7, 8, 9))\n"
+                "sd_err = sd_err * np.divide(sd_fo, sd, out=np.zeros_like(sd), where=sd != 0)\n"
+                "sdens, sdens_obs, sdens_label, faceon = (rad_sd, sd_fo, sd_err), None, None, True\n")
     body = ("rings = read_rings(outfolder + outprefix + '_rings_final1.txt', errcols1)\n"
             "rings2 = read_rings(outfolder + outprefix + '_rings_final2.txt', errcols2) if twostage else None\n"
             + dens +

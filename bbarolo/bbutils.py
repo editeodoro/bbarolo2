@@ -8,6 +8,7 @@ numpy arrays as well as scalars.
 """
 
 import os
+import re
 import sys
 import time
 import random
@@ -104,7 +105,25 @@ def _wave_rest(h, zcent_default):
     return (z_cent + 1 - h.Crpix(2)) * h.Cdelt(2) + h.Crval(2)
 
 
-_WAVE_UNITS = ("mum", "um", "micron", "nm", "nanom", "a", "ang", "angstrom")
+# units of the spectral axis: VEL_UNITS, how many units in 1 km/s; WAVE_UNITS, how many units in 1 m (exact powers
+# of ten, so that the conversions are those of C++ to the last bit). C++ knew km/s, m/s and um, nm, Angstrom only:
+# an axis in cm/s or a wavelength in m was taken as km/s.
+VEL_UNITS = {"km/s": 1., "kms": 1., "m/s": 1E03, "ms": 1E03, "cm/s": 1E05}
+WAVE_UNITS = {"m": 1., "cm": 1E02, "mm": 1E03, "um": 1E06, "mum": 1E06, "micron": 1E06, "nm": 1E09,
+              "nanom": 1E09, "a": 1E10, "ang": 1E10, "angstrom": 1E10}
+_WAVE_UNITS = tuple(WAVE_UNITS)
+_VEL_SPELLING = re.compile(r"((?:k|c)?m)(?:/s(?:ec)?|\.?s(?:\^|\*\*)?-1)")
+
+
+def canonical_unit(u):
+    """A velocity unit in any of the spellings of the FITS standard and WCSLIB (km s-1, km.s-1, km/sec, m s^-1,
+    cm/s, ...) as km/s, m/s or cm/s, the forms the rest of the code compares with; other units as they are.
+    (C++ knew only km/s, m/s, "km s-1" and "m s-1": e.g. m.s-1 was taken as km/s.)"""
+    s = str(u).strip().lower().replace(" ", "")
+    if s in ("km/s", "m/s", "cm/s"):
+        return u                                    # (as written: the code compares them in lower case)
+    m = _VEL_SPELLING.fullmatch(s)
+    return m.group(1) + "/s" if m else u
 # frequency units of the spectral axis -> Hz (rest frequencies are always in Hz)
 _FREQ_UNITS = {"hz": 1., "khz": 1E03, "mhz": 1E06, "ghz": 1E09}
 
@@ -112,10 +131,8 @@ _FREQ_UNITS = {"hz": 1., "khz": 1E03, "mhz": 1E06, "ghz": 1E09}
 def AlltoVel(inval, h):
     """Convert a spectral value (in units of the spectral axis) to km/s."""
     cunit2 = _spec_unit(h)
-    if cunit2 in ("km/s", "kms"):
-        return inval
-    if cunit2 in ("m/s", "ms"):
-        return inval / 1000.
+    if cunit2 in VEL_UNITS:
+        return inval / VEL_UNITS[cunit2]
     if cunit2 in _FREQ_UNITS:
         frest = h.Freq0() / (1 + h.Redshift())
         return Freq2Vel(inval * _FREQ_UNITS[cunit2], frest, h.VelDef())
@@ -128,10 +145,8 @@ def AlltoVel(inval, h):
 def Vel2Spec(inval, h):
     """Convert a velocity in km/s to the units of the spectral axis."""
     cunit2 = _spec_unit(h)
-    if cunit2 in ("km/s", "kms"):
-        return inval
-    if cunit2 in ("m/s", "ms"):
-        return inval * 1000.
+    if cunit2 in VEL_UNITS:
+        return inval * VEL_UNITS[cunit2]
     if cunit2 in _FREQ_UNITS:
         frest = h.Freq0() / (1 + h.Redshift())
         return Vel2Freq(inval, frest, h.VelDef()) / _FREQ_UNITS[cunit2]
@@ -146,10 +161,8 @@ def DeltaVel(h):
     deltaV = h.Cdelt(2)
     zdim = h.DimAx(2) if h.NumAx() > 2 else 1
     cunit2 = h.Cunit(2).lower() if h.NumAx() > 2 else ""
-    if cunit2 in ("km/s", "kms"):
-        return deltaV
-    if cunit2 in ("m/s", "ms"):
-        return deltaV / 1000.
+    if cunit2 in VEL_UNITS:
+        return deltaV / VEL_UNITS[cunit2]
     i = np.arange(zdim - 1)
     ipix = (i + 1 - h.Crpix(2)) * h.Cdelt(2) + h.Crval(2)
     spix = (i + 2 - h.Crpix(2)) * h.Cdelt(2) + h.Crval(2)
@@ -507,6 +520,30 @@ def bezier_interp(x_in, y_in, ns=None):
             u = np.exp(logbc + n * np.log(1 - sr) + j * (np.log(sr) - np.log(1 - sr)))
             xo[i], yo[i] = np.dot(x_in, u), np.dot(y_in, u)
     return xo, yo
+
+
+def bezier_at(x_in, y_in, xq):
+    """The Bezier curve of the points (x_in, y_in), x_in increasing, at the abscissae xq (clipped to the range of
+    x_in): x(t) of the curve is increasing, so each xq has one t, found by bisection. With evenly spaced x_in,
+    x(t) is linear and t = (xq - x_in[0]) / (x_in[-1] - x_in[0])."""
+    x_in = np.asarray(x_in, dtype=float)
+    y_in = np.asarray(y_in, dtype=float)
+    xq = np.clip(np.atleast_1d(np.asarray(xq, dtype=float)), x_in[0], x_in[-1])
+    n = x_in.size - 1
+    from scipy.special import comb
+    j = np.arange(n + 1)
+    bc = comb(n, j)
+
+    def curve(t, v):
+        t = t[:, None]
+        return (bc * t ** j * (1 - t) ** (n - j)) @ v
+
+    lo, hi = np.zeros(xq.size), np.ones(xq.size)
+    for _ in range(60):
+        mid = 0.5 * (lo + hi)
+        below = curve(mid, x_in) < xq
+        lo, hi = np.where(below, mid, lo), np.where(below, hi, mid)
+    return curve(0.5 * (lo + hi), y_in)
 
 
 def RotMatrices(alpha, beta, gamma):

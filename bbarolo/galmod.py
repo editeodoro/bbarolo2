@@ -27,7 +27,7 @@ import numpy as np
 import numba as nb
 from concurrent.futures import ThreadPoolExecutor
 
-from .bbutils import BBaroloError, DeltaVel, C_MS, arcsconv
+from .bbutils import BBaroloError, DeltaVel, C_MS, arcsconv, VEL_UNITS, WAVE_UNITS
 from ._rng import rng_init, rng_uniform, rng_normal
 from .smooth import Smooth3D, FFTConvolver
 
@@ -647,10 +647,8 @@ class GalmodSetup:
         self.freq0 = 0.1420405751786E10
         if sptype == "wave":
             self.axtyp = 2
-            if cunit3 in ("um", "mum", "micron"): mconv = 1.0E-06
-            elif cunit3 in ("nm", "nanom"): mconv = 1.0E-09
-            elif cunit3 in ("a", "ang", "angstrom"): mconv = 1.0E-10
-            else:
+            mconv = 1. / WAVE_UNITS[cunit3] if cunit3 in WAVE_UNITS else None
+            if mconv is None:
                 raise BBaroloError(f"GALMOD ERROR: unknown CUNIT3={cunit3}. Cannot convert to meters.")
             self.crval3 *= mconv
             self.cdelt3 *= mconv
@@ -676,7 +674,7 @@ class GalmodSetup:
         elif "velo" in sptype:
             self.axtyp = 4
             # the units of AlltoVel and DeltaVel (C++ took any other unit, e.g. kms, as cm/s)
-            msconv = {"m/s": 1., "ms": 1., "km/s": 1.0E03, "kms": 1.0E03}.get(cunit3)
+            msconv = 1.0E03 / VEL_UNITS[cunit3] if cunit3 in VEL_UNITS else None
             if msconv is None:
                 raise BBaroloError(f"GALMOD ERROR: unknown CUNIT3={cunit3}. Cannot convert to m/s.")
             self.freq0 = h.Freq0() / (1 + reds)

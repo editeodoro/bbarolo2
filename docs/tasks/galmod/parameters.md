@@ -15,6 +15,12 @@ The parameters of GALMOD: the keywords of the parameter files (case-insensitive;
 :group: Rings
 ```
 
+## Free parameters and fit
+
+```{bbparams} GALMOD
+:group: Free parameters and fit
+```
+
 ## Model
 
 ```{bbparams} GALMOD

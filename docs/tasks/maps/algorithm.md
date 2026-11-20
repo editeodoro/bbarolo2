@@ -277,6 +277,9 @@ Python, the `Maps` class makes the total, velocity and dispersion maps when no m
   `spectrum.txt`). The S/N maps of SEARCH have their own names and no longer overwrite those of TOTALMAP.
 - **MASSDENSMAP and RMSMAP** use the mask of the other maps, with all the detections; in 1.8 they used the
   largest detection when they built the mask, so the maps depended on which map ran first.
+- **MASSDENSMAP** multiplies the sum of each spectrum by the channel width once. BBarolo 1.8 multiplied it
+  twice (its sum map already included the channel width), so its maps were too large by the channel width in
+  km/s: 5.15 times for NGC 2403.
 - **The HI constant** of MASSDENSMAP is 8846 (1.8: 8794, 0.6% low, and 0.8% from the $2.36 \times 10^5$
   of ELLPROF).
 - **RMSMAP** of spectra with fewer than 5 channels is their noise (1.8: $10^{10}$).

@@ -24,7 +24,7 @@ from concurrent.futures import ThreadPoolExecutor
 from .rings import Rings, readRings, ring_file_columns
 from .galmod import DiskModel
 from .stats import findMedian, findMADFM, madfmToSigma
-from .bbutils import (BBaroloError, arcsconv, AlltoVel, DeltaVel, bezier_interp, polyfit_lsq,
+from .bbutils import (BBaroloError, arcsconv, AlltoVel, DeltaVel, bezier_interp, bezier_at, polyfit_lsq,
                       ProgressBar, mkdirp)
 
 VROT, VDISP, DENS, Z0, INC, PA, XPOS, YPOS, VSYS, VRAD, MAXPAR = range(11)
@@ -1336,7 +1336,13 @@ class Galfit:
                             reg[i] = -2
                 else:
                     reg[i] = -2
+        init = self.inr
         self.inr = self.outr.copy()
+        # the rings not fitted in the first stage (skipped, not converged, rejected) start the second from their
+        # initial values (C++ started them from the values of the failed fit: a ring rejected at VROT = 1125 km/s
+        # with DELTAVROT 1000 could not go below 125 km/s and was rejected again)
+        for k in ("vrot", "vdisp", "dens", "vrad"):
+            getattr(self.inr, k)[~good] = getattr(init, k)[~good]
         proceed = ngood > 0
         how = []
         for flag, key, r, name, short, unit, a in (
@@ -1393,8 +1399,14 @@ class Galfit:
         if rtype == -2:
             return True, np.full(xo.size, findMedian(y))
         if rtype == -1:
-            xb, yo = bezier_interp(x, y)
-            return True, (yo if xout is None else np.interp(xo, xb, yo))
+            d = np.diff(x)
+            if d.size and np.allclose(d, d[0], rtol=1e-6):
+                # (evenly spaced radii: the points of the curve at uniform t are at the radii, as C++)
+                xb, yo = bezier_interp(x, y)
+                return True, (yo if xout is None else np.interp(xo, xb, yo))
+            # the curve at the radii (C++ gave the points at uniform t to the radii, right only for evenly
+            # spaced radii)
+            return True, bezier_at(x, y, xo)
         if n <= rtype:
             if self.verb:
                 sys.stderr.write("3DFIT WARNING - Second stage: too few degree of freedom. Using a constant value.\n")

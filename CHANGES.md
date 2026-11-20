@@ -7,6 +7,39 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **The repair of a VOPT axis with CRPIX3 far outside the cube** set CUNIT3 to m/s while CRVAL3 and CDELT3 stayed
+  in the units of the axis: an axis in km/s became 1000 times slower. The unit is kept now **(C++)**.
+- **Spectral units in the spellings of WCSLIB** (`km.s-1`, `km/sec`, `km s^-1`, `m.s-1`, `cm/s`, ...) were taken
+  as km/s, and a wavelength axis in m as km/s (GALMOD stopped); they are read as velocities in km/s, m/s or cm/s
+  and as wavelengths in m (also cm, mm) now **(C++)**.
+- **REGTYPE bezier at uneven radii**: the points of the Bezier curve at uniform t were given to the radii, right
+  only for evenly spaced radii (and the interpolation for failed rings gave other values). The curve is evaluated
+  at the radii now; evenly spaced radii keep the values of C++ **(C++)**.
+- **3DFIT, rings not fitted in the first stage** (skipped, not converged, rejected) started the second stage from
+  the values of the failed fit: a ring rejected at VROT = 1125 km/s with DELTAVROT 1000 could not go below
+  125 km/s and was rejected again. They start from their initial VROT, VDISP, DENS and VRAD now **(C++)**.
+- **`BBarolo -f` (AUTO) skipped the checks of 3DFIT**: SIDE APPROACHING fitted both sides, FTYPE 7 gave zero
+  residuals, typos in FREE and MINVDISP ≥ MAXVDISP passed, and GALMOD could run with 3DFIT **(C++)**.
+- **SIDE for GALMOD**: the long forms (APPROACHING, RECEDING, ...) were not converted, so GALMOD used both
+  halves in the AZIM normalisation and the density profile; SIDE is now listed among the parameters of GALMOD
+  **(C++)**.
+- **2DFIT**: the derivative with respect to PA of the term of VEXP had cos² θ for sin² θ (after GIPSY), so with
+  VEXP free or not 0 the errors were 15–45% too small **(C++)**; the last row and column of the velocity field
+  were never used **(C++)**; a pixel of the model velocity field in several rings took weights ¼, ¼, ½ for
+  three rings, not their mean **(C++)**; the velocity field fitted was written to `<prefix>_map_1st.fits`, the
+  file of the velocity map of MAPS, which replaced it: it is `<prefix>_2d_velfield.fits` now **(C++)**; on a
+  velocity field (a 2D image) with initial values not given, the source finder ran on the velocity field and
+  2DFIT stopped with "No sources detected": it names the values to give now **(C++)**.
+- **The surface density panel of `_parameters.pdf`** took its unit from the conversion to Jy, while the map is
+  converted to Jy/beam only with FLUXCONVERT: a cube in K or mJy/beam was labelled Jy/beam. Without the
+  deconvolved profile it showed the median of each ring with its standard deviation; it shows the face-on
+  surface density now **(C++)**.
+- **MASSDENSMAP** multiplied the sum of each spectrum by the channel width twice: the maps of 1.8 were too large
+  by the channel width in km/s (5.15 times for NGC 2403). Fixed in the port from the start, recorded now
+  **(C++)**.
+- **The detection map of SEARCH** started from uninitialised memory and counted also the objects rejected
+  afterwards; **PV slices between two points** took the direction and length from (x₂ − x₁ + 1, y₂ − y₁ + 1).
+  Both fixed in the port from the start, recorded now (the documentation said they agreed with 1.8) **(C++)**.
 - **The parameter plot of 3DFIT read the errors of VRAD of the second stage from the wrong columns** **(C++)**: it
   took them two columns left per parameter fixed in the second stage, assuming three (C++: `ff = 6`), so with
   FREE VROT VDISP INC PA VRAD it showed the errors of VDISP as those of VRAD, and with FREE VROT INC VRAD the
@@ -456,7 +489,8 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   converted). All the spectral axis types, units and velocity definitions now give the same
   velocities, channel widths and models (tested). **(C++)**
 - **CUNIT3 = kms** was taken as cm/s (with the factor of mm/s) by the model, which came out
-  empty. A velocity unit other than m/s, ms, km/s or kms is now an error. **(C++)**
+  empty. A velocity unit other than m/s, ms, km/s, kms or cm/s (in any spelling of WCSLIB) is now an
+  error. **(C++)**
 - **Radio velocities on a wavelength axis** (VELDEF radio): the channel width was
   −c·λ₀/Δλ instead of c·Δλ/λ₀. **(C++)**
 - **Flux units mJy/beam and uJy/beam** were taken as Jy/beam in the conversions to Jy, the mass

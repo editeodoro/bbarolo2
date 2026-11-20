@@ -131,6 +131,10 @@ which case only the first Stokes plane is read) and works in km/s. The axis type
 | frequency | `FREQ` in `CTYPE3`, or a unit in Hz | `radio`, unless {ref}`VELDEF <par-all-veldef>` says otherwise |
 | wavelength | `WAVE`, or units of um, nm, Angstrom, micron | `relativistic`, unless `VELDEF` says otherwise |
 
+The units of a velocity axis are km/s, m/s or cm/s, in any of the spellings of the FITS standard and WCSLIB
+(`km/s`, `km s-1`, `km.s-1`, `km/sec`, ...); those of a wavelength axis are m, cm, mm, um (micron), nm and
+Angstrom.
+
 A velocity axis keeps its own definition, and `VELDEF` (`radio`, `optical`, `relativistic` or `auto`, the
 default) is ignored. For a frequency or a wavelength axis, the default is announced by a warning:
 

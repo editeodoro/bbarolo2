@@ -92,7 +92,7 @@ them in memory as attributes of the {class}`~bbarolo.Result`, and `res.write()` 
 |---|---|---|
 | `_2dtrm.txt` | `rings` | the fitted rings |
 | `_2d_mod.fits` | `model` | the model velocity field (km/s) |
-| `_map_1st.fits` | `velfield` | the velocity field that was fitted (km/s), from a cube |
+| `_2d_velfield.fits` | `velfield` | the velocity field that was fitted (km/s) |
 | `_mask.fits` | `mask` | the mask used to make the velocity field |
 | `_params.par` | | all the parameters of the run, defaults included |
 

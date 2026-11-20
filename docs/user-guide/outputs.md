@@ -113,7 +113,7 @@ defaults. It runs the same tasks again with `BBarolo -p`. See {doc}`parameter-fi
 | GALMOD | `_rings_model.txt`, `_mod_<norm>.fits`, mask, `_densprof.txt`, `maps/`, `pvs/` | {doc}`../tasks/galmod/index` |
 | GalMod3D | no files: `model()` returns an HDU | {doc}`../tasks/galmod3d/index` |
 | GALWIND | `_wind.fits`, `_wind_<n>mom.fits`, `_wind_pv.fits`, plots | {doc}`../tasks/galwind/index` |
-| 2DFIT | `_2dtrm.txt`, `_2d_mod.fits`, `_map_1st.fits`, mask | {doc}`../tasks/2dfit/index` |
+| 2DFIT | `_2dtrm.txt`, `_2d_mod.fits`, `_2d_velfield.fits`, mask | {doc}`../tasks/2dfit/index` |
 | SPACEPAR | `_spacepar.fits`, `_spacepar.pdf`, mask, rings | {doc}`../tasks/spacepar/index` |
 | SEARCH | `_detections.txt`, `_detections.fits.gz`, `_detections_num.fits.gz`, `_detectmap.fits.gz`, `_mom<n>.fits`, `sources/` | {doc}`../tasks/search/index` |
 | MAKEMASK | `_mask.fits` | {doc}`../tasks/makemask/index` |

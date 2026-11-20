@@ -26,7 +26,7 @@ V(x, y) = \frac{\sum_z M_{xyz} D_{xyz}\, v_z}{\sum_z M_{xyz} D_{xyz}} ,
 $$
 
 where $D_{xyz}$ is the data and $v_z$ the velocity of channel $z$ (km/s). Pixels with
-$\sum_z M_{xyz} D_{xyz} = 0$ are blank (NaN). The field is written to `<prefix>_map_1st.fits`. If the input is
+$\sum_z M_{xyz} D_{xyz} = 0$ are blank (NaN). The field is written to `<prefix>_2d_velfield.fits`. If the input is
 a 2D image (or a cube with one channel), the image is the velocity field, in km/s. Blank pixels never enter
 the fit.
 
@@ -54,7 +54,9 @@ values given are used (one value for all the rings or one per ring; the centre i
 first ring when XPOS and YPOS are given per ring). If any of
 the rings, the centre, $V_\mathrm{sys}$, $V_\mathrm{rot}$, $\phi$ or $i$ is not given, those not given are
 estimated from the cube as in 3DFIT ({ref}`GUESSTYPE <par-2dfit-guesstype>`; see
-{doc}`../3dfit/algorithm`, *Estimates from the data*). An estimated value is the same in all the rings.
+{doc}`../3dfit/algorithm`, *Estimates from the data*). An estimated value is the same in all the rings. The
+estimates need a datacube: on a velocity field (a 2D image) all these values must be given, and 2DFIT stops
+with a message that names those missing.
 
 ## The model of a ring
 
@@ -180,7 +182,7 @@ threads.
 
 | File | Content |
 |---|---|
-| `<prefix>_map_1st.fits` | the velocity field that was fitted (from a cube) |
+| `<prefix>_2d_velfield.fits` | the velocity field that was fitted |
 | `<prefix>_2dtrm.txt` | the rings: radius (pix, arcsec), VSYS, VROT, VEXP (km/s), PA, INC (°), centre (pix) |
 | `<prefix>_2d_mod.fits` | the model velocity field |
 
@@ -191,9 +193,8 @@ fitting engine (`ringmodel`), whose errors are `vsyse`, `vrote`, `vexpe`, `posae
 
 **The model velocity field.** For each ring, $V_\mathrm{mod}$ with its fitted values is computed at the pixels
 of its annulus, with the selection above but without the free angle ($\theta_\mathrm{f} = 0$); SIDE still
-applies, and only pixels where the velocity field is defined are filled. A pixel that belongs to two
-rings (the fitted geometries can make the annuli overlap) takes the mean of the two values (for more rings,
-each new value is averaged with the current one). Then the empty pixels within the outer edge of the last
+applies, and only pixels where the velocity field is defined are filled. A pixel that belongs to several
+rings (the fitted geometries can make the annuli overlap) takes the mean of their values. Then the empty pixels within the outer edge of the last
 ring fitted, with its geometry, take the model of the ring whose radius, computed with that same geometry,
 is closest to their own radius.
 
@@ -209,7 +210,18 @@ is closest to their own radius.
 - **RADII with an estimated geometry**: BBarolo 1.8 cut RADII to the estimated number of rings.
 - **Parameters seen by 2DFIT after 3DFIT** in the same run: 3DFIT no longer writes its estimated and default
   values into the parameters, so 2DFIT sees the parameters as given.
-- **Output names** start with `<prefix>_` (e.g. `<prefix>_map_1st.fits`).
+- **Output names** start with `<prefix>_` (e.g. `<prefix>_2d_mod.fits`).
+- **The velocity field fitted** is written to `<prefix>_2d_velfield.fits`. BBarolo 1.8 wrote it to
+  `<prefix>_map_1st.fits`, the file of the velocity map of MAPS, which replaced it when both tasks ran.
+- **The last row and column** of the velocity field are used. BBarolo 1.8 never used them, so the outer rings of
+  a disk that fills the field had a few pixels less.
+- **The derivative with respect to PA** of the term of $V_\mathrm{exp}$ has $1 - \sin^2 i \sin^2\theta$, as
+  that of $V_\mathrm{rot}$. BBarolo 1.8 (after GIPSY) had $\cos^2\theta$ in place of $\sin^2\theta$: with
+  $V_\mathrm{exp}$ free or not 0, the errors were 15–45% too small and the values moved within the noise.
+- **Overlapping rings in the model velocity field**: a pixel takes the mean of the rings. BBarolo 1.8 averaged
+  each new ring with the current value (weights ¼, ¼, ½ for three rings).
+- **A velocity field with initial values not given**: 2DFIT names the values to give. BBarolo 1.8 ran the
+  source finder on the velocity field and stopped with "No sources detected".
 - **The model velocity field**: the radius of the pixels between the rings is computed with the geometry of
   the last ring; BBarolo 1.8 used that of the ring of the previous pixel filled, so with fitted PA, INC or
   centre some pixels took the velocity of another ring (302 of 6964 pixels of NGC 2403, by up to 9 km/s).

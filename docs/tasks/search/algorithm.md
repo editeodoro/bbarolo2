@@ -299,8 +299,10 @@ voxels in each channel converted to Jy) and, with PLOTS, plots of the detections
 ## Differences from BBarolo 1.8
 
 - The algorithm is the same, but objects are found by connected-component labelling and merged as
-  connected components of a graph, instead of the object lists of Duchamp. The catalogue, the detection
-  maps and the mask are identical to those of the C++ code on the test cubes.
+  connected components of a graph, instead of the object lists of Duchamp. The catalogue and the mask are
+  identical to those of the C++ code on the test cubes.
+- **The detection map** (`<prefix>_detectmap.fits.gz`) counts the channels of the objects in the catalogue. In
+  BBarolo 1.8 it started from uninitialised memory and counted also the objects rejected afterwards.
 - **ITERNOISE** stops when the noise changes by less than 0.1%; in 1.8 the convergence test was wrong
   and it always ran 20 iterations (see {doc}`../stats/algorithm`).
 - The checks of SEARCHTYPE and of the growth threshold also apply when the source finder only builds

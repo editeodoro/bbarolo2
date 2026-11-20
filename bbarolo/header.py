@@ -15,7 +15,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
 
-from .bbutils import degconv
+from .bbutils import degconv, canonical_unit, VEL_UNITS, WAVE_UNITS
 
 
 def fits_image_hdu(fname):
@@ -244,8 +244,7 @@ class Header:
         else:
             cunit = [str(c) if c is not None else "" for c in cunit]
             for i in range(n):
-                if "km s-1" in cunit[i]: cunit[i] = "km/s"
-                if "m s-1" in cunit[i]: cunit[i] = "m/s"
+                cunit[i] = canonical_unit(cunit[i])
                 if cunit[i] == "":
                     ct = self.ctype[i].lower()
                     if "stokes" in ct:
@@ -342,8 +341,8 @@ class Header:
                 f0 = 0.1420405751786E10
             else:
                 d = 0.
-                if self.dunit3.lower() == "km/s": d = self.drval3 * 1000
-                elif self.dunit3.lower() == "m/s": d = self.drval3
+                du = canonical_unit(self.dunit3).lower()
+                if du in VEL_UNITS: d = self.drval3 * (1000 / VEL_UNITS[du])
                 c3 = 0.
                 if cu2 == "hz": c3 = self.crval[sp]
                 elif cu2 == "khz": c3 = self.crval[sp] * 1E03
@@ -403,14 +402,14 @@ class Header:
 
         self._hdr = hdr
         self.updateWCS(hdr)
+        # WCSLIB gives spectral values in SI units (m/s, Hz, m): specConv converts them to the units of the axis
         cs = cu2
-        if cs == "km/s": self.specConv = 1 / 1000.
+        self.specConv = 1.
+        if cs in VEL_UNITS: self.specConv = VEL_UNITS[cs] / 1000.
         if cs == "khz": self.specConv = 1 / 1E03
         if cs == "mhz": self.specConv = 1 / 1E06
         if cs == "ghz": self.specConv = 1 / 1E09
-        if cs in ("micron", "mum", "um"): self.specConv = 1E06
-        if cs in ("nm", "nanom"): self.specConv = 1E09
-        if cs in ("a", "ang", "angstrom"): self.specConv = 1E10
+        if self.sptype == "wave" and cs in WAVE_UNITS: self.specConv = WAVE_UNITS[cs]
         self.calcArea()
         return True
 
@@ -674,7 +673,9 @@ class Header:
                           f"                                       CDELT3 = {dv:.6f}"):
                     self.Warning(s)
                 allgood = False
-                self.crpix[2], self.crval[2], self.cdelt[2], self.cunit[2] = 1, v1, dv, "m/s"
+                # (getZphys gives the values in the units of the axis: C++ set CUNIT3 to m/s, so an axis in km/s
+                # became 1000 times slower)
+                self.crpix[2], self.crval[2], self.cdelt[2] = 1, v1, dv
                 self.updateWCS()
         sky = self.pixelGridOnSky()
         if sky is not None:

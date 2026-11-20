@@ -137,6 +137,9 @@ two points, where PA_PV is not used (0 by default).
   instead of the neighbourhood.
 - **WIDTH_PV** is the full width of the slit, sampled every half pixel or less. In 1.8 it was converted
   to a half-width rounded to whole pixels.
+- **Between two points**, the direction and the length are those of $P_2 - P_1$. BBarolo 1.8 took them
+  from $(x_2 - x_1 + 1,\ y_2 - y_1 + 1)$, so the angle and the length of the slice were slightly off (the
+  more, the shorter the slice).
 - **Offset axis.** CDELT1 is the pixel size of the cube; 1.8 derived it from the world coordinates of
   the end points. The offset is 0 at the centre in both.
 - **Output name**: `<prefix>_pv_<PA>.fits` (1.8: `<prefix>pv_<PA>.fits`).

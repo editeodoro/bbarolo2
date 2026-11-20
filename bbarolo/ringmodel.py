@@ -8,7 +8,7 @@ import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from scipy.optimize import least_squares
 
-from .bbutils import arcsconv, ProgressBar
+from .bbutils import arcsconv, ProgressBar, BBaroloError
 
 VSYS, VROT, VEXP, PA, INC, X0, Y0, MAXPAR = range(8)
 FLT_MAX = np.finfo(np.float32).max
@@ -52,8 +52,10 @@ def vderv(c, p):
     d[:, VSYS] = 1.0
     d[:, VROT] = sini1 * cost1
     d[:, VEXP] = sini1 * sint1
+    # (both terms have 1 - sin^2 i sin^2 theta: C++, after GIPSY, had cos^2 theta in that of VEXP, so with VEXP free or
+    # not 0 the errors were too small and the fit took more iterations)
     d[:, PA] = (F * vc * (1.0 - sini2 * sint2) * sint1 * sini1 / cosi1
-                - F * vr * (1.0 - sini2 * cost2) * cost1 * sini1 / cosi1)
+                - F * vr * (1.0 - sini2 * sint2) * cost1 * sini1 / cosi1)
     d[:, INC] = (F * vc * (cosi2 - sini2 * sint2) * cost1 / cosi1
                  + F * vr * (cosi2 + sini2 * cost2) * sint1 / cosi1)
     with np.errstate(invalid="ignore", divide="ignore"):
@@ -136,6 +138,16 @@ class Ringmodel:
         toEstimate = ((par.RADII == "-1" and (par.NRADII == -1 or par.RADSEP == -1)) or par.XPOS == "-1"
                       or par.YPOS == "-1" or par.VSYS == "-1" or par.VROT == "-1" or par.PHI == "-1" or par.INC == "-1")
         if toEstimate:
+            if not (c.Head().NumAx() > 2 and c.DimZ() > 1):
+                # (the estimates need a datacube: on a velocity field the source finder found nothing and C++ stopped
+                # with "No sources detected")
+                norad = par.RADII == "-1" and (par.NRADII == -1 or par.RADSEP == -1)
+                miss = [k for k, v in (("RADII (or NRADII and RADSEP)", norad), ("XPOS", par.XPOS == "-1"),
+                                       ("YPOS", par.YPOS == "-1"), ("VSYS", par.VSYS == "-1"),
+                                       ("VROT", par.VROT == "-1"), ("INC", par.INC == "-1"), ("PA", par.PHI == "-1"))
+                        if v]
+                raise BBaroloError("2DFIT error: the initial values are estimated from a datacube, and the input is a "
+                                   "velocity field (a 2D image): give " + ", ".join(miss) + ".")
             ip = EstimateInitial(c, par)
             if par.RADII == "-1":           # (C++ also set them with RADII given, truncating RADII)
                 if par.NRADII == -1: par.NRADII = ip.nrings
@@ -196,8 +208,10 @@ class Ringmodel:
         else:
             mp.array = c.array[0].copy()
             mp.setHead(1)
-        self.velmap = mp.to_hdu()                 # (the velocity field fitted, as <prefix>_map_1st.fits)
-        c.add_output("_map_1st.fits", self.velmap)
+        # the velocity field fitted, in a file of 2DFIT (C++ wrote it as <prefix>_map_1st.fits, the file of the velocity
+        # map of MAPS, which is written later and replaced it)
+        self.velmap = mp.to_hdu()
+        c.add_output("_2d_velfield.fits", self.velmap)
         self.setfield(mp.array, mp.DimX(), mp.DimY())
 
     def setoption(self, maskpar, hside, wfunc, freeangle):
@@ -236,7 +250,9 @@ class Ringmodel:
         empty = np.zeros((0, 2)), np.zeros(0), np.zeros(0)
         if llo > lup or mlo > mup:
             return 0, empty[0], empty[1], empty[2], FLT_MAX
-        rx, ry = np.mgrid[llo:lup, mlo:mup]      # same pixel order as C++ (x outer loop)
+        # same pixel order as C++ (x outer loop); lup and mup included (C++ never used the last row and column of the
+        # field: the bounds are inclusive, but its loops stopped before them)
+        rx, ry = np.mgrid[llo:lup + 1, mlo:mup + 1]
         v = self.vfield[ry - self.blo[1], rx - self.blo[0]]
         # Single precision geometry, as in the C++ code (ring membership of the
         # pixels lying exactly on the ring boundaries depends on it)
@@ -390,11 +406,12 @@ class Ringmodel:
 
     def model_field(self, h):
         """The model velocity field of the fitted rings (an Image2D on the grid of the header h): each pixel of
-        a ring has the velocity of the ring (the mean where rings overlap), the pixels between the rings that of
-        the nearest ring, out to the outermost ring fitted; NaN elsewhere."""
+        a ring has the velocity of the ring (the mean of the rings where they overlap), the pixels between the rings
+        that of the nearest ring, out to the outermost ring fitted; NaN elsewhere."""
         from .image import Image2D
         nx, ny = h.DimAx(0), h.DimAx(1)
         model = np.full((ny, nx), np.nan)
+        msum, mnum = np.zeros((ny, nx)), np.zeros((ny, nx), int)
         F = math.pi / 180.
         ot = self.thetaf
         self.thetaf = 0
@@ -410,9 +427,14 @@ class Ringmodel:
             if n == 0:
                 continue
             vv = vfunc(X, p)
-            for (xx, yy), v in zip(X.astype(int), vv):
-                if xx < nx and yy < ny:
-                    model[yy, xx] = v if np.isnan(model[yy, xx]) else (model[yy, xx] + v) / 2.
+            xi, yi = X[:, 0].astype(int), X[:, 1].astype(int)
+            k = (xi < nx) & (yi < ny)
+            # the mean of the rings at a pixel (C++ averaged each new ring with the current value: weights 1/4, 1/4,
+            # 1/2 for three rings)
+            np.add.at(msum, (yi[k], xi[k]), vv[k])
+            np.add.at(mnum, (yi[k], xi[k]), 1)
+        filled = mnum > 0
+        model[filled] = msum[filled] / mnum[filled]
         # the pixels between the rings: the value of the nearest ring fitted, within the outermost one
         il = good[-1] if good.size else None
         pl = fitted[:, il].copy() if il is not None else None

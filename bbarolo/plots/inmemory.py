@@ -154,7 +154,9 @@ class Fit3DPlots:
             sdens_obs, sdens_label, faceon = (r, np.asarray(deconv["sdens_fo_obs"])), "deconvolved", True
         else:
             dp = self.get("densprof")
-            sdens = (np.asarray(dp["radii"]), np.asarray(dp["median"]), np.asarray(dp["stddev"]))
+            sd, fo = np.asarray(dp["sdens"], float), np.asarray(dp["sdens_fo"], float)
+            err = np.asarray(dp["err_sd"], float) * np.divide(fo, sd, out=np.zeros_like(sd), where=sd != 0)
+            sdens, faceon = (np.asarray(dp["radii"]), fo, err), True
         return fit3d.plot_parameters(rings, rings2, sdens=sdens, sdens_obs=sdens_obs, sdens_label=sdens_label,
                                      faceon=faceon, radmax=radmax, bunit=self.settings["bunit"])
 

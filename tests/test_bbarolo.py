@@ -4602,7 +4602,7 @@ def test_task_in_memory_then_write(tmp_path, monkeypatch, name, kw):
         assert np.allclose(res.spectrum["flux"], np.loadtxt(str(tmp_path / "py" / f"{pre}_spectrum.txt"))[:, 1],
                            rtol=1e-5)
     elif name == "FitMod2D":
-        assert same(res.model, f"{pre}_2d_mod.fits") and same(res.velfield, f"{pre}_map_1st.fits")
+        assert same(res.model, f"{pre}_2d_mod.fits") and same(res.velfield, f"{pre}_2d_velfield.fits")
         t2 = np.loadtxt(str(tmp_path / "py" / f"{pre}_2dtrm.txt"))
         assert np.allclose(res.rings["vrot"], t2[:, 3], atol=0.006, equal_nan=True)
     elif name in ("Smooth", "SmoothSpec", "ContSub"):
@@ -5852,3 +5852,217 @@ def test_bayesian_dens_prior_follows_the_profile(tmp_path):
     g = Bayesian3DFIT(fn, dens=0.7, **kw)
     g._setup(['vrot_single', 'dens'])
     assert np.allclose(g._initial_theta()[g.freepar_idx['dens']], 0.7)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Before the release, the C++ findings (20 Nov 2026): BBAROLO2_FINDINGS 62, 63, 70, 72, 78, 79, 91, 92
+
+def test_vopt_axis_repair_keeps_its_unit():
+    """checkHeader moves the reference of a VOPT axis with CRPIX3 far outside the cube to the first channel, with
+    CRVAL3 and CDELT3 in the units of the axis. C++ also set CUNIT3 to m/s: an axis in km/s became 1000 times
+    slower (BBAROLO2_FINDINGS 62)."""
+    from bbarolo.bbutils import AlltoVel, DeltaVel
+    h = _header_of(dict(CTYPE3="VOPT", CRPIX3=-1000., CRVAL3=0., CDELT3=10.))
+    v = [AlltoVel(h.getZphys(z), h) for z in (0, 50)]
+    assert v[0] == pytest.approx(10010.)
+    assert not h.checkHeader()
+    assert h.crpix[2] == 1 and h.cunit[2] == "km/s"
+    assert [AlltoVel(h.getZphys(z), h) for z in (0, 50)] == pytest.approx(v) and DeltaVel(h) == pytest.approx(10.)
+
+
+def test_spectral_units_of_wcslib(tmp_path):
+    """Velocity units in the spellings of WCSLIB (km.s-1, km/sec, m.s-1, cm/s, ...) and wavelengths in m give the same
+    velocities and channel widths as km/s and Angstrom, and GALMOD builds the same model. C++ took m.s-1 and km/sec
+    as km/s, and a wavelength in m as km/s; GALMOD stopped (BBAROLO2_FINDINGS 63)."""
+    from bbarolo import GalMod
+    from bbarolo.bbutils import AlltoVel, DeltaVel
+    ref = _header_of({})
+    for unit, scale in (("km.s-1", 1.), ("km/sec", 1.), ("km s^-1", 1.), ("m.s-1", 1E3), ("m s-1", 1E3),
+                        ("cm/s", 1E5)):
+        h = _header_of(dict(CRVAL3=300. * scale, CDELT3=10. * scale, CUNIT3=unit))
+        assert AlltoVel(h.getZphys(7), h) == pytest.approx(AlltoVel(ref.getZphys(7), ref)), unit
+        assert DeltaVel(h) == pytest.approx(10.), unit
+    models = []
+    for unit, scale in (("Angstrom", 1.), ("m", 1E-10)):
+        hdu = emptyfits([32, 32, 24], [-10. / 3600., 10. / 3600., 0.5 * scale], beam=30. / 3600., bunit="JY/BEAM",
+                        obj="WAVE", ctypes=["RA---SIN", "DEC--SIN", "WAVE"], cunits=["deg", "deg", unit],
+                        crvals=[60, 0, 6563. * scale])
+        fn = str(tmp_path / f"wave_{unit}.fits")
+        hdu.writeto(fn)
+        h = Cube(fn).head
+        if unit == "m":
+            assert DeltaVel(h) == pytest.approx(DeltaVel(href)) and \
+                AlltoVel(h.getZphys(3), h) == pytest.approx(AlltoVel(href.getZphys(3), href))
+        href = h
+        models.append(GalMod(fn, radii=np.arange(15., 150, 30.), vrot=100., vdisp=15., inc=60., pa=30., z0=0.,
+                             dens=1., vsys=0., xpos=15.5, ypos=15.5, restwave=6563. * scale, galmodtype="ANALYTIC", norm="NONE",
+                             mask="NONE", threads=1, verbose=False).run().model.data)
+    assert models[0].max() > 0 and np.allclose(models[1], models[0], atol=1e-5 * models[0].max())
+
+
+def test_bezier_regularisation_at_uneven_radii():
+    """REGTYPE bezier gives the curve at the radii: with uneven radii, C++ gave the points of the curve at uniform t
+    to the radii, and the port's interpolation for failed rings gave other values (BBAROLO2_FINDINGS 70). Evenly
+    spaced radii keep the values of C++."""
+    import types
+    from bbarolo.galfit import Galfit
+    from bbarolo.bbutils import bezier_interp
+    g = types.SimpleNamespace(verb=0)
+    x = np.array([10., 20., 40., 80., 160., 320.])
+    y = np.array([50., 52., 54., 56., 58., 60.])
+    xb, yb = bezier_interp(x, y, ns=200001)
+    exact = np.interp(x, xb, yb)                                  # (the curve, densely sampled)
+    ok, out = Galfit.regularizeParams(g, x, y, -1)
+    assert ok and np.allclose(out, exact, atol=1e-3) and not np.allclose(out, y)
+    ok, full = Galfit.regularizeParams(g, x, y, -1, xout=x)
+    assert np.allclose(full, out)
+    xe = np.arange(6) * 30. + 15.
+    ye = np.array([50., 53., 51., 56., 58., 57.])
+    assert np.array_equal(Galfit.regularizeParams(g, xe, ye, -1)[1], bezier_interp(xe, ye)[1])
+
+
+@needs_data
+def test_second_stage_starts_failed_rings_from_their_initial_values(tmp_path, monkeypatch):
+    """The rings not fitted in the first stage (skipped, not converged, rejected) start the second stage from their
+    initial VROT, VDISP, DENS and VRAD: C++ started them from the failed fit, so a ring rejected at VROT = 1125 km/s
+    with DELTAVROT 1000 could not go below 125 km/s and was rejected again (BBAROLO2_FINDINGS 72)."""
+    from bbarolo.galfit import Galfit
+    gf = _galfit_n2403(tmp_path, "RADII 30 90 150 210 270 330\nVROT 120\nFREE VROT INC\nTWOSTAGE true\n"
+                                 "DELTAVROT 1000\n")
+    n = gf.inr.nr
+    gf.fitok = [True] * n
+    gf.fitok[2] = False
+    gf.outr = gf.inr.copy()
+    gf.outr.vrot[:] = [80., 100., 1125., 125., 130., 132.]
+    gf.outr.vdisp[2] = 77.
+    gf.outr.inc[:] = [58., 59., 89., 61., 62., 63.]
+    seen = {}
+    monkeypatch.setattr(Galfit, "galfit", lambda self: seen.update(vrot=self.inr.vrot.copy(),
+                                                                       vdisp=self.inr.vdisp.copy(),
+                                                                       inc=self.inr.inc.copy()))
+    gf.SecondStage()
+    assert seen["vrot"][2] == 120. and seen["vdisp"][2] == 8.
+    assert list(seen["vrot"][[0, 1, 3]]) == [80., 100., 125.]
+    assert 59. < seen["inc"][2] < 62.                          # (regularised from the fitted rings)
+
+
+@needs_data
+def test_auto_runs_the_checks_of_3dfit():
+    """BBarolo -f (AUTO) runs 3DFIT with its checks: C++ set the 3DFIT flag after the checks, so SIDE APPROACHING
+    fitted both sides, FTYPE 7 gave zero residuals, typos in FREE and MINVDISP >= MAXVDISP passed, and GALMOD ran
+    with 3DFIT (BBAROLO2_FINDINGS 78)."""
+    def check(extra):
+        p = Param()
+        p.readParamString(f"FITSFILE {N2403}\nAUTO true\nVERBOSE false\n" + extra)
+        return p, p.checkPars(quiet=True)
+    p, ok = check("SIDE APPROACHING\n")
+    assert ok and p.gf.flagGALFIT and p.gf.SIDE == "A"
+    assert check("FTYPE 7\n")[0].gf.FTYPE == 2
+    assert not check("FREE VROT VDSIP\n")[1]
+    assert not check("MINVDISP 30\nMAXVDISP 20\n")[1]
+    assert not check("GALMOD true\n")[0].gm.flagGALMOD
+
+
+@needs_data
+def test_side_long_forms_for_galmod():
+    """SIDE APPROACHING (RECEDING, BOTH, ...) is A (R, B) also for GALMOD, which uses it in the AZIM normalisation and
+    the density profile: C++ converted the long forms only for the fits, so GALMOD used both halves
+    (BBAROLO2_FINDINGS 79)."""
+    from bbarolo.keywords import lookup
+    p = Param()
+    p.readParamString(f"FITSFILE {N2403}\nGALMOD true\nRADII 30 90\nXPOS 77\nYPOS 77\nVSYS 132.8\nVROT 120\n"
+                      "VDISP 8\nINC 60\nPA 123.7\nZ0 10\nSIDE RECEDING\nVERBOSE false\n")
+    assert p.checkPars(quiet=True) and p.gf.SIDE == "R"
+    assert "GALMOD" in lookup("SIDE").tasks
+
+
+def test_2dfit_derivatives():
+    """The derivatives of the model velocity of 2DFIT agree with numerical ones, also with VEXP: C++ (after GIPSY)
+    had cos^2 theta for sin^2 theta in the VEXP term of the derivative with respect to PA, so with VEXP free or not 0
+    the errors were 15-45% too small (BBAROLO2_FINDINGS 91)."""
+    from bbarolo.ringmodel import vfunc, vderv, MAXPAR
+    p = np.array([100., 150., 30., 40., 55., 50., 50.])           # VSYS, VROT, VEXP, PA, INC, X0, Y0
+    c = np.random.default_rng(1).uniform(20, 80, (60, 2))
+    d = vderv(c, p)
+    for k in range(MAXPAR):
+        e = np.zeros(MAXPAR)
+        e[k] = 1e-5
+        num = (vfunc(c, p + e) - vfunc(c, p - e)) / 2e-5
+        assert np.allclose(d[:, k], num, rtol=1e-5, atol=1e-6), k
+
+
+def test_2dfit_last_row_and_column_and_overlaps():
+    """2DFIT uses the last row and column of the velocity field (C++ never did), and a pixel in several rings of the
+    model velocity field takes their mean (C++ averaged each new ring with the current value: weights 1/4, 1/4, 1/2
+    for three rings) (BBAROLO2_FINDINGS 91)."""
+    from bbarolo.ringmodel import Ringmodel, vfunc
+    from bbarolo.header import Header
+    rm = Ringmodel()
+    rm.set(3, [8., 9., 10.], [6., 6., 6.], 0., 100., 0., 30., 50., 10., 10.)
+    rm.setoption([False, True, False, False, False, False, False], 3, 2, 0.)
+    p = np.array([0., 100., 0., 30., 50., 10., 10.])
+    yy, xx = np.mgrid[0:20, 0:20].astype(float)
+    pix = np.column_stack([xx.ravel(), yy.ravel()])
+    rm.setfield(vfunc(pix, p), 20, 20)                          # (NaN at the centre)
+    n, X, y, w, q = rm.getdat(p, 0., 30., 0)
+    assert X[:, 0].max() == 19 and X[:, 1].max() == 19 and n == 399
+    for k, v in zip(("vsys", "vrot", "vexp", "posa", "incl", "xpos", "ypos"), p):
+        setattr(rm, k + "f", np.full(3, v))
+    rm.vsysf = np.array([10., 20., 60.])
+    h = _header_of(dict(NAXIS=2, NAXIS3=None, CTYPE3=None, CRPIX3=None, CRVAL3=None, CDELT3=None, CUNIT3=None))
+    m = np.asarray(rm.model_field(h).array, float).ravel()
+    sp, cp, ci = np.sin(np.radians(30.)), np.cos(np.radians(30.)), np.cos(np.radians(50.))
+    x1 = -(pix[:, 0] - 10.) * sp + (pix[:, 1] - 10.) * cp
+    y1 = (-(pix[:, 0] - 10.) * cp - (pix[:, 1] - 10.) * sp) / ci
+    r = np.hypot(x1, y1)
+    allthree = (r > 7.2) & (r < 10.8)                           # (in the annuli of the three rings)
+    assert allthree.sum() > 20 and np.allclose(m[allthree] - vfunc(pix[allthree], p), 30.)
+
+
+def test_2dfit_velocity_field_needs_the_initial_values(tmp_path):
+    """On a velocity field (a 2D image) the initial values cannot be estimated (the estimates need a datacube): 2DFIT
+    names the parameters to give. C++ ran the source finder on the velocity field and stopped with "No sources
+    detected" (BBAROLO2_FINDINGS 91). With the values given, the field is fitted."""
+    from astropy.io import fits
+    from bbarolo import FitMod2D
+    from bbarolo.bbutils import BBaroloError
+    from bbarolo.ringmodel import vfunc
+    yy, xx = np.mgrid[0:40, 0:40].astype(float)
+    v = vfunc(np.column_stack([xx.ravel(), yy.ravel()]), np.array([50., 120., 0., 30., 50., 20., 20.]))
+    h = fits.Header()
+    for k, val in dict(CTYPE1="RA---SIN", CTYPE2="DEC--SIN", CRPIX1=20., CRPIX2=20., CRVAL1=150., CRVAL2=30.,
+                       CDELT1=-5 / 3600., CDELT2=5 / 3600., CUNIT1="deg", CUNIT2="deg", BUNIT="km/s",
+                       BMAJ=5 / 3600., BMIN=5 / 3600., OBJECT="VF").items():
+        h[k] = val
+    fn = str(tmp_path / "vf.fits")
+    fits.writeto(fn, v.reshape(40, 40).astype(np.float32), h)
+    kw = dict(radii=np.arange(10., 90., 10.), xpos=20, ypos=20, vsys=50., vrot=100., free="VROT", verbose=False)
+    with pytest.raises(BBaroloError, match="velocity field.*give INC, PA"):
+        FitMod2D(fn, **kw).run()
+    r = FitMod2D(fn, inc=50., pa=30., **kw).run()
+    assert np.allclose(r.rings["vrot"][:5], 120., atol=0.1)
+
+
+def test_parameter_plot_surface_density_panel(tmp_path):
+    """The surface density panel of the parameter plot of 3DFIT: its unit is that of the total intensity map, whose
+    profile it shows (C++ took the unit from FluxtoJy, the map was converted with FluxtoJyBeam and only with
+    FLUXCONVERT: a cube in K or mJy/beam was labelled Jy/beam), and without the deconvolved profile it shows the
+    face-on surface density of the rings, not their median with the standard deviation (BBAROLO2_FINDINGS 92)."""
+    import bbarolo
+    from bbarolo.moments import moment0_unit
+    from bbarolo.plots.inmemory import Fit3DPlots
+    for bunit, conv, unit in (("K", False, "K * KM/S"), ("K", True, "JY/BEAM * KM/S"),
+                              ("mJy/beam", False, "mJy/beam * KM/S"), ("mJy/beam", True, "JY/BEAM * KM/S"),
+                              ("JY/BEAM", False, "JY/BEAM * KM/S"), ("WHATEVER", True, "WHATEVER * KM/S")):
+        assert moment0_unit(_header_of(dict(BUNIT=bunit)), conv) == unit
+    fn = _mock_cube(tmp_path)
+    r = bbarolo.FitMod3D(fn, radii=[30, 90], xpos=31.5, ypos=31.5, vsys=0., vrot=150., vdisp=10., z0=0., inc=60.,
+                         pa=45., free="VROT", mask="SEARCH", galmodtype="ANALYTIC", verbose=0, threads=1,
+                         outfolder=str(tmp_path / "out")).run()
+    plots = Fit3DPlots(r.fitter, lambda n: None if n == "densprof_deconvolved" else (r[n] if n in r else None))
+    assert plots.settings["bunit"] == r.maps["0mom"].header["BUNIT"]
+    ax = plots.parameters().axes[2]
+    dp = r.densprof
+    assert "face-on" in ax.get_ylabel()
+    y = np.concatenate([ln.get_ydata() for ln in ax.lines if len(ln.get_ydata()) == len(dp)])
+    assert np.allclose(y[:len(dp)], np.asarray(dp["sdens_fo"], float))

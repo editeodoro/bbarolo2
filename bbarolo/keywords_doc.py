@@ -634,10 +634,11 @@ Fits a tilted-ring model to the velocity field, ring by ring, with weighted leas
 2D method, as GIPSY's ROTCUR). `true` runs the task. It is fast but does not correct for beam smearing,
 so it is unreliable for data at low spatial resolution. If `FITSFILE` is a cube, the velocity field is
 its first moment within the mask (`MASK`); if it is a 2D map, the map is the velocity field. The field
-is written as `<prefix>_map_1st.fits`.
+is written as `<prefix>_2d_velfield.fits`.
 
 The rings come from `RADII`, or `NRADII` and `RADSEP`, with `XPOS`, `YPOS`, `VSYS`, `VROT`, `VRAD`,
-`INC` and `PA`: those not given are estimated as in `3DFIT` (`GUESSTYPE`), and `VRAD` is 0. Each ring
+`INC` and `PA`: those not given are estimated from the cube as in `3DFIT` (`GUESSTYPE`; on a 2D velocity
+field they must all be given), and `VRAD` is 0. Each ring
 is centred on a radius, with a width equal to the distance to the next radius, so N radii give N−1
 rings. `FREE` selects the free parameters among `VROT`, `INC`, `PA`, `XPOS`, `YPOS`, `VSYS`, `VRAD`
 and `ALL` (the others are ignored); a free centre is fitted in each ring.
