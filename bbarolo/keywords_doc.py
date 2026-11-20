@@ -1775,8 +1775,9 @@ run, and `none` gives the default. The options, with their defaults in brackets:
   the beam area, and the autocorrelation is summed over its positive core when it has negative lobes
   (the noise of synthesis images without short spacings, whose plain sum can be a fraction of the
   beam); `beam`: the beam area in pixels; a number N > 0: N voxels (1: independent voxels).
-- `densprof_smooth` (`0.1`): the weight of the smoothness term of the density profile deconvolved from
-  the total intensity map, used when `DENS` is not free (0: none).
+- `densprof_smooth` (`0.3`): the smoothness of the density profile deconvolved from the total intensity map,
+  used when `DENS` is not free: the profile may bend between neighbouring rings by about this fraction of its
+  value (1σ of a Gaussian prior on its second differences, which fades as the S/N grows; 0: none).
 - `bbres` (`false`): `true` uses the residuals minimised by `3DFIT` (with its `FTYPE`, `WFUNC`, `SIDE`,
   `BWEIGHT` and `NORM`) instead of the Gaussian likelihood.
 - `radmax` (`edge`): what the free parameter `RADMAX` is. `edge`: the outer edge of the disk, sharp,

@@ -1051,15 +1051,19 @@ class Galfit:
         total intensity map of the data in the mask, solved for all the rings together. Each ring fitted alone and
         normalised to the data in its annulus takes also the beam-smeared emission of its neighbours, so the
         normalisation factors of the ring fits are not the fluxes of the rings. Ones if there are too few pixels."""
-        from .profile import deconvolved_profile
+        from .profile import profile_system, solve_profile_relative
         blo, bhi = self.model.box(rings)
         sl = (slice(blo[1], bhi[1]), slice(blo[0], bhi[0]))
         m = self.mask_T[sl]
         mom0 = np.where(m, self.data_T[sl], 0.).sum(axis=2)
         nvox = m.sum(axis=2)
         h = self.cin.Head()
-        prof = deconvolved_profile(self.model, rings, (blo, bhi), mom0, float(self.data_noise) * np.sqrt(nvox),
-                                   nvox > 0, beam_arcsec=abs(h.Bmaj()) * 3600. if h.Bmaj() else None)
+        # (the smoothness weight relative to that of the data, as before 2.0.0: the data map is clipped by the mask of
+        # the fit, which the model does not describe, and the prior of the profile of METHOD GLOBAL and BAYESIAN,
+        # which fades at high S/N, let the solution follow the clipping: -22% in a ring of a disk at S/N 200)
+        sysm = profile_system(self.model, rings, (blo, bhi), mom0, float(self.data_noise) * np.sqrt(nvox), nvox > 0,
+                              beam_arcsec=abs(h.Bmaj()) * 3600. if h.Bmaj() else None)
+        prof = None if sysm is None else solve_profile_relative(sysm[0], sysm[1], sysm[3], 0.1)[:rings.nr]
         return np.ones(rings.nr) if prof is None or not np.any(prof > 0) else np.asarray(prof, float)
 
     def _ctx_dens(self, ir, dens):

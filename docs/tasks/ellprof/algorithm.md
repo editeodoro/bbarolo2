@@ -196,8 +196,10 @@ The density is interpolated linearly between the radii (RINGMODE CENTRED), so $K
 at $R_j$; the rings have the centre, INC and PA given, and the thickness Z0 (thin if not given). Ring
 $N+1$ is an exterior annulus, from the outer edge of the rings to two beams beyond, which takes the emission
 outside the rings; its density is not used. The densities are the non-negative least-squares solution
-weighted by the noise $s(\mathbf x)$ of the map, with the smoothness term of 3DFIT with METHOD GLOBAL or BAYESIAN, of weight
-$\alpha = 0.1$ times the mean data weight of a ring:
+weighted by the noise $s(\mathbf x)$ of the map, with a smoothness term of weight $\alpha = 0.1$ times the mean
+data weight of a ring (the term of 3DFIT with METHOD GLOBAL or BAYESIAN before 2.0.0; their prior now fades at
+high signal-to-noise ratio, see {doc}`../3dfit/likelihood`, which at a fixed geometry lets the profile follow the
+differences between the map and the model):
 
 $$
 \hat{\boldsymbol\Sigma} = \underset{\boldsymbol\Sigma \ge 0}{\arg\min}

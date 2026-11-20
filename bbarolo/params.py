@@ -1444,7 +1444,7 @@ def bayes_options(opts, none=True):
 # Options of the likelihood (Bayesian3DFIT.run(like_kwargs=...), LIKEOPTS) and their defaults.
 # Those of LIKE_SETUP set up the likelihood; sigma, fracerr and smooth are passed to the
 # log-likelihood at each call (None: not given).
-LIKE_OPTIONS = dict(likemask="dilated", dilation=(1., 3), noisecorr="measured", densprof_smooth=0.1, bbres=False,
+LIKE_OPTIONS = dict(likemask="dilated", dilation=(1., 3), noisecorr="measured", densprof_smooth=0.3, bbres=False,
                     radmax="edge", radmax_width=None, sigma=None, fracerr=None, smooth=None)
 LIKE_SETUP = ("likemask", "dilation", "noisecorr", "densprof_smooth", "bbres", "radmax", "radmax_width")
 _LIKE_ALIASES = {"usebbres": "bbres", "likemask_dilation": "dilation"}
@@ -1461,7 +1461,7 @@ def bayes_like_option(name, value):
       noisecorr        the correlation of the noise: 'measured' (default), 'beam' (the beam
                        area), or the number of voxels per independent measurement (1:
                        independent voxels); the log-likelihood is multiplied by its inverse
-      densprof_smooth  smoothness of the deconvolved density profile (default 0.1; 0: none)
+      densprof_smooth  smoothness of the deconvolved density profile (default 0.3; 0: none)
       bbres            True: the residuals of BBarolo's 3DFIT instead of the Gaussian
                        likelihood (also usebbres)
       radmax           what the free parameter RADMAX is: 'edge' (default: the outer edge of

@@ -34,7 +34,7 @@ The normalisation of the model (NORM):
 
 Options of the likelihood (LIKEOPTS): noisecorr ('measured', default: the correlation of the noise along the slit and
 along the spectra, measured; or a number of pixels per independent measurement, 1 for independent pixels),
-densprof_smooth (default 0.1), sigma (a fixed factor of the noise map, default 1), smooth (the smoothness priors of
+densprof_smooth (default 0.3), sigma (a fixed factor of the noise map, default 1), smooth (the smoothness priors of
 the parameters free in each ring, as 3DFIT with METHOD GLOBAL or BAYESIAN: the bend allowed to each profile over one seeing FWHM, in the units
 of the parameter, DENS in dex: smooth=(vrot=5, vdisp=3) in LIKEOPTS, a dict in Python).
 """
@@ -64,7 +64,7 @@ DEFAULT_SLIT_FUNCS = dict(vrot=lambda R, p1, p2: 2. / np.pi * p1 * np.arctan(R /
                           vrad=lambda R, p1, p2: p1 + p2 * R,                            # linear
                           dens=lambda R, p1, p2: p1 * np.exp(-R / p2))                   # exponential
 
-SLIT_LIKE_OPTIONS = dict(noisecorr="measured", densprof_smooth=0.1, sigma=None, smooth=None)
+SLIT_LIKE_OPTIONS = dict(noisecorr="measured", densprof_smooth=0.3, sigma=None, smooth=None)
 
 
 def slit_like_option(name, value):
@@ -627,6 +627,7 @@ class BayesianSlitFit(_FitTask):
         self._prof_rms = np.sqrt(np.nansum(np.where(np.isfinite(nl), nl, 0.) ** 2, axis=0) *
                                  prep.corr["spectral"])
         self._prof_ok &= self._prof_rms > 0
+        self._prof_corr = max(float(prep.corr["spatial"]), 1.)      # (positions per independent noise value)
         self._ringmap_key = None
         self._free_bases = {k.split("_")[0] for k in self.freepar_idx}
 
@@ -678,7 +679,7 @@ class BayesianSlitFit(_FitTask):
             raise BBaroloError("SLITFIT: too few positions with data to compute the density profile")
         s = self._prof_rms[ok]
         dens = solve_profile(A[:, ok].T / s[:, None], self._prof[ok] / s, Rc,
-                             self.like_kwargs.get("densprof_smooth") or 0.)
+                             self.like_kwargs.get("densprof_smooth") or 0., self._prof_corr)
         return dens[:rt.nr]
 
     def model_of(self, theta, details=False):

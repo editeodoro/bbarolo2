@@ -430,7 +430,7 @@ class ParamGuess:
         from scipy.ndimage import binary_dilation
         from .galmod import DiskModel
         from .rings import Rings
-        from .profile import profile_system, solve_profile
+        from .profile import profile_system, solve_profile_relative
         names = [n for n in ("xcentre", "ycentre", "inclin", "posang") if free.get(n, True)]
         if not names:
             return
@@ -469,7 +469,7 @@ class ParamGuess:
             if sysm is None:
                 return None
             A, b, _, Rc = sysm
-            return A @ solve_profile(A, b, Rc, 0.1) - b
+            return A @ solve_profile_relative(A, b, Rc, 0.1) - b
 
         lo = {"xcentre": start["xcentre"] - 2 * bpix, "ycentre": start["ycentre"] - 2 * bpix, "inclin": 5.,
               "posang": start["posang"] - 60.}

@@ -1831,7 +1831,7 @@ def test_bayesian_task(tmp_path, capsys):
     g = Bayesian3DFIT(fn, outfolder=str(tmp_path / "re"))
     g.load_results(str(cli / "MOCK_dynesty_results.npy"))
     assert g.freepar_names == ['vrot', 'vdisp'] and 100 < g.params[0] < 200
-    assert g.like_kwargs == dict(likemask='dilated', dilation=(1., 3), noisecorr='measured', densprof_smooth=0.1,
+    assert g.like_kwargs == dict(likemask='dilated', dilation=(1., 3), noisecorr='measured', densprof_smooth=0.3,
                                  bbres=False, radmax='edge', radmax_width=None,
                                  smooth=dict(vrot=5., vdisp=3.))
     capsys.readouterr()
@@ -6066,3 +6066,23 @@ def test_parameter_plot_surface_density_panel(tmp_path):
     assert "face-on" in ax.get_ylabel()
     y = np.concatenate([ln.get_ydata() for ln in ax.lines if len(ln.get_ydata()) == len(dp)])
     assert np.allclose(y[:len(dp)], np.asarray(dp["sdens_fo"], float))
+
+
+def test_deconvolved_profile_unbiased_at_high_sn(tmp_path):
+    """The smoothness prior of the deconvolved density profile does not depend on the noise, so it fades at high
+    S/N: on an exponential disk (rings 2/3 of its scale length) at S/N 100 the profile is within 2% of the truth. The
+    former weight, proportional to that of the data, flattened it by the same amount at any S/N: the first two rings
+    6% low and 5% high (BBAROLO2_FINDINGS 67). The former weight is kept for the initial estimates."""
+    from bbarolo.bayesian import Bayesian3DFIT
+    from bbarolo.profile import solve_profile_relative
+    fn = _mock_cube(tmp_path)
+    radii = np.arange(4) * 40. + 20.
+    f = Bayesian3DFIT(fn, radii=list(radii), xpos=31.5, ypos=31.5, vsys=0., vrot=150., vdisp=10., z0=0., inc=60.,
+                      pa=45., mask="SEARCH", outfolder=str(tmp_path / "out"), verbose=0)
+    f._setup(['vrot_single'])
+    rings = f._update_rings(f._fit0.copy(), np.array([150.]))
+    true = 2. * np.exp(-radii / 60.)
+    assert np.allclose(f._deconvolved_profile(rings) / true, 1., atol=0.02)
+    A, b, ok, Rc = f._profile_system(rings)
+    old = solve_profile_relative(A, b, Rc, 0.1)[:4] / true
+    assert old[0] < 0.95 and old[1] > 1.04

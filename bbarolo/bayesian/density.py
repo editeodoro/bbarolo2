@@ -54,10 +54,11 @@ class DensityMixin(object):
             not used);
           * a smoothness prior: rings narrower than the beam are nearly degenerate once
             convolved, and noise or non-axisymmetric structure make the solution oscillate
-            from ring to ring. The squared second differences of the profile (including the
-            exterior annulus) are penalised with a weight densprof_smooth (default 0.1) times
-            the mean data weight of a ring (trace(A^T A) / trace(L^T L)), independent of the
-            units and of the S/N (0 = no prior).
+            from ring to ring. The second differences of the profile (including the exterior
+            annulus) have a Gaussian prior of width densprof_smooth (default 0.3; 0 = no prior)
+            times the local density per ring spacing squared, and the data weigh 1/(the spatial
+            correlation area of the noise): see bbarolo.profile.solve_profile. The prior does not
+            depend on the noise, so it fades as the S/N grows.
         Returns None if there are too few pixels. """
         sysm = self._profile_system(rings)
         if sysm is None:
@@ -80,9 +81,11 @@ class DensityMixin(object):
                               beam_arcsec=abs(h.Bmaj()) * 3600. if h.Bmaj() else None)
 
     def _solve_profile(self, A, b, radii):
-        """ bbarolo.profile.solve_profile with the smoothness densprof_smooth of like_kwargs. """
+        """ bbarolo.profile.solve_profile with the smoothness densprof_smooth of like_kwargs and the spatial
+        correlation of the noise of the likelihood (1/likefactor2d pixels). """
         from ..profile import solve_profile
-        return solve_profile(A, b, radii, self.like_kwargs.get('densprof_smooth') or 0.)
+        return solve_profile(A, b, radii, self.like_kwargs.get('densprof_smooth') or 0.,
+                             1. / getattr(self, 'likefactor2d', 1.))
 
     def deconvolved_profile_errors(self, nsamples=200, nmc=200, seed=0):
         """ Uncertainties of the deconvolved density profile of the best fit (DENS not fitted),

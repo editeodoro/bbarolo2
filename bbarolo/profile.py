@@ -13,10 +13,17 @@ non-negative weighted least-squares problem, with:
     beams beyond, with its own density: it takes the emission beyond the disk, which the last ring would
     otherwise absorb (its density is not used);
   * a smoothness prior: rings narrower than the beam are nearly degenerate once convolved, and
-    noise or non-axisymmetric structure make the solution oscillate from ring to ring. The squared
-    second differences of the profile (including the exterior annulus) are penalised with a weight
-    smooth (0.1 by default) times the mean data weight of a ring (trace(A^T A) / trace(L^T L)),
-    independent of the units and of the S/N (0 = no prior).
+    noise or non-axisymmetric structure make the solution oscillate from ring to ring. The second
+    differences of the profile (including the exterior annulus) have a Gaussian prior whose width is
+    smooth (0.3 by default; 0 = no prior) times the local density, per ring spacing squared: the profile
+    may bend between neighbouring rings by about 30% of its value (1 sigma). The prior does not depend
+    on the noise, so its weight against the data falls as the S/N grows, unless the model misfits the data
+    (the misfit counts as noise), down to 5% of the former weight (DENSPROF_FLOOR), which keeps the profile from
+    following the structure that the rings do not describe at very high S/N. The former weight, proportional
+    to that of the data (solve_profile_relative, before 2.0.0), biased a curved profile by the same amount at any S/N: -6% and +5% in the first two rings of an
+    exponential disk with rings 2/3 of its scale length, 38 sigma at S/N 400. solve_profile is the profile of
+    METHOD GLOBAL and BAYESIAN and of SLITFIT; ELLPROF (also the deconvolved profile of 3DFIT), the models
+    of the rings around a ring of 3DFIT and the initial estimates keep solve_profile_relative.
 """
 
 import math
@@ -68,9 +75,87 @@ def _second_differences(d1, d2):
     return np.array([1. / d1, -1. / d1 - 1. / d2, 1. / d2]) * 2. / (d1 + d2)
 
 
-def solve_profile(A, b, radii, smooth=0.1):
+DENSPROF_SMOOTH = 0.3       # the default width of the smoothness prior (see the module docstring)
+
+
+def _second_difference_rows(R):
+    """The second differences of the profile at the radii R (any spacing, in order of radius): (L, o, Rs, tiny, dmin)
+    with L (n-2, n) on the columns in the order of R, o the order of R, Rs the radii sorted, tiny the separation given
+    to radii that coincide and dmin a quarter of the smallest distance between the rings (all but the last radius,
+    the exterior annulus)."""
+    R = np.asarray(R, float)
+    n = R.size
+    o = np.argsort(R, kind="stable")
+    Rs = R[o]
+    tiny = 1e-6 * max(float(np.ptp(R)), 1e-300)
+    dmin = max(0.25 * float(np.min(np.diff(np.sort(R[:-1])))), tiny) if n > 2 else tiny
+    L = np.zeros((n - 2, n))
+    for i in range(1, n - 1):
+        d1, d2 = (max(float(d), tiny) for d in (Rs[i] - Rs[i - 1], Rs[i + 1] - Rs[i]))
+        L[i - 1, o[i - 1:i + 2]] = _second_differences(d1, d2)
+    return L, o, Rs, tiny, dmin
+
+
+DENSPROF_FLOOR = 0.05       # the prior is never weaker than this fraction of the relative weight (solve_profile_relative)
+
+
+def solve_profile(A, b, radii, smooth=DENSPROF_SMOOTH, corr=1., floor=None):
+    """Non-negative least-squares solution of A dens = b (A and b divided by the noise; all the columns: the
+    rings, then the exterior annulus) with the smoothness prior of the module docstring: the second difference of
+    the profile at each radius (in order of radius) has a Gaussian prior of width smooth x the density there
+    (that of a first solution with solve_profile_relative, at least a tenth of its mean over the rings) / d^2, d
+    the median distance between the rings. corr: the number of pixels per independent value of the noise of b
+    (the beam area for a noise correlated over the beam): the data weigh 1/corr as much, and 1/chi2_red of the first
+    solution less when it is above 1. The weight of each second difference is at least floor (default
+    DENSPROF_FLOOR) times that of solve_profile_relative with smooth 0.1. smooth 0: no prior."""
+    from scipy.optimize import nnls
+    n = A.shape[1]
+    q, r = np.linalg.qr(A)                         # (the least squares of A on the small n x n system)
+    c = q.T @ b
+    if not smooth or n < 3:
+        return nnls(r, c)[0]
+    L, srel, o = _relative_rows(radii, float(np.sum(A * A)), 0.1)
+    zeros = np.zeros(n - 2)
+    x0 = nnls(np.vstack([r, srel * L]), np.r_[c, zeros])[0]
+    xm = float(np.mean(x0[:-1]))
+    if not xm > 0:
+        return x0
+    # the misfit of the first solution counts as noise: where the model cannot describe the data (non-axisymmetric
+    # structure, a clipped map), chi2_red > 1 and the data weigh less, so the prior does not let the profile follow
+    # the misfit as the S/N grows
+    chi2 = float(np.sum((b - A @ x0) ** 2)) / max(A.shape[0] - n, 1)
+    corr = max(float(corr), 1.) * max(chi2, 1.)
+    d = float(np.median(np.diff(np.sort(np.asarray(radii, float)[:-1]))))
+    xc = np.maximum(x0[o[1:-1]], 0.1 * xm)
+    w = math.sqrt(corr) * d * d / (float(smooth) * xc)
+    w = np.maximum(w, math.sqrt(DENSPROF_FLOOR if floor is None else float(floor)) * srel)
+    # (the second differences across two radii closer than a quarter of the distance between the rings, the exterior
+    # annulus on a ring: the weight of solve_profile_relative, which does not depend on which of the two comes first,
+    # so that the profile is continuous when the annulus crosses a ring)
+    Rs = np.asarray(radii, float)[o]
+    near = np.minimum(np.diff(Rs)[:-1], np.diff(Rs)[1:]) < 0.25 * d
+    w[near] = srel
+    return nnls(np.vstack([r, w[:, None] * L]), np.r_[c, zeros])[0]
+
+
+def _relative_rows(radii, traa, alpha):
+    """The second differences of solve_profile_relative at the radii (L, in the order of the columns), the scale of
+    its weight sqrt(alpha trace(A^T A) / trace(L^T L)) (traa = trace(A^T A); the distances between the radii at
+    least a quarter of the smallest distance between the rings) and the order of the radii."""
+    L, o, Rs, tiny, dmin = _second_difference_rows(radii)
+    norm = 0.
+    for i in range(1, len(Rs) - 1):
+        d1, d2 = (max(float(d), tiny) for d in (Rs[i] - Rs[i - 1], Rs[i + 1] - Rs[i]))
+        norm += float(np.sum(_second_differences(max(d1, dmin), max(d2, dmin)) ** 2))
+    return L, math.sqrt(alpha * traa / max(norm, 1e-300)), o
+
+
+def solve_profile_relative(A, b, radii, smooth=0.1):
     """Non-negative least-squares solution of A dens = b (all the columns: the rings, then the exterior
-    annulus), with the smoothness prior of weight smooth on the profile at the radii, in order of radius.
+    annulus), with the smoothness prior of weight smooth on the profile at the radii, in order of radius, relative
+    to the weight of the data: smooth times the mean data weight of a ring (trace(A^T A) / trace(L^T L)),
+    independent of the units and of the S/N. It was the profile of METHOD GLOBAL and BAYESIAN before 2.0; now the
+    initial estimates (GUESSTYPE FIT) and the first solution of solve_profile.
 
     With an edge of the disk inside the rings (RADMAX, RADMAXA, RADMAXR) the exterior annulus can lie
     before the last rings (beyond the edge, without emission): the second differences follow the
@@ -100,14 +185,16 @@ def solve_profile(A, b, radii, smooth=0.1):
     return nnls(r, q.T @ b)[0]
 
 
-def deconvolved_profile(model, rings, box, data_map, rms_map, ok_map, smooth=0.1, beam_arcsec=None):
+def deconvolved_profile(model, rings, box, data_map, rms_map, ok_map, smooth=DENSPROF_SMOOTH, beam_arcsec=None,
+                        corr=1.):
     """The densities of the rings whose beam-convolved model reproduces data_map (see the module
-    docstring), or None if there are too few pixels."""
+    docstring; corr: pixels per independent value of the noise, see solve_profile), or None if there are too
+    few pixels."""
     sysm = profile_system(model, rings, box, data_map, rms_map, ok_map, beam_arcsec=beam_arcsec)
     if sysm is None:
         return None
     A, b, _, Rc = sysm
-    return solve_profile(A, b, Rc, smooth)[:rings.nr]
+    return solve_profile(A, b, Rc, smooth, corr)[:rings.nr]
 
 
 
@@ -248,6 +335,10 @@ def ellprof_deconvolved(c, rings, side="B", smooth=0.1, nmc=200, seed=0, model=N
     least one beam area spatially). With side 'A' or 'R', only the pixels of that half of the galaxy are used
     (divided by the minor axis of the rings: their median centre and PA). The errors come from nmc refits of the
     best-fit map plus noise with that rms and spatial correlation (the geometry is fixed: no errors from it).
+    The smoothness prior has the weight smooth relative to that of the data (solve_profile_relative), as before
+    2.0.0: at a fixed geometry the map often differs from the model by more than the noise (non-axisymmetric
+    structure, the edges of the mask), and the prior of METHOD GLOBAL and BAYESIAN, which fades at high S/N, let
+    the profile follow those differences (simulated disks at S/N 300: rings -41% and +59%).
 
     model: the DiskModel of the cube whose densities are wanted (3DFIT: the engine of the fit, which then builds
     the final model with them; its ring convention and flux units); default an ANALYTIC model with CENTRED rings.
@@ -343,7 +434,7 @@ def ellprof_deconvolved(c, rings, side="B", smooth=0.1, nmc=200, seed=0, model=N
     if sysm is None:
         return None
     A, b, oks, Rc = sysm
-    sol = solve_profile(A, b, Rc, smooth)
+    sol = solve_profile_relative(A, b, Rc, smooth)
     dens = sol[:nr]
     noise = 1.                                          # (the noise of b: 1, as b is divided by the rms)
     if is2d:                                            # (uniform weights: the scatter of the residuals)
@@ -365,7 +456,7 @@ def ellprof_deconvolved(c, rings, side="B", smooth=0.1, nmc=200, seed=0, model=N
             if sk > 0.3:
                 g = gaussian_filter(g, sk, mode='wrap')
                 g /= g.std()
-            prof.append(solve_profile(A, bmod + noise * g[oks], Rc, smooth)[:nr])
+            prof.append(solve_profile_relative(A, bmod + noise * g[oks], Rc, smooth)[:nr])
         p16, p50, p84 = np.quantile(np.asarray(prof), (0.15865, 0.50, 0.84135), axis=0)     # (1 sigma)
         lo, hi = p50 - p16, p84 - p50
     if is2d:

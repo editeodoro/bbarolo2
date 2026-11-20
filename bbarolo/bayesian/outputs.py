@@ -676,7 +676,7 @@ class OutputsMixin(object):
             like = dict(noisecorr=r.get('noisecorr', 'beam'),
                         likemask=r['likemask'] if r.get('likemask') in ('dilated', 'none') else 'dilated',
                         dilation=tuple(r.get('likemask_dilation', (1., 3))),
-                        densprof_smooth=r.get('densprof_smooth', 0.1))
+                        densprof_smooth=r.get('densprof_smooth', 0.3))
         if 'radmax' not in like:                       # (files saved before the option: the last ring)
             like = dict(like, radmax='ring')
         like = {k: v for k, v in like.items() if k != 'lambdas'}     # (files saved before smooth: not read)

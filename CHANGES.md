@@ -918,6 +918,22 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Changed
 
+- **The smoothness of the deconvolved density profile** of METHOD GLOBAL and BAYESIAN (DENS not free) and of
+  SLITFIT: its weight was 0.1 times the mean data weight of a ring, so it flattened a curved profile by the same
+  amount at any S/N (an exponential disk with rings 2/3 of its scale length: the first two rings 6% low and 5%
+  high, 38 and 46 times their errors at S/N 400, where χ²_red of the true model was 2.56 and VDISP and INC moved
+  by 5 and 8 times their errors). It is now a Gaussian prior on the second differences of the profile, of
+  width `densprof_smooth` (LIKEOPTS, now 0.3) times the local density per ring spacing squared, with the data
+  weighted by 1/(the correlation area of the noise x the reduced χ² of a first solution, when above 1): it does
+  not depend on the noise, so it fades at high S/N unless the model misfits the map, down to 5% of the former
+  weight (the same rings within 1% of the truth, VDISP and INC within a third of their errors at S/N 400). On
+  the flat disks of the accuracy suite (half-beam rings, S/N 5-40, METHOD GLOBAL) the rotation curves are the same
+  within the noise; at S/N 5 PA and INC scatter less (2.5° and 4.2° instead of 9.3° and 6.5°) and VDISP more (5.2
+  instead of 3.5 km/s), at S/N 40 VDISP scatters a little more (0.60 instead of 0.41 km/s).
+  ELLPROF (also `_densprof_deconvolved.txt` of 3DFIT), the models of the rings around a ring in the passes of
+  3DFIT and the initial estimates keep the former weight: at a fixed geometry the map often differs from the
+  model by more than the noise, and a prior that fades let the profile follow the differences.
+
 - **The default priors of DENS and DENS_P1 (3DFIT METHOD GLOBAL and BAYESIAN with DENS fitted) follow the data**: 0
   to twice the largest value of the density profile deconvolved from the total map for the initial rings, the
   profile used when DENS is not fitted; DENS not given (nor in RINGFILE) starts at that profile. They were the

@@ -229,13 +229,14 @@ the band of the cube.
 The data map $D(\mathbf x)$ is the sum of the data over the voxels of the likelihood in the spectrum at
 $\mathbf x$ (below; units of the cube), with noise $s(\mathbf x)$ (see [the noise of the
 map](#noise-of-the-cube)). The densities are the solution of a non-negative weighted least-squares problem
-with a smoothness term:
+with a smoothness prior:
 
 $$
 \hat{\boldsymbol\Sigma} = \underset{\boldsymbol\Sigma \ge 0}{\arg\min}
-\left[\sum_{\mathbf x}\left(\frac{D(\mathbf x) - \sum_{j=1}^{N_\mathrm r+1}\Sigma_j K_j(\mathbf x)}
+\left[\frac{1}{C}\sum_{\mathbf x}\left(\frac{D(\mathbf x) - \sum_{j=1}^{N_\mathrm r+1}\Sigma_j K_j(\mathbf x)}
 {s(\mathbf x)}\right)^2
-+ \alpha\,\frac{\lVert A\rVert^2}{\lVert L\rVert^2}\,\lVert L\boldsymbol\Sigma\rVert^2\right].
++ \sum_{i=2}^{N_\mathrm r}\left(\frac{(L\boldsymbol\Sigma)_i}{\tau_i}\right)^2\right],
+\qquad \tau_i = \beta\,\frac{\max\left(\Sigma^{(0)}_i,\ 0.1\,\langle\Sigma^{(0)}\rangle\right)}{d^2} .
 $$
 
 - The pixels are those of the likelihood region with at least one voxel of the likelihood and
@@ -257,11 +258,30 @@ $$
   \qquad i = 2, \dots, N_\mathrm r .
   $$
 
-- $\alpha$ is `densprof_smooth` of {ref}`LIKEOPTS <par-3dfit-likeopts>` (default 0.1; 0: no
-  smoothness term). The factor $\lVert A\rVert^2/\lVert L\rVert^2$ makes the weight $\alpha$ times the mean
-  data weight of a ring, independent of the units and of the signal-to-noise ratio. Rings narrower than the
-  beam are nearly degenerate once convolved, and without this term noise and non-axisymmetric structure make
-  the profile oscillate from ring to ring.
+- $C = A_{xy}\max(1, \chi^2_{(0)})$: $A_{xy}$ is the spatial correlation area of the noise (pixels; see
+  [Correlated noise](#correlated-noise)), so that the data map has about one independent value per $A_{xy}$
+  pixels, and $\chi^2_{(0)}$ the reduced $\chi^2$ of the first solution $\Sigma^{(0)}$ below: where the model
+  cannot describe the map (non-axisymmetric structure), the misfit counts as noise, and the prior keeps the
+  profile from following it.
+- The second differences have a Gaussian prior of width $\tau_i$: the profile may bend between neighbouring
+  rings by about $\beta$ times its value. $\beta$ is `densprof_smooth` of {ref}`LIKEOPTS <par-3dfit-likeopts>`
+  (default 0.3; 0: no prior), $d$ the median distance between the rings, and $\Sigma^{(0)}$ a first solution,
+  with the weight $0.1\,\lVert A\rVert^2/\lVert L\rVert^2$ on $\lVert L\boldsymbol\Sigma\rVert^2$
+  ($\lVert\cdot\rVert$ the Frobenius norm), which gives the scale of the densities at each radius. Rings
+  narrower than the beam are nearly degenerate once convolved, and without a prior noise and non-axisymmetric
+  structure make the profile oscillate from ring to ring.
+- The prior does not depend on the noise, so it smooths the profile at low signal-to-noise ratio and fades at
+  high signal-to-noise ratio, where the data fix the profile, down to a floor: the weight of each second
+  difference is at least 5% of the former weight below (for rings 2/3 of a scale length, a bias of at most 1%;
+  in the simulated disks of the accuracy suite the floor is reached only above S/N 40). Second differences across
+  two radii closer than a quarter of the distance between the rings (the exterior annulus on a ring) keep the
+  former weight, so that the profile is continuous as the annulus crosses a ring. Before BBarolo 2.0.0 the term was
+  $0.1\,\lVert A\rVert^2/\lVert L\rVert^2\,\lVert L\boldsymbol\Sigma\rVert^2$, proportional to the
+  weight of the data: it flattened a curved profile by the same amount at any signal-to-noise ratio. For an
+  exponential disk with rings 2/3 of its scale length, the first two rings were 6% low and 5% high, 38 and 46
+  times their errors at S/N 400, where χ²<sub>red</sub> of the true model was 2.56 and VDISP and INC moved
+  by 5 and 8 times their errors. They are now within 1% of the truth (3.5 times their errors at S/N 400), and VDISP
+  and INC within a third of their errors.
 
 The data map sums the voxels of the likelihood, while the maps $K_j$ sum all the channels: the profile
 assumes that the voxels of the likelihood hold the whole line. This holds with the default dilated mask (the

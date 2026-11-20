@@ -730,7 +730,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                                 'beam': x 1/beam area in pixels; a number N: x 1/N, N=1 for
                                 independent voxels; see _set_likefactor),
                                 densprof_smooth (smoothness of the deconvolved density profile,
-                                default 0.1), bbres (True: BBarolo's 3DFIT residuals instead of
+                                default 0.3), bbres (True: BBarolo's 3DFIT residuals instead of
                                 the Gaussian likelihood), sigma and fracerr (fixed noise per voxel
                                 and fractional model error, when not free), smooth (the bend
                                 allowed over a beam to the profiles free in each ring, e.g.
