@@ -64,6 +64,9 @@ _FTOL = 1e-3                # the tolerance of Powell on -log L (scipy's is rela
 # batches (the Hessian, the populations of differential evolution) show the progress too.
 _PROGRESS_FIRST = 10.
 _CHUNK = 128
+# the end of L-BFGS-B when its line search fails even along the gradient (scipy >= 1.15 gives the message 'ABNORMAL: ',
+# without the reason; earlier, 'ABNORMAL_TERMINATION_IN_LNSRCH')
+_ABNORMAL = "ABNORMAL: the line search found no better point, even along the gradient"
 
 
 def method_name(method):
@@ -266,9 +269,17 @@ def _local(obj, method, u0, step, options):
     with warnings.catch_warnings():
         warnings.filterwarnings("error", message="Unknown solver options", category=sopt.OptimizeWarning)
         try:
-            return _local_run(obj, method, u0, step, options)
+            res = _local_run(obj, method, u0, step, options)
         except sopt.OptimizeWarning as e:
             raise BBaroloError(f"optimize: {method}: {e} (RUNOPTS, or options)") from None
+    res.message = _message(res)
+    return res
+
+
+def _message(res):
+    """ The message of a scipy result, with the reason of an ABNORMAL end of L-BFGS-B, which scipy leaves out. """
+    msg = str(getattr(res, 'message', ''))
+    return _ABNORMAL if msg.strip().rstrip(':').startswith('ABNORMAL') else msg
 
 
 def _local_run(obj, method, u0, step, options):
@@ -479,6 +490,8 @@ def summary(res, verbose=True, taskname=""):
     what = "maximum a posteriori" if res.posterior else "maximum likelihood"
     print(f"\n{taskname}Optimisation with {res.method} ({what}): {res.nfev} likelihoods in {dt}; "
           f"log-likelihood {res.logl:.6g}.\n  {res.message}")
+    if _ABNORMAL in res.message:
+        print("  (at the maximum, or where the jitter of the likelihood hides the slope; SAMPLEROPTS nstart=3 checks it)")
     if len(res.starts) > 1:
         print("  -log L of the starts: " + ", ".join(f"{s:.6g}" for s in res.starts))
     if res.at_bound:

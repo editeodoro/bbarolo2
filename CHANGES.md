@@ -7,6 +7,12 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **METHOD GLOBAL printed "ABNORMAL: " without a reason when L-BFGS-B stopped** because its line search found no
+  better point, even along the gradient (scipy ≥ 1.15 leaves the reason out of the message). The message is now
+  "ABNORMAL: the line search found no better point, even along the gradient", and the summary adds that this is the
+  maximum, or a point where the jitter of the likelihood hides the slope, which more starts (`SAMPLEROPTS nstart=3`)
+  check. The fit is unchanged.
+
 - **WINDFIT `emission=voxel`: the model cube (`_mod_wind.fits` and the plots) stopped short of the cone.** The model
   is the data where the cone reaches (as MoKA-3D), and the reach was the voxels where the expected emission of the
   fitted cone was above 1/1000 of its peak. With the emission falling steeply the peak, at the apex, dwarfs the rest:

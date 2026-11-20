@@ -610,6 +610,10 @@ the error says why. The minimisers:
 - `differential_evolution`: a global search, its population computed on the processes, then polished with
   L-BFGS-B.
 
+L-BFGS-B can stop with "ABNORMAL: the line search found no better point, even along the gradient": the jitter of
+the likelihood (below) hides its slope there, which happens at the maximum, but also short of it where the
+likelihood is nearly flat in a parameter; more starts (`nstart`) check it.
+
 `options` passes the options of the method (those of scipy, e.g. `maxiter`). With `VERBOSE`, the minimisation,
 whose length is not known in advance, prints the likelihoods computed and the best log-likelihood after 10 seconds
 and then at intervals of a tenth of the time elapsed; the Hessian shows the progress bar (`SHOWBAR`). In parameter

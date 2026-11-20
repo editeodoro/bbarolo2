@@ -1024,6 +1024,26 @@ def test_optimize_gaussian(monkeypatch, capsys):
     assert " Estimating errors (Hessian)... Done." in out               # (the bar itself only on a terminal)
 
 
+def test_optimize_abnormal(capsys):
+    """L-BFGS-B ends ABNORMAL when its line search finds no better point even along the gradient, as near the maximum
+    of a likelihood whose jitter hides the slope: scipy (>= 1.15) gives the message 'ABNORMAL: ' without the reason;
+    optimize gives the reason, and summary a hint."""
+    from bbarolo.bayesian.optimize import optimize, summary
+
+    class Jitter(_GaussFitter):
+        def _log_like_func(self, theta, **kw):
+            th = np.asarray(theta, float)
+            return super()._log_like_func(th) + 0.2 * np.sin(300. * th).sum()
+
+    f = Jitter([3., -1.], np.diag([0.2, 0.05]) ** 2, [("uniform", 0., 10.), ("uniform", -5., 10.)])
+    r = optimize(f, {}, np.array([5., 0.]), errors=False, verbose=False)
+    assert not r.success and r.message == "ABNORMAL: the line search found no better point, even along the gradient"
+    assert np.all(np.abs(r.x - [3., -1.]) < [0.2, 0.05])                  # (near the maximum)
+    summary(r)
+    out = capsys.readouterr().out
+    assert "even along the gradient\n  (at the maximum, or where the jitter" in out and "nstart=3" in out
+
+
 @needs_data
 def test_bayesian_optimize(tmp_path, capsys):
     """Bayesian3DFIT.optimize on a mock of NGC 2403 (the model at known parameters plus noise correlated as the beam):
