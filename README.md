@@ -24,6 +24,11 @@ long-slit spectra, with the methods GLOBAL and BAYESIAN.
 
 **Status:** release candidate of BBarolo 2.0.
 
+## Website and full documentation
+
+You can find the documentation at [bbarolo.readthedocs.io](https://bbarolo.readthedocs.io): installation, a
+first fit, every task with its parameters and how it works, examples, and the differences from BBarolo 1.8.
+
 ## Installation
 
 BBarolo 2 needs Python 3.11 or later. Install it from PyPI with ``pip``:
@@ -53,11 +58,6 @@ git clone https://github.com/editeodoro/bbarolo2
 cd bbarolo2
 pip install -e ".[bayesian,test]"
 ```
-
-## Documentation
-
-You can find the documentation at [bbarolo.readthedocs.io](https://bbarolo.readthedocs.io): installation, a
-first fit, every task with its parameters and how it works, examples, and the differences from BBarolo 1.8.
 
 ## Example
 

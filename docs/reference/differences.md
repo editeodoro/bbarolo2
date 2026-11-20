@@ -31,7 +31,7 @@ outputs of the Python code with those of the C++ code on the example cubes of BB
 |---|---|
 | SEARCH (catalogue, detection maps, mask) | identical |
 | 2DFIT | ring table identical; model map equal to float precision |
-| ELLPROF (profile) | identical (apart from the bugs fixed below) |
+| ELLPROF (profile) | identical (apart from the C++ bugs fixed, see [CHANGES.md](https://github.com/editeodoro/bbarolo2/blob/main/CHANGES.md)) |
 | Moment maps, RMS map, S/N map | equal to float precision (relative difference about $10^{-7}$) |
 | SMOOTH, SMOOTHSPEC, REND3D, CONTSUB | equal to float precision |
 | PVSLICE and the PV files of 3DFIT | same slice geometry; flux along the slice within 0.4% (the slices are interpolated now) |
@@ -271,50 +271,6 @@ run. The new defaults are checked with `bbarolo.help("ltype")` and similar calls
 
 The old module `BayesianBBarolo_test` and the C++ function `Galfit::getModel_BBB` are not ported.
 
-## C++ bugs fixed
-
-The bugs below are in the C++ code (and in pyBBarolo where stated); they are fixed in BBarolo 2, so the
-results of the affected tasks differ from those of 1.8. The entries of [CHANGES.md](https://github.com/editeodoro/bbarolo2/blob/main/CHANGES.md) marked **(C++)** are
-the bugs of 1.8; the others were introduced by the port and fixed before this release. The table is a
-summary: [CHANGES.md](https://github.com/editeodoro/bbarolo2/blob/main/CHANGES.md) has the details and the size of each change.
-
-| Task | Bug in 1.8 |
-|---|---|
-| 3DFIT | `FREE ALL` with TWOSTAGE: DENS free in the second stage but not counted (degenerate simplex, misaligned error columns) |
-| 3DFIT | The PA refinement read beyond the end of the 2D-fit arrays; the outermost ring could get a random PA |
-| 3DFIT | The second stage regularised all the rings, also those not fitted; the rings that failed kept their DENS in the final model; ADRIFT used them too |
-| 3DFIT | VDISP trial values out of [MINVDISP, MAXVDISP] were redrawn across the other bound |
-| 3DFIT | REVERSE: the beam-wide rings took the initial values of the ring with the same index, not interpolated ones |
-| 3DFIT | REVERSE (replaced by passes from the outside in with the model of the whole disk): the model of the outer rings left an empty annulus half a ring wide outside each ring and missed the outer half of the last ring; rings with no data were fitted on the noise, and they, the rings not converged and the rejected ones were in the model of the inner rings; the errors were computed without the outer rings |
-| 3DFIT | A fixed VROT was replaced by that of the 2D fit when PA was free |
-| 3DFIT | RADSEP without NRADII: the extent of the rings scaled with RADSEP |
-| 3DFIT, GALMOD, SPACEPAR | `NORM AZIMUTHAL` was used as LOCAL; a NORM with two values made GALMOD write no model |
-| 3DFIT (every METHOD) | MC models in a box were not crops of the model of the whole cube (the residuals jumped by the Monte Carlo noise) |
-| 3DFIT | `writeModel` switched FLUXCONVERT off and never restored it |
-| GALMOD | `DENSFLUX false` was ignored (the task went through the 3DFIT class, which sets it) |
-| SPACEPAR | The PA and VROT of the given rings were replaced by those of a 2D fit; the models were always normalised LOCAL; FTYPE and WFUNC out of range gave zero residuals |
-| SPACEPAR | With NORMALCUBE the noise was divided by the scale factor once per pixel when the cube was restored |
-| GALWIND | Spherical shells (WTYPE 1) read DENS from VWIND and VROT from OPENANG; the flux differs by DENS/VWIND |
-| GALWIND | Cylinders: a VROT column was read from DENS; ISEED never reached the cylinders (all shared the same random numbers); `VWIND > 0` was an inflow for the cylinders and an outflow for the shells; the smoothed model was multiplied by the beam area; the layers used a Gaussian profile, not boxes; list values used only their first element |
-| 2DFIT | The model velocity field: radius of the pixels between the rings computed with the geometry of the ring of the previous pixel; RADII cut to the estimated number of rings; a ring not fitted stopped the run |
-| ELLPROF | The ring-overlap correction was applied to blank pixels only; SIDE A and R swapped for most galaxies; blank pixels of a 2D map read as 0 |
-| Maps | `derv_gauss` for MAPTYPE GAUSSIAN used $e^{-x^2}$ instead of $e^{-x^2/2}$; with several lines (RESTWAVE, RESTFREQ) the maps mixed all the lines (now: the first line only, and a joint Gaussian fit with MAPTYPE GAUSSIAN); the HI mass constant (8794 against 8846) differed between MASSDENSMAP and ELLPROF; MASSDENSMAP and RMSMAP used a different mask; RMSMAP of spectra with fewer than 5 channels was 1E10 |
-| SMOOTH | A beam with major axis smaller than the minor one was rotated by 90°; cubes in mJy/beam, uJy/beam and W.U. were not rescaled; a cube without a beam was not smoothed |
-| SMOOTHSPEC | A window of one channel (HANNING2, BARTLETT, WELCH, BLACKMAN, FLATTOP) gave a cube of NaN |
-| SEARCH, MAKEMASK | ITERNOISE always ran 20 iterations; the checks of SEARCHTYPE and of the growth threshold ran only with SEARCH true; the HISTORY card GROWTHTHRESHOLD had the wrong value; with SNMAP the S/N maps overwrote those of TOTALMAP |
-| Statistics | min and max initialised with `array[0]` even when that pixel was masked |
-| REND3D, REDUCE | CRPIX3 = 0 gave each plane an angle one degree too large; CRPIX of a spatially reduced cube was rounded |
-| CONTSUB | EXCLWIND items that were not channels were ignored, and a channel outside the cube wrote outside the array |
-| CHECKCUBE | The thresholds of the row and column tests were swapped |
-| FITS utilities | `--fitscopy` of a reversed axis flipped only CDELT; `--jybeam2k` and `--k2jybeam` failed with `file[ext]`; mJy/beam taken as Jy/beam; K converted again |
-| All tasks, models | Spatial axes in arcsec or arcmin gave a wrong beam area, ring width and noise correlation; spectral axes in kHz, MHz, GHz or nm, `CUNIT3 = kms` and radio velocities on a wavelength axis gave wrong velocities or empty models; several lines on a frequency axis with REDSHIFT were misplaced; several lines were shifted by a fixed velocity |
-| All tasks, headers | A rotated WCS (PC or CD matrix) was lost when the WCS was rebuilt; a Stokes axis with an empty CUNIT3 was taken as km/s; centres given as `07h36m51s` or `+65d35m12s` were misread; a path of a ring file was lowercased |
-| Parameters | `RADII` as `Rmin~Rmax:step` could miss the last radius; the long forms of SIDE were not used |
-| ADRIFT | ADRIFTPOL1 < 0 left the dispersion profile uninitialised |
-| Initial estimates | The simplex of the inclination estimate did not keep the folded point (INC above 90°), so the estimate could end at 80° |
-| pyBBarolo | Default `redshift=-1` gave $1/(1+z) = \infty$; `write_bestmodel` called a missing function; `useBBres=True` returned an undefined variable; `verbose=` raised a TypeError; `plot_profiles` failed unless all nine parameters were free; parallel sampling failed with the `spawn` start method of macOS; the wrapper did not skip comment lines of parameter files |
-| 3DFIT with METHOD GLOBAL or BAYESIAN | The `lambdas` penalties used the wrong separations; `update()` discarded the priors given as distributions; a negative parameter of a function of radius had zero likelihood; `RUNOPTS dlogz` failed with dynesty's dynamic sampler, and with nautilus gave `f_live = dlogz`; a failed or interrupted sampling left the worker processes running; the initial rings changed during a run |
-
 ## Differences by task
 
 The section *Differences from BBarolo 1.8* of the page *how it works* of each task:
@@ -336,13 +292,3 @@ The section *Differences from BBarolo 1.8* of the page *how it works* of each ta
 [ELLPROF](../tasks/ellprof/algorithm.md#differences-from-bbarolo-18),
 [REND3D](../tasks/rend3d/algorithm.md#differences-from-bbarolo-18) and
 [FITS utilities](../tasks/fitsutils/algorithm.md#differences-from-bbarolo-18).
-
-## Not ported
-
-- **SLITFIT of 1.8**: the task did not work in the C++ code. It is replaced by the new
-  {doc}`SLITFIT <../tasks/slitfit/index>`, a different fit.
-- **gnuplot output**: removed. All plots are made with matplotlib.
-- **The MPI executable `BBarolo_MPI`**: see above.
-- **The unfinished `BBauto` routine** of the C++ code.
-- **The test module `BayesianBBarolo_test`** of pyBBarolo and `Galfit::getModel_BBB`.
-- **The old Python layers** `api.py` and `wrapper.py` of pyBBarolo and the package name `pyBBarolo`.
