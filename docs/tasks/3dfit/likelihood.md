@@ -155,9 +155,14 @@ the initial values of all the rings, from the smallest − $w$ to the largest + 
 | FTHICK | 0 to 1 |
 | VDISPTHICK | as VDISP |
 | Z0, Z0THICK (with a thick layer) | Z0 0 to half a beam FWHM; Z0THICK from the top of the range of Z0 (the upper end of its prior if free, its largest value otherwise) to 3 beam FWHM above it |
+| DENS, DENS_P1 | 0 to twice the largest value of the deconvolved density profile of the initial rings (below) |
 
-The others (VRAD, VVERT, DENS and the parameters of the functions of radius) are fixed ranges, listed under
-PRIORS. VROT uses the largest initial value, so that the prior of every ring holds the flat part
+The others (VRAD, VVERT and the other parameters of the functions of radius) are fixed ranges, listed under
+PRIORS. DENS is in the units of the model, a flux per unit area (the flux units of the cube × km/s per
+arcsec², e.g. ~0.015 for NGC 2403), so its scale is set by the data: when DENS is free, the deconvolved profile
+of the initial rings (the densities that reproduce the total intensity map, as when DENS is not free) gives the
+top of its prior, and the start of the fit when DENS is not given (its default, 1, is not in these units).
+The fixed range 0.1–200.1 (1–21 for DENS_P1) of earlier versions missed this scale. VROT uses the largest initial value, so that the prior of every ring holds the flat part
 of the rotation curve: the value of each ring would give the inner rings of a rising curve a prior narrower
 than their uncertainty. The priors follow the rings when they change (in Python, `update()`), but those given
 are kept. Where the data constrain a parameter poorly (Z0, the INC of a nearly face-on disk), the posterior

@@ -470,8 +470,5 @@ class GalMod3D:
         if not isFluxUnitKnown(h):
             raise BBaroloError(f"GalMod3D: cannot convert a flux in Jy km/s to BUNIT={h.Bunit()!r}: give "
                                "flux='measured' or None")
-        jy = float(FluxtoJy(model_sum, h))
-        if h.Bunit().lower().replace(" ", "") in ("k", "k(tmb)") and h.Freq0() > 0:
-            # K: the Rayleigh-Jeans conversion at the rest frequency of the cube (FluxtoJy assumes the HI line)
-            jy *= (21.106 * h.Freq0() / 2.99792458e10) ** 2
+        jy = float(FluxtoJy(model_sum, h))      # (K: at the rest frequency of the cube)
         return float(self.flux) / jy

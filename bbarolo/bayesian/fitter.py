@@ -341,8 +341,10 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
           RADMAXA, RADMAXR (the outer edges of the approaching and receding halves) half the outer edge of the
                   disk of the rings to that edge (see _prior_kwargs);
           VROT_P1 (the amplitude of the arctan curve) 1 km/s to 2 x the largest initial VROT.
-        The others do not depend on the rings: VRAD 0-50 km/s, VVERT 0-30 km/s, DENS 0.1-200.1, SIGMA and
-        FRACERR log-uniform (see _prior_kwargs), and those of the functions of radius. A prior that was changed (in
+          DENS, DENS_P1 0 to 2 x the largest value of the deconvolved profile of the initial rings, when DENS is
+                  fitted (_dens_scale, at the setup; 0.1-200.1 and 1-21 below are the fallbacks without a profile).
+        The others do not depend on the rings: VRAD 0-50 km/s, VVERT 0-30 km/s, SIGMA and FRACERR log-uniform
+        (see _prior_kwargs), and those of the functions of radius. A prior that was changed (in
         priors, or with PRIORS) is kept: only those equal to the previous defaults (_default_pri) follow the rings. """
         from ..bbutils import DeltaVel, arcsconv
         rr = {k: np.asarray(v, dtype=float) for k, v in self._inri.r.items()}
@@ -373,7 +375,7 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             z0thick=dict(name='uniform', loc=beam, scale=3. * beam),          # 1 - 4 beams (see _thick_layer_priors)
             fthick=dict(name='uniform', loc=0., scale=1.),                    # 0 - 1
             vdispthick=dict(name='uniform', loc=0., scale=max(2. * float(rr['vdisp'].max()), 50.)),   # as VDISP
-            dens=dict(name='uniform', loc=0.1, scale=200),                    # 0.1-200.1 (flux units x km/s/arcsec2)
+            dens=dict(name='uniform', loc=0.1, scale=200),                    # (0 - 2 x the profile, see _dens_scale)
             z0=dict(name='uniform', loc=0., scale=beam),                     # 0 - 1 beam
             sigma=dict(name='loguniform', a=None, b=None),                    # None: 0.5 and 1000 x noise rms
             fracerr=dict(name='loguniform', a=1e-3, b=1.),                    # fractional model error
@@ -602,6 +604,9 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
         self._free_positive = sorted({k.split('_')[0] for k in self.freepar_idx} & set(self._POSITIVE))
         # If the density is not fitted, the model is normalized with the azimuthal profile
         self.useNorm = not any('dens' in sub for sub in self.freepar_names)
+        self._dens_top = None
+        if not self.useNorm and not self.useBBres:
+            self._dens_scale()
         self.update_prof = False
         if self.useNorm and not self.useBBres:
             self._set_density(self._fit0)
@@ -609,6 +614,25 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
             self.update_prof = any(sub in string for string in self.freepar_names
                                    for sub in ['inc', 'phi', 'xpos', 'ypos', 'radmax', 'z0', 'fthick'])
         self._work = self._fit0.copy()
+
+    def _dens_scale(self):
+        """ With DENS fitted: the scale of DENS from the deconvolved profile of the initial rings (the densities whose
+        model reproduces the total map of the data, in the units of the model: e.g. ~0.015 for NGC 2403), as
+        _dens_top, twice its largest value: the top of the default priors of DENS and DENS_P1 (see _prior_kwargs).
+        DENS not given (nor in RINGFILE) starts at the profile, as when it is not fitted (its default, 1, is
+        not in the units of the model). The priors are frozen again with the new scale. """
+        try:
+            prof = self._deconvolved_profile(self._fit0.copy())
+        except Exception:
+            prof = None
+        if prof is None or not np.any(np.asarray(prof, float) > 0):
+            return
+        prof = np.asarray(prof, float)
+        self._dens_top = 2. * float(np.max(prof))
+        gf = self._cube_obj.pars().gf
+        if str(gf.DENS).strip() == '-1' and not gf.ringfile:
+            self._fit0.modify_parameter('dens', prof, makeobj=True)
+        self._freeze_priors()
 
     def _prior_kwargs(self, key):
         """ Parameters of the prior of key (self.priors without 'name'). For sigma, None values
@@ -636,6 +660,9 @@ class Bayesian3DFIT(OutputsMixin, DensityMixin, LikelihoodMixin, FitMod3D):
                 and self._galfit is not None:
             hi = outer_edge(self._inri.object, self._galfit.model.ringmode)
             kw['loc'], kw['scale'] = 0.5 * hi, 0.5 * hi
+        if key in ('dens', 'dens_p1') and self.priors[key] == getattr(self, '_default_pri', {}).get(key) \
+                and getattr(self, '_dens_top', None):
+            kw['loc'], kw['scale'] = 0., self._dens_top
         if key == 'sigma':
             for k, f in (('a', 0.5), ('b', 1000.), ('scale', 1.)):
                 if k in kw and kw[k] is None:

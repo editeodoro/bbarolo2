@@ -7,6 +7,31 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Fixed
 
+- **The parameter plot of 3DFIT read the errors of VRAD of the second stage from the wrong columns** **(C++)**: it
+  took them two columns left per parameter fixed in the second stage, assuming three (C++: `ff = 6`), so with
+  FREE VROT VDISP INC PA VRAD it showed the errors of VDISP as those of VRAD, and with FREE VROT INC VRAD the
+  columns VSYS and VRAD. The columns of each stage now come from its free parameters (also those of DENS with
+  FREE ALL, which the second stage keeps free).
+
+- **3DFIT with FREE ALL and FLAGERRORS: the errors of DENS were meaningless** **(C++)**: its error scan drew its
+  values between bounds that were never set (C++: uninitialised, here 0 and 0), found no interval, and gave DENS
+  the mean of the errors of the other parameters, in their units (-9.1 for a DENS of 1.4 on a test cube). DENS
+  is now scanned within a third of its value, as VROT (that cube: ±0.27 and ±0.1 for DENS 1.38 and 1.19 with
+  NORM NONE). With NORM LOCAL or AZIM the residual hardly depends on DENS, and its errors are often still that
+  mean.
+
+- **Flux units in the FITS-standard form "mJy beam-1" and "uJy beam-1" were read as Jy/beam** **(C++)**: the
+  header reader turned every "...Jy beam-1" into JY/BEAM and dropped the prefix (the fix of mJy/beam worked
+  only for "mJy/beam"), so the fluxes of SEARCH, the total maps (FLUXCONVERT), MASSDENSMAP and the HI columns of
+  ELLPROF were 1000 (1E6) times too large. The prefix is now kept ("mJy beam-1" is read as mJy/beam).
+
+- **Cubes in K were converted to Jy/beam at the wavelength of the 21-cm line, whatever their line** **(C++)**:
+  a CO(1-0) cube with a 5" beam got 4.1E-5 Jy/beam per K instead of 0.272, in the fluxes of SEARCH and the total
+  maps. The conversion is now at the rest frequency of the cube (that of the header, or RESTFREQ; the HI line if
+  neither is given), as `--k2jybeam` and GalMod3D (which corrected the 21-cm conversion on its own: same flux).
+  HI cubes in K change by 1E-5 (21.106114 cm for 21.106).
+
+
 - **METHOD GLOBAL printed "ABNORMAL: " without a reason when L-BFGS-B stopped** because its line search found no
   better point, even along the gradient (scipy ≥ 1.15 leaves the reason out of the message). The message is now
   "ABNORMAL: the line search found no better point, even along the gradient", and the summary adds that this is the
@@ -490,6 +515,17 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
 
 ### Added
 
+- **The header check reports a pixel grid rotated on the sky and a non-linear spectral axis**, which BBarolo does
+  not handle **(C++)**: it builds models, beams and rings on the pixels, so on a rotated grid (a rotated CD or PC
+  matrix, CROTA2) position angles are measured from the pixel y axis and the pixel size is CDELT (CD1_1 for a CD
+  matrix: 1/cos θ too small); and the models and channel widths take the spectral axis as linear (WAVE-LOG of
+  MaNGA: hundreds of km/s off; FELO-HEL of AIPS: 0.5 channels for 128 channels of 10 km/s at 300 km/s). Both
+  were silent. The check now says `HEADER CHECK: the pixel grid is rotated on the sky: its y axis points to PA =
+  ... deg` (with the pixel size on the sky when it differs from CDELT) and `HEADER CHECK: the spectral axis
+  (CTYPE3 = ...) is not linear: its channels are up to ... channels away from ...`, each with what to do
+  (reproject to north up, resample onto a linear axis); the run goes on. `Header.pixelGridOnSky()` and
+  `Header.spectralNonLinearity()` give the two quantities.
+
 - **`funcs` in FitMod3D, WindFit and SlitFit: functions of radius of one's own** (`NAME_FUNC` in FREE). Only the
   engines (Bayesian3DFIT, BayesianWind, BayesianSlitFit) had `funcs`, and the tasks make a new engine at every
   `run()`, so `FitMod3D(...).funcs['z0'] = ...` was an AttributeError and a function other than the defaults could
@@ -847,6 +883,14 @@ Bugs marked **(C++)** are also in the C++ BBarolo 1.8; the others were introduce
   SPECRES is not given, as in C++.
 
 ### Changed
+
+- **The default priors of DENS and DENS_P1 (3DFIT METHOD GLOBAL and BAYESIAN with DENS fitted) follow the data**: 0
+  to twice the largest value of the density profile deconvolved from the total map for the initial rings, the
+  profile used when DENS is not fitted; DENS not given (nor in RINGFILE) starts at that profile. They were the
+  fixed 0.1-200.1 and 1-21 of the original module, and DENS started at 1, while the densities of the model are a
+  flux per unit area in the units of the cube (~0.015 for NGC 2403): the solution could lie outside the prior.
+  On a test cube (DENS 1.43 to 0.19, VROT 150 km/s), METHOD GLOBAL with VROT and DENS free gave VROT 253 km/s and a
+  DENS at the bound 0.1; now VROT 150 km/s and the true DENS. Priors given are kept.
 
 - **The colour scale of the residual maps of 3DFIT (`_maps_*.pdf`, also METHOD GLOBAL and BAYESIAN) covers 95% of
   the pixels shown**, symmetric about 0, as that of WINDFIT; the larger residuals saturate. It covered 99.5% of the

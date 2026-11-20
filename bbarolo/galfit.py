@@ -1448,6 +1448,11 @@ class Galfit:
             elif fv == VDISP:
                 maxv = o.vdisp[ir] + 15
                 minv = max(o.vdisp[ir] - 15, 0)
+            elif fv == DENS:
+                # (C++ scanned between bounds never set, uninitialised; here 0 and 0: the errors of DENS were the
+                # mean of those of the other parameters): within a third of the value, as VROT
+                maxv = o.dens[ir] + o.dens[ir] / 3.
+                minv = max(o.dens[ir] - o.dens[ir] / 3., 0)
             else:
                 minv, maxv = self.mins[fv], self.maxs[fv]
             var_val = np.empty(n_models)
@@ -1556,11 +1561,22 @@ class Galfit:
         stream.write(initialParametersText(inr, getattr(self, "_estimated", {})))
 
 
-    def getErrorColumns(self):
-        free = [j for j in range(MAXPAR) if self.mpar[j]]
+    def getErrorColumns(self, stage=1):
+        """The column (from 0) of the lower error of each parameter in the ring file of stage 1 or 2, -1 for those
+        without errors (not free in that stage, or FLAGERRORS false). The second stage fixes the geometry, so the
+        errors of VRAD move left (C++ plots assumed three geometric parameters free in the first stage)."""
+        m = list(self.mpar)
+        if stage == 2:
+            st = getattr(self, "stages", {}).get(2)
+            if st is not None:
+                m = list(st.mpar)
+            else:
+                for i in (INC, PA, VSYS, XPOS, YPOS, Z0):
+                    m[i] = False
+        free = [j for j in range(MAXPAR) if m[j]]
         nc = [-1] * MAXPAR
         for j in range(MAXPAR):
-            if self.par.flagERRORS and self.mpar[j]:
+            if self.par.flagERRORS and m[j]:
                 nc[j] = NCOLS + 2 * free.index(j)
         return nc
 

@@ -162,8 +162,8 @@ def plot_settings(gf):
 
     nc = gf.getErrorColumns()
     errcols1 = {k: nc[i] for i, k in enumerate(fit3d.PAR_KEYS) if nc[i] > 0}
-    errcols2 = {k: nc[i] - (6 if k == "vrad" else 0) for i, k in enumerate(fit3d.PAR_KEYS)
-                if k in ("vrot", "disp", "vrad") and nc[i] > 0}
+    nc2 = gf.getErrorColumns(stage=2)          # (C++ took those of VRAD six columns left, whatever was free)
+    errcols2 = {k: nc2[i] for i, k in enumerate(fit3d.PAR_KEYS) if nc2[i] > 0}
 
     cubefile, cubehdu = p.imageFile, 0
     if p.contsub:

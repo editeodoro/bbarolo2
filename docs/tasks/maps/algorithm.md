@@ -75,7 +75,7 @@ converted to Jy/beam and $M_0$ is in Jy/beam km/s:
 | BUNIT of the cube | $f$ |
 |---|---|
 | Jy/beam | 1 |
-| mJy/beam, μJy/beam | $10^{-3}$, $10^{-6}$ |
+| mJy/beam, μJy/beam (also mJy beam$^{-1}$, μJy beam$^{-1}$) | $10^{-3}$, $10^{-6}$ |
 | Jy (per pixel; also mJy, μJy with their factor) | $\Omega_{\rm b}$, the beam area in pixels |
 | K | $\theta_{\rm maj}\,\theta_{\rm min} / (1360\, \lambda^2)$ |
 | W.U. | $5 \times 10^{-3}$ |
@@ -87,8 +87,9 @@ $$
 $$
 
 with $\theta_{\rm maj}$, $\theta_{\rm min}$ the FWHM of the beam and $p$ the mean of the two pixel sizes,
-in the same units. The conversion from K is the Rayleigh–Jeans relation of the 21-cm line, with the
-beam axes in arcsec and $\lambda = 21.106$ cm, whatever the line of the cube. With an unknown flux
+in the same units. The conversion from K is the Rayleigh–Jeans relation, with the beam axes in arcsec and
+$\lambda$ the rest wavelength of the line in cm, $c/\nu_0$ ($\nu_0$ the rest frequency of the header, or
+RESTFREQ; that of the 21-cm line if neither is given). With an unknown flux
 unit, or with FLUXCONVERT false, $f = 1$ and $M_0$ is in the unit of the cube times km/s.
 
 ## Gaussian maps
@@ -259,8 +260,11 @@ Python, the `Maps` class makes the total, velocity and dispersion maps when no m
 
 ## Differences from BBarolo 1.8
 
-- **Flux units mJy/beam and μJy/beam** are converted to Jy/beam with their factor in the total map
-  (with FLUXCONVERT) and in the mass surface density map; BBarolo 1.8 took them as Jy/beam.
+- **Flux units mJy/beam and μJy/beam** (also in the FITS form mJy beam$^{-1}$) are converted to Jy/beam with
+  their factor in the total map (with FLUXCONVERT) and in the mass surface density map; BBarolo 1.8 took them
+  as Jy/beam.
+- **Cubes in K** are converted to Jy/beam at the rest wavelength of their line; BBarolo 1.8 took 21.106 cm for
+  every line (for CO(1-0), with a 5″ beam, 4.1 × 10⁻⁵ Jy/beam per K instead of 0.272).
 - **Spectral axes in kHz, MHz or GHz, wavelength axes in nm**, and radio velocities on a wavelength
   axis gave wrong velocities and channel widths in 1.8, hence wrong velocity, dispersion and total
   maps; they are now converted correctly.

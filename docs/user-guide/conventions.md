@@ -163,13 +163,21 @@ width and the rest frequency.
 
 - **Spatial axes.** `CDELT1` should be negative (East to the left); a positive one gives the warning
   `HEADER CHECK: BBAROLO expects a negative CDELT1.` Axes in arcsec or arcmin are converted to degrees.
+  The pixel grid should be north up: BBarolo builds its models, beams and rings on the pixels, so position
+  angles are measured from the pixel y axis and the pixel size is `CDELT`. A grid rotated on the sky (a
+  rotated `CD` or `PC` matrix, or `CROTA2`) gives the warning `HEADER CHECK: the pixel grid is rotated on the
+  sky`, with the position angle of the y axis: reproject such a cube to north up before fitting it.
+- **Spectral axis.** The models take the spectral axis as linear, `CRVAL3 + CDELT3 (z - CRPIX3)`, in
+  velocity, frequency or wavelength. A non-linear axis (e.g. `WAVE-LOG` of MaNGA, the `FELO-HEL` of AIPS)
+  gives the warning `HEADER CHECK: the spectral axis (...) is not linear`, with how far it departs from the
+  linear one: resample such a cube onto a linear axis before fitting it.
 - **Beam.** Taken from `BMAJ`, `BMIN`, `BPA` (in degrees, as in the FITS standard), or from `HISTORY` cards
   (AIPS), or from the keyword {ref}`BEAM <par-all-beam>` (`BEAM bmaj bmin bpa`, which replaces the beam of the header);
   in Python, `beam=(bmaj, bmin, bpa)`, in arcsec and degrees.
 - **Flux units.** BBarolo uses `BUNIT` to convert the fluxes of the SEARCH catalogue and of the maps
-  to Jy ({ref}`FLUXCONVERT <par-all-fluxconvert>`). It recognises `JY/BEAM` (also `Jy beam-1`, `mJy/beam` and
-  `uJy/beam`), `Jy` (divided by the beam area, which needs the beam), `K` and `K (Tmb)` (converted for the
-  21-cm line and the beam) and the units of WSRT (`W.U.`). With `NORM LOCAL` or `AZIM` the fits do not need
+  to Jy ({ref}`FLUXCONVERT <par-all-fluxconvert>`). It recognises `JY/BEAM` (also `Jy beam-1`, `mJy/beam`,
+  `uJy/beam`, `mJy beam-1` and `uJy beam-1`), `Jy` (divided by the beam area, which needs the beam), `K` and
+  `K (Tmb)` (converted at the rest frequency of the cube, for the beam) and the units of WSRT (`W.U.`). With `NORM LOCAL` or `AZIM` the fits do not need
   a known unit, because the model is scaled to the data. With another unit, the run says
   `No known conversion to Jy.` and keeps the fluxes in the units of the cube.
 - The values `NaN` are read as 0 (blanks).

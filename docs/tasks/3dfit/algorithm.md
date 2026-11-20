@@ -475,8 +475,8 @@ in it are empty (DENS = 0) in the final model.
 With {ref}`FLAGERRORS <par-3dfit-flagerrors>`, the errors of the free parameters of each ring are estimated
 after its fit (in both stages), one parameter $p$ at a time, with the others at their best values:
 
-1. 100 values of $p$ are drawn uniformly in $\hat p \pm \hat p/3$ for VROT (above 0), $\hat\sigma \pm 15$ km/s
-   for VDISP (above 0), or the global interval of the fit for the others (as in *Bounds*, around all the
+1. 100 values of $p$ are drawn uniformly in $\hat p \pm \hat p/3$ for VROT and DENS (above 0),
+   $\hat\sigma \pm 15$ km/s for VDISP (above 0), or the global interval of the fit for the others (as in *Bounds*, around all the
    initial values), and the residual $f$ is computed for each.
 2. With $\Delta = p - \hat p$, the sampled range of $\Delta$ is divided in 40 bins; in each, $y$ is the lowest
    value of $100\,(f - f_\mathrm{min})/f_\mathrm{min}$ (the increase of the residual in percent, at most
@@ -490,7 +490,8 @@ after its fit (in both stages), one parameter $p$ at a time, with the others at 
 5. An error not found is replaced by the mean of the lower (or upper) errors of the other free parameters of
    the ring, whatever their units. VDISP errors smaller than half the dispersion of a channel,
    $\Delta v/(4\sqrt{2\ln 2})$, are replaced by that value plus a random number between 0 and 1 km/s. With
-   `FREE ALL` the errors of DENS are not meaningful, since DENS has no interval to sample.
+   `NORM LOCAL` or `AZIM` the residual hardly depends on DENS: its errors are then often not found, and are
+   that mean.
 
 The lower (negative) and upper errors are written in the columns `E_VROT1`, `E_VROT2`, ... of the ring files.
 These intervals are not statistical confidence intervals: they measure how fast the residual grows when
@@ -603,7 +604,9 @@ These are properties of the algorithm, shared by BBarolo 1.8.
   of the ring with the same index; Monte Carlo models in a box were not crops of the model of the whole cube
   when clouds fell outside the box; the PA refinement replaced a fixed VROT; RADSEP alone (without NRADII)
   kept the number of the estimated rings, so their extent scaled with RADSEP; `NORM AZIMUTHAL` was used as
-  `LOCAL`.
+  `LOCAL`; the errors of DENS (`FREE ALL` with FLAGERRORS) were scanned between bounds never set, so they were
+  meaningless; the parameter plot read the errors of VRAD of the second stage from the wrong columns (those of
+  VDISP with FREE VROT VDISP INC PA VRAD).
 - **Outputs**: no DISTANCE, so the ring files have no RAD(Kpc) and Z0(pc) columns (VROT is column 2); all the
   file names start with `<prefix>_`; RINGFILE finds the columns by their names (files of 1.8 are read).
 - **Checks**: a VSYS outside the velocity range of the cube, unknown names in FREE and MINVDISP ≥ MAXVDISP

@@ -5701,3 +5701,152 @@ def test_plot_pvs_side_edges(tmp_path):
     txt = (out / "plotscripts" / "plot_pvs.py").read_text()
     assert "radmaxa = 80.0" in txt and "radmaxr = None" in txt and "radmaxa=radmaxa, radmaxr=radmaxr" in txt
     assert "radmaxa" not in (out / "plotscripts" / "plot_pvslices.py").read_text()
+
+
+# ==========================================================================
+# Before the release (20 Nov 2026): BBAROLO2_FINDINGS 58, 59, 61, 64
+# ==========================================================================
+def _header_of(cards, warning=False):
+    from astropy.io import fits
+    from bbarolo.header import Header
+    h = fits.Header()
+    base = dict(NAXIS=3, NAXIS1=20, NAXIS2=20, NAXIS3=128, CTYPE1='RA---SIN', CTYPE2='DEC--SIN', CRPIX1=10.,
+                CRPIX2=10., CRVAL1=150., CRVAL2=30., CDELT1=-5 / 3600., CDELT2=5 / 3600., CUNIT1='deg', CUNIT2='deg',
+                CTYPE3='VRAD', CRPIX3=1., CRVAL3=300., CDELT3=10., CUNIT3='km/s', BUNIT='Jy/beam',
+                BMAJ=5 / 3600., BMIN=5 / 3600., BPA=0., OBJECT='TEST', TELESCOP='TEST')
+    for k, v in {**base, **cards}.items():
+        if v is None:
+            h.remove(k, ignore_missing=True)
+        else:
+            h[k] = v
+    hh = Header()
+    hh.warning = warning
+    hh.fromAstropy(h)
+    return hh
+
+
+def test_bunit_prefix_of_beam_minus_one():
+    """BUNIT in the FITS-standard form "mJy beam-1" or "uJy beam-1" keeps its prefix: it was read as Jy/beam, so
+    fluxes and masses were 1000 (1E6) times too large (C++)."""
+    from bbarolo.bbutils import FluxtoJyBeam
+    for bunit, f in (("Jy beam-1", 1.), ("mJy beam-1", 1E-3), ("mJy  beam-1", 1E-3), ("uJy beam-1", 1E-6),
+                     ("mJy/beam", 1E-3), ("Jy/beam", 1.)):
+        assert FluxtoJyBeam(1., _header_of(dict(BUNIT=bunit))) == pytest.approx(f), bunit
+    assert _header_of(dict(BUNIT="Jy beam-1")).Bunit() == "JY/BEAM"
+
+
+def test_kelvin_to_jybeam_at_the_rest_frequency():
+    """Cubes in K are converted to Jy/beam at the rest wavelength of the cube (C++: 21 cm for every line, so a
+    CO(1-0) cube with a 5" beam got 4.1E-5 Jy/beam per K instead of 0.272), as --k2jybeam."""
+    from bbarolo.bbutils import FluxtoJyBeam
+    co = _header_of(dict(BUNIT="K", CTYPE3="FREQ", CRVAL3=115.0e9, CDELT3=-1e6, CUNIT3="Hz", RESTFRQ=115.2712018e9))
+    assert FluxtoJyBeam(1., co) == pytest.approx(25. / (1360. * (29.9792458 / 115.2712018) ** 2), rel=1e-6)
+    assert FluxtoJyBeam(1., co) == pytest.approx(0.272, abs=1e-3)
+    hi = _header_of(dict(BUNIT="K"))
+    assert FluxtoJyBeam(1., hi) == pytest.approx(25. / (1360. * 21.106 ** 2), rel=2e-5)
+
+
+def test_rotated_pixel_grid_is_reported(capsys):
+    """A pixel grid rotated on the sky (CD or PC matrix, CROTA2) is reported by the header check: BBarolo measures
+    position angles from the pixel y axis and takes the pixel size from CDELT (CD1_1 for a CD matrix), so the PA
+    and the pixel size are off on such cubes (C++ too). North-up cubes are not reported."""
+    s, t = 5 / 3600., np.radians(30.)
+    cd = dict(CDELT1=None, CDELT2=None, CD1_1=-s * np.cos(t), CD1_2=-s * np.sin(t), CD2_1=-s * np.sin(t),
+              CD2_2=s * np.cos(t))
+    for cards, size in ((cd, True), (dict(CROTA2=30.), False),
+                        (dict(PC1_1=np.cos(t), PC1_2=np.sin(t), PC2_1=-np.sin(t), PC2_2=np.cos(t)), False)):
+        h = _header_of(cards, warning=True)
+        capsys.readouterr()
+        pay, sx, sy = h.pixelGridOnSky()
+        assert pay == pytest.approx(-30., abs=0.01)
+        assert sx * 3600 == pytest.approx(5., rel=1e-4) and sy * 3600 == pytest.approx(5., rel=1e-4)
+        assert not h.checkHeader()
+        out = capsys.readouterr().out
+        assert "PA = -30.0 deg" in out and ("pixels are 5\" x 5\"" in out) == size
+    h = _header_of({}, warning=True)
+    capsys.readouterr()
+    assert h.pixelGridOnSky()[0] == pytest.approx(0., abs=1e-9) and h.checkHeader()
+    assert "rotated" not in capsys.readouterr().out
+
+
+def test_nonlinear_spectral_axis_is_reported(capsys):
+    """A non-linear spectral axis (WAVE-LOG, FELO-HEL) is reported by the header check: the models and the channel
+    width take the axis as linear (C++ too). Linear axes (VRAD, VOPT, WAVE, FREQ) are not reported."""
+    for cards, dev in ((dict(CTYPE3="FELO-HEL", CRVAL3=300e3, CDELT3=10e3, CUNIT3="m/s"), 0.54),
+                       (dict(CTYPE3="WAVE-LOG", CRVAL3=6000., CDELT3=2., CUNIT3="Angstrom"), 2.73)):
+        h = _header_of(cards, warning=True)
+        capsys.readouterr()
+        assert h.spectralNonLinearity() == pytest.approx(dev, abs=0.01)
+        assert not h.checkHeader()
+        assert f"CTYPE3 = {cards['CTYPE3']}) is not linear" in capsys.readouterr().out
+    for cards in ({}, dict(CTYPE3="VOPT", CRVAL3=300e3, CDELT3=10e3, CUNIT3="m/s"),
+                  dict(CTYPE3="WAVE", CRVAL3=6000., CDELT3=2., CUNIT3="Angstrom"),
+                  dict(CTYPE3="FREQ", CRVAL3=1.42e9, CDELT3=-2e4, CUNIT3="Hz")):
+        h = _header_of(cards, warning=True)
+        assert h.spectralNonLinearity() < 1e-6 and h.checkHeader()
+        assert "not linear" not in capsys.readouterr().out
+
+
+def test_parameter_plot_error_columns_of_both_stages(tmp_path):
+    """The parameter plot reads the errors of each stage from their columns: in stage 2 the geometry is fixed, so
+    the errors of VRAD move left by two columns for each geometric parameter free in stage 1 (C++ assumed three:
+    with FREE VROT VDISP INC PA VRAD the plot showed E_VDISP as E_VRAD, and E_VRAD beyond the columns)."""
+    import bbarolo
+    from bbarolo.plots.scripts import plot_settings
+    names = dict(vrot="VROT", disp="DISP", dens="DENS", z0="Z0", inc="INC", pa="PA", xpos="XPOS", ypos="YPOS",
+                 vsys="VSYS", vrad="VRAD")
+    fn = _mock_cube(tmp_path)
+    kw = dict(radii=[30, 90], xpos=31.5, ypos=31.5, vsys=0., vrot=150., vdisp=10., z0=0., inc=60., pa=45., vrad=0.,
+              mask="SEARCH", galmodtype="ANALYTIC", verbose=0, threads=1, outfolder=str(tmp_path / "out"))
+    g = bbarolo.FitMod3D(fn, free="VROT VDISP INC PA VRAD", twostage=True, flagerrors=True, **kw).run().fitter
+    s = plot_settings(g)
+    for n, cols in ((1, s["errcols1"]), (2, s["errcols2"])):
+        head = g.stages[n].text.splitlines()[0].lstrip("#").split()
+        assert set(cols) == {k for k in names if f"E_{names[k]}1" in head}
+        for k, c in cols.items():
+            assert head[c] == f"E_{names[k]}1" and head[c + 1] == f"E_{names[k]}2"
+    assert s["errcols2"]["vrad"] == s["errcols1"]["vrad"] - 4
+
+
+def test_3dfit_errors_of_dens(tmp_path):
+    """FLAGERRORS with DENS free (e.g. FREE ALL): the error scan of DENS explored [0, 0] (its bounds were never set;
+    C++: uninitialised), so its errors were the mean of those of the other parameters, in their units (here -9.1 and
+    -0.9 for DENS 1.38 and 1.19). DENS is now scanned within a third of its value, as VROT."""
+    import bbarolo
+    fn = _mock_cube(tmp_path)
+    kw = dict(radii=[30, 90], xpos=31.5, ypos=31.5, vsys=0., vrot=150., vdisp=10., z0=0., inc=60., pa=45., dens=1.,
+              mask="SEARCH", galmodtype="ANALYTIC", verbose=0, threads=1, outfolder=str(tmp_path / "out"))
+    r = bbarolo.FitMod3D(fn, free="ALL", norm="NONE", flagerrors=True, **kw).run()
+    t = r.fitter.stage_table(1)
+    dens, lo, hi = (np.asarray(t[c], float) for c in ("dens", "e_dens1", "e_dens2"))
+    assert np.all(lo < 0) and np.all(hi > 0)
+    assert np.all(-lo <= dens / 3 + 1e-9) and np.all(hi <= dens / 3 + 1e-9)
+    assert -lo[1] < 0.1 * dens[1]
+
+
+def test_bayesian_dens_prior_follows_the_profile(tmp_path):
+    """With DENS fitted, its default prior is 0 to twice the largest value of the deconvolved profile of the initial
+    rings (the densities that reproduce the total map, in the units of the model), and so is that of DENS_P1 (the
+    central value of the exponential); DENS not given starts there. The fixed 0.1-200 (1-21 for DENS_P1) missed the
+    scale of the model (~0.015 for NGC 2403), so the start and the solution were outside the prior. A prior given is
+    kept, and so is a DENS given."""
+    from bbarolo.bayesian import Bayesian3DFIT
+    fn = _mock_cube(tmp_path)
+    kw = dict(radii=[20, 60, 100, 140], xpos=31.5, ypos=31.5, vsys=0., vrot=150., vdisp=10., z0=0., inc=60., pa=45.,
+              mask="SEARCH", verbose=0, outfolder=str(tmp_path / "out"))
+    f = Bayesian3DFIT(fn, **kw)
+    f._setup(['vrot_single', 'dens'])
+    prof = f._deconvolved_profile(f._fit0.copy())
+    assert np.all(np.isfinite(prof)) and prof.max() > 0
+    lo, hi = f.prior_distr['dens'].support()
+    assert lo == 0 and hi == pytest.approx(2 * prof.max(), rel=1e-6)
+    th = f._initial_theta()
+    assert np.allclose(th[f.freepar_idx['dens']], prof, rtol=1e-6)
+    f._setup(['vrot_single', 'dens_func'])
+    assert f.prior_distr['dens_p1'].support() == pytest.approx((0, 2 * prof.max()), rel=1e-6)
+    f.priors['dens'] = dict(name='uniform', loc=0.5, scale=2.)
+    f._setup(['vrot_single', 'dens'])
+    assert f.prior_distr['dens'].support() == pytest.approx((0.5, 2.5))
+    g = Bayesian3DFIT(fn, dens=0.7, **kw)
+    g._setup(['vrot_single', 'dens'])
+    assert np.allclose(g._initial_theta()[g.freepar_idx['dens']], 0.7)

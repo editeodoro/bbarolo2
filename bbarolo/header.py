@@ -278,7 +278,11 @@ class Header:
             self.Warning("HEADER WARNING: BUNIT keyword not found.")
             self.bunit = "NONE"
         if "beam-1" in self.bunit.lower() and "jy" in self.bunit.lower():
-            self.bunit = "JY/BEAM"
+            # FITS-standard units ("Jy beam-1", "mJy beam-1"): the prefix of Jy is kept (C++ dropped it, so mJy
+            # and uJy beam-1 were read as Jy/beam: fluxes and masses 1000 and 1E6 times too large)
+            pre = re.match(r"\s*(m|u|µ|μ|mu)?\s*jy", self.bunit, re.I)
+            pre = pre.group(1) if pre and pre.group(1) else ""
+            self.bunit = f"{pre}Jy/beam" if pre else "JY/BEAM"
         self.btype = str(g("BTYPE", "NONE"))
         self.bzero = float(g("BZERO", 0.))
         self.bscale = float(g("BSCALE", 1.))
@@ -608,6 +612,39 @@ class Header:
         return t if t else self.ctype[1][:4]
 
     # ------------------------------------------------------------------ checks
+    def pixelGridOnSky(self):
+        """The orientation of the pixel grid on the sky at the reference pixel, from the WCS: (position angle of the
+        pixel y axis in degrees east of north, in (-180, 180], size of a pixel along x and along y in degrees). None
+        without a celestial WCS."""
+        if self.wcs is None or not self.wcsIsGood or self.numAxes < 2:
+            return None
+        x0, y0 = self.crpix[0] - 1, self.crpix[1] - 1
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                w = self.pixToWCS([[x0, y0, 0.], [x0 + 1, y0, 0.], [x0, y0 + 1, 0.]])
+        except Exception:
+            return None
+        if not np.all(np.isfinite(w[:, :2])):
+            return None
+        cosd = math.cos(math.radians(w[0, 1]))
+        de = ((w[1:, 0] - w[0, 0] + 180.) % 360. - 180.) * cosd          # east offsets of the steps along x and y
+        dn = w[1:, 1] - w[0, 1]                                          # north offsets
+        pay = math.degrees(math.atan2(de[1], dn[1]))
+        return (pay if pay > -180. else 180.), math.hypot(de[0], dn[0]), math.hypot(de[1], dn[1])
+
+    def spectralNonLinearity(self):
+        """The largest distance, in channels, between the spectral value of a channel from the WCS (e.g. WAVE-LOG,
+        FELO-HEL) and that of a linear axis, CRVAL3 + CDELT3 (z - CRPIX3). 0 for a linear axis, or with no
+        spectral third axis."""
+        if (self.numAxes < 3 or self.dimAxes[2] < 2 or self.cdelt[2] == 0 or self.wcs is None
+                or self.wcs.wcs.spec != 2):
+            return 0.
+        z = np.arange(self.dimAxes[2], dtype=float)
+        lin = (z + 1 - self.crpix[2]) * self.cdelt[2] + self.crval[2]
+        dev = np.abs(np.asarray(self.getZphys(z), dtype=float) - lin) / abs(self.cdelt[2])
+        return float(np.nanmax(dev)) if np.any(np.isfinite(dev)) else 0.
+
     def checkHeader(self):
         allgood = True
         if self.cdelt[0] > 0:
@@ -639,6 +676,31 @@ class Header:
                 allgood = False
                 self.crpix[2], self.crval[2], self.cdelt[2], self.cunit[2] = 1, v1, dv, "m/s"
                 self.updateWCS()
+        sky = self.pixelGridOnSky()
+        if sky is not None:
+            # BBarolo builds models, beams and rings on the pixel grid: position angles are measured from the pixel
+            # y axis and the pixel size is CDELT (C++ too). Not fixed: said here.
+            pay, sx, sy = sky
+            if abs(pay) > 0.1:
+                self.Warning(f"HEADER CHECK: the pixel grid is rotated on the sky: its y axis points to PA = "
+                             f"{pay:.1f} deg, not to the north.")
+                self.Warning("              BBarolo measures position angles from the pixel y axis (the PA on the "
+                             f"sky is PA {pay:+.1f} deg)")
+                if max(abs(sx / self.cdelt[0]), abs(sy / self.cdelt[1])) > 1.001 or \
+                        min(abs(sx / self.cdelt[0]), abs(sy / self.cdelt[1])) < 0.999:
+                    self.Warning(f"              and takes the pixel size from CDELT ({abs(self.cdelt[0]) * 3600:.4g}\" x "
+                                 f"{abs(self.cdelt[1]) * 3600:.4g}\"), but the pixels are {sx * 3600:.4g}\" x "
+                                 f"{sy * 3600:.4g}\" on the sky")
+                self.Warning("              Rotate the cube to north up (e.g. reproject it) before fitting it.")
+                allgood = False
+        dev = self.spectralNonLinearity()
+        if dev > 0.1:
+            # GALMOD and the channel widths take the spectral axis as linear (C++ too). Not fixed: said here.
+            self.Warning(f"HEADER CHECK: the spectral axis (CTYPE3 = {self.ctype[2]}) is not linear: its channels are "
+                         f"up to {dev:.2g} channels away from CRVAL3 + CDELT3 (z - CRPIX3).")
+            self.Warning("              The models of the fits and the channel width of the maps take it as linear:")
+            self.Warning("              resample the cube onto a linear spectral axis before fitting it.")
+            allgood = False
         if self.beamArea != 0 and self.numAxes > 1:
             r1, r2 = abs(self.bmaj / self.cdelt[0]), abs(self.bmin / self.cdelt[1])
             if r1 < 1 or r2 < 1 or r1 > 30 or r2 > 30:

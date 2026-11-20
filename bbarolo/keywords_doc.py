@@ -1682,13 +1682,14 @@ largest + w:
 - with a thick layer (`FTHICK` free or > 0): `FTHICK` 0–1, `VDISPTHICK` as `VDISP`, `Z0` 0 to half a beam
   FWHM and `Z0THICK` from the top of the range of `Z0` (the upper end of its prior if free, its largest value
   otherwise) to 3 beam FWHM above it, so that the layers cannot swap;
-- `VRAD` 0–50 km/s, `VVERT` 0–30 km/s, `DENS` 0.1–200.1 (a flux per unit
-  area: the flux units of the cube × km/s per arcsec², see `DENS`; give a prior suited to the units of the
-  cube);
+- `VRAD` 0–50 km/s, `VVERT` 0–30 km/s;
+- `DENS` 0 to twice the largest value of the density profile deconvolved from the data for the initial rings
+  (a flux per unit area: the flux units of the cube × km/s per arcsec², see `DENS`); DENS not given starts
+  at that profile;
 - `SIGMA` log-uniform between 0.5 and 1000 times the noise rms, `FRACERR` log-uniform between 0.001 and 1;
 - the functions of radius R (arcsec): `VROT` = 2/π · P1 · arctan(R/P2), with P1 from 1 km/s to twice
   the largest initial VROT and P2 1–1001 arcsec; `VDISP` = P1 + P2 · R, with P1 0–10 km/s and P2 −10 to
-  10 km/s/arcsec; `DENS` = P1 · exp(−R/P2), with P1 1–21 and P2 1–201 arcsec.
+  10 km/s/arcsec; `DENS` = P1 · exp(−R/P2), with P1 as `DENS` and P2 1–201 arcsec.
 
 The priors follow the rings when they change (in Python, `update`), but those given are kept. An
 estimated INC can be wrong by 10° or more below 45° (see `GUESSTYPE`): for a galaxy seen nearly face-on,

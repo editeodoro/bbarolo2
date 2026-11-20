@@ -193,7 +193,11 @@ def FluxtoJyBeam(inval, h):
     if "jy" in b and h.BeamArea() != 0:
         return inval * _jy_prefix(b) * h.BeamArea()
     if b in ("k", "k(tmb)"):
-        return inval * (h.Bmaj() * 3600. * h.Bmin() * 3600.) / (1360. * 21.106 * 21.106)
+        # 1 K = bmaj bmin / (1360 lambda^2) Jy/beam (arcsec, cm) at the rest wavelength of the cube, as --k2jybeam
+        # and GalMod3D (C++ always took 21.106 cm: a CO(1-0) cube with a 5" beam got 4.1E-5 Jy/beam per K, not 0.272)
+        f0 = h.Freq0() if h.Freq0() > 0 else 0.1420405751786E10
+        lam = 29979245800. / f0
+        return inval * (h.Bmaj() * 3600. * h.Bmin() * 3600.) / (1360. * lam * lam)
     return inval
 
 
