@@ -53,8 +53,8 @@ res.write()                 # the files of the command line, in output/LESS_J033
 :::
 ::::
 
-On our server, with 16 cores (16 processes for the sampler), the run takes **8 minutes 8 seconds**, of which 7.6
-minutes are the sampling (203 000 likelihoods). The sampler is random, so the numbers below change slightly from run
+On our server, with 16 cores (16 processes for the sampler), the run takes **8 minutes 19 seconds**, of which 7.6
+minutes are the sampling (204 000 likelihoods). The sampler is random, so the numbers below change slightly from run
 to run.
 
 ## The setup
@@ -90,33 +90,33 @@ to run.
 
 | Parameter | Median and 68% interval |
 |---|---|
-| VROT, rings 1 to 8 | 395 (−171, +129), 390 (−145, +131), 421 (−119, +110), 413 (−85, +96), 408 (−108, +104), 378 (−110, +110), 251 (−97, +106), 275 (−46, +45) km/s |
-| VDISP, rings 1 to 8 | 62 (−28, +29), 85 (−28, +27), 90 (−31, +26), 55 (−19, +28), 66 (−20, +22), 57 (−17, +19), 62 (−14, +16), 37 (−8, +9) km/s |
-| INC | 21.3° (−1.4, +1.5) |
+| VROT, rings 1 to 8 | 398 (−173, +127), 394 (−148, +130), 425 (−117, +108), 413 (−84, +93), 417 (−110, +104), 392 (−107, +105), 239 (−86, +94), 286 (−48, +45) km/s |
+| VDISP, rings 1 to 8 | 63 (−28, +29), 87 (−28, +26), 88 (−30, +26), 53 (−19, +27), 67 (−21, +23), 59 (−17, +20), 61 (−13, +15), 34 (−8, +10) km/s |
+| INC | 21.1° (−1.4, +1.6) |
 | PA | 44.0° ± 1.7° |
-| Centre | 03h32m29.295s, −27°56′19.56″ (XPOS 45.7, YPOS 40.3 pixels, ± 0.2 pixels) |
+| Centre | 03h32m29.295s, −27°56′19.56″ (XPOS 45.6, YPOS 40.2 pixels, ± 0.2 pixels) |
 | VSYS | 13.2 ± 3.0 km/s (relative to z = 4.7555) |
 | FRACERR | 0.36 ± 0.04 |
 
-The rotation velocity is 380–420 km/s out to 0.33 arcsec (2.2 kpc) and 250–280 km/s in the last two rings: the curve
+The rotation velocity is 390–425 km/s out to 0.33 arcsec (2.2 kpc) and 240–290 km/s in the last two rings: the curve
 rises within the first ring and then declines, as in Lelli et al. (2021). The intervals are wide, ±100 km/s in the
 inner rings, and most of their width does not come from the inclination: the projected velocity VROT sin *i* has
-almost the same relative interval (149 ± 32 km/s in the fourth ring, against 413 ± 91 km/s for VROT). The rings
-are half a beam wide, and the velocities of neighbouring rings are anti-correlated (correlation coefficients −0.5
+almost the same relative interval (148 ± 30 km/s in the fourth ring, against 413 ± 88 km/s for VROT). The rings
+are half a beam wide, and the velocities of neighbouring rings are anti-correlated (correlation coefficients −0.4
 to −0.6 in the corner plot): the data constrain their average better than each one.
 
-The inclination, 21.3°, is below the mean of its prior (25°): the data prefer a lower value, close to the 22° of the
+The inclination, 21.1°, is below the mean of its prior (25°): the data prefer a lower value, close to the 22° of the
 best mass model of Lelli et al. (2021), in which the inclination was free. The position angle is 4° from their 40°,
 and the centre is 0.04 arcsec from their kinematic centre (03h32m29.295s, −27°56′19.60″).
 
-The dispersion is 55–90 km/s within 0.4 arcsec and 37 ± 8 km/s in the last ring, so VROT/VDISP is between 4 and 8.
+The dispersion is 53–88 km/s within 0.4 arcsec and 34 ± 9 km/s in the last ring, so VROT/VDISP is between 4 and 8.5.
 Lelli et al. (2021) find 50–60 km/s in the centre, decreasing to about 10 km/s in the outer parts, and a ratio of
 about 10 within 2.5 kpc. Their fit is the classic one, with the geometry fixed (INC 25°, PA 40°) and the surface
 density of each ring from the azimuthal average of the intensity map; here the geometry is free and the density
 profile is deconvolved. In the inner rings the intervals of VDISP (±20–30 km/s) are almost as wide as the prior
 (30 km/s): the prior has a part in the result there.
 
-The reduced χ² is 1.69 without the model error and 1.27 with it. FRACERR, 36% of the model, takes the
+The reduced χ² is 1.70 without the model error and 1.29 with it. FRACERR, 36% of the model, takes the
 non-axisymmetric structures of the gas, which the axisymmetric model does not have: arm-like features in the
 residual map of the total intensity, also found by Lelli et al. (2021).
 

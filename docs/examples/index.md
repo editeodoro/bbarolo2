@@ -15,12 +15,12 @@ diagrams and the channel maps of the data and of the model. The notebook
 | {doc}`ngc2403` | HI, VLA, nearby spiral | 3DFIT CLASSIC, geometry free, errors | 52 s |
 | {doc}`ngc5633` | Hα + [NII], CALIFA optical IFU | CONTSUB, 3DFIT CLASSIC with three lines | 25 s |
 | {doc}`pgc53639` | HI, ATCA, warped disk at low inclination | 3DFIT CLASSIC, position angle free | 24 s |
-| {doc}`ugc1281` | HI, WSRT, edge-on dwarf | 3DFIT GLOBAL, smoothness priors, errors | 38 s |
-| {doc}`ngc891` | HI, WSRT, edge-on spiral with a lagging halo | 3DFIT GLOBAL, thin disk and thick layer with a lag | 19 min |
-| {doc}`u3-25160` | Hα, KMOS, star-forming galaxy at z = 0.9 | 3DFIT BAYESIAN | 1 min 42 s |
-| {doc}`aless73` | [CII], ALMA, starburst galaxy at z = 4.8 | 3DFIT BAYESIAN, prior on the inclination | 8 min 8 s |
+| {doc}`ugc1281` | HI, WSRT, edge-on dwarf | 3DFIT GLOBAL, smoothness priors, errors | 40 s |
+| {doc}`ngc891` | HI, WSRT, edge-on spiral with a lagging halo | 3DFIT GLOBAL, thin disk and thick layer with a lag | 18 min |
+| {doc}`u3-25160` | Hα, KMOS, star-forming galaxy at z = 0.9 | 3DFIT BAYESIAN | 1 min 55 s |
+| {doc}`aless73` | [CII], ALMA, starburst galaxy at z = 4.8 | 3DFIT BAYESIAN, prior on the inclination | 8 min 19 s |
 | {doc}`hd142527` | ¹³CO, ALMA, protoplanetary disk | 3DFIT BAYESIAN, geometry and thickness free | 52 min |
-| {doc}`2masxj1022` | Hα + [NII], SALT long slit, massive spiral | SLITFIT GLOBAL | 23 s |
+| {doc}`2masxj1022` | Hα + [NII], SALT long slit, massive spiral | SLITFIT GLOBAL | 27 s |
 | {doc}`circinus` | [OIII], MUSE, ionised nuclear wind of a Seyfert galaxy | WINDFIT GLOBAL with a mask, MoKA-3D compared | 16 min |
 
 The times are the wall-clock times of `BBarolo -p` on our server (Intel Xeon Platinum 8480+) with 16 cores

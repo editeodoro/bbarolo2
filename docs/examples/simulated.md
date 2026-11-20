@@ -121,25 +121,26 @@ of the ring; right: the dispersion. The points of each ring are shifted sideways
 
 | | CLASSIC | GLOBAL | BAYESIAN | True |
 |---|---|---|---|---|
-| INC (°) | 60.3 | 60.3 ± 0.4 | 60.4 ± 0.5 | 60 |
+| INC (°) | 60.3 | 60.1 ± 0.4 | 60.4 ± 0.4 | 60 |
 | PA (°) | 39.7 | 39.9 ± 0.2 | 40.0 ± 0.2 | 40 |
 | Time (4 processes) | 2–3 s | 12–13 s | 9–11 min | |
 
 - **Geometry.** From a first guess 5° off, the three methods find INC and PA within 0.4° of the true values.
   CLASSIC gives no errors for them, as its second stage fixes them; over 20 noise realisations (seeds 1 to 20)
   its INC is 60.6° ± 0.8° and its PA 40.1° ± 0.3°.
-- **Rotation velocity.** Beyond the first ring, GLOBAL and BAYESIAN are within 1.6 km/s (1%) of the true
+- **Rotation velocity.** Beyond the first ring, GLOBAL and BAYESIAN are within 1.7 km/s (1%) of the true
   velocity, within their errors; CLASSIC is 1 to 4 km/s too low (−3% and −2% in the second and third rings: the
   bias of CLASSIC, see {doc}`../tasks/3dfit/algorithm`), and its errors are up to twice as large.
 - **The first ring.** It spans the steep rise of the rotation curve, from 0 to 100 km/s between the centre and
   60 arcsec, which a ring of one velocity cannot follow: the three methods miss the true velocity at 30 arcsec
-  by 7–8 km/s, CLASSIC above and GLOBAL and BAYESIAN below, and the dispersion of the first two rings is off
+  by 6–8 km/s, CLASSIC above and GLOBAL and BAYESIAN below, and the dispersion of the first two rings is off
   (21–24 km/s in the first; about 4.5 km/s with GLOBAL and BAYESIAN and 14.6 km/s with CLASSIC in the second).
-  Beyond them, the dispersion of GLOBAL and BAYESIAN is within 2.5 km/s of the true 10 km/s; that of CLASSIC
+  Beyond them, the dispersion of GLOBAL and BAYESIAN is within 3.3 km/s of the true 10 km/s, about twice its
+  errors; that of CLASSIC
   drops to 1.7 km/s in the last ring, where the disk is faint: at low S/N the mask cuts the wings of the lines,
   which biases the dispersion low.
 - **GLOBAL and BAYESIAN** maximise and sample the same likelihood: the best fit of GLOBAL and the medians of
-  BAYESIAN differ by less than 0.7σ, and the errors of the Laplace approximation are within 15% of the widths of
+  BAYESIAN differ by less than 0.9σ, and the errors of the Laplace approximation are within 15% of the widths of
   the posterior. GLOBAL takes seconds, BAYESIAN minutes: use GLOBAL to try a setup, and BAYESIAN when the shape
   of the posterior matters. With `seed=1` the sampling is reproducible: two runs gave the same rings.
 

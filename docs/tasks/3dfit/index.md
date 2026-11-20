@@ -189,21 +189,21 @@ res.write()               # the files of the task, in output/ngc2403/
 :::
 ::::
 
-The fit takes between 2.5 and 3 minutes on four processes (about 8 minutes of CPU time). The time grows quickly with the
+The fit takes between 2.5 and 4.5 minutes on four processes (8 to 12 minutes of CPU time). The time grows quickly with the
 number of free parameters. The result of the run shown here:
 
 | Parameter | Median | 68% interval |
 |---|---|---|
-| VROT, ring 1 (120 arcsec) | 88.4 km/s | −1.7, +1.6 |
-| VROT, ring 2 (240 arcsec) | 115.7 km/s | −1.1, +1.2 |
-| VROT, ring 3 (360 arcsec) | 127.5 km/s | −1.1, +1.3 |
-| VROT, ring 4 (480 arcsec) | 125.0 km/s | −0.9, +0.8 |
-| VDISP, all rings | 12.6 km/s | −0.3, +0.2 |
+| VROT, ring 1 (120 arcsec) | 88.4 km/s | −1.6, +1.7 |
+| VROT, ring 2 (240 arcsec) | 115.5 km/s | −1.0, +1.2 |
+| VROT, ring 3 (360 arcsec) | 127.7 km/s | −1.1, +1.0 |
+| VROT, ring 4 (480 arcsec) | 124.9 km/s | −0.8, +0.8 |
+| VDISP, all rings | 12.6 km/s | −0.2, +0.3 |
 | SIGMA | 0.020 Jy/beam | |
 
 SIGMA is about 36 times the noise of the cube (0.00055 Jy/beam): it is the root mean square of the
 residuals, so it measures how far the tilted-ring model is from the data, and the reduced χ² of the best
-fit is 1 by construction (0.99). The corner plot shows the one- and
+fit is 1 by construction (1.00). The corner plot shows the one- and
 two-dimensional marginal posteriors, with the 15.87th, 50th and 84.13th percentiles (±1σ) as dashed lines:
 
 ```{figure} /figures/bayesian3dfit_corner.png
