@@ -92,10 +92,11 @@ The simulated cube (grey) and the fit (red contours) along the major and the min
 
 The rings above are those of the simulation, half a beam wide, so neighbouring rings are not independent. Here the
 same cube is fitted with rings one beam wide (60 arcsec) by the three methods of 3DFIT
-({ref}`METHOD <par-3dfit-method>`), from the same wrong first guess. CLASSIC fits INC and PA in
-each ring and, in its second stage, one value of each for the whole disk; GLOBAL and BAYESIAN fit one INC and one
-PA for the disk (`_SINGLE`) together with the rotation velocity and the dispersion of each ring, within their
-default priors (INC 45–65° and PA 20–50°: the first guess ± 10° and ± 15°).
+({ref}`METHOD <par-3dfit-method>`), from the same wrong first guess. CLASSIC fits INC and PA in each ring, within
+± 15° and ± 20° of the first guess (DELTAINC and DELTAPA, whose defaults are 5° and 15°), and, in its second stage,
+one value of each for the whole disk; GLOBAL and BAYESIAN fit one INC and one PA for the disk (`_SINGLE`) together
+with the rotation velocity and the dispersion of each ring, within their default priors (INC 45–65° and PA
+20–50°: the first guess ± 10° and ± 15°; DELTAINC and DELTAPA are not used by these methods).
 
 ```python
 radii_b = np.arange(30, 360, 60.)                     # 6 rings one beam wide (arcsec)

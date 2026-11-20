@@ -37,7 +37,7 @@ companions, or the HI of the Milky Way in the foreground ({doc}`../examples/ngc2
 ## 3. The initial values
 
 The parameter space is degenerate, and the fit depends on where it starts, above all on the **inclination**: with
-METHOD CLASSIC each ring can move only by {ref}`DELTAINC <par-3dfit-deltainc>` (15° by default) from the initial
+METHOD CLASSIC each ring can move only by {ref}`DELTAINC <par-3dfit-deltainc>` (5° by default) from the initial
 inclination, and on simulated disks the fitted inclination stays close to its start
 ({doc}`../tasks/3dfit/algorithm`). The rotation velocity scales as $1/\sin i$.
 
